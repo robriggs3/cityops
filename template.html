@@ -668,8 +668,10 @@ var CityOps = (function () {
       return frag;
     }
     var h3 = el('h3');
-    if (status === 'done') h3.appendChild(el('span', 'donemark', '✓'));
-    h3.appendChild(document.createTextNode(effectiveName(it, curState)));
+    var tname = el('span', 'tname');
+    if (status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
+    tname.appendChild(document.createTextNode(effectiveName(it, curState)));
+    h3.appendChild(tname);
     if (it.price) h3.appendChild(el('span', 'price', it.price.text));
     frag.appendChild(h3);
     if (showWhen && it.when) frag.appendChild(el('p', 'when-line', it.when));
@@ -950,8 +952,10 @@ var CityOps = (function () {
       d.entries.forEach(function (e) {
         var bd = el('div', 'bd' + (e.status === 'done' ? ' item-done' : ''));
         var h3 = el('h3');
-        if (e.status === 'done') h3.appendChild(el('span', 'donemark', '✓'));
-        h3.appendChild(document.createTextNode(effectiveName(e.it, state)));
+        var tname = el('span', 'tname');
+        if (e.status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
+        tname.appendChild(document.createTextNode(effectiveName(e.it, state)));
+        h3.appendChild(tname);
         if (e.it.price) h3.appendChild(el('span', 'price', e.it.price.text));
         bd.appendChild(h3);
         var meta = (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label + (e.it.when ? ' · ' + e.it.when : '');
@@ -971,8 +975,10 @@ var CityOps = (function () {
       sm.undated.forEach(function (e) {
         var card = el('div', 'card' + (e.status === 'done' ? ' item-done' : ''));
         var h3 = el('h3');
-        if (e.status === 'done') h3.appendChild(el('span', 'donemark', '✓'));
-        h3.appendChild(document.createTextNode(effectiveName(e.it, state)));
+        var tname = el('span', 'tname');
+        if (e.status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
+        tname.appendChild(document.createTextNode(effectiveName(e.it, state)));
+        h3.appendChild(tname);
         if (e.it.price) h3.appendChild(el('span', 'price', e.it.price.text));
         card.appendChild(h3);
         card.appendChild(el('p', 'when-line', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
