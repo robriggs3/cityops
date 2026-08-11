@@ -3217,7 +3217,21 @@ CityOps.init();
     });
   }
 
+  // Offline support: register the app-shell service worker. Feature-detected
+  // (older browsers just skip it) and gated to http/https so opening the app
+  // as a local file:// (the standalone-guide path) never tries and never
+  // logs a scary console error. Silent on failure: a registration error
+  // should not block the app from working online.
+  function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
+    try {
+      navigator.serviceWorker.register('./sw.js');
+    } catch (e) {}
+  }
+
   start();
+  registerServiceWorker();
 })();
 </script>
 </body>
