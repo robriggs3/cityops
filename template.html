@@ -555,9 +555,53 @@ var CityOps = (function () {
     return MONTHS[a.getMonth()] + ' ' + a.getDate() + ' - ' + MONTHS[b.getMonth()] + ' ' + b.getDate() + ', ' + b.getFullYear();
   }
 
+  // ---- multi-city app store (used by the app shell, not by standalone files) ----
+  // Shape: { cities: {cityId: cityJson}, order: [cityId], active: cityId|null }.
+  // Pure helpers only: reading and writing localStorage stays in the app shell.
+  function normalizeAppStore(raw) {
+    var src = (raw && typeof raw === 'object') ? raw : {};
+    var srcCities = (src.cities && typeof src.cities === 'object') ? src.cities : {};
+    var cities = {};
+    Object.keys(srcCities).forEach(function (id) { cities[id] = srcCities[id]; });
+    var order = [];
+    var seen = {};
+    (Array.isArray(src.order) ? src.order : []).forEach(function (id) {
+      if (!seen[id] && Object.prototype.hasOwnProperty.call(cities, id)) { seen[id] = 1; order.push(id); }
+    });
+    Object.keys(cities).forEach(function (id) {
+      if (!seen[id]) { seen[id] = 1; order.push(id); }
+    });
+    var active = (typeof src.active === 'string' && order.indexOf(src.active) !== -1)
+      ? src.active : (order.length ? order[0] : null);
+    return { cities: cities, order: order, active: active };
+  }
+
+  function appAddCity(store, data) {
+    var s = normalizeAppStore(store);
+    var id = cityId(data);
+    var replaced = Object.prototype.hasOwnProperty.call(s.cities, id);
+    s.cities[id] = data;
+    if (s.order.indexOf(id) === -1) s.order.push(id);
+    return { store: s, cityId: id, replaced: replaced };
+  }
+
+  function appRemoveCity(store, id) {
+    var s = normalizeAppStore(store);
+    delete s.cities[id];
+    s.order = s.order.filter(function (x) { return x !== id; });
+    if (s.order.indexOf(s.active) === -1) s.active = s.order.length ? s.order[0] : null;
+    return s;
+  }
+
+  // Keep-both renames the incoming city so cityId() derives a fresh id.
+  function keepBothName(name) {
+    return String(name) + ' 2';
+  }
+
   // ---- DOM rendering (browser only) ----
-  var ctx = null; // { base, store }
+  var ctx = null; // { base, store }; replaced wholesale when the app boots another city
   var drag = null; // { card, grip, startY, list, cards, sec } while a pointer drag is in progress
+  var listenersBound = false; // window drag listeners bind once per page, not per boot
 
   function el(tag, cls, text) {
     var n = document.createElement(tag);
@@ -1265,6 +1309,15 @@ var CityOps = (function () {
       dts.type = 'button';
       dts.onclick = openDatesModal;
       tb.appendChild(dts);
+      // App context only: standalone guide files have no CityOpsApp, so this
+      // button never appears in them.
+      if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.exportStandalone) {
+        var expg = el('button', null, 'Export guide');
+        expg.type = 'button';
+        expg.id = 'btn-export-guide';
+        expg.onclick = function () { window.CityOpsApp.exportStandalone(); };
+        tb.appendChild(expg);
+      }
     }
     if (state.dataOverride) {
       tb.appendChild(el('span', 'flag', 'Data updated in-app: export and paste into the file to make permanent'));
@@ -1282,25 +1335,45 @@ var CityOps = (function () {
     main.appendChild(card);
   }
 
-  function init() {
-    var elData = document.getElementById('city-data');
-    if (!elData) return; // Node test harness path
-    var res = parse(elData.textContent);
-    if (!res.data) { renderError(res.errors); return; }
+  // boot(data) renders a parsed city. The app shell calls it again on every city
+  // switch, so every piece of per-city session state is reset here; only the
+  // window-level drag listeners survive, and they bind exactly once.
+  function boot(data) {
     var storageRef = null;
     try { storageRef = (typeof localStorage !== 'undefined') ? localStorage : null; }
     catch (e) { storageRef = null; }
-    var store = makeStore(cityId(res.data), storageRef);
-    ctx = { base: res.data, store: store };
-    window.addEventListener('pointermove', onDragPointerMove, { passive: false });
-    window.addEventListener('pointerup', onDragPointerEnd);
-    window.addEventListener('pointercancel', onDragPointerEnd);
+    ctx = { base: data, store: makeStore(cityId(data), storageRef) };
+    curState = null;
+    shareOn = false;
+    pendingPromote = null;
+    pendingMove = null;
+    pendingEdit = null;
+    drag = null;
+    if (typeof document !== 'undefined' && document.body) document.body.classList.remove('share');
+    if (!listenersBound && typeof window !== 'undefined' && window && window.addEventListener) {
+      window.addEventListener('pointermove', onDragPointerMove, { passive: false });
+      window.addEventListener('pointerup', onDragPointerEnd);
+      window.addEventListener('pointercancel', onDragPointerEnd);
+      listenersBound = true;
+    }
     rerender();
+  }
+
+  function init() {
+    var elData = document.getElementById('city-data');
+    if (!elData) return; // Node test harness path, and the app shell (no data block)
+    var res = parse(elData.textContent);
+    if (!res.data) { renderError(res.errors); return; }
+    boot(res.data);
   }
 
   return {
     STATUSES: STATUSES, slug: slug, cityId: cityId, dayLabel: dayLabel,
-    validate: validate, parse: parse, init: init,
+    validate: validate, parse: parse, init: init, boot: boot,
+    appStore: {
+      normalize: normalizeAppStore, add: appAddCity,
+      remove: appRemoveCity, keepBothName: keepBothName
+    },
     emptyState: emptyState, makeStore: makeStore, setStatus: setStatus,
     effectiveStatus: effectiveStatus, effectiveData: effectiveData, viewModel: viewModel,
     TRANSITIONS: TRANSITIONS, fmtRange: fmtRange, buildExport: buildExport,

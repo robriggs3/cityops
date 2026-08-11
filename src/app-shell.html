@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CityOps</title>
+<style>
+/*CITYOPS_CSS*/
+
+  /* --- app shell: multi-city switcher (index.html only) --- */
+  #citybar{max-width:760px; margin:0 auto; padding:10px 16px 0;}
+  .citybtn{display:flex; align-items:center; justify-content:space-between; gap:10px;
+    width:100%; font:inherit; text-align:left; color:var(--text); background:var(--bg-card);
+    border:1px solid var(--border-light); border-radius:12px; padding:10px 14px;
+    cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.03);}
+  .citybtn:hover{border-color:var(--accent);}
+  .citybtn .cname{font-weight:700; font-size:.95rem;}
+  .citybtn .cdates{display:block; font-size:.78rem; color:var(--text-3); margin-top:1px;}
+  .citybtn .chev{flex:0 0 auto; font-size:.8rem; color:var(--accent);}
+  .citypanel{background:var(--bg-card); border:1px solid var(--border-light); border-radius:12px;
+    margin-top:6px; overflow:hidden; box-shadow:0 6px 18px rgba(0,0,0,.12);}
+  .cityrow{display:block; width:100%; font:inherit; text-align:left; color:var(--text);
+    background:none; border:none; border-bottom:1px solid var(--border-light);
+    padding:11px 14px; cursor:pointer;}
+  .cityrow:last-of-type{border-bottom:none;}
+  .cityrow:hover{background:var(--bg-softer);}
+  .cityrow.current{background:var(--accent-soft);}
+  .cityrow .cname{font-weight:700; font-size:.9rem;}
+  .cityrow .cdates{display:block; font-size:.76rem; color:var(--text-3); margin-top:1px;}
+  .cityact{display:flex; gap:8px; flex-wrap:wrap; padding:10px 14px;
+    background:var(--bg-softer); border-top:1px solid var(--border-light);}
+  .cityact button{font:inherit; font-size:.78rem; font-weight:700; color:var(--accent-hover);
+    background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
+    padding:5px 13px; cursor:pointer;}
+  .cityact button:hover{border-color:var(--accent);}
+  .name-confirm{width:100%; font:inherit; font-size:.9rem; padding:8px 10px; margin-top:8px;
+    border:1px solid var(--border-light); border-radius:8px; background:#fff; color:var(--text);}
+  .modal .ctl[disabled]{opacity:.45; cursor:not-allowed; border-color:var(--border-light);}
+  .modal .ctl[disabled]:hover{border-color:var(--border-light);}
+  @media (max-width: 430px){
+    #citybar{padding:8px 10px 0;}
+  }
+</style>
+</head>
+<body>
+<div id="citybar"></div>
+<div class="wrap">
+  <div id="notice"></div>
+  <header id="hdr"></header>
+  <div class="toolbar" id="toolbar"></div>
+  <main id="main"></main>
+  <div class="foot" id="foot"></div>
+</div>
+<div id="modal"></div>
+
+<script id="app">
+<!--CITYOPS_ENGINE-->
+</script>
+
+<!--CITYOPS_TEMPLATE-->
+
+<script id="appshell">
+(function () {
+  'use strict';
+
+  var APP_KEY = 'cityops.app.v1';
+
+  // Bundled first-run city: the same example block standalone template.html ships
+  // with, so a stranger opening the app sees a working guide immediately.
+  var SEED_CITY = {
+    "schema": 1,
+    "city": {
+      "name": "Example City", "country": "XX",
+      "dates": {"from": "2026-01-01", "to": "2026-01-07"},
+      "accommodation": {"name": "Example Stay", "lat": 0, "lng": 0},
+      "currency": {"code": "USD", "usd": 1},
+      "notes": ["Replace this block with generated city JSON"]
+    },
+    "sections": [
+      {"id": "dinner", "label": "Dinner", "icon": "🍽️"}
+    ],
+    "items": [{
+      "id": "example",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-01-02",
+      "when": "First evening",
+      "name": "Example Restaurant",
+      "price": {"text": "~$20"},
+      "note": "Replace me. This item exists so the empty template renders.",
+      "hours": {"text": "12:00-23:00 daily", "class": "late"},
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    }]
+  };
+
+  var LS = null;
+  try { LS = (typeof localStorage !== 'undefined') ? localStorage : null; }
+  catch (e) { LS = null; }
+
+  var memStore = null;   // session fallback when localStorage refuses writes
+  var store = null;      // {cities, order, active}
+  var activeId = null;
+  var panelOpen = false;
+
+  function has(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+
+  function loadStore() {
+    var raw = null;
+    if (LS) { try { raw = LS.getItem(APP_KEY); } catch (e) { raw = null; } }
+    var obj = null;
+    if (raw) { try { obj = JSON.parse(raw); } catch (e) { obj = null; } }
+    if (!obj) obj = memStore;
+    return CityOps.appStore.normalize(obj);
+  }
+
+  function saveStore(s) {
+    memStore = s;
+    if (LS) { try { LS.setItem(APP_KEY, JSON.stringify(s)); } catch (e) {} }
+  }
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+
+  function hashCity() {
+    var m = String(location.hash || '').match(/^#city=(.+)$/);
+    if (!m) return null;
+    try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; }
+  }
+
+  function setHash(id) {
+    var target = '#city=' + encodeURIComponent(id);
+    if (location.hash === target) return;
+    try {
+      history.replaceState(null, '', location.pathname + location.search + target);
+    } catch (e) {
+      location.hash = target;
+    }
+  }
+
+  // Switching cities means: remember it, reflect it in the URL, hand the engine
+  // a fresh copy of that city's data. The engine reloads that city's own
+  // cityops.<cityId>.v1 state, so progress per city is preserved untouched.
+  function activateCity(id) {
+    store.active = id;
+    saveStore(store);
+    activeId = id;
+    setHash(id);
+    CityOps.boot(clone(store.cities[id]));
+    renderCitybar();
+  }
+
+  function renderCitybar() {
+    var bar = document.getElementById('citybar');
+    bar.innerHTML = '';
+    var cur = store.cities[activeId];
+    if (!cur) return;
+    var btn = el('button', 'citybtn');
+    btn.type = 'button';
+    btn.setAttribute('aria-expanded', String(panelOpen));
+    var lab = el('span');
+    lab.appendChild(el('span', 'cname', cur.city.name));
+    lab.appendChild(el('span', 'cdates', CityOps.fmtRange(cur.city.dates) +
+      ' · ' + store.order.length + (store.order.length === 1 ? ' city' : ' cities')));
+    btn.appendChild(lab);
+    btn.appendChild(el('span', 'chev', panelOpen ? '▴' : '▾'));
+    btn.onclick = function () { panelOpen = !panelOpen; renderCitybar(); };
+    bar.appendChild(btn);
+    if (!panelOpen) return;
+
+    var panel = el('div', 'citypanel');
+    store.order.forEach(function (id) {
+      var d = store.cities[id];
+      var row = el('button', 'cityrow' + (id === activeId ? ' current' : ''));
+      row.type = 'button';
+      row.appendChild(el('span', 'cname', d.city.name));
+      row.appendChild(el('span', 'cdates', CityOps.fmtRange(d.city.dates)));
+      row.onclick = function () {
+        panelOpen = false;
+        if (id === activeId) { renderCitybar(); return; }
+        activateCity(id);
+      };
+      panel.appendChild(row);
+    });
+    var acts = el('div', 'cityact');
+    var add = el('button', null, '+ Add city');
+    add.type = 'button';
+    add.onclick = function () { panelOpen = false; renderCitybar(); openAddModal(); };
+    acts.appendChild(add);
+    var rm = el('button', null, 'Remove city');
+    rm.type = 'button';
+    rm.onclick = function () { panelOpen = false; renderCitybar(); openRemoveModal(); };
+    acts.appendChild(rm);
+    panel.appendChild(acts);
+    bar.appendChild(panel);
+  }
+
+  function openAddModal() {
+    var host = document.getElementById('modal');
+    host.innerHTML = '';
+    var wrap = el('div', 'modal-wrap');
+    var box = el('div', 'modal');
+    box.appendChild(el('h3', null, 'Add a city'));
+    box.appendChild(el('p', 'diff', 'Paste schema v1 city JSON (the output of PROMPT.md). It is saved in this browser only.'));
+    var ta = document.createElement('textarea');
+    box.appendChild(ta);
+    var msg = el('div', 'diff', '');
+    box.appendChild(msg);
+    var row = el('div', 'mrow');
+    box.appendChild(row);
+
+    function close() { wrap.remove(); }
+
+    function commit(data) {
+      var res = CityOps.appStore.add(store, data);
+      store = res.store;
+      saveStore(store);
+      close();
+      activateCity(res.cityId);
+    }
+
+    function askDuplicate(data, id) {
+      msg.textContent = '"' + store.cities[id].city.name + '" is already saved under the id ' +
+        id + '. Replace it with the pasted data, or keep both?';
+      row.innerHTML = '';
+      var rep = el('button', 'ctl', 'Replace');
+      rep.type = 'button';
+      rep.onclick = function () { commit(data); };
+      var both = el('button', 'ctl', 'Keep both');
+      both.type = 'button';
+      both.onclick = function () {
+        var copy = clone(data);
+        var guard = 0;
+        do {
+          copy.city.name = CityOps.appStore.keepBothName(copy.city.name);
+          guard++;
+        } while (has(store.cities, CityOps.cityId(copy)) && guard < 20);
+        commit(copy);
+      };
+      var cancel = el('button', 'ctl', 'Cancel');
+      cancel.type = 'button';
+      cancel.onclick = close;
+      row.appendChild(rep);
+      row.appendChild(both);
+      row.appendChild(cancel);
+    }
+
+    var apply = el('button', 'ctl', 'Apply');
+    apply.type = 'button';
+    apply.onclick = function () {
+      var res = CityOps.parse(ta.value);
+      if (!res.data) { msg.textContent = 'Invalid:\n' + res.errors.join('\n'); return; }
+      var id = CityOps.cityId(res.data);
+      if (has(store.cities, id)) { askDuplicate(res.data, id); return; }
+      commit(res.data);
+    };
+    var cancel = el('button', 'ctl', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = close;
+    row.appendChild(apply);
+    row.appendChild(cancel);
+
+    wrap.appendChild(box);
+    wrap.onclick = function (e) { if (e.target === wrap) close(); };
+    host.appendChild(wrap);
+    ta.focus();
+  }
+
+  function openRemoveModal() {
+    var host = document.getElementById('modal');
+    host.innerHTML = '';
+    var cur = store.cities[activeId];
+    if (!cur) return;
+    var name = cur.city.name;
+    var wrap = el('div', 'modal-wrap');
+    var box = el('div', 'modal');
+    box.appendChild(el('h3', null, 'Remove ' + name));
+    box.appendChild(el('p', 'diff', 'This deletes the city and its saved progress on this device. ' +
+      'Type the city name exactly to enable the Remove button.'));
+    var inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'name-confirm';
+    inp.placeholder = name;
+    inp.setAttribute('aria-label', 'Type the city name to confirm removal');
+    box.appendChild(inp);
+    var row = el('div', 'mrow');
+    var rm = el('button', 'ctl to-archived', 'Remove');
+    rm.type = 'button';
+    rm.disabled = true;
+    rm.title = 'Type "' + name + '" to enable';
+    inp.oninput = function () {
+      var ok = inp.value === name;
+      rm.disabled = !ok;
+      rm.title = ok ? '' : 'Type "' + name + '" to enable';
+    };
+    rm.onclick = function () {
+      if (inp.value !== name) return;
+      var gone = activeId;
+      store = CityOps.appStore.remove(store, gone);
+      if (LS) { try { LS.removeItem('cityops.' + gone + '.v1'); } catch (e) {} }
+      if (!store.order.length) {
+        var res = CityOps.appStore.add(store, clone(SEED_CITY));
+        store = res.store;
+        store.active = res.cityId;
+      }
+      saveStore(store);
+      wrap.remove();
+      activateCity(store.active);
+    };
+    var cancel = el('button', 'ctl', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = function () { wrap.remove(); };
+    row.appendChild(rm);
+    row.appendChild(cancel);
+    box.appendChild(row);
+    wrap.appendChild(box);
+    wrap.onclick = function (e) { if (e.target === wrap) wrap.remove(); };
+    host.appendChild(wrap);
+    inp.focus();
+  }
+
+  // The assembler embeds the fully assembled standalone template here, with every
+  // closing script tag escaped so the text/plain block cannot end early. Undo that,
+  // drop the exported city JSON into the data block, and the result is a
+  // self-contained guide file identical to what tools/embed.js produces.
+  // (Never write that closing sequence literally in this file: it would end THIS
+  // script element. The assembler counts script tags to keep that honest.)
+  function exportStandalone() {
+    var node = document.getElementById('guide-template');
+    if (!node) return;
+    var closeTag = '<' + '/script'; // assembled, never written literally: see above
+    var raw = node.textContent;
+    // The assembler pads the block with one newline on each side; strip exactly
+    // those so the download is byte-identical to what tools/embed.js writes.
+    if (raw.charAt(0) === '\n') raw = raw.slice(1);
+    if (raw.charAt(raw.length - 1) === '\n') raw = raw.slice(0, -1);
+    var tpl = raw.replace(/<\\\/script/g, closeTag);
+    var base = store.cities[activeId];
+    var st = CityOps.makeStore(activeId, LS).load();
+    var out = CityOps.buildExport(CityOps.effectiveData(base, st), st);
+    var html = tpl.replace('__CITY_DATA__', function () { return JSON.stringify(out, null, 2); });
+    var blob = new Blob([html], { type: 'text/html' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = CityOps.cityId(out) + '.html';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+  }
+
+  // Set before the first boot so the engine's toolbar picks up the app-only button.
+  window.CityOpsApp = { exportStandalone: exportStandalone };
+
+  function start() {
+    store = loadStore();
+    if (!store.order.length) {
+      var seeded = CityOps.appStore.add(store, clone(SEED_CITY));
+      store = seeded.store;
+      store.active = seeded.cityId;
+      saveStore(store);
+    }
+    var wanted = hashCity();
+    var target = (wanted && has(store.cities, wanted)) ? wanted
+      : (store.active && has(store.cities, store.active)) ? store.active
+      : store.order[0];
+    activateCity(target);
+    window.addEventListener('hashchange', function () {
+      var id = hashCity();
+      if (id && has(store.cities, id) && id !== activeId) activateCity(id);
+    });
+  }
+
+  start();
+})();
+</script>
+</body>
+</html>
