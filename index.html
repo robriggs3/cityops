@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CityOps · living city guides</title>
+<style>
+  :root{--sea:#0b6e8f; --sea-deep:#084c63; --sand:#f5efe3; --ink:#1a2530; --muted:#5c6b78; --line:#e2ddd2;}
+  *{box-sizing:border-box; margin:0; padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--sand); color:var(--ink); line-height:1.5;}
+  .wrap{max-width:640px; margin:0 auto; padding:0 16px 60px;}
+  header{background:linear-gradient(160deg,var(--sea) 0%,var(--sea-deep) 100%); color:#fff;
+    padding:28px 20px 24px; margin:0 -16px 24px; border-radius:0 0 20px 20px;}
+  header h1{font-size:1.5rem;}
+  header p{opacity:.9; font-size:.95rem; margin-top:6px;}
+  .guide{display:block; background:#fff; border:1px solid var(--line); border-radius:14px;
+    padding:16px 18px; margin-bottom:12px; text-decoration:none; color:var(--ink);
+    box-shadow:0 1px 2px rgba(0,0,0,.03);}
+  .guide:active{background:#eef4f8;}
+  .guide .name{font-weight:700; font-size:1.05rem; color:var(--sea-deep);}
+  .guide .meta{font-size:.85rem; color:var(--muted); margin-top:3px;}
+  .foot{font-size:.8rem; color:var(--muted); margin-top:28px; line-height:1.6;}
+  .foot a{color:var(--sea);}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>CityOps</h1>
+  <p>A living city guide you operate, not just read. One file per city: plan, reorder, promote backups, mark done.</p>
+</header>
+<a class="guide" href="yerevan.html">
+  <div class="name">Yerevan 🗺️</div>
+  <div class="meta">Aug 15-22, 2026 · 75 items · dinners, coffee, coworking, day trips</div>
+</a>
+<a class="guide" href="batumi.html">
+  <div class="name">Batumi 🌊</div>
+  <div class="meta">Aug 8-15, 2026 · 58 items · the guide this project grew out of</div>
+</a>
+<a class="guide" href="template.html">
+  <div class="name">Blank template</div>
+  <div class="meta">Paste your own city JSON in and go. See the README for the generation prompt.</div>
+</a>
+<div class="foot">
+  Open source. Generate a city with any AI engine using <a href="PROMPT.md">the prompt</a>,
+  paste the JSON into the template, and you have a working guide: offline-friendly, phone-first, no build step.
+</div>
+</div>
+</body>
+</html>

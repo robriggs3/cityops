@@ -1,0 +1,1082 @@
+{
+  "schema": 1,
+  "city": {
+    "name": "Batumi",
+    "country": "GE",
+    "dates": {
+      "from": "2026-08-08",
+      "to": "2026-08-15"
+    },
+    "accommodation": {
+      "name": "Orbi City area",
+      "lat": 41.64,
+      "lng": 41.61
+    },
+    "currency": {
+      "code": "GEL",
+      "usd": 0.37
+    },
+    "notes": [
+      "Bolt works well",
+      "Cards widely OK",
+      "~2.2km south of Old Town"
+    ]
+  },
+  "sections": [
+    {
+      "id": "dinner",
+      "label": "Dinner",
+      "icon": "🍽️"
+    },
+    {
+      "id": "coffee",
+      "label": "Coffee",
+      "icon": "☕"
+    },
+    {
+      "id": "cowork",
+      "label": "Coworking",
+      "icon": "💻"
+    },
+    {
+      "id": "activities",
+      "label": "Activities",
+      "icon": "🏛️"
+    },
+    {
+      "id": "services",
+      "label": "Services",
+      "icon": "🧺"
+    },
+    {
+      "id": "practical",
+      "label": "Practical",
+      "icon": "💡"
+    }
+  ],
+  "items": [
+    {
+      "id": "heart-of-batumi",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-08-09",
+      "when": "After the Old Town sunset walk",
+      "name": "Heart of Batumi",
+      "price": {
+        "text": "~50-70 GEL / $19-26"
+      },
+      "note": "4.6★ across 5,545 reviews - the broadest, most reliable Georgian menu in the city. Your orientation dinner in the neighborhood you actually like.",
+      "hours": {
+        "text": "11:00-23:00 daily",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=5665222092725758856"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+995568940515"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "tanini",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-08-10",
+      "when": "Work day · stay local, low effort",
+      "name": "Tanini",
+      "price": {
+        "text": "~30-50 GEL / $11-19"
+      },
+      "note": "4.6★, five minutes from your door, open till midnight. Pkhali and badrijani are the light order; mtsvadi if you want protein without a heavy sauce.",
+      "hours": {
+        "text": "Till 00:00 daily",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=17307905369148409534"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+995558890404"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "blue-wave",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-08-11",
+      "when": "After the Botanical Garden - eat on the way back",
+      "name": "Blue Wave",
+      "price": {
+        "text": "~60-100 GEL / $22-37"
+      },
+      "note": "Fish market row, north of the center. Pick your fish, they grill it. You'll be coming down the coast anyway.",
+      "hours": {
+        "text": "Till 00:00 daily",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=7717649371581167499"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+995422225071"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "riverside-makhuntseti",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-08-12",
+      "when": "Mountain day - eat up there, drink back here",
+      "name": "Riverside, Makhuntseti",
+      "price": {
+        "text": "~30-50 GEL / $11-19"
+      },
+      "note": "4.8★, riverside, open-fire cooking and river trout at roughly half Batumi prices. Then Mahzen back in town: expat pub run by two Americans, board game night from 7pm.",
+      "hours": {
+        "text": "Till 00:00 · Mahzen opens 19:00",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Riverside",
+          "href": "https://maps.google.com/?cid=10679791630811695327"
+        },
+        {
+          "kind": "map",
+          "label": "Mahzen",
+          "href": "https://maps.google.com/?cid=1635951102451792142"
+        },
+        {
+          "kind": "tel",
+          "label": "Call Riverside",
+          "href": "tel:+995591008790"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "brasserie-1900",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-08-13",
+      "when": "Old Town office day - make this the good one",
+      "name": "Brasserie 1900",
+      "price": {
+        "text": "~80-120 GEL / $30-44 · book ahead"
+      },
+      "note": "4.8★ and the best-reviewed proper restaurant in the city. Smart casual fits better than athleisure here, no formal requirement. Closes 23:00, and August fills it, so reserve.",
+      "hours": {
+        "text": "12:00-23:00 daily",
+        "class": "late"
+      },
+      "tags": [
+        "Book ahead"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=895365817124148954"
+        },
+        {
+          "kind": "web",
+          "label": "brasserie1900.ge",
+          "href": "https://brasserie1900.ge"
+        },
+        {
+          "kind": "tel",
+          "label": "Book",
+          "href": "tel:+995511222252"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "adjarian-khachapuri",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-08-13",
+      "name": "Adjarian Khachapuri",
+      "price": {
+        "text": "11 GEL"
+      },
+      "note": "Same day as Brasserie 1900, as LUNCH. Cash only, self-service, locals. The boat-shaped egg-and-butter one. It's a meal in itself, which is why it's lunch and not dinner. Closes 21:00.",
+      "tags": [
+        "Lunch"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Adjarian Khachapuri",
+          "href": "https://maps.google.com/?cid=14266185083253223848"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "tanini-or-sakhli",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-08-14",
+      "when": "Services + slack · light, near home, early night",
+      "name": "Tanini or Sakhli",
+      "price": {
+        "text": "~30-60 GEL / $11-22"
+      },
+      "note": "4.7★ across 790 reviews for Sakhli. Tanini if you want the 5-minute walk. Sakhli if you want one more good night out: converted old house with a hidden courtyard and pond, gastropub menu, open till midnight.",
+      "hours": {
+        "text": "Both till 00:00",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Tanini",
+          "href": "https://maps.google.com/?cid=17307905369148409534"
+        },
+        {
+          "kind": "map",
+          "label": "Sakhli",
+          "href": "https://maps.google.com/?cid=7869130428979254352"
+        },
+        {
+          "kind": "tel",
+          "label": "Call Sakhli",
+          "href": "tel:+995555522388"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "sat-15-departure-day",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-08-15",
+      "when": "Departure day",
+      "name": "Flight day: eat before the airport",
+      "note": "Decided: you are FLYING to Yerevan today. Check your ticket for the departure time and work backward: Batumi airport (BUS) is about 25 minutes south of you by Bolt, and for an international departure be there 2 hours ahead. A morning flight means breakfast only; a midday flight leaves room for one last khachapuri as an early lunch near home. Nothing at the airport is worth eating, so eat first either way.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "at-the-sisters",
+      "section": "dinner",
+      "status": "backup",
+      "name": "At the Sisters",
+      "note": "(Parnavaz Mepe). 4.8★, 1,169 reviews, Ukrainian. The borscht is the draw. Closes 22:00, so this is an early-dinner option only.",
+      "hours": {
+        "text": "Closes 22:00"
+      },
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "savane",
+      "section": "dinner",
+      "status": "backup",
+      "name": "Savane",
+      "note": "(Gogebashvili). 4.8★, till midnight, quieter and less touristed than the Piazza edge. Steak and cocktails.",
+      "hours": {
+        "text": "Till midnight"
+      },
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "retro-gogebashvili",
+      "section": "dinner",
+      "status": "backup",
+      "name": "RETRO, Gogebashvili location",
+      "note": "(4.3★, sea view, till 02:00). Note there are two Retros; the Takaishvili one is inland and scores lower. Reviews at both flag aggressive drink upselling: one guest was charged 40 GEL for a \"homemade lemonade.\" Ask prices before ordering anything off-menu.",
+      "hours": {
+        "text": "Till 02:00"
+      },
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "ponte",
+      "section": "dinner",
+      "status": "backup",
+      "name": "Ponte",
+      "note": "Pizza, 4.8★, till 02:00, ~10 min from you. The non-Georgian night.",
+      "hours": {
+        "text": "Till 02:00"
+      },
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "lavanda",
+      "section": "dinner",
+      "status": "backup",
+      "name": "Lavanda",
+      "note": "Literally your street. Cheap Georgian. 15% service charge and at least one report of a padded bill, so check it.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "khinkali-chacha",
+      "section": "dinner",
+      "status": "backup",
+      "name": "Khinkali & Chacha",
+      "note": "4.8★, till 01:00. Best khinkali in town if you want another round, see the note below first.",
+      "hours": {
+        "text": "Till 01:00"
+      },
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "european-square-restaurant",
+      "section": "dinner",
+      "status": "archived",
+      "name": "European Square Restaurant",
+      "note": "On the Piazza: square-premium pricing, ordinary food. Decided against. Also skipping Sami Ludi's neighbors on the fish row (15% auto service charge).",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "nord",
+      "section": "coffee",
+      "status": "plan",
+      "name": "Nord Specialty Coffee",
+      "price": {
+        "text": "~11-14 GEL / $4-5"
+      },
+      "note": "Zhordania St. Shavi beans out of Tbilisi. Americano ~11, V60 ~14. Small room, 09:00-22:00.",
+      "hours": {
+        "text": "09:00-22:00",
+        "class": "day"
+      },
+      "tags": [
+        "Best"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=17715235062727338856"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "kopi",
+      "section": "coffee",
+      "status": "plan",
+      "name": "Kopi Specialty Roasters",
+      "price": {
+        "text": "~10-20 GEL / $4-7"
+      },
+      "note": "Lermontov St. Roasts in house, 4.8★, does breakfast. The best morning work spot of the three.",
+      "hours": {
+        "text": "Morning ✓",
+        "class": "day"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=15468823544390630221"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "urban-roastery",
+      "section": "coffee",
+      "status": "plan",
+      "name": "Urban Roastery",
+      "price": {
+        "text": "~10-18 GEL / $4-7"
+      },
+      "note": "Melikishvili. Opens 08:00, earliest of the three, which matters on a work morning.",
+      "hours": {
+        "text": "From 08:00",
+        "class": "day"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=13779949869241695437"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "global-coffee",
+      "section": "coffee",
+      "status": "backup",
+      "name": "Global Coffee",
+      "note": "(Abashidze Ave). Opens 08:00, central, fine for a work block.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "coffeetopia",
+      "section": "coffee",
+      "status": "backup",
+      "name": "Coffeetopia",
+      "note": "Was Plan A in v1; it's 4.2★ and has become a tourist café. Use it for the view, not the coffee.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "thone-bakeries",
+      "section": "coffee",
+      "status": "backup",
+      "name": "Thone bakeries",
+      "note": "Clay-oven neighborhood bakeries, 2-5 GEL for fresh bread or khachapuri on the walk out. Daytime only.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "locus",
+      "section": "cowork",
+      "status": "plan",
+      "name": "Locus",
+      "price": {
+        "text": "~30-40 GEL / $11-15 day"
+      },
+      "note": "4.8★, bookable desks online, free coffee. Gorgasali St near the port, 20 min walk to Old Town, not in it. Closed Sat & Sun, which rules out your arrival and departure days.",
+      "hours": {
+        "text": "Mon-Fri 10:00-21:00",
+        "class": "day"
+      },
+      "tags": [
+        "Best"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=693453881050092310"
+        },
+        {
+          "kind": "web",
+          "label": "Book a desk",
+          "href": "https://app.locus.ge/"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+995511113366"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "lendspace",
+      "section": "cowork",
+      "status": "plan",
+      "name": "LendSpace",
+      "price": {
+        "text": "day rates vary"
+      },
+      "note": "Sherif Khimshiashvili, 4 minutes from your door and open every day 10:00-22:00, with private rooms for calls. Reviews flag weak ventilation. This is your 7-day fallback if the apartment wifi disappoints.",
+      "hours": {
+        "text": "Daily 10:00-22:00",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=16288971574140874946"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "vataga",
+      "section": "cowork",
+      "status": "backup",
+      "name": "Vataga",
+      "note": "(Komakhidze, 5 min from Piazza). Coworking plus board-game club, cheap, well-liked. Opens at noon weekdays, 14:00 Saturday, kills your morning.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "terminal-batumi",
+      "section": "cowork",
+      "status": "backup",
+      "name": "Terminal Batumi",
+      "note": "(Akhmeteli 7a). The only true coworking inside the Old Town footprint, open 09:00-21:00 daily including weekends, ~40 GEL. But reviews consistently describe broken AC and 30-40 Mbps. In August the AC is the dealbreaker.",
+      "hours": {
+        "text": "09:00-21:00 daily"
+      },
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "d-block-rooms-hotel",
+      "section": "cowork",
+      "status": "backup",
+      "name": "D Block @ Rooms Hotel",
+      "note": "24/7, central, 20 GEL a visit. It's a hotel lobby with rolling suitcases. Emergency only.",
+      "hours": {
+        "text": "24/7"
+      },
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "kopi-or-global-coffee",
+      "section": "cowork",
+      "status": "backup",
+      "name": "Kopi or Global Coffee",
+      "note": "For a morning work block with no day pass.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "botanical-garden",
+      "section": "activities",
+      "status": "plan",
+      "name": "Batumi Botanical Garden",
+      "price": {
+        "text": "20-25 GEL / $7-9 (+10 shuttle)"
+      },
+      "note": "Cliffside over the sea, one of the largest in the former USSR. 2-3 hrs, hilly. Official price is 20; recent visitors report 25. Bolt ~10-20 GEL each way. Go 09:00-10:00, August afternoons are brutal on those slopes.",
+      "hours": {
+        "text": "09:00-19:30 · DAYTIME",
+        "class": "day"
+      },
+      "tags": [
+        "Tue"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=4574072351925181070"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "makhuntseti",
+      "section": "activities",
+      "status": "plan",
+      "name": "Makhuntseti + Adjara valley",
+      "price": {
+        "text": "150-200 GEL driver / 60-100 tour / 2-3 GEL bus"
+      },
+      "note": "12th-century arched Queen Tamar bridge, waterfall, family wineries. ~1 hr inland, 10-15°C cooler and dry, the answer to \"Batumi is bigger than I expected.\" Entry free, 2 GEL parking. Marshrutka #77 from the Old Batumi bus station on Mayakovsky runs hourly toward Keda; a hired Bolt driver for the day gives you the wineries a bus can't.",
+      "hours": {
+        "text": "Morning · DAYTIME",
+        "class": "day"
+      },
+      "tags": [
+        "Wed",
+        "Best day"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Riverside (lunch)",
+          "href": "https://maps.google.com/?cid=10679791630811695327"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "argo-cable-car",
+      "section": "activities",
+      "status": "plan",
+      "name": "Argo Cable Car",
+      "price": {
+        "text": "30 GEL / $11 return"
+      },
+      "note": "Best panorama in the city, and better value than the Alphabet Tower deck. 2.6km, ~15 min each way, round trip included, buy online to skip a queue that runs 20 min at peak. Tickets valid 6 months. The official site warns that taxi drivers quote false prices at the lower station; ignore them. Listings disagree on closing (22:30 vs midnight), check the site the day you go.",
+      "hours": {
+        "text": "From 11:00 · evening ✓",
+        "class": "eve"
+      },
+      "tags": [
+        "Thu",
+        "Evening"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=17774162145929967733"
+        },
+        {
+          "kind": "web",
+          "label": "Buy tickets",
+          "href": "https://argo-batumi.ge/en/ticket-info"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "boulevard",
+      "section": "activities",
+      "status": "plan",
+      "name": "Batumi Boulevard",
+      "price": {
+        "text": "Free · bikes from 5-15 GEL"
+      },
+      "note": "7km promenade. Seaward path the whole way, water on one side, lit towers on the other. The 4km walk from Miracle Park back to Orbi is ~50 min and the best free thing in the city.",
+      "hours": {
+        "text": "Anytime · great after dark",
+        "class": "eve"
+      },
+      "tags": [
+        "Anytime"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=9499721919345703217"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "ali-nino",
+      "section": "activities",
+      "status": "done",
+      "name": "Ali & Nino",
+      "price": {
+        "text": "Free"
+      },
+      "note": "Two steel figures pass through each other on a ~10 min cycle. Sunset. Ferris wheel 100m away, 10 GEL, runs till 01:00.",
+      "hours": {
+        "text": "Sunset",
+        "class": "eve"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=6533487441952877240"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "gonio-fortress",
+      "section": "activities",
+      "status": "plan",
+      "name": "Gonio Fortress",
+      "price": {
+        "text": "10-15 GEL / $4-6"
+      },
+      "note": "Roman-era ruins 20 min south. 45-60 min visit. Marshrutka 1.5-2 GEL, Bolt ~20-25. Guide +25. Closes 18:00.",
+      "hours": {
+        "text": "10:00-18:00 · DAYTIME",
+        "class": "day"
+      },
+      "tags": [
+        "Sat morning"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=5526848821056374421"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "view-park",
+      "section": "activities",
+      "status": "backup",
+      "name": "View Park / \"WHERE\" sculpture",
+      "note": "2km south of you, 4.8★, fountains and skate park. Good morning walk, free. Turn around at Metro City mall.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "breakwater-pier",
+      "section": "activities",
+      "status": "backup",
+      "name": "Breakwater pier by the lighthouse",
+      "note": "(North end of Miracle Park). City skyline from the water side. Free, and a better shot than the paid decks.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "alphabet-tower-deck",
+      "section": "activities",
+      "status": "backup",
+      "name": "Alphabet Tower deck",
+      "note": "20 GEL. Cut it. The cable car gives you more for 33.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "aquapark-beach",
+      "section": "activities",
+      "status": "archived",
+      "name": "Aquapark Beach",
+      "note": "700m south. Walk past it. Reviews describe untreated outflows nearby: smell, murky water. Decided against.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "360-sky-bar",
+      "section": "activities",
+      "status": "backup",
+      "name": "360 Sky Bar",
+      "note": "Great view from the right table, ordinary from the rest, and they won't seat you well unless you ask on arrival. Drink, not dinner.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "casinos",
+      "section": "activities",
+      "status": "backup",
+      "name": "Casinos",
+      "note": "Free entry for foreigners, some comp drinks. Not a priority per your notes.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "oktopus-gym",
+      "section": "activities",
+      "status": "backup",
+      "name": "OkTopUs Gym",
+      "note": "Sherif Khimshiashvili, 24/7, 4.5★, day passes, ~10 min walk.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "harmony-laundry",
+      "section": "services",
+      "status": "plan",
+      "name": "Harmony Laundry",
+      "price": {
+        "text": "~50 GEL / $19 large load"
+      },
+      "note": "Same day, WhatsApp when ready. One reviewer got a week and a half done for 50 GEL. Far cheaper than any hotel. Do this Friday morning.",
+      "hours": {
+        "text": "12:00-23:00 daily",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=13780194524220652846"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "infinity-massage",
+      "section": "services",
+      "status": "plan",
+      "name": "Infinity",
+      "price": {
+        "text": "~80-120 GEL / $30-44 per hr"
+      },
+      "note": "(Kostava, 4.9★, 511 reviews). Thai massage. Roughly half what the Hilton and Sheraton spas charge for the same hour.",
+      "hours": {
+        "text": "12:00-00:00 daily",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Infinity",
+          "href": "https://maps.google.com/?cid=3384373623836726499"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "siam-massage",
+      "section": "services",
+      "status": "plan",
+      "name": "Siam",
+      "price": {
+        "text": "~80-120 GEL / $30-44 per hr"
+      },
+      "note": "(Chavchavadze, 5.0★, 427 reviews). Thai massage. Roughly half what the Hilton and Sheraton spas charge for the same hour.",
+      "hours": {
+        "text": "12:00-00:00 daily",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Siam",
+          "href": "https://maps.google.com/?cid=8033156274956617233"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "barber-karalidze",
+      "section": "services",
+      "status": "backup",
+      "name": "Barber Karalidze",
+      "note": "(Tavdadebuli). Most central, ~25-40 GEL. Men Zone and Barbershop DIDI score higher but are well south.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "heaven-nails",
+      "section": "services",
+      "status": "backup",
+      "name": "Heaven Nails",
+      "note": "Central pedicure, 4.8★.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "willmart",
+      "section": "services",
+      "status": "backup",
+      "name": "Willmart",
+      "note": "(Inasaridze). 24h grocery, 4.3★, better than the Magniti next door.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "grooming-yerevan",
+      "section": "services",
+      "status": "backup",
+      "name": "Grooming can wait for Yerevan",
+      "note": "Cheaper there with more options.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "saturday-departure-decision",
+      "section": "practical",
+      "status": "plan",
+      "name": "Saturday departure: RESOLVED, flying",
+      "note": "Decided 11 Aug: flying Batumi to Yerevan direct (FlyOne runs the route Saturdays, about an hour in the air) instead of the 18-hour train-plus-overnight-bus haul via Tbilisi. That gives Saturday evening back: you land, check in, and Sunday starts rested. Confirm the departure time on your ticket and book the Bolt to the airport the night before.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "work-window",
+      "section": "practical",
+      "status": "plan",
+      "name": "Work window",
+      "note": "The old version assumed you work until ~10pm Batumi time, so every dinner was a 9pm pick. This week you've been out at 8pm. The plan below assumes work mornings, explore afternoons, dinner 7-9pm. If that's wrong, the late-friendly options are flagged.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "on-dinner-flexibility",
+      "section": "practical",
+      "status": "plan",
+      "name": "On dinner flexibility",
+      "note": "Nothing here closes on a specific weekday. The real constraints are early-closers and weekend crowding, both flagged.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "on-khinkali",
+      "section": "practical",
+      "status": "plan",
+      "name": "On khinkali",
+      "note": "You had it in Tbilisi and it sat badly. That's common and not a you-problem: khinkali is a dense fistful of fatty meat and broth in thick boiled dough, usually eaten five or six at a time, and it's heavy going down. If you want the experience again, order three, not six, take the mushroom or cheese filling instead of the meat, and don't pair it with beer. Otherwise the pkhali / badrijani / grilled-meat route you've been on works better for you, and the cheese boards are doing you no harm at all.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "on-coffee-scene",
+      "section": "practical",
+      "status": "plan",
+      "name": "On the coffee scene",
+      "note": "The specialty scene here is better than \"thin.\" These three are the real ones.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "on-websites",
+      "section": "practical",
+      "status": "plan",
+      "name": "On websites",
+      "note": "Only three places in this guide have a real one: Brasserie 1900, Locus, and Argo. Everything else in Batumi runs on Facebook or Instagram, or has no web presence at all, so those cards get a Call pill instead. That is normal here and not a quality signal: Adjarian Khachapuri is cash-only with no phone and it is one of the best things you will eat this week. Where booking matters, calling beats messaging, staff generally speak enough English and same-day reservations are easy.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "the-rhythm",
+      "section": "practical",
+      "status": "plan",
+      "name": "The rhythm",
+      "note": "Work mornings from the apartment or LendSpace, beach or boulevard midday, Bolt into Old Town late afternoon, dinner, walk or Bolt back. One trip into the center per day rather than fighting the 2.2km each way.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "cash",
+      "section": "practical",
+      "status": "plan",
+      "name": "Cash",
+      "note": "200-300 GEL covers beach chairs, the khachapuri place, marshrutkas, and Bolt tips. TBC/BoG ATMs on Abashidze and the Boulevard. Tbilisi GEL carries over.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "tourist-overcharging",
+      "section": "practical",
+      "status": "plan",
+      "name": "Tourist overcharging",
+      "note": "Tourist overcharging is systemic here. Multiple reviews across supermarkets, beach clubs, and restaurants describe wrong change, shelf-tag mismatches, and foreigner pricing. Watch the register display, keep receipts, count change. Restaurant service charges of 10-15% are often added automatically, check before tipping again.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "beach",
+      "section": "practical",
+      "status": "plan",
+      "name": "Beach",
+      "note": "Pebble, not sand. Chacos are fine for walking in; they float off if you swim. All Georgian coastline is public, \"private beach\" doesn't exist, you're only ever renting a lounger (10-20 GEL independent, ~60 GEL at Iveria Beach). Real rip currents and patchy lifeguard coverage; respect red flags.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "weekend-crowding",
+      "section": "practical",
+      "status": "plan",
+      "name": "Weekend crowding",
+      "note": "Old Town and the Piazza fill after 20:00 in August, especially Fri-Sat. Go at 19:00 or expect a wait. Brasserie 1900 is the only Plan A pick that genuinely needs a reservation.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    }
+  ]
+}

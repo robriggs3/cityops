@@ -1,0 +1,2788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CityOps Guide</title>
+<style>
+  :root{
+    --sea:#0b6e8f; --sea-deep:#084c63; --sand:#f5efe3; --ink:#1a2530;
+    --muted:#5c6b78; --line:#e2ddd2; --gold:#c8892a; --flag:#c1462f;
+    --card:#ffffff; --ok:#2f7d55;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--sand); color:var(--ink); line-height:1.5; -webkit-text-size-adjust:100%;}
+  .wrap{max-width:760px; margin:0 auto; padding:0 16px 60px;}
+  header{background:linear-gradient(160deg,var(--sea) 0%,var(--sea-deep) 100%); color:#fff;
+    padding:26px 20px 22px;}
+  .wrap>header{margin:0 -16px 20px; border-radius:0 0 20px 20px;}
+  header h1{font-size:1.55rem; letter-spacing:.2px;}
+  header .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
+  .facts{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;}
+  .chip{background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25);
+    padding:5px 10px; border-radius:20px; font-size:.8rem;}
+  h2{font-size:1.15rem; margin:26px 0 12px; color:var(--sea-deep);
+    display:flex; align-items:center; gap:8px;}
+  h2 .ic{font-size:1.1rem}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:14px 16px; margin-bottom:12px; box-shadow:0 1px 2px rgba(0,0,0,.03);}
+  .card h3{font-size:1.02rem; display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap;}
+  .card h3 .price{font-size:.82rem; color:var(--muted); font-weight:600; white-space:nowrap;}
+  .card p{font-size:.9rem; color:var(--muted); margin-top:5px;}
+  .row{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:10px;}
+  .hours{display:inline-block; font-size:.78rem; font-weight:600;
+    padding:3px 9px; border-radius:6px;}
+  .late{background:#e6f3ec; color:var(--ok);}
+  .day{background:#fbe9e4; color:var(--flag);}
+  .eve{background:#eef4f8; color:var(--sea);}
+  .maplink{display:inline-flex; align-items:center; gap:5px; font-size:.78rem; font-weight:700;
+    color:#fff; background:var(--sea); padding:5px 11px; border-radius:20px; text-decoration:none;}
+  .maplink:active{background:var(--sea-deep);}
+  .weblink{display:inline-flex; align-items:center; gap:5px; font-size:.78rem; font-weight:700;
+    color:var(--sea-deep); background:#fff; border:1.5px solid var(--sea);
+    padding:4px 11px; border-radius:20px; text-decoration:none;}
+  .weblink:active{background:#e8f1f5;}
+  .phonelink{display:inline-flex; align-items:center; gap:5px; font-size:.78rem; font-weight:700;
+    color:var(--muted); background:#fff; border:1.5px solid var(--line);
+    padding:4px 11px; border-radius:20px; text-decoration:none;}
+  .phonelink:active{background:#f0ece2;}
+  .nosite{font-size:.74rem; color:var(--muted); font-style:italic;}
+  .callout{background:#fff7ea; border:1px solid #f0dfba; border-left:4px solid var(--gold);
+    border-radius:10px; padding:14px 16px; margin:4px 0 20px; font-size:.9rem;}
+  .callout b{color:var(--gold);}
+  .lead{font-size:.92rem; color:var(--muted); margin-bottom:6px;}
+  .tag{display:inline-block; font-size:.72rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.4px; color:var(--sea); background:#e8f1f5; padding:2px 7px; border-radius:5px; margin-right:6px;}
+  .foot{font-size:.78rem; color:var(--muted); margin-top:24px; text-align:center; line-height:1.6;}
+  a{color:var(--sea);}
+
+
+  /* --- v5: drag to reorder --- */
+  .days .daycard{position:relative; touch-action:pan-y;}
+  .days .daycard .hd{padding-left:40px;}
+  .grip{position:absolute; left:8px; top:7px; width:26px; height:30px;
+    display:flex; align-items:center; justify-content:center; cursor:grab;
+    touch-action:none; border-radius:7px; color:var(--sea-deep); opacity:.45;}
+  .grip:active{cursor:grabbing; opacity:1; background:rgba(11,110,143,.12);}
+  .grip svg{width:15px; height:15px; pointer-events:none;}
+  .daycard.dragging{opacity:.9; box-shadow:0 10px 24px rgba(8,76,99,.22);
+    transform:scale(1.015); z-index:50; position:relative;}
+  .daycard.shifting{transition:transform .18s ease;}
+  .dropline{height:3px; background:var(--sea); border-radius:2px; margin:6px 0;}
+  .reorderbar{display:flex; align-items:center; justify-content:space-between;
+    gap:10px; flex-wrap:wrap; margin:0 0 12px; font-size:.8rem; color:var(--muted);}
+  .reorderbar button{font:inherit; font-weight:700; color:var(--sea-deep);
+    background:#fff; border:1.5px solid var(--line); border-radius:20px;
+    padding:5px 13px; cursor:pointer;}
+  .reorderbar button:hover{border-color:var(--sea);}
+  .reorderbar .saved{color:var(--ok); font-weight:700;}
+  @media (prefers-reduced-motion: reduce){ .daycard.shifting{transition:none} }
+
+  /* --- v3 additions --- */
+  .daycard{background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:0; margin-bottom:12px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.03);}
+  .daycard .hd{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+    background:#eef4f8; padding:9px 16px; border-bottom:1px solid var(--line);}
+  .daycard .hd .d{font-weight:800; font-size:.8rem; letter-spacing:.6px;
+    text-transform:uppercase; color:var(--sea-deep);}
+  .daycard .hd .t{font-size:.82rem; color:var(--muted);}
+  .daycard .bd{padding:12px 16px 14px;}
+  .daycard .bd h3{font-size:1.02rem; display:flex; justify-content:space-between;
+    align-items:baseline; gap:10px; flex-wrap:wrap;}
+  .daycard .bd h3 .price{font-size:.82rem; color:var(--muted); font-weight:600; white-space:nowrap;}
+  .daycard .bd p{font-size:.9rem; color:var(--muted); margin-top:5px;}
+  .backup{background:#f7f4ec; border:1px dashed #cfc6b2; border-radius:12px;
+    padding:12px 16px; margin:2px 0 22px;}
+  .backup .bt{font-size:.72rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+    color:var(--gold); margin-bottom:7px;}
+  .backup ul{margin:0; padding-left:18px;}
+  .backup li{font-size:.86rem; color:var(--muted); margin-bottom:5px;}
+  .backup li b{color:var(--ink);}
+  .warn{background:#fbe9e4; border-left:4px solid var(--flag); border-radius:10px;
+    padding:12px 16px; margin:4px 0 20px; font-size:.88rem; color:var(--ink);}
+  .warn b{color:var(--flag);}
+  .links{margin-top:9px; font-size:.82rem;}
+  .links a{font-weight:600; text-decoration:none;}
+  .links span{color:var(--line); margin:0 5px;}
+
+  /* --- cityops additions --- */
+  /* neutral badge when no class given */
+  .hours:not(.late):not(.day):not(.eve){background:#ececec; color:var(--muted);}
+  .ctl-row{display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;}
+  .ctl{font:inherit; font-size:.74rem; font-weight:700; color:var(--sea-deep);
+    background:#fff; border:1.5px solid var(--line); border-radius:20px;
+    padding:4px 11px; cursor:pointer;}
+  .ctl:hover{border-color:var(--sea);}
+  .ctl.to-done:hover{border-color:var(--ok); color:var(--ok);}
+  .ctl.to-archived:hover{border-color:var(--flag); color:var(--flag);}
+  .item-done{opacity:.55;}
+  .donemark{color:var(--ok); font-weight:800; margin-right:6px;}
+  .arch-details{margin:2px 0 22px;}
+  .arch-details summary{font-size:.72rem; font-weight:800; letter-spacing:.6px;
+    text-transform:uppercase; color:var(--muted); cursor:pointer; padding:6px 0;}
+  .arch-details .card, .arch-details .daycard{opacity:.7;}
+  .toolbar{display:flex; gap:8px; flex-wrap:wrap; margin:0 0 16px; align-items:center;}
+  .toolbar button{font:inherit; font-weight:700; color:var(--sea-deep); background:#fff;
+    border:1.5px solid var(--line); border-radius:20px; padding:5px 13px;
+    cursor:pointer; font-size:.8rem;}
+  .toolbar button:hover{border-color:var(--sea);}
+  .toolbar .flag{font-size:.74rem; color:var(--gold); font-weight:700;}
+  .errcard{background:#fbe9e4; border-left:4px solid var(--flag); border-radius:10px;
+    padding:14px 16px; margin:20px 0; font-size:.9rem;}
+  .errcard b{color:var(--flag);}
+  #notice{font-size:.78rem; color:var(--muted); margin:8px 0;}
+  .when-line{font-size:.8rem; color:var(--muted); font-style:italic; margin-top:2px;}
+  .modal-wrap{position:fixed; inset:0; background:rgba(26,37,48,.5); display:flex;
+    align-items:center; justify-content:center; padding:16px; z-index:100;}
+  .modal{background:#fff; border-radius:14px; padding:18px; max-width:640px;
+    width:100%; max-height:85vh; overflow:auto;}
+  .modal textarea{width:100%; min-height:200px; font-family:ui-monospace,Menlo,monospace;
+    font-size:.78rem; border:1px solid var(--line); border-radius:8px; padding:10px;}
+  .modal .mrow{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
+  .modal .diff{font-size:.8rem; color:var(--muted); margin-top:8px; white-space:pre-line;}
+  body.share .ctl-row, body.share .grip, body.share .reorderbar{display:none;}
+  /* narrow phones: trim horizontal chrome so cards get the width */
+  @media (max-width: 430px){
+    .wrap{padding:0 10px 48px;}
+    .wrap>header{margin:0 -10px 16px; padding:20px 14px 16px; border-radius:0 0 16px 16px;}
+    header h1{font-size:1.35rem;}
+    .facts{gap:6px; margin-top:10px;}
+    .chip{padding:4px 9px; font-size:.75rem;}
+    .card{padding:12px 12px; border-radius:12px;}
+    .daycard{border-radius:12px;}
+    .daycard .hd{padding:8px 12px;}
+    .days .daycard .hd{padding-left:38px;}
+    .daycard .bd{padding:10px 12px 12px;}
+    .backup{padding:10px 12px;}
+    .callout, .warn, .errcard{padding:12px 12px;}
+    .toolbar{gap:6px;}
+    .toolbar button{padding:5px 10px; font-size:.75rem;}
+    h2{margin:20px 0 10px;}
+  }
+  @media print{
+    .toolbar, .ctl-row, .grip, .reorderbar, #notice{display:none !important;}
+    body{background:#fff;}
+    .daycard, .card{box-shadow:none; break-inside:avoid;}
+    header{background:var(--sea-deep) !important; -webkit-print-color-adjust:exact;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="notice"></div>
+  <header id="hdr"></header>
+  <div class="toolbar" id="toolbar"></div>
+  <main id="main"></main>
+  <div class="foot" id="foot"></div>
+</div>
+<div id="modal"></div>
+
+<script type="application/json" id="city-data">
+{
+  "schema": 1,
+  "city": {
+    "name": "Yerevan",
+    "country": "AM",
+    "dates": {
+      "from": "2026-08-15",
+      "to": "2026-08-22"
+    },
+    "accommodation": {
+      "name": "Base: southeast Kentron",
+      "lat": 40.17,
+      "lng": 44.52
+    },
+    "currency": {
+      "code": "AMD",
+      "usd": 0.0027
+    },
+    "notes": [
+      "Yandex Go + GG, not Bolt",
+      "Cards fine, cash for taxis + markets",
+      "~1.8km SE of Republic Square",
+      "August: 33-39C, plan around it"
+    ]
+  },
+  "sections": [
+    {
+      "id": "dinner",
+      "label": "Dinner",
+      "icon": "🍽️"
+    },
+    {
+      "id": "coffee",
+      "label": "Coffee",
+      "icon": "☕"
+    },
+    {
+      "id": "cowork",
+      "label": "Coworking",
+      "icon": "💻"
+    },
+    {
+      "id": "activities",
+      "label": "Activities",
+      "icon": "🏛️"
+    },
+    {
+      "id": "services",
+      "label": "Services",
+      "icon": "🧺"
+    },
+    {
+      "id": "practical",
+      "label": "Practical",
+      "icon": "💡"
+    }
+  ],
+  "items": [
+    {
+      "id": "sat-15-arrival",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-08-15",
+      "when": "Arrival night",
+      "name": "Arrival night: land, check in, eat close",
+      "note": "Decided: you are flying in, so you land Saturday evening with the whole night intact. The honest move after a travel day: Merhatsy or Artashi Mot, both nine minutes from the door (watch Merhatsy's 20:30 close), or just the supermarket around the corner and an early night. Do not book anything for tonight; Sunday is the real first day.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "buzand-cafe",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-08-16",
+      "when": "Vernissage in the afternoon, fountains at 21:00 · this sits between them",
+      "name": "Buzand Cafe Restaurant",
+      "price": {
+        "text": "~4,000-12,000 AMD / $11-33"
+      },
+      "note": "4.8 stars across 442 reviews, the highest-rated substantial restaurant inside your walking radius, and it is literally next to the Vernissage market. 14 min from the door. Caramelised eggplant, kufta, pumpkin soup, and portions reviewers call large. English-speaking staff. Closes 23:00, so it is not a late option, but on a 19:00 sitting that does not matter.",
+      "hours": {
+        "text": "10:00-23:00 daily · closes 23:00",
+        "class": "eve"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=535674735576712650"
+        },
+        {
+          "kind": "web",
+          "label": "buzandcaferestaurant.com",
+          "href": "https://buzandcaferestaurant.com"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37410580180"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "derian",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-08-17",
+      "when": "After the Parajanov Museum · light, on the way home",
+      "name": "Derian",
+      "price": {
+        "text": "~4,000-16,000 AMD / $11-44"
+      },
+      "note": "4.7 stars across 801 reviews. Armenian crossed with Lebanese and Syrian, which in practice means hummus, fattoush, cig kofte, manti and lahmajun rather than a plate of meat: exactly the not-heavy-late order you want on a Monday. 16 min walk. Closes 23:00.",
+      "hours": {
+        "text": "12:00-23:00 daily · closes 23:00",
+        "class": "eve"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=5022432513420573258"
+        },
+        {
+          "kind": "web",
+          "label": "derianrestaurant.com",
+          "href": "https://derianrestaurant.com"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37495750740"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "sherep",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-08-18",
+      "when": "Coming back in from Tsitsernakaberd · make this a proper one",
+      "name": "Sherep",
+      "price": {
+        "text": "~6,000-18,000 AMD / $16-49 · book ahead"
+      },
+      "note": "4.6 stars across 2,521 reviews and the most-reviewed serious kitchen in the city. King Pap at Amiryan, so it is on your line back in from the memorial. Armenian crossed with Georgian: dolma, lamb, hummus, and the lavash they bake in front of you. Reservations are explicitly recommended and August is peak, so book. Two things reviews keep saying: dishes arrive one at a time with gaps rather than together, and the room ventilates badly in warm weather, so ask for a terrace table.",
+      "hours": {
+        "text": "09:30-00:00 daily",
+        "class": "late"
+      },
+      "tags": [
+        "Book ahead"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=5004375529947127824"
+        },
+        {
+          "kind": "tel",
+          "label": "Book",
+          "href": "tel:+37410600880"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "apres",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-08-19",
+      "when": "Back from Garni around 21:00 · the one that will still be open",
+      "name": "Après Restaurant Yvn",
+      "price": {
+        "text": "Price band not published"
+      },
+      "note": "4.3 stars across 165 reviews, and the reason it is here is the hours: open to 02:00, and 13 min from your door, which after a five-hour run to Geghard and back is the whole argument. Reviewers like the room and the welcome. The consistent complaint is slow service, so order the moment you sit down rather than easing into it. If Garni runs long, Caucasus Tavern never closes at all.",
+      "hours": {
+        "text": "10:00-02:00 daily",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=6114541216690985363"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37495404090"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "gata-tavern",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-08-20",
+      "when": "Walk down Mashtots from Matenadaran and cut across to Tumanyan",
+      "name": "Gata Tavern",
+      "price": {
+        "text": "~4,000-14,000 AMD / $11-38"
+      },
+      "note": "4.7 stars across 1,441 reviews. Khorovats and kebab done properly, an on-site bakery making gata where you can watch it, and a lot of reviewers specifically praising the staff. Two warnings, both from the reviews rather than from me: there is live music every night, so this is not a quiet room, and the portions are enormous, so order less than feels right.",
+      "hours": {
+        "text": "10:00-00:00 daily",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=2988160439417892917"
+        },
+        {
+          "kind": "web",
+          "label": "gatapandok.am",
+          "href": "https://gatapandok.am"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37494309000"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "lavash-restaurant",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-08-21",
+      "when": "Last full night · come down off the Cascade into it",
+      "name": "Lavash Restaurant",
+      "price": {
+        "text": "~4,000-16,000 AMD / $11-44 · book ahead"
+      },
+      "note": "4.6 stars across 5,058 reviews, which is more than any other restaurant in this guide by a distance, and it has stayed there. 21 Tumanyan, a 15 minute walk down from the top of the Cascade. The dishes reviewers name over and over are the dolma, the ghapama, the mille-feuille, and the lamb shoulder with emmer wheat pilaf. Its own top review tells you to reserve because it gets very busy, and this is August, so reserve.",
+      "hours": {
+        "text": "08:30-00:00 daily",
+        "class": "late"
+      },
+      "tags": [
+        "Book ahead"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=17905162120822390188"
+        },
+        {
+          "kind": "tel",
+          "label": "Book",
+          "href": "tel:+37410608800"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "sat-22-departure",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-08-22",
+      "when": "Departure morning · Pegasus 10:45 to Tirana",
+      "name": "Eat here, not at the airport",
+      "note": "You are targeting Zvartnots at 08:45 and I would make it 08:15, so breakfast is early and it is local. The nearest Yerevan City opens 08:30, which is too late; mart coffee opens 08:00 but it is 26 minutes the wrong way. The honest answer is to buy what you need the night before and eat it in the room, then leave at 07:45. Nothing airside at Zvartnots at 08:00 is worth the money, and August queues there run 30 to 50 percent longer than normal.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "merhatsy",
+      "section": "dinner",
+      "status": "backup",
+      "name": "Merhatsy.yvn",
+      "price": {
+        "text": "~2,000-4,000 AMD / $5-11"
+      },
+      "note": "4.9 stars across 189 reviews, the highest rating anywhere in this guide, and it is nine minutes from your door. Lebanese: manaqish, lahmacun, fattoush, tabbouleh, cardamom coffee, and an owner reviewers keep mentioning by name. THE CATCH IS THE HOURS. It shuts at 20:30 Monday to Saturday and at 16:00 on Sunday. It cannot hold a 21:00 dinner and it is closed on Sunday evening entirely. Go at 19:00 sharp on a weekday, or make it lunch.",
+      "hours": {
+        "text": "Mon-Sat 09:30-20:30 · Sun 09:30-16:00 · CLOSES EARLY"
+      },
+      "tags": [
+        "Early close"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=13146832030977478189"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37444200301"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "artashi-mot",
+      "section": "dinner",
+      "status": "backup",
+      "name": "Artashi Mot",
+      "price": {
+        "text": "~2,000-10,000 AMD / $5-27"
+      },
+      "note": "The khorovats answer, and the closest real food to the hotel at nine minutes. 4.2 stars across 404 reviews, which is honest rather than glowing and suggests it is inconsistent. Shashlik is the order; reviewers also rave about the pickle plate and the yoghurt with bread. Closes 23:00.",
+      "hours": {
+        "text": "10:00-23:00 daily · closes 23:00"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=11504603965177164614"
+        },
+        {
+          "kind": "web",
+          "label": "artashimot.am",
+          "href": "https://artashimot.am"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37410553222"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "tavern-yerevan-khorenatsi",
+      "section": "dinner",
+      "status": "backup",
+      "name": "Tavern Yerevan, Khorenatsi branch",
+      "price": {
+        "text": "~2,000-12,000 AMD / $5-33"
+      },
+      "note": "4.7 stars across 1,077 reviews, and note the branch: 29 Movses Khorenatsi is 17 minutes from you, while the flagship on Pap Tagavor is further and rates lower at 4.5. Classic tavern cooking, dolma and lyulya kebab, live music, generous plates, and the cheapest way into the Yeremyan group's kitchens.",
+      "hours": {
+        "text": "09:30-00:00 daily"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=8167352246672311429"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37410582512"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "lali-kitchen",
+      "section": "dinner",
+      "status": "backup",
+      "name": "LALI Kitchen and Bar",
+      "price": {
+        "text": "~6,000-16,000 AMD / $16-44"
+      },
+      "note": "4.5 stars across 297 reviews. Contemporary Georgian, and specifically the parts of Georgian food that worked for you: crispy eggplant, hummus with a twist, Georgian salad, achma, which is the layered cheese bread and a far lighter way to eat cheese and dough than khinkali. Reviewers call the service fast and friendly. To 00:00, and 01:00 on Friday and Saturday.",
+      "hours": {
+        "text": "Sun-Thu 10:00-00:00 · Fri-Sat to 01:00"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=613969417123250738"
+        },
+        {
+          "kind": "web",
+          "label": "lalikitchen.com",
+          "href": "https://lalikitchen.com"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37433070706"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "frank-by-basta",
+      "section": "dinner",
+      "status": "backup",
+      "name": "Frank by Basta",
+      "price": {
+        "text": "~4,000-16,000 AMD / $11-44"
+      },
+      "note": "4.7 stars across 566 reviews, and 113 of them mention the ribs specifically, which tells you what to order. Grill house: ribs, steaks, tartare. Open to 01:00. The night you want protein and no ceremony.",
+      "hours": {
+        "text": "12:00-01:00 daily"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=13221464448116283264"
+        },
+        {
+          "kind": "web",
+          "label": "frankmeat.am",
+          "href": "https://frankmeat.am"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37495050020"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "shirvan",
+      "section": "dinner",
+      "status": "backup",
+      "name": "Shirvan Persian Halal Restaurant",
+      "price": {
+        "text": "~2,000-12,000 AMD / $5-33"
+      },
+      "note": "4.7 stars across 3,658 reviews, the second most-reviewed place in the guide. Persian: kubideh, barg kebab, zereshk polo, shirazi salad. Two honest flags. Shisha comes up in 50 reviews, so the room is smoky. And there are real consistency complaints in the negatives: a limp shirazi salad, a watery ghormeh sabzi, a portion dispute on a barg order.",
+      "hours": {
+        "text": "11:00-00:00 daily"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=1852727147389865022"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37410582565"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "caucasus-tavern",
+      "section": "dinner",
+      "status": "backup",
+      "name": "Caucasus Tavern",
+      "price": {
+        "text": "~2,000-12,000 AMD / $5-33"
+      },
+      "note": "Open 24 hours, which is the entire point of it being here: it is the answer if Garni runs late or a flight moves. 4.2 stars across 1,387 reviews and that number is earned, not a fluke. One reviewer describes barbecue that was damp and soft as if it had been steamed; others praise khachapuri made fresh at 11pm. Go for the hours and the khash, not for the grill.",
+      "hours": {
+        "text": "Open 24 hours"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=13984643508467307238"
+        },
+        {
+          "kind": "web",
+          "label": "caucasus.am",
+          "href": "https://caucasus.am"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37410561177"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "tun-lahmajo",
+      "section": "dinner",
+      "status": "backup",
+      "name": "Tun Lahmajo",
+      "price": {
+        "text": "~2,000-6,000 AMD / $5-16"
+      },
+      "note": "Open till 04:00 and 264 reviews mention the lahmajo by name. 4.0 stars across 1,864 reviews, the lowest rating in this guide, and it is here for what it is rather than how it scores: cheap, loud, chaotic, and the thing everyone eats at midnight. The recurring complaint is slow service when it fills up, which it does.",
+      "hours": {
+        "text": "08:00-04:00 daily"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=16536170306299575299"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37410538717"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "niko-kitchen",
+      "section": "dinner",
+      "status": "backup",
+      "name": "Niko Kitchen and Bar",
+      "price": {
+        "text": "~4,000-12,000 AMD / $11-33"
+      },
+      "note": "4.9 stars but only 76 reviews, so treat that number as soft. A modern bistro in the house of Yerevan's first chief architect, 23 min walk, Instagram-only web presence. Gazpacho, grilled vegetables, a good wine list. One substantive review says the food is a hit or a miss and the chicken is often overdone, which on this small a sample is worth knowing.",
+      "hours": {
+        "text": "Mon-Fri 12:00-00:00 · Sat-Sun from 11:00"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=3638546618423160875"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37441885880"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "dolmama",
+      "section": "dinner",
+      "status": "backup",
+      "name": "Dolmama, the famous one, and why it is not a plan pick",
+      "note": "The most famous fine-dining name in Yerevan, open since 1998, now listed as Dolmama - Armenia's Restaurant. It sits at 4.2 stars across 859 reviews while Sherep, Lavash and Gata all sit at 4.6 to 4.7, and reviewers repeatedly frame it as expensive but. That is the clearest famous-name-has-slipped signal I found in the city, so it is a backup rather than your good night out. If you go anyway, the ishli dolma and the by-the-glass wine list are what people still praise. No price band published, no website on the listing.",
+      "hours": {
+        "text": "11:00-23:30 daily"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=17096852822464230124"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37410561354"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "on-tipping",
+      "section": "dinner",
+      "status": "backup",
+      "name": "Check the bill before you tip",
+      "note": "Some Yerevan restaurants add an automatic service charge of about 10%, and where it appears there is no obligation to add anything on top. Where it does not, 5 to 10% is normal and rounding up is the local habit. Tip in cash even when you pay by card, because card tips do not reliably reach the server. Worth saying plainly: unlike Batumi, I found ZERO bill-padding or service-charge complaints in the reviews I read here, including in the one-star reviews of the busiest places. This is a check-the-bill habit, not a defence against a known scam.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "mart-coffee",
+      "section": "coffee",
+      "status": "plan",
+      "name": "mart coffee",
+      "price": {
+        "text": "~1,200-1,800 AMD / $3-5 a coffee"
+      },
+      "note": "17 Pavstos Buzand. The morning default: opens 08:00 every day, closes 22:30, 4.4 stars across 256 reviews. It is one of only three cafes in the city where air conditioning could actually be CONFIRMED, which in August decides it, and it has power at every table plus a real breakfast menu. About 26 min walk, which is the honest cost of good coffee from your side of town. Coffee prices here are city averages, not this shop's menu; expect variation.",
+      "hours": {
+        "text": "08:00-22:30 daily · AC confirmed",
+        "class": "late"
+      },
+      "tags": [
+        "Best"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=8762115148101257575"
+        },
+        {
+          "kind": "web",
+          "label": "martcoffee.am",
+          "href": "https://martcoffee.am"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "work-space",
+      "section": "coffee",
+      "status": "plan",
+      "name": "Work Space",
+      "price": {
+        "text": "~1,200-1,800 AMD / $3-5 a coffee"
+      },
+      "note": "60 Pushkin. Opens 08:00, runs to midnight, every day. 5.0 stars across 317 Google reviews and 456 Yandex ratings, air conditioning confirmed, fast wifi and outlets everywhere. This is the one built for what you actually do before 14:00. Two recurring gripes in the reviews: the tables are thick enough to make legroom awkward, and the music sometimes runs loud, so bring headphones.",
+      "hours": {
+        "text": "08:00-00:00 daily · AC confirmed",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Work%20Space%2C%2060%20Pushkin%20St%2C%20Yerevan%2C%20Armenia"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "lumen-coffee",
+      "section": "coffee",
+      "status": "plan",
+      "name": "Lumen Coffee",
+      "price": {
+        "text": "~1,200-1,800 AMD / $3-5 a coffee"
+      },
+      "note": "3A Teryan. The city's benchmark roaster: in-house Giesen, single-origin Ethiopia, Colombia and Brazil, and reportedly some experimental Armenian-grown lots. 4.7 stars across 522 reviews. Quiet courtyard, non-smoking, outlets, reliable wifi. It opens 08:30 rather than 08:00 and the food is cake rather than breakfast, so this is the coffee-first morning, not the eat-first one. Air conditioning unconfirmed.",
+      "hours": {
+        "text": "08:30-22:30 daily",
+        "class": "late"
+      },
+      "tags": [
+        "Best coffee"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=11134072223634063458"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37444933030"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "nono",
+      "section": "coffee",
+      "status": "backup",
+      "name": "NÖNÖ Artisanal Coffee and Bakery",
+      "note": "7/10 Pavstos Buzand, the same block as mart coffee, 08:00 to midnight daily. Yandex 5.0 across 117 ratings, and the flat white is what reviews single out. Coffee, bakery, tapas and a cocktail bar in one room. Wifi, air conditioning and laptop tolerance are all unverified, but it is sixty seconds from mart, so it costs you nothing to try both on the first morning.",
+      "hours": {
+        "text": "08:00-00:00 daily"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=7883986869789877150"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "afrolab",
+      "section": "coffee",
+      "status": "backup",
+      "name": "AfroLab Specialty Coffee Roastery",
+      "note": "40 Pushkin. Armenia's first specialty roastery, beans from Kenya, Costa Rica, Colombia, Ethiopia, Guatemala, Honduras and Uganda, with a takeaway window. Opens by 08:00 (their own site says 08:00, Yandex says 07:00) and runs to 02:00. 4.6 stars across 479 Google reviews, but Tripadvisor sits at 3.4 with reviewers split hard on whether the coffee is any good. That is the widest rating gap in the city; go once and decide for yourself.",
+      "hours": {
+        "text": "~07:00-08:00 open, to 02:00"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=10470081937509838263"
+        },
+        {
+          "kind": "web",
+          "label": "afrolab.am",
+          "href": "https://afrolab.am"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "green-bean",
+      "section": "coffee",
+      "status": "backup",
+      "name": "The Green Bean",
+      "note": "38 Isahakyan, up by the Cascade. 08:30 to midnight daily, 4.5 stars across 578 reviews, and the remote-worker staple: consistent wifi, laptops normal, terrace, non-smoking, and a proper international breakfast (spinach omelette, bagels and cream cheese, vegan pancakes). It is 38 min on foot, so pair it with a Cascade evening rather than a work morning.",
+      "hours": {
+        "text": "08:30-00:00 daily"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=14821259442148975413"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37491529279"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "lumen-1936",
+      "section": "coffee",
+      "status": "backup",
+      "name": "Lumen Coffee 1936",
+      "note": "45 Mashtots. Lumen's second room, 08:30-22:30 daily, 4.6 stars across 400 reviews, and it has an actual dedicated coworking area with charging stations, in a vintage bookstore space with jazz on vinyl. Two consistent complaints: it is small, and the food is basic. It is on the Mashtots walk, so it pairs with the Matenadaran afternoon on Thursday.",
+      "hours": {
+        "text": "08:30-22:30 daily"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Lumen%20Coffee%201936%2C%2045%20Mesrop%20Mashtots%20Ave%2C%20Yerevan%2C%20Armenia"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "coffee-late-openers",
+      "section": "coffee",
+      "status": "backup",
+      "name": "The ones that open too late",
+      "note": "Named so you do not waste a morning discovering it. Openhaus on Isahakyan and Mirzoyan Library on Mher Mkrtchyan do not open until 10:00 and 11:00. Haldi.Co opens 10:00 on weekdays and 11:00 at weekends. Ground Zero on Saryan has sources claiming both 08:00 and 13:00 and there appear to be two branches under that name, so do not gamble an 08:00 start on it. All of them are good. None of them is breakfast.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "loft-coworking",
+      "section": "cowork",
+      "status": "plan",
+      "name": "LOFT Coworking",
+      "price": {
+        "text": "4,500 AMD / $12 day pass · 60,000-65,000 monthly"
+      },
+      "note": "3 Moskovyan, and the only genuinely 24/7 coworking in the capital, seven days a week. That one fact makes it the answer for Sat 15, Sun 16 and Sat 22, when nearly everything else is shut or reduced. 4.5 stars, 252 reviews. Air conditioning, phone and Skype booths, a meeting room, lockers, free coffee, printing, and a lounge with ping pong and a piano. 28 min walk, straight north of you. Two sources give two different phone numbers so I am publishing neither: reach them through Facebook or Instagram, and message the day before rather than assuming you can walk in.",
+      "hours": {
+        "text": "Open 24/7 including weekends",
+        "class": "late"
+      },
+      "tags": [
+        "Best",
+        "Weekends OK"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=3559657556172947173"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "impact-hub",
+      "section": "cowork",
+      "status": "plan",
+      "name": "Impact Hub Yerevan",
+      "price": {
+        "text": "5,000 AMD / $14 day pass · meeting room 5,000/hr"
+      },
+      "note": "80/1 Tigran Mets, the nearest coworking to your side of town at about 25 min, and 115m from Zoravar Andranik metro. 4.9 stars but only 31 reviews. THE CATCH: the day pass explicitly buys access until 19:00, Monday to Friday. Their own FAQ says the hub is open 24 hours including weekends, but that applies to the monthly membership tiers, not to a day pass, and one directory lists them as closed Saturday and Sunday outright. Email before you count on a weekend. Book through the form on their site; they publish no phone number anywhere.",
+      "hours": {
+        "text": "Day pass Mon-Fri 09:00-19:00 · weekends NOT reliable",
+        "class": "day"
+      },
+      "tags": [
+        "Closest",
+        "Book ahead"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=12476045117820446457"
+        },
+        {
+          "kind": "web",
+          "label": "yerevan.impacthub.net",
+          "href": "https://yerevan.impacthub.net"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "becoworker",
+      "section": "cowork",
+      "status": "backup",
+      "name": "BeCoworker",
+      "note": "37 Mashtots, near the Opera. 1,000 AMD an hour, 5,000 a day, and 20,000 AMD for a WEEK, which is the best-value structure I found for a stay this length: about $55 for the whole trip. Mon-Sat 09:30-22:00, closed Sunday. Only 6 reviews though, so the 5.0 rating means very little.",
+      "hours": {
+        "text": "Mon-Sat 09:30-22:00 · closed Sun"
+      },
+      "tags": [
+        "Best value"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=14517155029470788676"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "256-hub",
+      "section": "cowork",
+      "status": "backup",
+      "name": "256 HUB",
+      "note": "3,000 AMD a day, the cheapest found, open Mon-Sat 09:00-23:30 and Sun 09:30-23:30, so it does cover your weekends. 5.0 across 25 reviews. Terrace, kitchen, restaurant on site, phone booth, even a podcasting room. Two problems: it is out on Tsitsernakaberd Highway, the wrong side of the city from you, and the rate card I found is dated January 2024 with three conflicting sets of hours attached to it. Confirm before travelling out there.",
+      "hours": {
+        "text": "Mon-Sat 09:00-23:30 · Sun 09:30-23:30"
+      },
+      "tags": [
+        "Weekends OK"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=12619633478612608731"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "yerevan-coworking",
+      "section": "cowork",
+      "status": "backup",
+      "name": "Yerevan Coworking",
+      "note": "18/1 Zarobyan, near the Cascade. 4,000 AMD a day or 1,000 an hour, open 10:00-22:00 every day including weekends. An apartment converted into a workspace, small and cosy. The 10:00 opening is the disqualifier for a morning that starts at 08:00, which is why it is a backup and not a pick.",
+      "hours": {
+        "text": "10:00-22:00 daily · opens too late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=12934199102786142384"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37455489005"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "cowork-do-not-go",
+      "section": "cowork",
+      "status": "backup",
+      "name": "Do not go: the dead ones",
+      "note": "Several 2026 guides still list places that no longer exist, so here they are by name. Epicure has MOVED TO DILIJAN and is not a Yerevan coworking any more. KONG on Abovyan and Keerk and Co are permanently closed. Vol. 1 on Yeznik Koghbatsi is marked shut down on Yandex despite still appearing in current guides. BURO on Nalbandyan now shows up in current data as a cocktail bar and restaurant at the same address. AEON is probably fine but three sources give three different addresses and three different prices, so call before you walk anywhere.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "cafes-as-fallback",
+      "section": "cowork",
+      "status": "backup",
+      "name": "Cafes genuinely work here",
+      "note": "Yerevan is unusual: there is a mature, indexed laptop-cafe culture, with a local site maintaining a thirty-cafe index of them, and at specialty places nobody moves you on for sitting three hours over one coffee. Lumen 1936 and a couple of others run dedicated coworking corners. For five hours a morning with headphones, mart coffee or Work Space will carry you and you may never buy a day pass at all. The exceptions: traditional soorj cafes are cash-only with no wifi and are not built for it, and The Coffee 23.5 is specifically described as not a place to work from.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "vernissage",
+      "section": "activities",
+      "status": "plan",
+      "day": "2026-08-16",
+      "name": "Vernissage market",
+      "price": {
+        "text": "Free to walk"
+      },
+      "note": "4.5 stars, 6,035 reviews. Nominally open daily 10:00-18:00, but it is only actually a market on Saturday and Sunday: on a weekday, especially Monday, a large share of the stalls simply are not there, and Sunday is the fullest day. It closes at 18:00, so it is the one thing in this guide that cannot wait for the evening, which is exactly why it sits on a Sunday. Closest major sight to your door, 15 min walk.",
+      "hours": {
+        "text": "10:00-18:00 · DAYTIME · weekends only in practice",
+        "class": "day"
+      },
+      "tags": [
+        "Sun",
+        "Weekend only"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=12839570982798843047"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "republic-square-fountains",
+      "section": "activities",
+      "status": "plan",
+      "day": "2026-08-16",
+      "when": "After Vernissage · same trip into the centre",
+      "name": "Republic Square singing fountains",
+      "price": {
+        "text": "Free"
+      },
+      "note": "4.8 stars, 10,535 reviews. The light-and-music show runs late May to October, so August is fine. Sources split on the start time between 20:00 and 21:00, so be there by 20:45 and you cannot miss it. CLOSED TUESDAYS for cleaning, which is why this is not on Tue 18. 22 min walk, and it pairs with Vernissage as a single trip into the centre.",
+      "hours": {
+        "text": "Show ~21:00-23:00 · not Tuesdays",
+        "class": "late"
+      },
+      "tags": [
+        "Evening"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=3160986876997168244"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "parajanov-museum",
+      "section": "activities",
+      "status": "plan",
+      "day": "2026-08-17",
+      "name": "Sergei Parajanov Museum",
+      "price": {
+        "text": "1,500 AMD / $4 · foreign-language guide 5,000"
+      },
+      "note": "4.7 stars, 913 reviews, and here is why it has Monday: Monday is the dead day in Yerevan and this is open every single day, 10:30-18:00, with no closed day at all. Last entry 17:15. Collages, dolls and assemblages by the film director, in a house above the Hrazdan gorge. Small, strange, and the highest signal-to-noise museum in the city. About 10 min by GG, or a 34 min walk with a climb at the end.",
+      "hours": {
+        "text": "10:30-18:00 daily · last entry 17:15 · DAYTIME",
+        "class": "day"
+      },
+      "tags": [
+        "Mon"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=8570584081865167831"
+        },
+        {
+          "kind": "web",
+          "label": "parajanovmuseum.am",
+          "href": "https://parajanovmuseum.am"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37410538473"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "tsitsernakaberd",
+      "section": "activities",
+      "status": "plan",
+      "day": "2026-08-18",
+      "name": "Tsitsernakaberd: Genocide Museum + memorial",
+      "price": {
+        "text": "Free"
+      },
+      "note": "4.8 stars, 2,114 reviews, and entry is free. Closed Mondays, so Tuesday works. Sources disagree on closing time, one says 17:00 and one says 15:30, so treat 15:00 as your latest safe arrival rather than gambling on the later figure. The play is museum first, then stay outside: the eternal flame, the split stele and the ridge over the Hrazdan gorge stay open and are at their best at golden hour. Not walkable in August heat, take a GG for roughly 800-1,500 AMD.",
+      "hours": {
+        "text": "Museum Tue-Sun to 17:00 (or 15:30) · grounds open late",
+        "class": "day"
+      },
+      "tags": [
+        "Tue"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=2791847197271680866"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37410391412"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "garni-geghard",
+      "section": "activities",
+      "status": "plan",
+      "day": "2026-08-19",
+      "when": "The one day trip · leave straight after work",
+      "name": "Garni + Geghard + Symphony of Stones",
+      "price": {
+        "text": "~15,000-25,000 AMD car / $41-68 · Garni 1,500, Geghard free, gorge 300"
+      },
+      "note": "The best day out from Yerevan and the only one that fits after a morning of work. Garni is the only standing Greco-Roman colonnaded temple in the former USSR. Geghard is a UNESCO monastery cut straight into the cliff nine kilometres further up the gorge, and its interior is cave-cool. Symphony of Stones is a fifty-metre wall of hexagonal basalt columns below Garni. Do them in that order and be at Garni after 17:00: it is fully exposed with zero shade, and the temple is better in low sun anyway. Hire a driver for the afternoon rather than fighting marshrutka 266, which serves Garni but not Geghard. Leave 14:30, back around 21:00.",
+      "hours": {
+        "text": "Leave 14:30 · back ~21:00 · DAYTIME",
+        "class": "day"
+      },
+      "tags": [
+        "Wed",
+        "Best day"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Geghard",
+          "href": "https://maps.google.com/?cid=4612754634485307222"
+        },
+        {
+          "kind": "map",
+          "label": "Garni temple",
+          "href": "https://maps.google.com/?cid=3685814986048788063"
+        },
+        {
+          "kind": "map",
+          "label": "Symphony of Stones",
+          "href": "https://maps.google.com/?cid=16688498276389062602"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "matenadaran",
+      "section": "activities",
+      "status": "plan",
+      "day": "2026-08-20",
+      "name": "Matenadaran manuscript institute",
+      "price": {
+        "text": "2,000 AMD / $5 · foreign-language tour 5,000"
+      },
+      "note": "4.7 stars, 772 reviews. Tue-Sat 10:00-17:50, closed Sunday AND Monday, which is why it lands on Thursday. This one is tight: finish at 14:00, GG straight there, and you get a clean two hours. Illuminated manuscripts going back to the fifth century, in a bunker of a building at the top of Mashtots. Walk back down Mashtots afterwards; the Blue Mosque is on the way and so is Lumen 1936.",
+      "hours": {
+        "text": "Tue-Sat 10:00-17:50 · DAYTIME · go straight after work",
+        "class": "day"
+      },
+      "tags": [
+        "Thu"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=9160700839288794583"
+        },
+        {
+          "kind": "web",
+          "label": "matenadaran.am",
+          "href": "https://matenadaran.am"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "blue-mosque",
+      "section": "activities",
+      "status": "plan",
+      "day": "2026-08-20",
+      "when": "On the walk back down Mashtots",
+      "name": "Blue Mosque",
+      "price": {
+        "text": "Free"
+      },
+      "note": "4.5 stars, 1,815 reviews. An eighteenth-century Persian mosque with a tiled courtyard, and the quietest place in central Yerevan. Reported hours are 10:00-13:00 and 15:00-18:00, but it is an active religious site and visitors regularly arrive to find it shut around prayer times. Treat it as a twenty minute bonus on the Mashtots walk, never as the plan.",
+      "hours": {
+        "text": "~10:00-13:00, 15:00-18:00 · often shut without notice",
+        "class": "day"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=6963945105062554792"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "cascade-cafesjian",
+      "section": "activities",
+      "status": "plan",
+      "day": "2026-08-21",
+      "name": "Cascade + Cafesjian Center",
+      "price": {
+        "text": "Steps free · galleries 1,000 AMD / $3"
+      },
+      "note": "4.7 stars, 11,869 reviews, the most-reviewed thing in the city. The steps and the sculpture garden (Botero's cat, the Chihuly glass) are free and open 24/7; the indoor escalator hall runs 08:00-20:00, so ride up and walk down. Two current sources say the Cafesjian exhibition galleries are now FRIDAY TO SUNDAY ONLY, 10:00-20:00, while older listings say Tue-Sun. That conflict is exactly why this sits on a Friday: on a Friday it is right either way. Call if you want certainty. Do not climb 572 steps at midday in August. Note: a major Cascade renovation project (approximately 20 billion AMD) has been announced, and its 2026 construction status remains unconfirmed; if scaffolding or closures appear on site, the steps and sculpture garden may be affected, so check on arrival.",
+      "hours": {
+        "text": "Steps 24/7 · escalators 08:00-20:00 · galleries Fri-Sun 10:00-20:00",
+        "class": "eve"
+      },
+      "tags": [
+        "Fri",
+        "Evening"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Cascade",
+          "href": "https://maps.google.com/?cid=6059134300791198915"
+        },
+        {
+          "kind": "map",
+          "label": "Cafesjian Center",
+          "href": "https://maps.google.com/?cid=1807647764307747040"
+        },
+        {
+          "kind": "web",
+          "label": "cmf.am",
+          "href": "https://cmf.am"
+        },
+        {
+          "kind": "tel",
+          "label": "Check gallery hours",
+          "href": "tel:+37410567262"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "victory-park",
+      "section": "activities",
+      "status": "plan",
+      "day": "2026-08-21",
+      "when": "Straight on up from the top of the Cascade, for sunset",
+      "name": "Victory Park + Mother Armenia",
+      "price": {
+        "text": "Free"
+      },
+      "note": "4.5 stars and 1,833 reviews for the park, 4.6 and 607 for the statue. The ridge directly above the Cascade: the whole city below you and, on a clear evening, Ararat. The park is free and never closes, and the ferris wheel and lakeside cafes run into the night. The small museum inside the Mother Armenia plinth is free but closes at 17:00 and is shut Mondays, which does not matter here because the view is the point. Continue up from the Cascade around 18:30 and walk back down after dark.",
+      "hours": {
+        "text": "Park always open · best 19:00 onward",
+        "class": "eve"
+      },
+      "tags": [
+        "Fri",
+        "Evening"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=2665946077238760077"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "circular-park",
+      "section": "activities",
+      "status": "plan",
+      "name": "Circular Park, the ring park",
+      "price": {
+        "text": "Free"
+      },
+      "note": "The green belt tracing the line of the old city wall, and it starts about 15 min from your door. Fountains, open-air cafes, and the local evening promenade: Yerevan comes outside after 19:00 in August and this is where it goes. Free, no hours, and the lowest-effort good evening in the guide on a night you do not want to plan anything.",
+      "hours": {
+        "text": "Anytime · best after 19:00",
+        "class": "eve"
+      },
+      "tags": [
+        "Anytime",
+        "Free"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=11785941047741423658"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "saryan-wine-street",
+      "section": "activities",
+      "status": "plan",
+      "name": "Saryan Street, the wine street",
+      "price": {
+        "text": "Glasses ~1,500-3,000 AMD / $4-8"
+      },
+      "note": "One lane of wine bars and tasting rooms a block west of the Opera, pouring Armenian wine out of Areni and Vayots Dzor. Most open between 18:00 and 19:00, last call around 01:00 or 02:00 on weeknights and 03:00 to 04:00 on Friday and Saturday. This is the default evening when nothing is scheduled, and it is a better use of a night than another museum.",
+      "hours": {
+        "text": "From ~18:00 · late",
+        "class": "late"
+      },
+      "tags": [
+        "Anytime",
+        "Evening"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Saryan St",
+          "href": "https://www.google.com/maps/search/?api=1&query=Martiros%20Saryan%20Street%20wine%20bars%2C%20Yerevan%2C%20Armenia"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "opera-rooftop",
+      "section": "activities",
+      "status": "plan",
+      "name": "Opera rooftop concerts and the ballet season",
+      "price": {
+        "text": "Ticket prices not published where I could check"
+      },
+      "note": "4.7 stars, 2,068 reviews, and the season is NOT on summer break. Read off opera.am for your exact week: The Sleeping Beauty Sun 16 at 19:00 and Tue 18 at 18:00, The Nutcracker Wed 19 and Thu 20 at 19:00, a Ballet Gala Fri 21 at 19:00. Better still, the rooftop series runs at 21:00 in the cool air: JazZara on Wed 19, a Khachaturian rooftop night Thu 20, Kami Friends Fri 21 at both 19:00 and 21:00. A 21:00 rooftop concert after dinner is the single best evening this city offers in August. Buy through opera.am.",
+      "hours": {
+        "text": "Ballets 18:00-19:00 · rooftop 21:00",
+        "class": "late"
+      },
+      "tags": [
+        "Evening",
+        "Book ahead"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=579775087245391631"
+        },
+        {
+          "kind": "web",
+          "label": "opera.am",
+          "href": "https://opera.am"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "echmiadzin-grape-blessing",
+      "section": "activities",
+      "status": "backup",
+      "name": "Echmiadzin: Blessing of the Grapes, Sun 16 Aug",
+      "note": "The Feast of the Assumption falls on Sun 16 Aug 2026, and at the Mother See of Holy Echmiadzin the liturgy is followed by a procession from St Gayane to the open-air St Trdat altar for the Blessing of the Grapes. It is the best-timed thing in your week and it is a genuine spectacle. Now that you fly in Saturday evening, this is actually LIVE: it costs you the Sunday work morning, nothing else. No 2026 start time is published, so treat it as an early start and confirm locally Saturday night. Marshrutka 106 or 107 from Admiral Isakov, about 300 AMD. The Mother Cathedral reopened to visitors in September 2024 after its long restoration, so older exterior-only advice is out of date. Alterra Vineyard runs a secular grape blessing at 17:00 the same day if the morning is too much.",
+      "tags": [
+        "Sun 16"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Mother Cathedral",
+          "href": "https://www.google.com/maps/search/?api=1&query=Mother%20Cathedral%20of%20Holy%20Etchmiadzin%2C%20Vagharshapat%2C%20Armenia"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "history-museum",
+      "section": "activities",
+      "status": "backup",
+      "name": "History Museum of Armenia",
+      "note": "Republic Square 4. Tue-Sat 11:00-18:00 with last entry 17:15, Sunday to 17:00, closed Monday. 2,500 AMD. 4.4 stars across 1,385 reviews, the weakest of the majors, and reviewers consistently call the presentation dated. It is literally on the square, so if you want it, bolt it onto the fountains evening rather than spending a whole slot on it.",
+      "hours": {
+        "text": "Tue-Sat 11:00-18:00 · closed Mon"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=17373916364905703334"
+        },
+        {
+          "kind": "web",
+          "label": "historymuseum.am",
+          "href": "https://historymuseum.am"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "lake-sevan",
+      "section": "activities",
+      "status": "backup",
+      "name": "Lake Sevan + Sevanavank",
+      "note": "The half-day heat escape: an alpine lake at 1,900m, an hour and a quarter out, and you can swim in it. Marshrutka from Kilikia bus station every 30 to 45 minutes, 700-800 AMD, no booking, then an 800-1,000 AMD taxi for the last few kilometres to the peninsula. Monastery free. The stair climb up to Sevanavank is fully exposed, so do it after 17:00. Realistic shape: leave 14:30, at the lake by 16:00, swim, fish dinner lakeside, back by 21:30. Swap this in for any afternoon that has gone over 38 degrees.",
+      "tags": [
+        "Heat escape"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Sevanavank",
+          "href": "https://maps.google.com/?cid=2562717933816512926"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "ararat-brandy",
+      "section": "activities",
+      "status": "backup",
+      "name": "ARARAT Museum, Yerevan Brandy Company",
+      "note": "The hilltop brandy factory across the Victory Bridge. Tastings run from 4,500 AMD for the Three Stars and the ten-year Ani, up to 12,000 for the old stuff. BOOKING IS REQUIRED. Two facts I could not settle: one source says tours run 09:00-20:00 every day, another says the standing English slot is 11:30, which would make it useless on a work morning. Their own site refused to load for me, so phone before you count on it. If they can put you in an English tour at 16:00 or later this becomes a strong afternoon.",
+      "tags": [
+        "Book ahead"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=2969748987406316998"
+        },
+        {
+          "kind": "tel",
+          "label": "Book",
+          "href": "tel:+37410540000"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "gum-market",
+      "section": "activities",
+      "status": "backup",
+      "name": "GUM Market, listed on Maps as Armenian Market",
+      "note": "35 Movses Khorenatsi, ten minutes from your door and the closest thing in this guide to it. Dried fruit, spices, sujuk, cheese, and vendors who will make you taste all of it. Free. 11:00-17:00 daily, and that 17:00 close is hard, so it only happens if you cut a work morning short. Pak Shuka, the ornate covered market, is no longer a food market; this is the surviving real one.",
+      "hours": {
+        "text": "11:00-17:00 daily · DAYTIME"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=13072009671850844115"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "lovers-park-northern-ave",
+      "section": "activities",
+      "status": "backup",
+      "name": "Lovers' Park, Swan Lake, Northern Avenue",
+      "note": "The three free central strolls. Lovers' Park on Baghramyan is 4.6 stars across 1,013 reviews, a landscaped garden with streams and a cafe that hosts free concerts in summer. Swan Lake sits beside the Opera and is ringed with cafes. Northern Avenue is the fully pedestrianised spine from Republic Square to the Opera: a connector rather than a destination, but well lit and busy late.",
+      "tags": [
+        "Free",
+        "Anytime"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Lovers' Park",
+          "href": "https://maps.google.com/?cid=11407011959312425408"
+        },
+        {
+          "kind": "map",
+          "label": "Northern Avenue",
+          "href": "https://maps.google.com/?cid=1300020463513649386"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "khor-virap-noravank",
+      "section": "activities",
+      "status": "backup",
+      "name": "Khor Virap + Areni + Noravank",
+      "note": "The postcard loop: a monastery on a mound with Ararat filling the sky behind it, then wine country and the Areni-1 cave, then a rose-red thirteenth-century church at the end of a red-rock canyon. Magnificent, and I would still skip it this trip. It is eight to ten hours, tour or private driver only, the Ararat plain and the Vayots Dzor canyon are both furnaces in August, Khor Virap's mound has no shade at all, and Ararat is usually haze-hidden by afternoon, so the view you went for is a morning thing that fights your schedule directly.",
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Khor Virap",
+          "href": "https://maps.google.com/?cid=16978654901337366544"
+        },
+        {
+          "kind": "map",
+          "label": "Noravank",
+          "href": "https://maps.google.com/?cid=17854153118262964923"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "dilijan",
+      "section": "activities",
+      "status": "backup",
+      "name": "Dilijan",
+      "note": "Forested national park at 1,500m, routinely eight to twelve degrees cooler than the city, with Haghartsin monastery in the woods and Parz Lake. Marshrutka from the Northern Bus Station, hourly 09:00-17:30, from 1,000 AMD. The honest problem: done by minibus this is a genuine ten to fourteen hour day, which is more than you have spare. Only worth it with a hired car, and Sevan is on the way if you do that.",
+      "tags": [
+        "Heat escape"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Dilijan",
+          "href": "https://www.google.com/maps/search/?api=1&query=Dilijan%2C%20Tavush%2C%20Armenia"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "true-cost-barbershop",
+      "section": "services",
+      "status": "plan",
+      "name": "True Cost Barbershop, Khanjyan 13",
+      "price": {
+        "text": "3,000-4,000 AMD cut / $8-11 · beard 3,000-3,500"
+      },
+      "note": "This is the grooming you deferred out of Batumi, and deferring was right: a cut plus a beard trim here is about sixteen dollars all in. 5.0 stars across 1,157 reviews on the chain. Khanjyan 13 is the branch nearest you, 13 min walk up past Vernissage. Book online through their site, it is free, and neither this shop nor any other in the city publishes a walk-in policy either way.",
+      "hours": {
+        "text": "10:00-22:00 daily",
+        "class": "late"
+      },
+      "tags": [
+        "Book ahead"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=6647577742570571817"
+        },
+        {
+          "kind": "web",
+          "label": "truecost.am",
+          "href": "https://truecost.am/en"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37495832838"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "level-barbershop",
+      "section": "services",
+      "status": "plan",
+      "name": "Level Barbershop",
+      "price": {
+        "text": "6,000-13,000 AMD / $16-36 by barber tier"
+      },
+      "note": "The step up if you would rather it were done properly than cheaply, and even the top tier is under forty dollars. 5.0 stars across 363 reviews. The standalone beard price is not published anywhere, only combo packages, so ask when you book. About 20 min walk north of you, which makes it the closest good barber after True Cost.",
+      "hours": {
+        "text": "10:00-22:00 daily",
+        "class": "late"
+      },
+      "tags": [
+        "Book ahead"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=15372361510447129114"
+        },
+        {
+          "kind": "web",
+          "label": "levelbarbershop.am",
+          "href": "https://levelbarbershop.am/"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37498494648"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "laundry-point",
+      "section": "services",
+      "status": "plan",
+      "name": "Laundry Point",
+      "price": {
+        "text": "~10 EUR / $11 for a 9kg wash and dry (AMD price not published)"
+      },
+      "note": "A real self-service laundromat, open 24 hours, 5.0 stars. The wash caps at an hour and the dryer at 45 minutes, so a full load is about two hours start to finish. Detergent is built into the machines and the instructions are in three languages. Two branches, Hanrapetutyan 2nd Lane 17/1 and Mashtots 5/9. Sources contradict each other on whether it takes cards or cash, so carry both. Do this on a work morning: you can sit there and work through it.",
+      "hours": {
+        "text": "Open 24 hours",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Laundry%20Point%2C%20Hanrapetutyan%202nd%20Lane%2017%2F1%2C%20Yerevan%2C%20Armenia"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "yerevan-city-nearest",
+      "section": "services",
+      "status": "plan",
+      "name": "Yerevan City, nearest branch",
+      "price": {
+        "text": "Supermarket prices"
+      },
+      "note": "Three minutes from your door, effectively your pantry. 4.6 stars across 250 ratings. NOT 24 hours despite what some listings claim: Yandex shows it shut overnight and opening 08:30, and the local business directory contradicts itself on the same page. Treat it as roughly 08:30-23:00 and use Tigran Mets for anything later than that.",
+      "hours": {
+        "text": "~08:30-23:00 · not 24h",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "body-soft-massage",
+      "section": "services",
+      "status": "plan",
+      "name": "Body Soft, Nalbandyan 23/27",
+      "price": {
+        "text": "from ~29,000 AMD / $79 for 70 min (secondhand figure)"
+      },
+      "note": "5.0 stars across roughly 230 to 250 reviews, the best-reviewed massage within walking distance at 22 min. Mon-Fri 10:00-22:00, and Sat-Sun 08:00 to midnight, which is unusual and useful. The price came off a secondary listing rather than their own site, so confirm it when you book. Thai Spa out in Arabkir is roughly a third of that if their number holds.",
+      "hours": {
+        "text": "Mon-Fri 10:00-22:00 · Sat-Sun 08:00-00:00",
+        "class": "late"
+      },
+      "tags": [
+        "Book ahead"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=16299426932624138836"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "thai-spa",
+      "section": "services",
+      "status": "backup",
+      "name": "Thai Spa, Kievyan 7",
+      "note": "12,000-13,000 AMD, so $33-36, for sixty minutes of Thai traditional or Thai oil, with a herbal sauna and tea included. These are the only spa prices I could read off an operator's own site rather than a directory. Daily 12:00-23:00, book ahead. The catch is location: Arabkir, about an hour on foot, so this is a GG trip both ways.",
+      "hours": {
+        "text": "12:00-23:00 daily"
+      },
+      "tags": [
+        "Book ahead"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=4123789443272984692"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37410265644"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "topgun-barbershop",
+      "section": "services",
+      "status": "backup",
+      "name": "TOPGUN Barbershop, Moskovyan 37",
+      "note": "5.0 stars across 179 reviews. The third option if True Cost and Level are both booked out. Further north, near the Cascade end of town, and no prices are published.",
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=11170299696758898865"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "selena-dry-clean",
+      "section": "services",
+      "status": "backup",
+      "name": "Selena Service, Zaqyan 4",
+      "note": "Drop-off dry cleaning and laundry, returned folded, usually overnight. 4.5 stars. Opens 09:00. The 1,000 AMD per kilo figure floating around online is from 2022, so expect more than that. Use this instead of Laundry Point if you would rather it were done for you than sit with it.",
+      "hours": {
+        "text": "From 09:00"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=13384039085489367688"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37499310310"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "late-grocery-pharmacy",
+      "section": "services",
+      "status": "backup",
+      "name": "24h grocery and pharmacy, Tigran Mets",
+      "note": "Yerevan City at Tigran Mets 10 is genuinely 24 hours, confirmed on the local directory unlike the branch near you, and Natali Pharm runs a 24-hour branch on the same street. Both are about 15 min from you, and between them they cover anything that goes wrong at 2am. SAS Supermarket also runs 24h branches on Mashtots, Tumanyan and Isahakyan, all further north.",
+      "hours": {
+        "text": "24 hours"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Yerevan City 24h",
+          "href": "https://www.google.com/maps/search/?api=1&query=Yerevan%20City%20supermarket%2C%2010%20Tigran%20Mets%20Ave%2C%20Yerevan%2C%20Armenia"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "tourist-sim",
+      "section": "services",
+      "status": "backup",
+      "name": "Local SIM: Viva-MTS or Ucom tourist plan",
+      "note": "2,500 AMD, about six dollars, buys fifteen days of unlimited data plus 300 international minutes, from either Viva-MTS, which has the strongest Yerevan coverage, or Ucom. That is better value than any eSIM you can buy for this trip, where a seven-day 10GB plan runs ten to twenty dollars. Take your passport and an unlocked phone. The SIM itself is about 100 AMD, or free with the plan.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "getting-here",
+      "section": "practical",
+      "status": "plan",
+      "name": "Getting here: flying in, and Zvartnots arrival",
+      "note": "You are FLYING Batumi to Yerevan (FlyOne Armenia runs the route on Saturdays, about an hour in the air; reconfirm your departure time on the ticket). On landing at Zvartnots: ignore the arrivals-hall taxi touts quoting double or triple, walk past them and order a Yandex Go or GG from the app, 2,000-4,000 AMD and 20-30 minutes into town. Have the hotel address ready in the app before you land; airport wifi requires an SMS code some foreign numbers never receive, so screenshot the address too. If you still need cash, skip the airport exchange and use a bank ATM in town. The train-and-bus route via Tbilisi is no longer your plan and is not worth the 18 hours it costs.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "ride-apps",
+      "section": "practical",
+      "status": "plan",
+      "name": "Ride apps: Yandex Go and GG",
+      "note": "Install both before you land. Yandex Go and GG are the two that matter; both quote a fixed fare before you book and both take card in app or cash. Uber does not operate in Armenia at all. BOLT IS AMBIGUOUS: Bolt's own blog announced a Yerevan launch in November 2023, but Armenia does not appear on Bolt's official city list today and two 2026 local guides do not mention it. Do not plan around it. Yandex's published Yerevan tariff is 300 AMD pickup plus up to 60 AMD a kilometre, so short centre hops run 600 to 1,500 AMD and a cross-town ride 1,500 to 3,000. One real warning from a local writer: foreign credit cards frequently fail on Armenian taxi apps, so keep 1,000 AMD notes on you as the fallback.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "august-heat",
+      "section": "practical",
+      "status": "plan",
+      "name": "The August heat, and the day it forces",
+      "note": "Average August high 33C with lows around 19C, and peaks near 39C with overnight lows of 23C. Humidity runs about 47%, the lowest of the year, so this is a dry kiln heat rather than a sticky one, which means dehydration arrives without warning you first. Roughly eleven hours of sun and about five rainy days in the whole month, so rain is not a factor. The local shape of the day is the one to copy rather than fight: indoors through the middle, back out after 18:00, streets genuinely full after 19:00, outdoor cafes running to 03:00 or 04:00. Your work-mornings-explore-afternoons rhythm collides head-on with the worst of it, which is why every anchor in this guide is either indoors, after 17:00, or both. One local trick: the Hrazdan gorge restaurants below Kievyan Bridge run five or six degrees cooler than Republic Square after 19:00, because the gorge funnels cold air down.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "pulpulaks",
+      "section": "practical",
+      "status": "plan",
+      "name": "Pulpulaks: drink from them",
+      "note": "The little street drinking fountains are everywhere, they run cold mountain spring water, they are safe, and locals drink from them constantly. Many run 24 hours. They are the reason you do not need to buy bottled water in this city, which at 39 degrees genuinely matters. One 2026 development worth knowing: there is an active public debate about the water they waste, and some are being fitted with push-buttons rather than running free, so do not be thrown if one needs a press. That is a conservation story, not a safety one. pulpuluck.am maps them if you want to find one deliberately.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "cash-and-cards",
+      "section": "practical",
+      "status": "plan",
+      "name": "Cash and cards",
+      "note": "Cards work almost everywhere that matters: hotels, restaurants, supermarkets, malls, and contactless and phone payments are common. Keep cash for taxis, marshrutkas and city buses, the markets including Vernissage, small bakeries and family shops, and the airport bus. ATMs are easy to find and most Armenian banks charge foreign cards nothing, though some take 1.5 to 2 percent, so read the fee screen before you confirm. For changing money use an exchange office rather than a bank or an ATM: they are all over the centre, usually take no commission, and beat the ATM rate. Do not change money at the airport. The rate as of the Central Bank on 10 Aug 2026 is 365.88 AMD to the dollar, so call it 366.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "overcharging",
+      "section": "practical",
+      "status": "plan",
+      "name": "What is and is not a real risk here",
+      "note": "Yerevan's low-scam reputation holds up, and I am not going to import Batumi's warnings into it. What IS documented, repeatedly, for Yerevan specifically: airport taxi touts quoting double or triple the real fare to arrivals, which a ride app eliminates entirely; street taxis near Republic Square claiming a broken meter and then naming a number; restaurants directly on Republic Square charging tourists well above what the same food costs two streets away; ATM skimmers, so use bank-lobby machines and check the card slot; and counting your money before you leave an exchange counter. What I found NO pattern of: fake police, drink spiking, gem or carpet scams, aggressive street hustles, or systematic bill padding. Nothing here calls for defensive behaviour beyond using an app instead of a street taxi and not eating on the square.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "monday-dead-day",
+      "section": "practical",
+      "status": "plan",
+      "name": "Monday is the dead day",
+      "note": "On Mon 17 the History Museum, the Genocide Museum, the Cafesjian galleries and the Mother Armenia museum are all closed, and Matenadaran is closed Sunday AND Monday. That is why the Parajanov Museum, which opens every day of the week, has Monday. Two other fixed closures to hold onto: the Republic Square fountain show does not run on Tuesdays, and Vernissage is only really a market at the weekend. Everything else in your week is open, and no Armenian public holiday falls between 15 and 22 August.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "walking-distances",
+      "section": "practical",
+      "status": "plan",
+      "name": "Walking, from your base",
+      "note": "Your street is southeast Kentron, a residential pocket rather than the tourist core, so Republic Square is a genuine 20 to 22 minute walk, which on an August afternoon is a decision rather than a stroll. What is close: the supermarket is 3 minutes, Merhatsy and Artashi Mot 9, GUM Market 10, your barber 13, Vernissage 15, Circular Park 15. What is not close: every specialty coffee shop worth the name is 25 minutes or more, so budget for that. The centre itself is dense and very walkable once you are in it, and Northern Avenue is fully pedestrianised. The one real hill is the Cascade, 572 steps, with a free indoor escalator alongside: ride up, walk down, never climb it at midday. Note there is no crossing on Moskovyan directly in front of the Cascade; the nearest are at Baghramyan and at Mashtots. Use marked crossings generally and do not assume traffic yields.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "departure-zvartnots",
+      "section": "practical",
+      "status": "plan",
+      "name": "Sat 22: Zvartnots and the 10:45 to Tirana",
+      "note": "Your plan is to be at Zvartnots by 08:45. That is two hours before the Pegasus departure and it is thinner than it looks: August is one of the airport's three busiest months, with queues running 30 to 50 percent longer than average, and security is at its worst between 06:00 and 09:00, which is precisely your window. Standard guidance for an international departure here is three hours. Leave the hotel at 07:45 and target 08:15 at the terminal instead. The ride is 12 to 13km and 20 to 30 minutes: GG runs 2,000 to 3,500 AMD and Yandex 2,500 to 4,000, while the official airport taxi desk is 4,000 to 6,000. There is a 300 AMD airport bus, though sources disagree on whether it is numbered 100 or 201, so just ask for the airport bus and have coins ready.",
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Zvartnots (EVN)",
+          "href": "https://maps.google.com/?cid=4943625694354026583"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "the-rhythm",
+      "section": "practical",
+      "status": "plan",
+      "name": "The rhythm",
+      "note": "Work the morning from the hotel or a cafe, break for a late lunch, take the one trip into the centre from mid-afternoon, eat between 19:00 and 21:00, walk home through the Circular Park or take a 700 AMD GG. One centre trip a day, not two: it is twenty minutes each way on foot and the heat charges you for every extra crossing. Every dinner in this guide is already placed near that day's activity, so the walk home is short.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "on-sources",
+      "section": "practical",
+      "status": "plan",
+      "name": "On the data in this guide, and one warning",
+      "note": "Ratings and review counts here were read off Google place pages on 10 and 11 August 2026, so they are current rather than remembered. Maps links use real cid permalinks wherever one could be resolved and Google's own official search-link format where it could not; nothing here is a made-up URL, and no phone number appears unless it was actually found. THE WARNING: a site called armenia-spirit.com surfaces high in searches for Yerevan restaurants and invents things. It claims a restaurant called Tigran's Table, chef and all, that does not exist on Google Maps, plus several other fabricated names and closure claims. If you search around this guide and find confident specifics that contradict it, check the source before believing it.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    }
+  ]
+}
+</script>
+
+<script id="app">
+var CityOps = (function () {
+  'use strict';
+
+  var STATUSES = ['plan', 'backup', 'archived', 'done'];
+
+  function slug(s) {
+    return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  }
+  function cityId(data) {
+    return slug(data.city.name) + '-' + data.city.dates.from;
+  }
+  function dayLabel(iso) {
+    var d = new Date(iso + 'T12:00:00');
+    var names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return names[d.getDay()] + ' ' + d.getDate();
+  }
+
+  function validate(data) {
+    var errors = [];
+    if (!data || typeof data !== 'object') return ['Root is not an object'];
+    if (data.schema !== 1) errors.push('schema must be 1');
+    if (!data.city || !data.city.name) errors.push('city.name required');
+    if (!data.city || !data.city.dates || !data.city.dates.from || !data.city.dates.to) {
+      errors.push('city.dates.from and city.dates.to required');
+    }
+    if (!Array.isArray(data.sections) || !data.sections.length) {
+      errors.push('sections[] required');
+    } else {
+      data.sections.forEach(function (s, i) {
+        if (!s.id || !s.label) errors.push('sections[' + i + '] needs id and label');
+      });
+    }
+    if (!Array.isArray(data.items)) {
+      errors.push('items[] required');
+    } else {
+      var secIds = {};
+      (data.sections || []).forEach(function (s) { secIds[s.id] = 1; });
+      var seen = {};
+      data.items.forEach(function (it, i) {
+        var ref = 'items[' + i + ']' + (it && it.id ? ' (' + it.id + ')' : '');
+        if (!it.id) errors.push(ref + ' needs id');
+        else if (seen[it.id]) errors.push('duplicate item id "' + it.id + '"');
+        else seen[it.id] = 1;
+        if (!it.name) errors.push(ref + ' needs name');
+        if (!secIds[it.section]) errors.push(ref + ' unknown section "' + it.section + '"');
+        if (STATUSES.indexOf(it.status) === -1) errors.push(ref + ' bad status "' + it.status + '"');
+        if (it.day && !/^\d{4}-\d{2}-\d{2}$/.test(it.day)) errors.push(ref + ' day must be YYYY-MM-DD');
+      });
+    }
+    return errors;
+  }
+
+  function parse(text) {
+    var data;
+    try { data = JSON.parse(text); }
+    catch (e) { return { data: null, errors: ['JSON parse error: ' + e.message] }; }
+    var errors = validate(data);
+    return { data: errors.length ? null : data, errors: errors };
+  }
+
+  var TRANSITIONS = {
+    plan:     [{ to: 'done', label: '✓ Done' }, { to: 'backup', label: '↓ Backup' }, { to: 'archived', label: '✕ Archive' }],
+    backup:   [{ to: 'plan', label: '↑ Promote' }, { to: 'archived', label: '✕ Archive' }],
+    done:     [{ to: 'plan', label: '↩ Undo' }],
+    archived: [{ to: 'backup', label: '↩ Restore' }]
+  };
+
+  function emptyState() {
+    return { itemStatus: {}, itemDay: {}, dayOrder: {}, dataOverride: null, updated: null };
+  }
+
+  function normalizeState(st) {
+    if (!st || typeof st !== 'object') return emptyState();
+    st.itemStatus = st.itemStatus || {};
+    st.itemDay = st.itemDay || {};
+    st.dayOrder = st.dayOrder || {};
+    if (!('dataOverride' in st)) st.dataOverride = null;
+    return st;
+  }
+
+  function makeStore(id, storage) {
+    var key = 'cityops.' + id + '.v1';
+    var mem = null;
+    var ok = true;
+    if (!storage) ok = false;
+    try {
+      storage.setItem(key + '.t', '1');
+      storage.removeItem(key + '.t');
+    } catch (e) { ok = false; }
+    return {
+      persistent: ok,
+      load: function () {
+        if (mem) return normalizeState(JSON.parse(JSON.stringify(mem)));
+        if (!ok) return emptyState();
+        try {
+          var raw = storage.getItem(key);
+          return raw ? normalizeState(JSON.parse(raw)) : emptyState();
+        } catch (e) { return emptyState(); }
+      },
+      save: function (st) {
+        st.updated = new Date().toISOString();
+        mem = JSON.parse(JSON.stringify(st));
+        if (ok) {
+          try { storage.setItem(key, JSON.stringify(st)); } catch (e) { ok = false; }
+        }
+      }
+    };
+  }
+
+  function setStatus(state, id, to) {
+    if (STATUSES.indexOf(to) === -1) throw new Error('bad status "' + to + '"');
+    state.itemStatus[id] = to;
+    return state;
+  }
+
+  function effectiveStatus(it, state) {
+    return state.itemStatus[it.id] || it.status;
+  }
+
+  function effectiveDay(it, state) {
+    if (state.itemDay && Object.prototype.hasOwnProperty.call(state.itemDay, it.id)) {
+      return state.itemDay[it.id] || null;
+    }
+    return it.day || null;
+  }
+
+  function setDay(state, id, iso) {
+    if (iso !== null && !/^\d{4}-\d{2}-\d{2}$/.test(iso)) throw new Error('bad day "' + iso + '"');
+    state.itemDay[id] = iso;
+    return state;
+  }
+
+  function stayDates(city) {
+    var out = [];
+    var d = new Date(city.dates.from + 'T12:00:00');
+    var end = new Date(city.dates.to + 'T12:00:00');
+    while (d <= end && out.length < 60) {
+      var m = d.getMonth() + 1;
+      var day = d.getDate();
+      out.push(d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day);
+      d.setDate(d.getDate() + 1);
+    }
+    return out;
+  }
+
+  function effectiveData(base, state) {
+    if (state.dataOverride && !validate(state.dataOverride).length) return state.dataOverride;
+    return base;
+  }
+
+  function viewModel(data, state) {
+    return data.sections.map(function (sec) {
+      var items = data.items.filter(function (it) { return it.section === sec.id; });
+      var active = items.filter(function (it) {
+        var s = effectiveStatus(it, state);
+        return s === 'plan' || s === 'done';
+      });
+      var dayed = active.filter(function (it) { return effectiveDay(it, state); });
+      var undated = active.filter(function (it) { return !effectiveDay(it, state); });
+      // Day cards are SLOTS: the dates always render in chronological order, and
+      // reordering moves a card's CONTENT into a different date slot. A card's
+      // stable identity (key) is its group's effective day in the data; the date
+      // it renders under (iso) is the chronological slot it currently occupies.
+      var keys = [];
+      dayed.forEach(function (it) {
+        var d = effectiveDay(it, state);
+        if (keys.indexOf(d) === -1) keys.push(d);
+      });
+      var slots = keys.slice().sort();
+      var order = [];
+      (state.dayOrder[sec.id] || []).forEach(function (k) {
+        if (keys.indexOf(k) !== -1 && order.indexOf(k) === -1) order.push(k);
+      });
+      slots.forEach(function (k) { if (order.indexOf(k) === -1) order.push(k); });
+      return {
+        section: sec,
+        days: order.map(function (key, i) {
+          return {
+            key: key, iso: slots[i], label: dayLabel(slots[i]),
+            items: dayed.filter(function (it) { return effectiveDay(it, state) === key; })
+          };
+        }),
+        undated: undated,
+        backups: items.filter(function (it) { return effectiveStatus(it, state) === 'backup'; }),
+        archived: items.filter(function (it) { return effectiveStatus(it, state) === 'archived'; })
+      };
+    });
+  }
+
+  function shareModel(data, state) {
+    // Share view uses the same slot-assigned dates the planner shows.
+    var byDay = {};
+    var undated = [];
+    viewModel(data, state).forEach(function (sv) {
+      sv.days.forEach(function (d) {
+        d.items.forEach(function (it) {
+          if (!byDay[d.iso]) byDay[d.iso] = [];
+          byDay[d.iso].push({ sec: sv.section, it: it, status: effectiveStatus(it, state) });
+        });
+      });
+      sv.undated.forEach(function (it) {
+        undated.push({ sec: sv.section, it: it, status: effectiveStatus(it, state) });
+      });
+    });
+    var isos = Object.keys(byDay).sort();
+    return {
+      days: isos.map(function (iso) { return { iso: iso, label: dayLabel(iso), entries: byDay[iso] }; }),
+      undated: undated
+    };
+  }
+
+  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  function fmtRange(d) {
+    var a = new Date(d.from + 'T12:00:00');
+    var b = new Date(d.to + 'T12:00:00');
+    if (a.getMonth() === b.getMonth()) {
+      return MONTHS[a.getMonth()] + ' ' + a.getDate() + '-' + b.getDate() + ', ' + b.getFullYear();
+    }
+    return MONTHS[a.getMonth()] + ' ' + a.getDate() + ' - ' + MONTHS[b.getMonth()] + ' ' + b.getDate() + ', ' + b.getFullYear();
+  }
+
+  // ---- DOM rendering (browser only) ----
+  var ctx = null; // { base, store }
+  var drag = null; // { card, grip, startY, list, cards, sec } while a pointer drag is in progress
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+
+  function linkPill(l) {
+    var a = document.createElement('a');
+    a.href = l.href;
+    if (l.kind === 'map') { a.className = 'maplink'; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = '📍 ' + l.label; }
+    else if (l.kind === 'web') { a.className = 'weblink'; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = '🌐 ' + l.label; }
+    else { a.className = 'phonelink'; a.textContent = '📞 ' + l.label; }
+    return a;
+  }
+
+  function onStatus(id, to) {
+    var st = ctx.store.load();
+    setStatus(st, id, to);
+    ctx.store.save(st);
+    rerender();
+  }
+
+  var pendingPromote = null; // item id whose promote day-picker is open (session-only UI state)
+
+  function promoteTo(id, iso) {
+    var st = ctx.store.load();
+    setStatus(st, id, 'plan');
+    setDay(st, id, iso);
+    ctx.store.save(st);
+    pendingPromote = null;
+    rerender();
+  }
+
+  function itemBody(it, status, showWhen, withDayPicker) {
+    var frag = document.createDocumentFragment();
+    var h3 = el('h3');
+    if (status === 'done') h3.appendChild(el('span', 'donemark', '✓'));
+    h3.appendChild(document.createTextNode(it.name));
+    if (it.price) h3.appendChild(el('span', 'price', it.price.text));
+    frag.appendChild(h3);
+    if (showWhen && it.when) frag.appendChild(el('p', 'when-line', it.when));
+    if (it.tags && it.tags.length) {
+      var tp = el('p');
+      it.tags.forEach(function (t) { tp.appendChild(el('span', 'tag', t)); });
+      frag.appendChild(tp);
+    }
+    if (it.note) frag.appendChild(el('p', null, it.note));
+    var row = el('div', 'row');
+    if (it.hours) row.appendChild(el('span', 'hours' + (it.hours.class ? ' ' + it.hours.class : ''), it.hours.text));
+    (it.links || []).forEach(function (l) { row.appendChild(linkPill(l)); });
+    if (row.children.length) frag.appendChild(row);
+    if (status === 'backup' && withDayPicker && pendingPromote === it.id) {
+      // Day picker: promoting into a day-carded section needs a date slot.
+      frag.appendChild(el('p', 'when-line', 'Promote to which day?'));
+      var pick = el('div', 'ctl-row');
+      var city = effectiveData(ctx.base, ctx.store.load()).city;
+      stayDates(city).forEach(function (iso) {
+        var db = el('button', 'ctl', dayLabel(iso));
+        db.type = 'button';
+        db.onclick = function () { promoteTo(it.id, iso); };
+        pick.appendChild(db);
+      });
+      var nd = el('button', 'ctl', 'No day');
+      nd.type = 'button';
+      nd.onclick = function () { promoteTo(it.id, null); };
+      pick.appendChild(nd);
+      var cancel = el('button', 'ctl to-archived', 'Cancel');
+      cancel.type = 'button';
+      cancel.onclick = function () { pendingPromote = null; rerender(); };
+      pick.appendChild(cancel);
+      frag.appendChild(pick);
+      return frag;
+    }
+    var ctl = el('div', 'ctl-row');
+    (TRANSITIONS[status] || []).forEach(function (t) {
+      var b = el('button', 'ctl to-' + t.to, t.label);
+      b.type = 'button';
+      if (t.to === 'plan' && status === 'backup' && withDayPicker) {
+        b.onclick = function () { pendingPromote = it.id; rerender(); };
+      } else {
+        b.onclick = function () { onStatus(it.id, t.to); };
+      }
+      ctl.appendChild(b);
+    });
+    if (ctl.children.length) frag.appendChild(ctl);
+    return frag;
+  }
+
+  function renderCard(it, status, withDayPicker) {
+    var card = el('div', 'card' + (status === 'done' ? ' item-done' : ''));
+    card.appendChild(itemBody(it, status, true, withDayPicker));
+    return card;
+  }
+
+  function renderDayCard(day, state) {
+    var dc = el('div', 'daycard');
+    dc.dataset.day = day.key; // stable group identity; the rendered date is the slot
+    var hd = el('div', 'hd');
+    hd.appendChild(el('span', 'd', day.label));
+    if (day.items.length === 1 && day.items[0].when) hd.appendChild(el('span', 't', day.items[0].when));
+    dc.appendChild(hd);
+    day.items.forEach(function (it) {
+      var status = effectiveStatus(it, state);
+      var bd = el('div', 'bd' + (status === 'done' ? ' item-done' : ''));
+      bd.appendChild(itemBody(it, status, day.items.length > 1));
+      dc.appendChild(bd);
+    });
+    return dc;
+  }
+
+  function renderHeader(data) {
+    var c = data.city;
+    var h = document.getElementById('hdr');
+    h.innerHTML = '';
+    h.appendChild(el('h1', null, c.name));
+    var sub = fmtRange(c.dates) + (c.accommodation && c.accommodation.name ? ' · ' + c.accommodation.name : '');
+    h.appendChild(el('div', 'sub', sub));
+    var facts = el('div', 'facts');
+    if (c.currency && c.currency.code !== 'USD') {
+      facts.appendChild(el('span', 'chip', c.currency.code + ' = $' + c.currency.usd));
+    }
+    (c.notes || []).forEach(function (n) { facts.appendChild(el('span', 'chip', n)); });
+    h.appendChild(facts);
+    document.title = c.name + ' Guide · ' + fmtRange(c.dates);
+  }
+
+  function renderSection(sv, state) {
+    var frag = document.createDocumentFragment();
+    var h2 = el('h2');
+    if (sv.section.icon) h2.appendChild(el('span', 'ic', sv.section.icon));
+    h2.appendChild(document.createTextNode(' ' + sv.section.label));
+    frag.appendChild(h2);
+    if (sv.days.length) {
+      var days = el('div', 'days');
+      days.dataset.sec = sv.section.id;
+      sv.days.forEach(function (d) { days.appendChild(renderDayCard(d, state)); });
+      frag.appendChild(days);
+    }
+    sv.undated.forEach(function (it) { frag.appendChild(renderCard(it, effectiveStatus(it, state))); });
+    if (sv.backups.length) {
+      var withPicker = sv.days.length > 0;
+      var bk = el('div', 'backup');
+      bk.appendChild(el('div', 'bt', '↩ Backups: if Plan A is full, closed, or you want a change'));
+      sv.backups.forEach(function (it) { bk.appendChild(renderCard(it, 'backup', withPicker)); });
+      frag.appendChild(bk);
+    }
+    if (sv.archived.length) {
+      var det = el('details', 'arch-details');
+      det.appendChild(el('summary', null, 'Archived (' + sv.archived.length + ')'));
+      sv.archived.forEach(function (it) { det.appendChild(renderCard(it, 'archived')); });
+      frag.appendChild(det);
+    }
+    return frag;
+  }
+
+  function saveDayOrder(sec, keys, focusKey) {
+    var st = ctx.store.load();
+    st.dayOrder[sec] = keys;
+    ctx.store.save(st);
+    // Dates are slots: after a reorder the cards must re-label to their new
+    // chronological slots, so a full rerender is required (not just a DOM move).
+    rerender();
+    if (focusKey) {
+      var g = document.querySelector('.days[data-sec="' + sec + '"] .daycard[data-day="' + focusKey + '"] .grip');
+      if (g) g.focus();
+    }
+  }
+
+  // Window-level pointermove/pointerup/pointercancel are bound once in init()
+  // (not per rerender, which would stack duplicate listeners). They read the
+  // shared module-scope `drag` context and no-op when it is null.
+  function onDragPointerMove(e) {
+    if (!drag) return;
+    var list = drag.list, cards = drag.cards;
+    if (!list.contains(drag.card)) { drag = null; return; }
+    e.preventDefault();
+    var y = e.clientY;
+    drag.card.style.transform = 'translateY(' + (y - drag.startY) + 'px) scale(1.015)';
+    var others = cards().filter(function (c) { return c !== drag.card; });
+    for (var i = 0; i < others.length; i++) {
+      var r = others[i].getBoundingClientRect();
+      var mid = r.top + r.height / 2;
+      var after = drag.card.compareDocumentPosition(others[i]) & Node.DOCUMENT_POSITION_FOLLOWING;
+      if (after && y > mid) {
+        drag.card.style.transform = '';
+        list.insertBefore(others[i], drag.card);
+        drag.startY = y;
+        drag.card.style.transform = 'scale(1.015)';
+        return;
+      }
+      if (!after && y < mid) {
+        drag.card.style.transform = '';
+        list.insertBefore(drag.card, others[i]);
+        drag.startY = y;
+        drag.card.style.transform = 'scale(1.015)';
+        return;
+      }
+    }
+  }
+
+  function onDragPointerEnd(e) {
+    if (!drag) return;
+    var d = drag;
+    if (!d.list.contains(d.card)) { drag = null; return; }
+    d.card.classList.remove('dragging');
+    d.card.style.transform = '';
+    try { d.grip.releasePointerCapture(e.pointerId); } catch (err) {}
+    drag = null;
+    saveDayOrder(d.sec, d.cards().map(function (c) { return c.dataset.day; }));
+  }
+
+  function attachReorder() {
+    var lists = document.querySelectorAll('.days');
+    Array.prototype.forEach.call(lists, function (list) {
+      var sec = list.dataset.sec;
+      var cards = function () { return Array.prototype.slice.call(list.querySelectorAll('.daycard')); };
+      if (cards().length < 2) return;
+
+      var bar = el('div', 'reorderbar');
+      var status = el('span', null, 'Drag the ⠿ handle to reorder days. Saved on this device.');
+      var reset = el('button', null, 'Reset to date order');
+      reset.type = 'button';
+      reset.onclick = function () {
+        var st = ctx.store.load();
+        delete st.dayOrder[sec];
+        ctx.store.save(st);
+        rerender();
+      };
+      bar.appendChild(status);
+      bar.appendChild(reset);
+      list.parentNode.insertBefore(bar, list);
+
+      cards().forEach(function (card) {
+        var g = el('div', 'grip');
+        g.setAttribute('role', 'button');
+        g.setAttribute('tabindex', '0');
+        g.setAttribute('aria-label', 'Reorder this day. Use arrow up and arrow down keys.');
+        g.innerHTML = '<svg viewBox="0 0 10 16" fill="currentColor" aria-hidden="true">' +
+          '<circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/>' +
+          '<circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/>' +
+          '<circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg>';
+        card.appendChild(g);
+      });
+
+      list.addEventListener('pointerdown', function (e) {
+        var grip = e.target.closest('.grip');
+        if (!grip) return;
+        var card = grip.closest('.daycard');
+        if (!card) return;
+        e.preventDefault();
+        grip.setPointerCapture(e.pointerId);
+        drag = { card: card, grip: grip, startY: e.clientY, list: list, cards: cards, sec: sec };
+        card.classList.add('dragging');
+      });
+
+      list.addEventListener('keydown', function (e) {
+        var grip = e.target.closest('.grip');
+        if (!grip) return;
+        var card = grip.closest('.daycard');
+        if (e.key === 'ArrowUp' && card.previousElementSibling) {
+          e.preventDefault();
+          list.insertBefore(card, card.previousElementSibling);
+          saveDayOrder(sec, cards().map(function (c) { return c.dataset.day; }), card.dataset.day);
+        } else if (e.key === 'ArrowDown' && card.nextElementSibling) {
+          e.preventDefault();
+          list.insertBefore(card.nextElementSibling, card);
+          saveDayOrder(sec, cards().map(function (c) { return c.dataset.day; }), card.dataset.day);
+        }
+      });
+    });
+  }
+
+  var shareOn = false;
+
+  function renderShare() {
+    var state = ctx.store.load();
+    var data = effectiveData(ctx.base, state);
+    var sm = shareModel(data, state);
+    var main = document.getElementById('main');
+    main.innerHTML = '';
+    sm.days.forEach(function (d) {
+      var dc = el('div', 'daycard');
+      var hd = el('div', 'hd');
+      hd.appendChild(el('span', 'd', d.label));
+      dc.appendChild(hd);
+      d.entries.forEach(function (e) {
+        var bd = el('div', 'bd' + (e.status === 'done' ? ' item-done' : ''));
+        var h3 = el('h3');
+        if (e.status === 'done') h3.appendChild(el('span', 'donemark', '✓'));
+        h3.appendChild(document.createTextNode(e.it.name));
+        if (e.it.price) h3.appendChild(el('span', 'price', e.it.price.text));
+        bd.appendChild(h3);
+        var meta = (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label + (e.it.when ? ' · ' + e.it.when : '');
+        bd.appendChild(el('p', 'when-line', meta));
+        if (e.it.hours) {
+          var row = el('div', 'row');
+          row.appendChild(el('span', 'hours' + (e.it.hours.class ? ' ' + e.it.hours.class : ''), e.it.hours.text));
+          bd.appendChild(row);
+        }
+        dc.appendChild(bd);
+      });
+      main.appendChild(dc);
+    });
+    if (sm.undated.length) {
+      var h2 = el('h2', null, 'Anytime');
+      main.appendChild(h2);
+      sm.undated.forEach(function (e) {
+        var card = el('div', 'card' + (e.status === 'done' ? ' item-done' : ''));
+        var h3 = el('h3');
+        if (e.status === 'done') h3.appendChild(el('span', 'donemark', '✓'));
+        h3.appendChild(document.createTextNode(e.it.name));
+        if (e.it.price) h3.appendChild(el('span', 'price', e.it.price.text));
+        card.appendChild(h3);
+        card.appendChild(el('p', 'when-line', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
+        main.appendChild(card);
+      });
+    }
+  }
+
+  function rerender() {
+    // Any in-flight drag references nodes from the previous render's #main;
+    // drop it so a stray window pointerup after a rerender is a no-op.
+    drag = null;
+    var state = ctx.store.load();
+    var data = effectiveData(ctx.base, state);
+    renderHeader(data);
+    renderToolbar(data, state);
+    if (shareOn) {
+      renderShare();
+    } else {
+      var main = document.getElementById('main');
+      main.innerHTML = '';
+      viewModel(data, state).forEach(function (sv) { main.appendChild(renderSection(sv, state)); });
+      attachReorder();
+    }
+    var foot = document.getElementById('foot');
+    foot.textContent = 'cityops · schema v1 · state saved on this device';
+    var notice = document.getElementById('notice');
+    notice.textContent = ctx.store.persistent ? '' :
+      'Private mode: changes hold for this session only and are not saved.';
+  }
+
+  function buildExport(data, state) {
+    var out = JSON.parse(JSON.stringify(data));
+    out.items.forEach(function (it) {
+      it.status = effectiveStatus(it, state);
+      var d = effectiveDay(it, state);
+      if (d) { it.day = d; } else { delete it.day; }
+    });
+    var vm = viewModel(out, { itemStatus: {}, itemDay: {}, dayOrder: state.dayOrder || {}, dataOverride: null });
+    var rank = {};
+    var r = 0;
+    var byId = {};
+    out.items.forEach(function (it) { byId[it.id] = it; });
+    vm.forEach(function (sv) {
+      sv.days.forEach(function (d) {
+        d.items.forEach(function (it) {
+          byId[it.id].day = d.iso; // bake the slot date the planner displays
+          rank[it.id] = r++;
+        });
+      });
+      sv.undated.forEach(function (it) { rank[it.id] = r++; });
+      sv.backups.forEach(function (it) { rank[it.id] = r++; });
+      sv.archived.forEach(function (it) { rank[it.id] = r++; });
+    });
+    out.items.sort(function (a, b) {
+      var ra = (rank[a.id] !== undefined) ? rank[a.id] : 1e9;
+      var rb = (rank[b.id] !== undefined) ? rank[b.id] : 1e9;
+      return ra - rb;
+    });
+    return out;
+  }
+
+  function diffSummary(oldData, newData) {
+    var oldIds = {};
+    oldData.items.forEach(function (i) { oldIds[i.id] = 1; });
+    var added = 0, unchanged = 0;
+    newData.items.forEach(function (i) {
+      if (oldIds[i.id]) { unchanged++; delete oldIds[i.id]; } else { added++; }
+    });
+    var removed = Object.keys(oldIds).length;
+    return added + ' added, ' + removed + ' removed, ' + unchanged + ' unchanged';
+  }
+
+  function openUpdateModal() {
+    var host = document.getElementById('modal');
+    host.innerHTML = '';
+    var wrap = el('div', 'modal-wrap');
+    var box = el('div', 'modal');
+    box.appendChild(el('h3', null, 'Update city data'));
+    box.appendChild(el('p', 'diff', 'Paste schema v1 JSON. It is stored on this device as an override; the file itself is not changed. Export and paste into the file to make it permanent.'));
+    var ta = document.createElement('textarea');
+    box.appendChild(ta);
+    var msg = el('div', 'diff', '');
+    box.appendChild(msg);
+    var row = el('div', 'mrow');
+    var apply = el('button', 'ctl', 'Apply');
+    apply.type = 'button';
+    apply.onclick = function () {
+      var res = parse(ta.value);
+      if (!res.data) { msg.textContent = 'Invalid:\n' + res.errors.join('\n'); return; }
+      var st = ctx.store.load();
+      var current = effectiveData(ctx.base, st);
+      var summary = diffSummary(current, res.data);
+      st.dataOverride = res.data;
+      ctx.store.save(st);
+      pendingPromote = null; // item ids may change under an override
+      wrap.remove();
+      rerender();
+      document.getElementById('notice').textContent = 'Data updated: ' + summary + '.';
+    };
+    var revert = el('button', 'ctl', 'Revert to file data');
+    revert.type = 'button';
+    var hasOverride = !!ctx.store.load().dataOverride;
+    if (hasOverride) {
+      revert.onclick = function () {
+        var st = ctx.store.load();
+        st.dataOverride = null;
+        ctx.store.save(st);
+        pendingPromote = null;
+        wrap.remove();
+        rerender();
+      };
+    } else {
+      revert.disabled = true;
+      revert.title = 'No in-app override is active';
+    }
+    var cancel = el('button', 'ctl', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = function () { wrap.remove(); };
+    row.appendChild(apply); row.appendChild(revert); row.appendChild(cancel);
+    box.appendChild(row);
+    wrap.appendChild(box);
+    wrap.onclick = function (e) { if (e.target === wrap) wrap.remove(); };
+    host.appendChild(wrap);
+    ta.focus();
+  }
+
+  function renderToolbar(data, state) {
+    var tb = document.getElementById('toolbar');
+    tb.innerHTML = '';
+    var share = el('button', null, shareOn ? 'Back to planner' : 'Share view');
+    share.type = 'button';
+    share.id = 'btn-share';
+    share.onclick = function () {
+      shareOn = !shareOn;
+      document.body.classList.toggle('share', shareOn);
+      rerender();
+    };
+    tb.appendChild(share);
+    if (!shareOn) {
+      var exp = el('button', null, 'Export JSON');
+      exp.type = 'button';
+      exp.id = 'btn-export';
+      exp.onclick = function () {
+        var st = ctx.store.load();
+        var out = buildExport(effectiveData(ctx.base, st), st);
+        var blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = cityId(out) + '.cityops.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+      };
+      tb.appendChild(exp);
+      var upd = el('button', null, 'Update data');
+      upd.type = 'button';
+      upd.onclick = openUpdateModal;
+      tb.appendChild(upd);
+    }
+    if (state.dataOverride) {
+      tb.appendChild(el('span', 'flag', 'Data updated in-app: export and paste into the file to make permanent'));
+    }
+  }
+
+  function renderError(errors) {
+    var main = document.getElementById('main');
+    main.innerHTML = '';
+    var card = el('div', 'errcard');
+    var b = el('b', null, 'This guide\'s city data has a problem.');
+    card.appendChild(b);
+    errors.forEach(function (m) { card.appendChild(el('p', null, m)); });
+    card.appendChild(el('p', null, 'Fix the JSON inside the <script id="city-data"> block and reload.'));
+    main.appendChild(card);
+  }
+
+  function init() {
+    var elData = document.getElementById('city-data');
+    if (!elData) return; // Node test harness path
+    var res = parse(elData.textContent);
+    if (!res.data) { renderError(res.errors); return; }
+    var storageRef = null;
+    try { storageRef = (typeof localStorage !== 'undefined') ? localStorage : null; }
+    catch (e) { storageRef = null; }
+    var store = makeStore(cityId(res.data), storageRef);
+    ctx = { base: res.data, store: store };
+    window.addEventListener('pointermove', onDragPointerMove, { passive: false });
+    window.addEventListener('pointerup', onDragPointerEnd);
+    window.addEventListener('pointercancel', onDragPointerEnd);
+    rerender();
+  }
+
+  return {
+    STATUSES: STATUSES, slug: slug, cityId: cityId, dayLabel: dayLabel,
+    validate: validate, parse: parse, init: init,
+    emptyState: emptyState, makeStore: makeStore, setStatus: setStatus,
+    effectiveStatus: effectiveStatus, effectiveData: effectiveData, viewModel: viewModel,
+    TRANSITIONS: TRANSITIONS, fmtRange: fmtRange, buildExport: buildExport,
+    diffSummary: diffSummary, shareModel: shareModel,
+    effectiveDay: effectiveDay, setDay: setDay, stayDates: stayDates,
+    normalizeState: normalizeState
+  };
+})();
+CityOps.init();
+</script>
+</body>
+</html>
