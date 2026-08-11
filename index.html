@@ -21,13 +21,13 @@
   .wrap{max-width:760px; margin:0 auto; padding:0 16px 60px;}
   header{background:linear-gradient(160deg,var(--accent) 0%,var(--accent-hover) 100%); color:#fff;
     padding:26px 20px 22px;}
-  .wrap>header{margin:0 -16px 20px; border-radius:0 0 20px 20px;}
+  .wrap>header{margin:0 -16px 20px; border-radius:0;}
   header h1{font-size:1.55rem; letter-spacing:.2px;}
   header .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
   .facts{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;}
   .chip{background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25);
     padding:5px 10px; border-radius:20px; font-size:.8rem;}
-  h2{font-size:1.15rem; margin:26px 0 12px; color:var(--accent-hover);
+  h2{font-size:1.15rem; margin:26px 0 12px; color:var(--text);
     display:flex; align-items:center; gap:8px;}
   h2 .ic{font-size:1.1rem}
   .card{background:var(--bg-card); border:1px solid var(--border-light); border-radius:14px;
@@ -166,7 +166,7 @@
   /* narrow phones: trim horizontal chrome so cards get the width */
   @media (max-width: 430px){
     .wrap{padding:0 10px 48px;}
-    .wrap>header{margin:0 -10px 16px; padding:20px 14px 16px; border-radius:0 0 16px 16px;}
+    .wrap>header{margin:0 -10px 16px; padding:20px 14px 16px; border-radius:0;}
     header h1{font-size:1.35rem;}
     .facts{gap:6px; margin-top:10px;}
     .chip{padding:4px 9px; font-size:.75rem;}
@@ -189,29 +189,37 @@
   }
 
   /* --- app shell: multi-city switcher (index.html only) --- */
-  #citybar{max-width:760px; margin:0 auto; padding:10px 16px 0;}
-  .citybar-row{display:flex; align-items:stretch; gap:8px;}
-  .citybtn{display:flex; align-items:center; justify-content:space-between; gap:10px;
-    flex:1 1 auto; min-width:0; font:inherit; text-align:left; color:var(--text); background:var(--bg-card);
-    border:1px solid var(--border-light); border-radius:12px; padding:10px 14px;
-    cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.03);}
-  .citybar-add{flex:0 0 auto; font:inherit; font-size:.78rem; font-weight:700; color:var(--accent-hover);
-    background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
-    padding:0 13px; cursor:pointer; white-space:nowrap;}
-  .citybar-add:hover{border-color:var(--accent);}
-  .citybtn:hover{border-color:var(--accent);}
-  .citybtn .cname{font-weight:700; font-size:.95rem;}
-  .citybtn .cdates{display:block; font-size:.78rem; color:var(--text-3); margin-top:1px;}
-  .citybtn .chev{flex:0 0 auto; font-size:.8rem; color:var(--accent);}
-  .citypanel{background:var(--bg-card); border:1px solid var(--border-light); border-radius:12px;
-    margin-top:6px; overflow:hidden; box-shadow:0 6px 18px rgba(0,0,0,.12);}
+  /* Dense in-header controls: the h1 itself is the switcher trigger (chevron
+     appended after it), and a translucent chip in the header's top-right opens
+     Add-city. Both live inside #hdr, which the engine fully replaces
+     (innerHTML='') on every render, so decorateHeader() re-appends them from
+     CityOps.onStateChange every time — see the appshell script below. The
+     header must not grow to fit these; they overlay the existing chrome. */
+  #hdr{position:relative;}
+  #hdr h1{cursor:pointer; display:inline-flex; align-items:center; gap:2px;}
+  .hdr-chev{font-size:.85rem; opacity:.85;}
+  .hdr-add{position:absolute; top:24px; right:20px; font:inherit; font-size:.75rem; font-weight:700;
+    color:#fff; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.4);
+    border-radius:20px; padding:5px 11px; cursor:pointer; white-space:nowrap;}
+  .hdr-add:hover{background:rgba(255,255,255,.25);}
+
+  /* Dropdown panel: floats directly under the header (does not add header
+     height); #citybar is its host, positioned inside .wrap right after
+     #hdr so it shares the content width. */
+  #citybar{position:relative;}
+  .citypanel{position:absolute; top:6px; left:0; right:0; z-index:60;
+    background:var(--bg-card); border:1px solid var(--border-light); border-radius:12px;
+    overflow:hidden; box-shadow:0 6px 18px rgba(0,0,0,.12);}
   .cityrow{display:block; width:100%; font:inherit; text-align:left; color:var(--text);
     background:none; border:none; border-bottom:1px solid var(--border-light);
     padding:11px 14px; cursor:pointer;}
   .cityrow:last-of-type{border-bottom:none;}
   .cityrow:hover{background:var(--bg-softer);}
   .cityrow.current{background:var(--accent-soft);}
-  .cityrow .cname{font-weight:700; font-size:.9rem;}
+  .cityrow .cname{font-weight:600; font-size:.9rem;}
+  .cityrow.current .cname{font-weight:800;}
+  .cityrow .dot{display:inline-block; width:6px; height:6px; border-radius:50%;
+    background:var(--accent); margin-left:7px; vertical-align:middle;}
   .cityrow .cdates{display:block; font-size:.76rem; color:var(--text-3); margin-top:1px;}
   .cityact{display:flex; gap:8px; flex-wrap:wrap; padding:10px 14px;
     background:var(--bg-softer); border-top:1px solid var(--border-light);}
@@ -224,15 +232,15 @@
   .modal .ctl[disabled]{opacity:.45; cursor:not-allowed; border-color:var(--border-light);}
   .modal .ctl[disabled]:hover{border-color:var(--border-light);}
   @media (max-width: 430px){
-    #citybar{padding:8px 10px 0;}
+    .hdr-add{top:17px; right:14px; padding:4px 9px; font-size:.7rem;}
   }
 </style>
 </head>
 <body>
-<div id="citybar"></div>
 <div class="wrap">
   <div id="notice"></div>
   <header id="hdr"></header>
+  <div id="citybar"></div>
   <div class="toolbar" id="toolbar"></div>
   <main id="main"></main>
   <div class="foot" id="foot"></div>
@@ -1451,13 +1459,13 @@ CityOps.init();
   .wrap{max-width:760px; margin:0 auto; padding:0 16px 60px;}
   header{background:linear-gradient(160deg,var(--accent) 0%,var(--accent-hover) 100%); color:#fff;
     padding:26px 20px 22px;}
-  .wrap>header{margin:0 -16px 20px; border-radius:0 0 20px 20px;}
+  .wrap>header{margin:0 -16px 20px; border-radius:0;}
   header h1{font-size:1.55rem; letter-spacing:.2px;}
   header .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
   .facts{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;}
   .chip{background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25);
     padding:5px 10px; border-radius:20px; font-size:.8rem;}
-  h2{font-size:1.15rem; margin:26px 0 12px; color:var(--accent-hover);
+  h2{font-size:1.15rem; margin:26px 0 12px; color:var(--text);
     display:flex; align-items:center; gap:8px;}
   h2 .ic{font-size:1.1rem}
   .card{background:var(--bg-card); border:1px solid var(--border-light); border-radius:14px;
@@ -1596,7 +1604,7 @@ CityOps.init();
   /* narrow phones: trim horizontal chrome so cards get the width */
   @media (max-width: 430px){
     .wrap{padding:0 10px 48px;}
-    .wrap>header{margin:0 -10px 16px; padding:20px 14px 16px; border-radius:0 0 16px 16px;}
+    .wrap>header{margin:0 -10px 16px; padding:20px 14px 16px; border-radius:0;}
     header h1{font-size:1.35rem;}
     .facts{gap:6px; margin-top:10px;}
     .chip{padding:4px 9px; font-size:.75rem;}
@@ -2920,92 +2928,114 @@ CityOps.init();
     saveStore(store);
     activeId = id;
     setHash(id);
+    // CityOps.boot -> rerender() calls CityOps.onStateChange() itself (see
+    // below), which re-renders the panel and decorates the fresh header; no
+    // separate call needed here.
     CityOps.boot(clone(store.cities[id]));
-    renderCitybar();
   }
 
   // Closing on an outside click: bound to document only while the panel is
   // open, and removed as soon as it closes (by any path), so it never lingers.
+  // The header counts as "inside" too: it now hosts the trigger (h1) and the
+  // Add chip, and those already have their own click handlers.
   function onOutsideClick(e) {
     var bar = document.getElementById('citybar');
-    if (panelOpen && bar && !bar.contains(e.target)) {
+    var hdr = document.getElementById('hdr');
+    var insideBar = bar && bar.contains(e.target);
+    var insideHdr = hdr && hdr.contains(e.target);
+    if (panelOpen && !insideBar && !insideHdr) {
       panelOpen = false;
-      renderCitybar();
+      updateHeaderExpanded();
+      renderPanel();
     }
   }
 
-  function renderCitybar() {
+  // Renders (or clears) the dropdown panel: city list + Remove city. Add city
+  // now lives in the header chip, so the panel's own action row only has Remove.
+  function renderPanel() {
     var bar = document.getElementById('citybar');
     bar.innerHTML = '';
-    var cur = store.cities[activeId];
-    if (!cur) return;
-    // Live values: the header already shows the effective (override-aware) dates
-    // for the active city; the citybar should agree rather than showing the
-    // authored file dates while a stay override is active. The city name stays
-    // the authored name: renaming a city in-app is not a feature.
-    var liveSt = CityOps.makeStore(activeId, LS).load();
-    var range = CityOps.effectiveDates({ city: cur.city }, liveSt);
-
-    var row = el('div', 'citybar-row');
-    var btn = el('button', 'citybtn');
-    btn.type = 'button';
-    btn.setAttribute('aria-expanded', String(panelOpen));
-    var lab = el('span');
-    lab.appendChild(el('span', 'cname', cur.city.name));
-    lab.appendChild(el('span', 'cdates', CityOps.fmtRange(range) +
-      ' · ' + store.order.length + (store.order.length === 1 ? ' city' : ' cities')));
-    btn.appendChild(lab);
-    btn.appendChild(el('span', 'chev', panelOpen ? '▴' : '▾'));
-    btn.onclick = function () { panelOpen = !panelOpen; renderCitybar(); };
-    row.appendChild(btn);
-
-    // Always-visible affordance beside the switcher toggle, not only inside
-    // the dropdown: a first-time visitor should not have to open the panel to
-    // discover how to add their own city.
-    var quickAdd = el('button', 'citybar-add', '+ Add city');
-    quickAdd.type = 'button';
-    quickAdd.onclick = function () { panelOpen = false; renderCitybar(); openAddModal(); };
-    row.appendChild(quickAdd);
-
-    bar.appendChild(row);
-
-    if (panelOpen) {
-      var panel = el('div', 'citypanel');
-      store.order.forEach(function (id) {
-        var d = store.cities[id];
-        var prow = el('button', 'cityrow' + (id === activeId ? ' current' : ''));
-        prow.type = 'button';
-        prow.appendChild(el('span', 'cname', d.city.name));
-        prow.appendChild(el('span', 'cdates', CityOps.fmtRange(d.city.dates)));
-        prow.onclick = function () {
-          panelOpen = false;
-          if (id === activeId) { renderCitybar(); return; }
-          activateCity(id);
-        };
-        panel.appendChild(prow);
-      });
-      var acts = el('div', 'cityact');
-      var add = el('button', null, '+ Add city');
-      add.type = 'button';
-      add.onclick = function () { panelOpen = false; renderCitybar(); openAddModal(); };
-      acts.appendChild(add);
-      var rm = el('button', null, 'Remove city');
-      rm.type = 'button';
-      rm.onclick = function () { panelOpen = false; renderCitybar(); openRemoveModal(); };
-      acts.appendChild(rm);
-      panel.appendChild(acts);
-      bar.appendChild(panel);
+    if (!panelOpen) {
+      if (docClickBound) { document.removeEventListener('click', onOutsideClick, true); docClickBound = false; }
+      return;
     }
+    var panel = el('div', 'citypanel');
+    store.order.forEach(function (id) {
+      var d = store.cities[id];
+      var isCurrent = id === activeId;
+      var prow = el('button', 'cityrow' + (isCurrent ? ' current' : ''));
+      prow.type = 'button';
+      var nameWrap = el('span', 'cname', d.city.name);
+      if (isCurrent) nameWrap.appendChild(el('span', 'dot'));
+      prow.appendChild(nameWrap);
+      prow.appendChild(el('span', 'cdates', CityOps.fmtRange(d.city.dates)));
+      prow.onclick = function () {
+        panelOpen = false;
+        // activateCity triggers a real engine render, which calls
+        // decorateHeader() via onStateChange and updates aria-expanded there;
+        // only the same-city no-op path needs to refresh it itself.
+        if (id === activeId) { updateHeaderExpanded(); renderPanel(); return; }
+        activateCity(id);
+      };
+      panel.appendChild(prow);
+    });
+    var acts = el('div', 'cityact');
+    var rm = el('button', null, 'Remove city');
+    rm.type = 'button';
+    rm.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); openRemoveModal(); };
+    acts.appendChild(rm);
+    panel.appendChild(acts);
+    bar.appendChild(panel);
 
-    if (panelOpen && !docClickBound) {
+    if (!docClickBound) {
       // Deferred: adding the listener synchronously would let it observe the
       // very click (bubbling to document) that just opened the panel.
       setTimeout(function () { document.addEventListener('click', onOutsideClick, true); }, 0);
       docClickBound = true;
-    } else if (!panelOpen && docClickBound) {
-      document.removeEventListener('click', onOutsideClick, true);
-      docClickBound = false;
     }
+  }
+
+  // Just refreshes the aria-expanded flag on the current h1 in place. Toggling
+  // the panel does not itself trigger an engine render, so this must NOT go
+  // through decorateHeader() below (that appends the chevron/chip afresh and
+  // would duplicate them on an h1 the engine hasn't wiped since last time).
+  function updateHeaderExpanded() {
+    var h1 = document.querySelector('#hdr h1');
+    if (h1) h1.setAttribute('aria-expanded', String(panelOpen));
+  }
+
+  // Re-decorates the freshly rendered #hdr (the engine wipes it with
+  // innerHTML='' on every render): appends the chevron to h1 and wires it as
+  // the switcher trigger, and appends the header's + Add chip. Called once
+  // per engine render via CityOps.onStateChange — never from a plain
+  // open/close toggle, which would duplicate these onto the still-live h1.
+  function decorateHeader() {
+    var h = document.getElementById('hdr');
+    if (!h) return;
+    var h1 = h.querySelector('h1');
+    if (!h1) return;
+    h1.setAttribute('role', 'button');
+    h1.setAttribute('tabindex', '0');
+    h1.setAttribute('aria-expanded', String(panelOpen));
+    h1.appendChild(el('span', 'hdr-chev', ' ▾'));
+    h1.onclick = function () {
+      panelOpen = !panelOpen;
+      updateHeaderExpanded();
+      renderPanel();
+    };
+    h1.onkeydown = function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); h1.click(); }
+    };
+    var add = el('button', 'hdr-add', '+ Add');
+    add.type = 'button';
+    add.onclick = function (e) {
+      e.stopPropagation();
+      panelOpen = false;
+      updateHeaderExpanded();
+      renderPanel();
+      openAddModal();
+    };
+    h.appendChild(add);
   }
 
   function openAddModal() {
@@ -3194,11 +3224,14 @@ CityOps.init();
   // Set before the first boot so the engine's toolbar picks up the app-only button.
   window.CityOpsApp = { exportStandalone: exportStandalone };
 
-  // Re-render the citybar on every engine state change (not just on city
-  // switch, which activateCity already handles directly): this catches things
-  // like the Edit-dates modal applying a stay override, and future-proofs any
-  // M2 sync path that mutates state outside the app shell's own click handlers.
-  CityOps.onStateChange = function () { renderCitybar(); };
+  // Re-decorate the header and re-render the panel on every engine state
+  // change (not just on city switch, which activateCity already triggers via
+  // CityOps.boot -> rerender -> this hook): this catches things like the
+  // Edit-dates modal applying a stay override, and future-proofs any M2 sync
+  // path that mutates state outside the app shell's own click handlers. The
+  // engine wipes #hdr on every render, so decorateHeader() must re-run here
+  // every time too, not just once at startup.
+  CityOps.onStateChange = function () { renderPanel(); decorateHeader(); };
 
   function start() {
     store = loadStore();
