@@ -415,5 +415,174 @@ test('promote resolves the displayed slot before the item turns active', () => {
   assert.equal(key, '2026-08-10'); // with nothing active, displayed Mon IS Mon
 });
 
+// Task 3: multi-city app store (pure helpers; the app shell owns localStorage)
+const CITY_B = clone(GOOD);
+const CITY_Y = clone(GOOD);
+CITY_Y.city.name = 'Yerevan';
+CITY_Y.city.dates = { from: '2026-08-15', to: '2026-08-22' };
+test('appStore.normalize fills missing keys and repairs order/active', () => {
+  const empty = C.appStore.normalize(null);
+  assert.deepEqual(empty, { cities: {}, order: [], active: null });
+  const s = C.appStore.normalize({
+    cities: {
+      a: CITY_B, b: CITY_Y,
+      c: { city: { name: 'Broken' } },   // missing dates
+      d: null,                            // not an object
+      e: { notCity: 1 },                  // missing city entirely
+      f: { city: { dates: { from: '2026-01-01', to: '2026-01-02' } } } // missing name
+    },
+    order: ['b', 'b', 'ghost', 'c', 'd', 'f'],
+    active: 'ghost'
+  });
+  assert.deepEqual(s.order, ['b', 'a']); // dedupe, drop unknown, drop malformed, append orphans
+  assert.equal(s.active, 'b');           // unknown active falls back to the first city
+  assert.deepEqual(Object.keys(s.cities).sort(), ['a', 'b']); // malformed entries dropped entirely
+});
+test('appStore.add derives the id, appends order, flags replacement', () => {
+  let s = C.appStore.normalize(null);
+  const first = C.appStore.add(s, CITY_B);
+  assert.equal(first.cityId, 'batumi-2026-08-08');
+  assert.equal(first.replaced, false);
+  const second = C.appStore.add(first.store, CITY_Y);
+  assert.deepEqual(second.store.order, ['batumi-2026-08-08', 'yerevan-2026-08-15']);
+  const again = C.appStore.add(second.store, CITY_B);
+  assert.equal(again.replaced, true);
+  assert.deepEqual(again.store.order, ['batumi-2026-08-08', 'yerevan-2026-08-15']); // no duplicate slot
+});
+test('appStore.keepBothName renames so cityId derives a fresh id', () => {
+  const copy = clone(CITY_B);
+  copy.city.name = C.appStore.keepBothName(copy.city.name);
+  assert.equal(copy.city.name, 'Batumi 2');
+  assert.equal(C.cityId(copy), 'batumi-2026-08-08'.replace('batumi', 'batumi-2'));
+  copy.city.name = C.appStore.keepBothName(copy.city.name); // collides again: suffix again
+  assert.equal(C.cityId(copy), 'batumi-2-2-2026-08-08');
+});
+test('appStore.remove drops the city and repoints active', () => {
+  let s = C.appStore.add(C.appStore.normalize(null), CITY_B).store;
+  s = C.appStore.add(s, CITY_Y).store;
+  s.active = 'batumi-2026-08-08';
+  s = C.appStore.remove(s, 'batumi-2026-08-08');
+  assert.deepEqual(s.order, ['yerevan-2026-08-15']);
+  assert.ok(!('batumi-2026-08-08' in s.cities));
+  assert.equal(s.active, 'yerevan-2026-08-15'); // first remaining
+  const empty = C.appStore.remove(s, 'yerevan-2026-08-15');
+  assert.deepEqual(empty.order, []);
+  assert.equal(empty.active, null);
+});
+test('appStore.remove of an inactive city leaves active alone', () => {
+  let s = C.appStore.add(C.appStore.normalize(null), CITY_B).store;
+  s = C.appStore.add(s, CITY_Y).store;
+  s.active = 'yerevan-2026-08-15';
+  s = C.appStore.remove(s, 'batumi-2026-08-08');
+  assert.equal(s.active, 'yerevan-2026-08-15');
+});
+
+// T3 review fix wave
+test('appStore.resolveStartCity: hash known > active > first > null', () => {
+  let s = C.appStore.add(C.appStore.normalize(null), CITY_B).store;
+  s = C.appStore.add(s, CITY_Y).store;
+  s.active = 'batumi-2026-08-08';
+  assert.equal(C.appStore.resolveStartCity(s, 'yerevan-2026-08-15'), 'yerevan-2026-08-15'); // hash wins
+  assert.equal(C.appStore.resolveStartCity(s, 'ghost-hash'), 'batumi-2026-08-08');          // unknown hash: active
+  assert.equal(C.appStore.resolveStartCity(s, null), 'batumi-2026-08-08');                  // no hash: active
+  const s2 = { cities: s.cities, order: s.order, active: 'ghost-active' };
+  assert.equal(C.appStore.resolveStartCity(s2, null), s.order[0]);                          // unknown active: first
+  const empty = C.appStore.normalize(null);
+  assert.equal(C.appStore.resolveStartCity(empty, null), null);                             // nothing: null
+});
+test('keep-both collision loop finds a free id past a multi-deep collision chain', () => {
+  // Mirrors the app shell's do/while loop in openAddModal: repeatedly apply
+  // keepBothName and re-derive the id until it stops colliding, guarded at 20.
+  let s = C.appStore.normalize(null);
+  let name = 'Batumi';
+  for (let i = 0; i < 3; i++) {
+    name = C.appStore.keepBothName(name);
+    const d = clone(CITY_B);
+    d.city.name = name;
+    s = C.appStore.add(s, d).store;
+  }
+  const copy = clone(CITY_B);
+  let guard = 0;
+  do {
+    copy.city.name = C.appStore.keepBothName(copy.city.name);
+    guard++;
+  } while (Object.prototype.hasOwnProperty.call(s.cities, C.cityId(copy)) && guard < 20);
+  assert.equal(guard, 4); // 3 pre-seeded collisions plus the first fresh one
+  assert.ok(!Object.prototype.hasOwnProperty.call(s.cities, C.cityId(copy)));
+});
+test('keep-both collision loop fails closed when 20 renames are not enough', () => {
+  let s = C.appStore.normalize(null);
+  let name = 'Batumi';
+  for (let i = 0; i < 20; i++) {
+    name = C.appStore.keepBothName(name);
+    const d = clone(CITY_B);
+    d.city.name = name;
+    s = C.appStore.add(s, d).store;
+  }
+  const copy = clone(CITY_B);
+  let guard = 0;
+  do {
+    copy.city.name = C.appStore.keepBothName(copy.city.name);
+    guard++;
+  } while (Object.prototype.hasOwnProperty.call(s.cities, C.cityId(copy)) && guard < 20);
+  assert.equal(guard, 20);
+  // Still colliding after the guard trips: the caller (app shell) must treat
+  // this as a failure and refuse to commit, not silently overwrite the city.
+  assert.ok(Object.prototype.hasOwnProperty.call(s.cities, C.cityId(copy)));
+});
+test('export escaping: </script in a note round-trips losslessly and never appears raw in the data block', () => {
+  const st = C.emptyState();
+  const data = clone(GOOD);
+  data.items[0].note = '</script><img src=x>';
+  const out = C.buildExport(data, st);
+  // Same transform as exportStandalone() in src/app-shell.html.
+  const escaped = JSON.stringify(out, null, 2).replace(/<\//g, '<\\/');
+  // "\/" is a valid JSON escape for "/", so escaping is lossless.
+  assert.deepEqual(JSON.parse(escaped), out);
+  const block = '<script type="application/json" id="city-data">\n' + escaped + '\n</script>';
+  const inner = block.slice(block.indexOf('\n') + 1, block.lastIndexOf('\n'));
+  assert.equal(inner.indexOf('</script'), -1); // no raw close-tag sequence survives inside the block
+});
+
+test('template.html contains src/cityops.js verbatim (assembler sync)', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const engine = fs.readFileSync(path.join(__dirname, '..', 'src', 'cityops.js'), 'utf8');
+  const tpl = fs.readFileSync(path.join(__dirname, '..', 'template.html'), 'utf8');
+  assert.ok(tpl.includes(engine), 'run node tools/assemble.js after editing src/');
+});
+test('template.html and index.html contain src/cityops.css verbatim (assembler sync)', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'src', 'cityops.css'), 'utf8').replace(/\n$/, '');
+  ['template.html', 'index.html'].forEach(name => {
+    const html = fs.readFileSync(path.join(__dirname, '..', name), 'utf8');
+    assert.ok(html.includes(css), name + ': run node tools/assemble.js after editing src/');
+  });
+});
+test('index.html embeds the standalone template, escaped and reversible', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const root = path.join(__dirname, '..');
+  const idx = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const m = idx.match(/<script type="text\/plain" id="guide-template">\n([\s\S]*?)\n<\/script>/);
+  assert.ok(m, 'guide-template block missing or closed early');
+  // A raw </script or <!-- inside the block would end (or trap) it in the browser.
+  assert.equal(m[1].indexOf('</script'), -1);
+  assert.equal(m[1].indexOf('<!--'), -1);
+  // Exactly the unescape the app performs on export.
+  const un = m[1].replace(/<\\\/script/g, '</script');
+  const tpl = fs.readFileSync(path.join(root, 'template.html'), 'utf8');
+  const marked = tpl.replace(
+    /(<script type="application\/json" id="city-data">)[\s\S]*?(<\/script>)/,
+    (x, open, close) => open + '\n__CITY_DATA__\n' + close
+  );
+  assert.equal(un, marked);
+  // And filling the marker reproduces what tools/embed.js writes, byte for byte.
+  const city = fs.readFileSync(path.join(root, 'cities', 'batumi.json'), 'utf8').trim();
+  assert.equal(un.replace('__CITY_DATA__', () => city),
+    fs.readFileSync(path.join(root, 'batumi.html'), 'utf8'));
+});
+
 console.log(pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);
