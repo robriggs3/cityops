@@ -2988,6 +2988,14 @@ var CityOps = (function () {
     return out;
   }
 
+  // Accepted limitation: updated_at is client-driven (the device stamps it,
+  // not the server), so a device with a fast clock wins every reconcile for
+  // as long as its clock stays skewed. Bounded by real device skew, which for
+  // NTP-synced phones and laptops is sub-second in practice. v2 fix: a
+  // server-side `now()` default on the column plus the client adopting the
+  // stamp Postgres actually wrote via `Prefer: return=representation` instead
+  // of trusting its own clock.
+  //
   // Rows for a PostgREST upsert. user_id is never sent: it defaults to
   // auth.uid() server side, and RLS rejects anything else.
   function buildRows(field, entries) {

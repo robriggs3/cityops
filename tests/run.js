@@ -624,6 +624,12 @@ test('appStore.normalize backfills missing stamps with EPOCH and prunes orphans'
   assert.ok(!('ghost-city' in n.updatedAt));
   assert.deepEqual(Object.keys(n.updatedAt).sort(), n.order.slice().sort());
 });
+test('seeding a city stamps EPOCH, not now, so a real server row always wins', () => {
+  // Mirrors both app-shell.html seed call sites (first-run seed and
+  // re-seed-after-remove): CityOps.appStore.add(store, clone(SEED_CITY), CityOps.syncKit.EPOCH).
+  const s = C.appStore.add(C.appStore.normalize(null), CITY_B, C.syncKit.EPOCH).store;
+  assert.equal(s.updatedAt['batumi-2026-08-08'], C.syncKit.EPOCH);
+});
 test('syncKit.decide covers the full newer-wins matrix', () => {
   const A = '2026-08-11T09:00:00.000Z';   // older
   const B = '2026-08-11T10:00:00.000Z';   // newer

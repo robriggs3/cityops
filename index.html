@@ -747,6 +747,14 @@ var CityOps = (function () {
     return out;
   }
 
+  // Accepted limitation: updated_at is client-driven (the device stamps it,
+  // not the server), so a device with a fast clock wins every reconcile for
+  // as long as its clock stays skewed. Bounded by real device skew, which for
+  // NTP-synced phones and laptops is sub-second in practice. v2 fix: a
+  // server-side `now()` default on the column plus the client adopting the
+  // stamp Postgres actually wrote via `Prefer: return=representation` instead
+  // of trusting its own clock.
+  //
   // Rows for a PostgREST upsert. user_id is never sent: it defaults to
   // auth.uid() server side, and RLS rejects anything else.
   function buildRows(field, entries) {
@@ -2323,6 +2331,14 @@ var CityOps = (function () {
     return out;
   }
 
+  // Accepted limitation: updated_at is client-driven (the device stamps it,
+  // not the server), so a device with a fast clock wins every reconcile for
+  // as long as its clock stays skewed. Bounded by real device skew, which for
+  // NTP-synced phones and laptops is sub-second in practice. v2 fix: a
+  // server-side `now()` default on the column plus the client adopting the
+  // stamp Postgres actually wrote via `Prefer: return=representation` instead
+  // of trusting its own clock.
+  //
   // Rows for a PostgREST upsert. user_id is never sent: it defaults to
   // auth.uid() server side, and RLS rejects anything else.
   function buildRows(field, entries) {
@@ -3602,7 +3618,9 @@ CityOps.init();
       removedIds[gone] = 1;
       delete stateStamp[gone];
       if (!store.order.length) {
-        var res = CityOps.appStore.add(store, clone(SEED_CITY));
+        // Stamp EPOCH, not now: a pristine reseed must always lose the
+        // reconcile to any real server row (see the M2 client report).
+        var res = CityOps.appStore.add(store, clone(SEED_CITY), CityOps.syncKit.EPOCH);
         store = res.store;
         store.active = res.cityId;
       }
@@ -3667,9 +3685,12 @@ CityOps.init();
     try { cfg = JSON.parse(raw); } catch (e2) { warn('dev config is not valid JSON'); return; }
     if (!cfg || typeof cfg.url !== 'string' || typeof cfg.anon !== 'string' || !cfg.anon) return;
     var url = cfg.url.replace(/\/+$/, '');
-    var okScheme = /^https:\/\/[^\s\/]+$/.test(url) ||
+    // Tight enough to reject userinfo, a query string or a path riding along
+    // with the host: only a bare Supabase project host, or loopback for local
+    // testing. A bearer token must never be sent anywhere else.
+    var okScheme = /^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(url) ||
       /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(url);
-    if (!okScheme) { warn('dev config url rejected (https, or http on localhost, only)'); return; }
+    if (!okScheme) { warn('dev config url rejected (https project host, or http on localhost, only)'); return; }
     SUPA = { url: url, anon: cfg.anon };
   }
 
@@ -3739,7 +3760,8 @@ CityOps.init();
     try {
       history.replaceState(null, '', location.pathname + location.search);
     } catch (e) {
-      location.hash = '';
+      // No history API: leave the hash rather than write a new history entry
+      // via location.hash = '' (which some browsers treat as a navigation).
     }
   }
 
@@ -3915,6 +3937,17 @@ CityOps.init();
     pushNow('state', stateEntries);
   }
 
+  // Fires the debounced push immediately instead of waiting out the 2s timer:
+  // the tab is about to go away (hidden or unloading), and a queued edit that
+  // never flushes is an edit that never syncs. Same guards schedulePush uses,
+  // since this only matters when a debounce could actually be pending.
+  function flushPendingPush() {
+    if (!syncOn() || !session || !pushTimer) return;
+    clearTimeout(pushTimer);
+    pushTimer = null;
+    flushPush();
+  }
+
   // Chained onto the engine's state-change hook. A push fires only when the
   // state stamp actually moved: the first render after a boot just records a
   // baseline, because pushing there would upload this device's state before the
@@ -3989,7 +4022,7 @@ CityOps.init();
       // payload does not derive the city id it claims to be filed under.
       if (CityOps.validate(row.data).length) { warn('skipped invalid remote city ' + id); return; }
       if (CityOps.cityId(row.data) !== id) { warn('skipped mismatched remote city ' + id); return; }
-      var res = CityOps.appStore.add(store, row.data, row.updated_at || null);
+      var res = CityOps.appStore.add(store, row.data, row.updated_at || CityOps.syncKit.EPOCH);
       store = res.store;
       if (id === activeId) rebootActive = true;
       if (pulledNames.indexOf(row.data.city.name) === -1) pulledNames.push(row.data.city.name);
@@ -4001,6 +4034,19 @@ CityOps.init();
       var row = remoteState[id];
       if (!row || !row.state || typeof row.state !== 'object') return;
       var st = CityOps.normalizeState(clone(row.state));
+      // A pulled state row is untrusted input same as a pulled city row (see
+      // the conservative choices in the report): a dataOverride whose derived
+      // id does not match the city_id it was filed under is rejected rather
+      // than let a mismatched override attach to the wrong city. The rest of
+      // the pulled state is kept.
+      if (st.dataOverride) {
+        var overrideId = null;
+        try { overrideId = CityOps.cityId(st.dataOverride); } catch (e) {}
+        if (overrideId !== id) {
+          warn('pulled state for ' + id + ' carried a mismatched dataOverride; stripped it');
+          st.dataOverride = null;
+        }
+      }
       st.updated = row.updated_at || st.updated || null;
       if (!writeStateRaw(id, st)) return;  // private mode: cannot persist, leave local alone
       stateStamp[id] = st.updated;         // baseline first, so the re-boot does not push it back
@@ -4082,6 +4128,10 @@ CityOps.init();
     pushQueueData = {};
     pushQueueState = {};
     if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
+    // The last-sync record is meaningless once signed out (and stale once
+    // signed back in as someone else), so it goes with the session.
+    lastSyncIso = null;
+    if (LS) { try { LS.removeItem(SYNC_KEY); } catch (e) {} }
     renderPanel();
   }
 
@@ -4196,11 +4246,14 @@ CityOps.init();
     if (!session) return;
     if (!syncEmail) fetchUserEmail();
     window.addEventListener('online', function () { pullAll(true); });
-    // Mobile tab resume. Throttled to one pull a minute inside pullAll, so
-    // flicking between apps does not hammer the project.
+    // Mobile tab resume pulls; going hidden or away flushes any pending
+    // debounced push immediately rather than risking the 2s timer never
+    // firing (tab suspended, app switched away from, page unloaded).
     document.addEventListener('visibilitychange', function () {
       if (document.visibilityState === 'visible') pullAll(false);
+      else if (document.visibilityState === 'hidden') flushPendingPush();
     });
+    window.addEventListener('pagehide', flushPendingPush);
     pullAll(true);
   }
 
@@ -4275,7 +4328,9 @@ CityOps.init();
     var authNotice = consumeAuthHash();
     store = loadStore();
     if (!store.order.length) {
-      var seeded = CityOps.appStore.add(store, clone(SEED_CITY));
+      // Stamp EPOCH, not now: a pristine first-run seed must always lose the
+      // reconcile to any real server row (see the M2 client report).
+      var seeded = CityOps.appStore.add(store, clone(SEED_CITY), CityOps.syncKit.EPOCH);
       store = seeded.store;
       store.active = seeded.cityId;
       saveStore(store);
