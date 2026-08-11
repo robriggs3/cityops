@@ -30,6 +30,16 @@
       "icon": "🍽️"
     },
     {
+      "id": "breakfast",
+      "label": "Breakfast",
+      "icon": "🍳"
+    },
+    {
+      "id": "lunch",
+      "label": "Lunch",
+      "icon": "🥙"
+    },
+    {
       "id": "coffee",
       "label": "Coffee",
       "icon": "☕"
@@ -592,6 +602,425 @@
       "status": "backup",
       "name": "Check the bill before you tip",
       "note": "Some Yerevan restaurants add an automatic service charge of about 10%, and where it appears there is no obligation to add anything on top. Where it does not, 5 to 10% is normal and rounding up is the local habit. Tip in cash even when you pay by card, because card tips do not reliably reach the server. Worth saying plainly: unlike Batumi, I found ZERO bill-padding or service-charge complaints in the reviews I read here, including in the one-star reviews of the busiest places. This is a check-the-bill habit, not a defence against a known scam.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "paul-armenia",
+      "section": "breakfast",
+      "status": "plan",
+      "name": "PAUL Armenia, 8 Abovyan",
+      "price": {
+        "text": "Price band not published"
+      },
+      "note": "OPENS 08:00, closes 22:00, every day, and it is the nearest 08:00 breakfast to your base at about 17 min: everything else that opens at eight is 25 minutes away. French bakery chain, so croissants, omelettes, baguettes, proper coffee. Be honest about the number though: 4.1 stars across roughly 590 Google reviews, the weakest rating anywhere in this guide, and the recurring complaints are inconsistent food and slow service when it fills. It is here for the hours and the distance, not because it is the best breakfast in Yerevan.",
+      "hours": {
+        "text": "08:00-22:00 daily · opens 08:00 · closes 22:00",
+        "class": "eve"
+      },
+      "tags": [
+        "Closest early opener"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=14257518832721304097"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37444100400"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "achajour-parpetsi",
+      "section": "breakfast",
+      "status": "plan",
+      "name": "Achajour, Parpetsi branch",
+      "price": {
+        "text": "~1,800-3,500 AMD / $5-10 · their own stated breakfast average is 1,800"
+      },
+      "note": "OPENS 08:00 and runs to midnight, seven days, and the branch matters: Parpetsi serves breakfast ALL DAY, while their Lovers' Park branch on Baghramyan stops breakfast at noon. That is straight off their own site. About 4.5 to 4.6 stars across roughly 140 Google reviews, which is a thin sample, so treat the rating as soft. Non-smoking, kid area, reliable wifi, outdoor seating, and reviewers specifically call it quiet and good for a morning laptop session. Eggs benedict with salmon, bagels, bowls, homemade desserts. About 25 min on foot, which is the same tax you already pay for mart coffee.",
+      "hours": {
+        "text": "08:00-00:00 daily · breakfast all day at Parpetsi only",
+        "class": "late"
+      },
+      "tags": [
+        "Best breakfast"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=16947684954462541346"
+        },
+        {
+          "kind": "web",
+          "label": "achajour.am",
+          "href": "https://www.achajour.am/en/"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37455966866"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "crumbs-bakery",
+      "section": "breakfast",
+      "status": "plan",
+      "name": "Crumbs Bread Factory, 37 Mashtots",
+      "price": {
+        "text": "Price band not published"
+      },
+      "note": "4.5 stars across 370 Google reviews and 4.9 across 177 Yandex ratings, which is the widest positive gap I found and probably means locals rate it higher than tourists do. A real bakery rather than a cafe with pastries: sourdough rye, buckwheat, olive breads, plus salads and sandwiches for later in the day, and the croissants are what reviewers name first. HOURS CONFLICT: the aggregators say 08:00-22:00 daily, one local guide says 08:30. Assume 08:30 if you are making a special trip. About 26 min, and it sits on the Mashtots walk, so it doubles as the Thursday Matenadaran morning.",
+      "hours": {
+        "text": "08:00-22:00 daily (one source says 08:30) · closes 22:00",
+        "class": "eve"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=1641627983671913062"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37410703007"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "baguette-and-co",
+      "section": "breakfast",
+      "status": "backup",
+      "name": "Baguette & Co, 20 Abovyan",
+      "price": {
+        "text": "Price band not published"
+      },
+      "note": "The fourth 08:00 opener, 08:00-22:00 daily, about 21 min out and directly on your line into the centre. French bakery-confectionery that bakes from scratch three or four times a day and freezes nothing, which is a specific claim they make and reviewers back. Omelettes, sandwiches, summer salads, croissants, free wifi, outdoor tables. RATINGS ARE MESSY: 4.4 across 462 on one Google snapshot, 4.5 across 135 on Yandex, 4.3 on Tripadvisor, and a separate listing for what looks like a second branch at the Abovyan-Tumanyan corner shows 4.2 across only 80. Somewhere around 4.3 to 4.5 is the honest read.",
+      "hours": {
+        "text": "08:00-22:00 daily · closes 22:00",
+        "class": "eve"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=17596173616389476600"
+        },
+        {
+          "kind": "web",
+          "label": "baguetteandco.am",
+          "href": "http://www.baguetteandco.am/"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37412202299"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "breakfast-near-base",
+      "section": "breakfast",
+      "status": "backup",
+      "name": "What is actually open near you at 08:00: almost nothing",
+      "note": "Say it plainly so you do not go looking. Southeast Kentron is residential, and at 08:00 the only thing within ten minutes of your door is the supermarket, which the guide already puts at roughly 08:30 rather than 24h. Merhatsy is nine minutes away and does Lebanese breakfast properly (manaqish, cardamom coffee) but does not open until 09:30, and only until 16:00 on Sunday. GUM Market is ten minutes but does not open until 11:00. So the workday shape is: coffee and something from the supermarket at the desk before 09:00, or accept the 17 to 26 minute walk and make breakfast the first move of the day. Green Bean already covers international breakfast in this guide, but at 08:30 and 38 min it is a Cascade-evening place, not a work morning.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "tonir-and-gata",
+      "section": "breakfast",
+      "status": "backup",
+      "name": "Tonir lavash and gata: where it actually is",
+      "note": "The picture of a tonir-baked breakfast in central Yerevan mostly is not a bakery, it is inside restaurants, and two of them are already in this guide. Lavash Restaurant bakes lavash and gata behind glass on the ground floor and opens 08:30, and its Armenian breakfast (fried eggs with basturma, julienne baked into fresh lavash) is the most-recommended one in the city; you have it booked for dinner on Fri 21, so eating there twice is a choice rather than a duplicate. Gata Tavern has its own gata bakery on site and opens 10:00. For gata to carry away, GUM Market sells it alongside the sujuk and cheese. I could NOT verify a standalone neighbourhood tonir bakery near your side of town with hours I trust, so do not plan around one.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "lahmajun-gaidz",
+      "section": "lunch",
+      "status": "plan",
+      "name": "Lahmajun Gaidz, 9 Tumanyan",
+      "price": {
+        "text": "Lahmajun from 350 AMD / $1"
+      },
+      "note": "4.9 stars across 811 reviews, the highest-rated eating anywhere in this guide, dinner included. A Syrian-Armenian family cooking Aleppo recipes down a backstreet, 15 min from your door, and lahmajun starts at 350 dram. It is also the best-shaped lunch on the list for your day: MON-SAT 11:00 TO 18:30, CLOSED SUNDAY, so a 14:30 arrival lands in the quiet half of their service. Three honest flags from the reviews: quality wobbles (a dry dough turns up more than once), there is no toilet, and several people mention an automatic service charge nobody explained to them, so read the bill.",
+      "hours": {
+        "text": "Mon-Sat 11:00-18:30 · CLOSED SUNDAY · DAYTIME",
+        "class": "day"
+      },
+      "tags": [
+        "Best",
+        "Closed Sun"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=6047422207802723273"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37477332118"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "gum-market-lunch",
+      "section": "lunch",
+      "status": "plan",
+      "name": "Lunch at GUM Market, 35 Movses Khorenatsi",
+      "price": {
+        "text": "Cash only · a grazing lunch runs ~2,000-4,000 AMD / $5-11"
+      },
+      "note": "The market is already an activities pick in this guide; this is the eat-there version, and it is the closest real lunch to your base at ten minutes. Gata, sujuk, lavash, sheep and cow cheeses, dried fruit and nuts, and vendors who will hand you samples of all of it until you have effectively eaten. Build the plate as you walk. THREE THINGS. It is cash. Hours are contested: this guide reads it as 11:00-17:00 daily, other sources say 09:00-19:00 with Sunday afternoon dead, so 14:00 is inside every version and 16:30 is not. And the guide's own overcharging note names markets specifically as where tourist pricing happens, so ask the price before it goes in the bag.",
+      "hours": {
+        "text": "~11:00-17:00 · sources conflict · DAYTIME · cash only",
+        "class": "day"
+      },
+      "tags": [
+        "Near base",
+        "Cash only"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=13072009671850844115"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "foodetory-rossia",
+      "section": "lunch",
+      "status": "plan",
+      "name": "Foodetory Food Hall, Rossia Mall, 16 Tigran Mets",
+      "price": {
+        "text": "Price band not published · food-hall pricing"
+      },
+      "note": "The August answer, and the near-base one: third floor of Rossia Mall, roughly 12 min from your door, and it is a shopping-mall interior, so it is the one lunch on this list where the room is definitively cold. Ten-odd counters under one roof (Armenian, Georgian, Lebanese, Italian, Mexican, Japanese, plus the Art Lunch cafeteria), so you can eat light without negotiating a menu. 10:00-22:00 daily. THE RATINGS ARE THIN: 4.7 across 91 Yandex ratings and 29 reviews, and 5.0 across only 13 on Tripadvisor. That is not enough sample to call it good, only enough to say nobody is complaining.",
+      "hours": {
+        "text": "10:00-22:00 daily · closes 22:00 · air conditioned",
+        "class": "eve"
+      },
+      "tags": [
+        "Near base",
+        "AC"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Foodetory%20Food%20Hall%2C%2016%20Tigran%20Mets%20Ave%2C%20Rossia%20Mall%2C%20Yerevan%2C%20Armenia"
+        },
+        {
+          "kind": "web",
+          "label": "foodetory.am",
+          "href": "https://foodetory.am/en/contact-us"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37443312101"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "zhingyalov-hats",
+      "section": "lunch",
+      "status": "plan",
+      "name": "Zhinglyanov Hats, 62 Teryan",
+      "price": {
+        "text": "700 AMD / $2 each, and one is two halves"
+      },
+      "note": "The centre pick, and the lightest lunch in the guide. One dish only: Artsakh flatbread stuffed with fifteen or twenty finely chopped herbs, griddled, no meat, no cheese, no oil to speak of. 700 dram, served cut in half, and one is a real lunch. 5.0 across 1,154 Yandex ratings and 4.7 on Tripadvisor where it ranks 59th of 1,156 restaurants; I could not resolve a Google cid for it, so the map link is a search rather than a permalink. 10:00-22:00 daily, about 25 min out by Yeritasardakan metro, which puts it on the way to the Opera, the Cascade and Saryan Street rather than on the way home.",
+      "hours": {
+        "text": "10:00-22:00 daily · closes 22:00",
+        "class": "eve"
+      },
+      "tags": [
+        "Light",
+        "Vegan"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Zhinglyanov%20Hats%2C%2062%20Teryan%20St%2C%20Yerevan%2C%20Armenia"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37410582205"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "anteb",
+      "section": "lunch",
+      "status": "backup",
+      "name": "Anteb, 30 Yeznik Koghbatsi",
+      "price": {
+        "text": "Price band not published"
+      },
+      "note": "4.5 stars across roughly 1,000 reviews, which is the most reviewed lunch-shaped room on this list. Western Armenian: manti with yoghurt and tomato, lahmajun, hummus, fattoush, shish taouk, and reviewers keep calling the manti soup the thing to order. Opens 11:00 and runs to 23:45, about 21 min out and two streets off Republic Square, so it works as the lunch on a day you are going into the centre anyway. Derian, already a dinner plan pick, covers very similar ground closer to you.",
+      "hours": {
+        "text": "11:00-23:45 daily",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=3710543583750614067"
+        },
+        {
+          "kind": "web",
+          "label": "anteb.am",
+          "href": "https://anteb.am/"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37410530988"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "mer-taghe",
+      "section": "lunch",
+      "status": "backup",
+      "name": "Mer Taghe, 21 Tumanyan",
+      "price": {
+        "text": "Price band not published"
+      },
+      "note": "4.5 stars across about 405 reviews. Lahmajun thrown into a belt-fed wood oven in front of you, and the cheese lahmajo is what reviewers single out. 10:00 to midnight daily, 20 min out, and it shares an address with Lavash Restaurant and Tumanyan's Khinkali, so if one is full you are already standing outside the other two. Reviewers also rate its breakfast, which makes it the fallback if you want lahmajun before noon. The consistent knock is the room: plain, and noisy inside.",
+      "hours": {
+        "text": "10:00-00:00 daily",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=5141040958004670140"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37410580106"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "jano-tigran-mets",
+      "section": "lunch",
+      "status": "backup",
+      "name": "Jano, 59 Tigran Mets",
+      "price": {
+        "text": "Price band not published · reviewers call it very cheap for the quantity"
+      },
+      "note": "4.6 stars across 296 Google reviews and 4.6 across 428 Yandex ratings, so the rating is real rather than a small-sample fluke. Aleppo Syrian-Armenian, family running the recipes since 1946: hummus platters, Aleppo beef, shawarma, and it works as both fast food counter and sit-down room. 11:00-23:00 daily. TWO CAVEATS. It reads as near you because it is on Tigran Mets, but number 59 is down in Erebuni rather than Kentron, so budget nearer 25 min than 15. And sources give two different phone numbers; the one here is the one two sources agree on.",
+      "hours": {
+        "text": "11:00-23:00 daily",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Jano%20Restaurant%2C%2059%20Tigran%20Mets%20Ave%2C%20Yerevan%2C%20Armenia"
+        },
+        {
+          "kind": "web",
+          "label": "jano.am",
+          "href": "https://www.jano.am"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37460501946"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "tumanyan-shaurma",
+      "section": "lunch",
+      "status": "backup",
+      "name": "Tumanyan Shaurma, 32/36 Tumanyan",
+      "price": {
+        "text": "Price band not published · cheapest option on this list"
+      },
+      "note": "Here for the hours and the price, not the cooking. Open 24 hours, chain since 1998, and the national default when nothing else fits. THE RATINGS SPLIT HARD: 3.8 across 772 Google reviews on this branch against 4.8 across 997 Yandex ratings for the chain, and the negative reviews are consistent about cold or bland shawarma and poor fries. Reviewers who like it say order the beef, not the chicken, and take a salad instead of the fries. A branch exists at 16 Tigran Mets, much closer to you, but I could not verify that branch's own hours or rating, so do not assume it matches this one.",
+      "hours": {
+        "text": "Open 24 hours",
+        "class": "late"
+      },
+      "tags": [
+        "24h"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://maps.google.com/?cid=6030684349440210886"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+37411818888"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "lunch-heat-rule",
+      "section": "lunch",
+      "status": "backup",
+      "name": "The 14:00 rule: the walk is the cost, not the meal",
+      "note": "You finish work into the hottest ninety minutes of a 33 to 39C day, so lunch obeys one rule: either eat within about fifteen minutes of your base, or eat where that day's activity already takes you. Never a third trip. Within fifteen minutes: GUM Market (10), Foodetory in Rossia Mall (12, and cold), Merhatsy (9, already in the guide, open 09:30-20:30 and 09:30-16:00 Sunday), Lahmajun Gaidz (15). On the centre line: Zhinglyanov Hats and Anteb. Two closures to hold: Lahmajun Gaidz is shut Sunday, which is your Vernissage day, and GUM is thin on Sunday afternoon. And keep it light: every dinner in this guide is a full sitting, and Sherep, Gata Tavern and Lavash all get described by reviewers as serving more food than anyone asked for.",
       "tags": [],
       "links": [],
       "place_id": null,

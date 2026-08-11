@@ -38,8 +38,9 @@ that changes what "a good pick" means this time.]
 
 ## What I need
 
-Research this city and return a single guide covering six sections:
-dinner, coffee, coworking, activities, services, and practical notes.
+Research this city and return a single guide covering eight sections:
+dinner, breakfast, lunch, coffee, coworking, activities, services, and
+practical notes.
 Use real, current information: actual restaurants and cafes that exist
 right now, with real review counts and ratings where you can find them,
 not generic or made-up suggestions.
@@ -53,12 +54,32 @@ walking day). Add 5 to 8 backup picks across the whole stay, not tied to a
 specific date, covering a spread of cuisines and price points in case a
 plan pick is closed, full, or wrong on the day.
 
+### Breakfast
+
+2 to 3 plan picks plus a few backups. Opening time is the deciding factor:
+the traveler starts work in the morning, so a breakfast place that opens
+at 10:00 is a backup at best. Favor what actually opens 07:00 to 08:30
+(local breakfast spots, bakeries, early brunch), near the accommodation or
+on the work-morning route. State the opening time prominently in the note.
+No day assignments; breakfast repeats daily.
+
+### Lunch
+
+3 to 4 plan picks plus 3 to 5 backups. The realistic use is a late lunch
+around 14:00 to 15:00 when the work morning ends, either near the
+accommodation, in the center, or on the way to that day's activity. Favor
+light-to-medium local options over heavy sit-down meals (the big meal is
+dinner); include at least one near-accommodation option and one center
+option, plus a market or street-food option if the city has a real one.
+No day assignments.
+
 ### Coffee
 
 2 to 3 specialty coffee picks (good espresso, not just "has coffee"), plus
 a few backups. These are for the workday, so weight toward places near the
 accommodation or on the routine commute, with reliable hours in the
-morning.
+morning. If a coffee pick doubles as the breakfast answer, say so in both
+sections rather than duplicating the item.
 
 ### Coworking
 
@@ -153,9 +174,11 @@ must be valid against schema v1 (below) with these rules:
     otherwise not suited to an evening visit).
   - `"eve"`: evening-suited but not necessarily late (a dinner spot that
     closes at 22:00, for example).
-- `sections` covers the six sections above, in this order: `dinner`,
-  `coffee`, `cowork`, `activities`, `services`, `practical`. Use exactly
-  these `id` values so the guide renders correctly.
+- `sections` covers the eight sections above, in this order: `dinner`,
+  `breakfast`, `lunch`, `coffee`, `cowork`, `activities`, `services`,
+  `practical`. Use exactly these `id` values so the guide renders
+  correctly. Breakfast and lunch items never carry a `day` field; they
+  repeat daily.
 - Every item's `section` matches one of the section ids you defined.
 - Every item has a unique `id` (a short slug, e.g. `"brasserie"`), a
   `name`, and a `links` array. Place items must have at least a `map`

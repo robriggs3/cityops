@@ -142,6 +142,13 @@
   .modal .mrow{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
   .modal .diff{font-size:.8rem; color:var(--muted); margin-top:8px; white-space:pre-line;}
   body.share .ctl-row, body.share .grip, body.share .reorderbar{display:none;}
+  .sec-toggle{font:inherit; color:inherit; background:none; border:none; padding:0;
+    display:flex; align-items:center; gap:8px; cursor:pointer; text-align:left;}
+  .sec-toggle .chev{font-size:.8rem; color:var(--muted); width:14px; flex:0 0 auto;}
+  .sec-count{font-size:.78rem; color:var(--muted); font-weight:600; margin-left:6px;}
+  h2.collapsed{opacity:.85; margin-bottom:8px;}
+  body.share .sec-toggle{pointer-events:none;}
+  body.share .sec-toggle .chev{display:none;}
   .empty-day .hd{border-bottom:none;}
   .empty-day .free-day{padding:6px 16px 10px; font-size:.8rem; color:var(--muted); font-style:italic;}
   .date-field{font:inherit; font-size:.85rem; padding:6px 10px; border:1px solid var(--line);
@@ -1336,7 +1343,7 @@ var CityOps = (function () {
   };
 
   function emptyState() {
-    return { itemStatus: {}, itemDay: {}, dayOrder: {}, dataOverride: null, stayOverride: null, updated: null };
+    return { itemStatus: {}, itemDay: {}, dayOrder: {}, collapsedSections: {}, dataOverride: null, stayOverride: null, updated: null };
   }
 
   function normalizeState(st) {
@@ -1344,6 +1351,7 @@ var CityOps = (function () {
     st.itemStatus = st.itemStatus || {};
     st.itemDay = st.itemDay || {};
     st.dayOrder = st.dayOrder || {};
+    st.collapsedSections = st.collapsedSections || {};
     if (!('dataOverride' in st)) st.dataOverride = null;
     if (!('stayOverride' in st)) st.stayOverride = null;
     return st;
@@ -1425,6 +1433,13 @@ var CityOps = (function () {
     var o = state.stayOverride;
     if (o && isIso(o.from) && isIso(o.to) && o.from <= o.to) return o;
     return data.city.dates;
+  }
+
+  function toggleSection(state, secId) {
+    state.collapsedSections = state.collapsedSections || {};
+    if (state.collapsedSections[secId]) delete state.collapsedSections[secId];
+    else state.collapsedSections[secId] = true;
+    return state;
   }
 
   function setStayDates(state, from, to) {
@@ -1668,10 +1683,28 @@ var CityOps = (function () {
 
   function renderSection(sv, state) {
     var frag = document.createDocumentFragment();
-    var h2 = el('h2');
-    if (sv.section.icon) h2.appendChild(el('span', 'ic', sv.section.icon));
-    h2.appendChild(document.createTextNode(' ' + sv.section.label));
+    var collapsed = !!(state.collapsedSections && state.collapsedSections[sv.section.id]);
+    var h2 = el('h2', collapsed ? 'collapsed' : null);
+    var tbtn = el('button', 'sec-toggle');
+    tbtn.type = 'button';
+    tbtn.setAttribute('aria-expanded', String(!collapsed));
+    tbtn.appendChild(el('span', 'chev', collapsed ? '▸' : '▾'));
+    if (sv.section.icon) tbtn.appendChild(el('span', 'ic', sv.section.icon));
+    tbtn.appendChild(document.createTextNode(' ' + sv.section.label));
+    if (collapsed) {
+      var n = sv.undated.length + sv.backups.length + sv.archived.length;
+      sv.days.forEach(function (d) { n += d.items.length; });
+      tbtn.appendChild(el('span', 'sec-count', n + (n === 1 ? ' item' : ' items')));
+    }
+    tbtn.onclick = function () {
+      var st = ctx.store.load();
+      toggleSection(st, sv.section.id);
+      ctx.store.save(st);
+      rerender();
+    };
+    h2.appendChild(tbtn);
     frag.appendChild(h2);
+    if (collapsed) return frag;
     if (sv.days.length) {
       var days = el('div', 'days');
       days.dataset.sec = sv.section.id;
@@ -2120,7 +2153,7 @@ var CityOps = (function () {
     diffSummary: diffSummary, shareModel: shareModel,
     effectiveDay: effectiveDay, setDay: setDay, stayDates: stayDates,
     normalizeState: normalizeState, effectiveDates: effectiveDates,
-    setStayDates: setStayDates
+    setStayDates: setStayDates, toggleSection: toggleSection
   };
 })();
 CityOps.init();

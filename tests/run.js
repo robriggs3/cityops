@@ -210,7 +210,17 @@ test('normalizeState fills missing keys from older stored state', () => {
   assert.deepEqual(st.itemDay, {});
   assert.equal(st.dataOverride, null);
   assert.equal(st.stayOverride, null);
+  assert.deepEqual(st.collapsedSections, {});
   assert.equal(st.itemStatus.a, 'done');
+});
+test('toggleSection flips collapse state per section', () => {
+  const st = C.emptyState();
+  C.toggleSection(st, 'dinner');
+  assert.equal(st.collapsedSections.dinner, true);
+  C.toggleSection(st, 'coffee');
+  C.toggleSection(st, 'dinner');
+  assert.ok(!('dinner' in st.collapsedSections));
+  assert.equal(st.collapsedSections.coffee, true);
 });
 test('viewModel keeps done items in place, moves archived out', () => {
   const st = C.emptyState();
