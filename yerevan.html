@@ -2864,6 +2864,42 @@ var CityOps = (function () {
   // stored active city (if still present), else the first city in order, else
   // null when the store is empty. Extracted so the app shell's boot-target
   // logic is unit-testable without a DOM.
+  function blankCity(name, country, from, to) {
+    if (!name || !String(name).replace(/^\s+|\s+$/g, '')) throw new Error('city name required');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new Error('dates must be YYYY-MM-DD');
+    if (from > to) throw new Error('start date must not be after end date');
+    return {
+      schema: 1,
+      city: {
+        name: String(name).replace(/^\s+|\s+$/g, ''),
+        country: (country || '').toUpperCase().slice(0, 2),
+        dates: { from: from, to: to },
+        notes: []
+      },
+      sections: [
+        { id: 'dinner', label: 'Dinner', icon: '🍽️' },
+        { id: 'breakfast', label: 'Breakfast', icon: '🍳' },
+        { id: 'lunch', label: 'Lunch', icon: '🥙' },
+        { id: 'coffee', label: 'Coffee', icon: '☕' },
+        { id: 'cowork', label: 'Coworking', icon: '💻' },
+        { id: 'activities', label: 'Activities', icon: '🏛️' },
+        { id: 'services', label: 'Services', icon: '🧺' },
+        { id: 'practical', label: 'Practical', icon: '💡' }
+      ],
+      items: [{
+        id: 'getting-started',
+        section: 'practical',
+        status: 'plan',
+        name: 'Fill this city with real data',
+        note: 'This is a blank scaffold. Run PROMPT.md for this city (see the README), then paste the generated JSON via the Update data button to fill every section. Until then you can adjust dates and plan the shape of the stay.',
+        tags: [],
+        links: [],
+        place_id: null,
+        verified: null
+      }]
+    };
+  }
+
   function resolveStartCity(store, hashId) {
     if (hashId && Object.prototype.hasOwnProperty.call(store.cities, hashId)) return hashId;
     if (store.active && Object.prototype.hasOwnProperty.call(store.cities, store.active)) return store.active;
@@ -3660,7 +3696,7 @@ var CityOps = (function () {
     appStore: {
       normalize: normalizeAppStore, add: appAddCity,
       remove: appRemoveCity, keepBothName: keepBothName,
-      resolveStartCity: resolveStartCity
+      resolveStartCity: resolveStartCity, blankCity: blankCity
     },
     onStateChange: null, liveState: liveState,
     emptyState: emptyState, makeStore: makeStore, setStatus: setStatus,

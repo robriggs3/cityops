@@ -584,5 +584,18 @@ test('index.html embeds the standalone template, escaped and reversible', () => 
     fs.readFileSync(path.join(root, 'batumi.html'), 'utf8'));
 });
 
+test('blankCity scaffolds a valid schema-v1 city', () => {
+  const b = C.appStore.blankCity('  Tirana ', 'al', '2026-08-22', '2026-08-29');
+  assert.deepEqual(C.validate(b), []);
+  assert.equal(b.city.name, 'Tirana');
+  assert.equal(b.city.country, 'AL');
+  assert.equal(b.sections.length, 8);
+  assert.equal(b.items[0].section, 'practical');
+  assert.equal(C.cityId(b), 'tirana-2026-08-22');
+  assert.throws(() => C.appStore.blankCity('', 'AL', '2026-08-22', '2026-08-29'));
+  assert.throws(() => C.appStore.blankCity('Tirana', 'AL', '2026-08-29', '2026-08-22'));
+  assert.throws(() => C.appStore.blankCity('Tirana', 'AL', 'soon', '2026-08-29'));
+});
+
 console.log(pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);
