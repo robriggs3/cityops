@@ -1610,8 +1610,18 @@ var CityOps = (function () {
   }
 
   // ---- multi-city app store (used by the app shell, not by standalone files) ----
-  // Shape: { cities: {cityId: cityJson}, order: [cityId], active: cityId|null }.
+  // Shape: { cities: {cityId: cityJson}, order: [cityId], active: cityId|null,
+  //          updatedAt: {cityId: iso} }.
   // Pure helpers only: reading and writing localStorage stays in the app shell.
+  //
+  // updatedAt is the per-city stamp for city DATA (the pasted/blank JSON). Live
+  // planning state has its own stamp inside the per-city state object (updated),
+  // written by makeStore().save. Cities carried over from before M2 have no
+  // stamp: they are backfilled with EPOCH so that a device with a real server
+  // copy wins the reconcile, while a city that exists nowhere else still pushes
+  // (EPOCH beats "no row at all"). See docs in .superpowers/sdd/m2-client-report.md.
+  var EPOCH_ISO = '1970-01-01T00:00:00.000Z';
+
   function normalizeAppStore(raw) {
     var src = (raw && typeof raw === 'object') ? raw : {};
     var srcCities = (src.cities && typeof src.cities === 'object') ? src.cities : {};
@@ -1630,21 +1640,32 @@ var CityOps = (function () {
     });
     var active = (typeof src.active === 'string' && order.indexOf(src.active) !== -1)
       ? src.active : (order.length ? order[0] : null);
-    return { cities: cities, order: order, active: active };
+    var srcStamps = (src.updatedAt && typeof src.updatedAt === 'object') ? src.updatedAt : {};
+    var updatedAt = {};
+    order.forEach(function (id) {
+      var v = srcStamps[id];
+      updatedAt[id] = (typeof v === 'string' && v) ? v : EPOCH_ISO;
+    });
+    return { cities: cities, order: order, active: active, updatedAt: updatedAt };
   }
 
-  function appAddCity(store, data) {
+  // iso: pass the REMOTE stamp when applying a pulled city, so the pull does not
+  // look like a fresh local edit and immediately push back. Omit it for genuine
+  // local edits (add/paste/replace/blank), which stamp now.
+  function appAddCity(store, data, iso) {
     var s = normalizeAppStore(store);
     var id = cityId(data);
     var replaced = Object.prototype.hasOwnProperty.call(s.cities, id);
     s.cities[id] = data;
     if (s.order.indexOf(id) === -1) s.order.push(id);
+    s.updatedAt[id] = (typeof iso === 'string' && iso) ? iso : new Date().toISOString();
     return { store: s, cityId: id, replaced: replaced };
   }
 
   function appRemoveCity(store, id) {
     var s = normalizeAppStore(store);
     delete s.cities[id];
+    delete s.updatedAt[id];
     s.order = s.order.filter(function (x) { return x !== id; });
     if (s.order.indexOf(s.active) === -1) s.active = s.order.length ? s.order[0] : null;
     return s;
@@ -1699,6 +1720,135 @@ var CityOps = (function () {
     if (hashId && Object.prototype.hasOwnProperty.call(store.cities, hashId)) return hashId;
     if (store.active && Object.prototype.hasOwnProperty.call(store.cities, store.active)) return store.active;
     return store.order.length ? store.order[0] : null;
+  }
+
+  // ---- sync helpers (pure) ----
+  // Every network call, session store and piece of sync UI lives in the app
+  // shell (src/app-shell.html). Only decision logic lives here, so it is unit
+  // testable in Node and so standalone guide files carry no sync code at all.
+
+  // Timestamps arrive in two dialects: the device writes
+  // "2026-08-11T09:00:00.000Z", PostgREST returns "2026-08-11T09:00:00+00:00".
+  // Those two are the same instant but do NOT compare equal as strings, so
+  // every comparison goes through epoch milliseconds. Unparseable or missing
+  // values are treated as "no timestamp" rather than as year 0.
+  function isoMs(v) {
+    if (typeof v !== 'string' || !v) return null;
+    var t = Date.parse(v);
+    return (typeof t !== 'number' || isNaN(t)) ? null : t;
+  }
+
+  // Newer wins, ties keep local (spec M2). 'push' = local should go up,
+  // 'pull' = remote should come down, 'noop' = leave both alone.
+  function decideSync(localIso, remoteIso) {
+    var l = isoMs(localIso);
+    var r = isoMs(remoteIso);
+    if (l === null && r === null) return 'noop';
+    if (r === null) return 'push';
+    if (l === null) return 'pull';
+    if (l > r) return 'push';
+    if (l < r) return 'pull';
+    return 'noop';
+  }
+
+  // Whole-side plan: maps of id -> iso on each side (a missing key means the
+  // row does not exist on that side). skipIds names cities removed on this
+  // device in this session; they are never pulled back (removal does not
+  // propagate in v1, but a removal must not be undone by our own next pull).
+  function planSync(localMap, remoteMap, skipIds) {
+    var local = localMap || {};
+    var remote = remoteMap || {};
+    var skip = skipIds || {};
+    var ids = [];
+    var seen = {};
+    function collect(m) {
+      Object.keys(m).forEach(function (id) {
+        if (!Object.prototype.hasOwnProperty.call(seen, id)) { seen[id] = 1; ids.push(id); }
+      });
+    }
+    collect(local);
+    collect(remote);
+    ids.sort();
+    var out = { push: [], pull: [], noop: [] };
+    ids.forEach(function (id) {
+      var hasLocal = Object.prototype.hasOwnProperty.call(local, id);
+      var d = decideSync(hasLocal ? local[id] : null,
+        Object.prototype.hasOwnProperty.call(remote, id) ? remote[id] : null);
+      if (d === 'pull' && !hasLocal && Object.prototype.hasOwnProperty.call(skip, id)) {
+        out.noop.push(id);
+        return;
+      }
+      out[d].push(id);
+    });
+    return out;
+  }
+
+  // Accepted limitation: updated_at is client-driven (the device stamps it,
+  // not the server), so a device with a fast clock wins every reconcile for
+  // as long as its clock stays skewed. Bounded by real device skew, which for
+  // NTP-synced phones and laptops is sub-second in practice. v2 fix: a
+  // server-side `now()` default on the column plus the client adopting the
+  // stamp Postgres actually wrote via `Prefer: return=representation` instead
+  // of trusting its own clock.
+  //
+  // Rows for a PostgREST upsert. user_id is never sent: it defaults to
+  // auth.uid() server side, and RLS rejects anything else.
+  function buildRows(field, entries) {
+    var rows = [];
+    (entries || []).forEach(function (e) {
+      if (!e || !e.cityId || !e.payload || typeof e.payload !== 'object') return;
+      var row = { city_id: e.cityId, updated_at: (typeof e.updatedAt === 'string' && e.updatedAt) ? e.updatedAt : EPOCH_ISO };
+      row[field] = e.payload;
+      rows.push(row);
+    });
+    return rows;
+  }
+
+  // GoTrue returns the magic-link session in the URL fragment. Both tokens are
+  // required: an access token with no refresh token would die silently in an
+  // hour with no way back, so that case is treated as no session at all.
+  // When the fragment carries no expiry at all we mark it already expired,
+  // which forces a refresh on first use rather than trusting an unknown TTL.
+  function parseAuthHash(hash, nowMs) {
+    var s = String(hash === null || hash === undefined ? '' : hash);
+    if (s.charAt(0) === '#') s = s.slice(1);
+    if (!s || s.indexOf('=') === -1) return null;
+    var out = {};
+    s.split('&').forEach(function (pair) {
+      if (!pair) return;
+      var i = pair.indexOf('=');
+      if (i === -1) return;
+      var k = pair.slice(0, i);
+      var v = pair.slice(i + 1);
+      try { k = decodeURIComponent(k); } catch (e) {}
+      try { v = decodeURIComponent(v.replace(/\+/g, ' ')); } catch (e2) {}
+      if (k) out[k] = v;
+    });
+    if (!out.access_token || !out.refresh_token) return null;
+    var now = (typeof nowMs === 'number') ? nowMs : Date.now();
+    var expSec;
+    if (out.expires_at && /^\d+$/.test(out.expires_at)) expSec = parseInt(out.expires_at, 10);
+    else if (out.expires_in && /^\d+$/.test(out.expires_in)) expSec = Math.floor(now / 1000) + parseInt(out.expires_in, 10);
+    else expSec = Math.floor(now / 1000);
+    return {
+      access_token: out.access_token,
+      refresh_token: out.refresh_token,
+      token_type: out.token_type || 'bearer',
+      expires_at: expSec,
+      email: out.email || ''
+    };
+  }
+
+  // True whenever the access token is missing, unreadable, or within 60s of
+  // expiry. Accepts expires_at in seconds (GoTrue's own unit) or milliseconds.
+  function sessionExpiringSoon(session, nowMs) {
+    if (!session || !session.access_token) return true;
+    var exp = session.expires_at;
+    if (typeof exp === 'string' && /^\d+$/.test(exp)) exp = parseInt(exp, 10);
+    if (typeof exp !== 'number' || !isFinite(exp)) return true;
+    var ms = exp > 1e12 ? exp : exp * 1000;
+    var now = (typeof nowMs === 'number') ? nowMs : Date.now();
+    return (ms - now) < 60000;
   }
 
   // ---- DOM rendering (browser only) ----
@@ -2492,6 +2642,10 @@ var CityOps = (function () {
       normalize: normalizeAppStore, add: appAddCity,
       remove: appRemoveCity, keepBothName: keepBothName,
       resolveStartCity: resolveStartCity, blankCity: blankCity
+    },
+    syncKit: {
+      EPOCH: EPOCH_ISO, decide: decideSync, plan: planSync, buildRows: buildRows,
+      parseAuthHash: parseAuthHash, sessionExpiringSoon: sessionExpiringSoon
     },
     onStateChange: null, liveState: liveState,
     emptyState: emptyState, makeStore: makeStore, setStatus: setStatus,
