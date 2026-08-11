@@ -415,5 +415,13 @@ test('promote resolves the displayed slot before the item turns active', () => {
   assert.equal(key, '2026-08-10'); // with nothing active, displayed Mon IS Mon
 });
 
+test('template.html contains src/cityops.js verbatim (assembler sync)', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const engine = fs.readFileSync(path.join(__dirname, '..', 'src', 'cityops.js'), 'utf8');
+  const tpl = fs.readFileSync(path.join(__dirname, '..', 'template.html'), 'utf8');
+  assert.ok(tpl.includes(engine), 'run node tools/assemble.js after editing src/');
+});
+
 console.log(pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);

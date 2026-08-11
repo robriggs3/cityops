@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CityOps Guide</title>
+<style>
+  :root{
+    --sea:#0b6e8f; --sea-deep:#084c63; --sand:#f5efe3; --ink:#1a2530;
+    --muted:#5c6b78; --line:#e2ddd2; --gold:#c8892a; --flag:#c1462f;
+    --card:#ffffff; --ok:#2f7d55;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--sand); color:var(--ink); line-height:1.5; -webkit-text-size-adjust:100%;}
+  .wrap{max-width:760px; margin:0 auto; padding:0 16px 60px;}
+  header{background:linear-gradient(160deg,var(--sea) 0%,var(--sea-deep) 100%); color:#fff;
+    padding:26px 20px 22px;}
+  .wrap>header{margin:0 -16px 20px; border-radius:0 0 20px 20px;}
+  header h1{font-size:1.55rem; letter-spacing:.2px;}
+  header .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
+  .facts{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;}
+  .chip{background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25);
+    padding:5px 10px; border-radius:20px; font-size:.8rem;}
+  h2{font-size:1.15rem; margin:26px 0 12px; color:var(--sea-deep);
+    display:flex; align-items:center; gap:8px;}
+  h2 .ic{font-size:1.1rem}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:14px 16px; margin-bottom:12px; box-shadow:0 1px 2px rgba(0,0,0,.03);}
+  .card h3{font-size:1.02rem; display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap;}
+  .card h3 .price{font-size:.82rem; color:var(--muted); font-weight:600; white-space:nowrap;}
+  .card p{font-size:.9rem; color:var(--muted); margin-top:5px;}
+  .row{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:10px;}
+  .hours{display:inline-block; font-size:.78rem; font-weight:600;
+    padding:3px 9px; border-radius:6px;}
+  .late{background:#e6f3ec; color:var(--ok);}
+  .day{background:#fbe9e4; color:var(--flag);}
+  .eve{background:#eef4f8; color:var(--sea);}
+  .maplink{display:inline-flex; align-items:center; gap:5px; font-size:.78rem; font-weight:700;
+    color:#fff; background:var(--sea); padding:5px 11px; border-radius:20px; text-decoration:none;}
+  .maplink:active{background:var(--sea-deep);}
+  .weblink{display:inline-flex; align-items:center; gap:5px; font-size:.78rem; font-weight:700;
+    color:var(--sea-deep); background:#fff; border:1.5px solid var(--sea);
+    padding:4px 11px; border-radius:20px; text-decoration:none;}
+  .weblink:active{background:#e8f1f5;}
+  .phonelink{display:inline-flex; align-items:center; gap:5px; font-size:.78rem; font-weight:700;
+    color:var(--muted); background:#fff; border:1.5px solid var(--line);
+    padding:4px 11px; border-radius:20px; text-decoration:none;}
+  .phonelink:active{background:#f0ece2;}
+  .nosite{font-size:.74rem; color:var(--muted); font-style:italic;}
+  .callout{background:#fff7ea; border:1px solid #f0dfba; border-left:4px solid var(--gold);
+    border-radius:10px; padding:14px 16px; margin:4px 0 20px; font-size:.9rem;}
+  .callout b{color:var(--gold);}
+  .lead{font-size:.92rem; color:var(--muted); margin-bottom:6px;}
+  .tag{display:inline-block; font-size:.72rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.4px; color:var(--sea); background:#e8f1f5; padding:2px 7px; border-radius:5px; margin-right:6px;}
+  .foot{font-size:.78rem; color:var(--muted); margin-top:24px; text-align:center; line-height:1.6;}
+  a{color:var(--sea);}
+
+
+  /* --- v5: drag to reorder --- */
+  .days .daycard{position:relative; touch-action:pan-y;}
+  .days .daycard .hd{padding-left:40px;}
+  .grip{position:absolute; left:8px; top:7px; width:26px; height:30px;
+    display:flex; align-items:center; justify-content:center; cursor:grab;
+    touch-action:none; border-radius:7px; color:var(--sea-deep); opacity:.45;}
+  .grip:active{cursor:grabbing; opacity:1; background:rgba(11,110,143,.12);}
+  .grip svg{width:15px; height:15px; pointer-events:none;}
+  .daycard.dragging{opacity:.9; box-shadow:0 10px 24px rgba(8,76,99,.22);
+    transform:scale(1.015); z-index:50; position:relative;}
+  .daycard.shifting{transition:transform .18s ease;}
+  .dropline{height:3px; background:var(--sea); border-radius:2px; margin:6px 0;}
+  .reorderbar{display:flex; align-items:center; justify-content:space-between;
+    gap:10px; flex-wrap:wrap; margin:0 0 12px; font-size:.8rem; color:var(--muted);}
+  .reorderbar button{font:inherit; font-weight:700; color:var(--sea-deep);
+    background:#fff; border:1.5px solid var(--line); border-radius:20px;
+    padding:5px 13px; cursor:pointer;}
+  .reorderbar button:hover{border-color:var(--sea);}
+  .reorderbar .saved{color:var(--ok); font-weight:700;}
+  @media (prefers-reduced-motion: reduce){ .daycard.shifting{transition:none} }
+
+  /* --- v3 additions --- */
+  .daycard{background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:0; margin-bottom:12px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.03);}
+  .daycard .hd{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+    background:#eef4f8; padding:9px 16px; border-bottom:1px solid var(--line);}
+  .daycard .hd .d{font-weight:800; font-size:.8rem; letter-spacing:.6px;
+    text-transform:uppercase; color:var(--sea-deep);}
+  .daycard .hd .t{font-size:.82rem; color:var(--muted);}
+  .daycard .bd{padding:12px 16px 14px;}
+  .daycard .bd h3{font-size:1.02rem; display:flex; justify-content:space-between;
+    align-items:baseline; gap:10px; flex-wrap:wrap;}
+  .daycard .bd h3 .price{font-size:.82rem; color:var(--muted); font-weight:600; white-space:nowrap;}
+  .daycard .bd p{font-size:.9rem; color:var(--muted); margin-top:5px;}
+  .backup{background:#f7f4ec; border:1px dashed #cfc6b2; border-radius:12px;
+    padding:12px 16px; margin:2px 0 22px;}
+  .backup .bt{font-size:.72rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+    color:var(--gold); margin-bottom:7px;}
+  .backup ul{margin:0; padding-left:18px;}
+  .backup li{font-size:.86rem; color:var(--muted); margin-bottom:5px;}
+  .backup li b{color:var(--ink);}
+  .warn{background:#fbe9e4; border-left:4px solid var(--flag); border-radius:10px;
+    padding:12px 16px; margin:4px 0 20px; font-size:.88rem; color:var(--ink);}
+  .warn b{color:var(--flag);}
+  .links{margin-top:9px; font-size:.82rem;}
+  .links a{font-weight:600; text-decoration:none;}
+  .links span{color:var(--line); margin:0 5px;}
+
+  /* --- cityops additions --- */
+  /* neutral badge when no class given */
+  .hours:not(.late):not(.day):not(.eve){background:#ececec; color:var(--muted);}
+  .ctl-row{display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;}
+  .ctl{font:inherit; font-size:.74rem; font-weight:700; color:var(--sea-deep);
+    background:#fff; border:1.5px solid var(--line); border-radius:20px;
+    padding:4px 11px; cursor:pointer;}
+  .ctl:hover{border-color:var(--sea);}
+  .ctl.to-done:hover{border-color:var(--ok); color:var(--ok);}
+  .ctl.to-archived:hover{border-color:var(--flag); color:var(--flag);}
+  .item-done{opacity:.55;}
+  .donemark{color:var(--ok); font-weight:800; margin-right:6px;}
+  .arch-details{margin:2px 0 22px;}
+  .arch-details summary{font-size:.72rem; font-weight:800; letter-spacing:.6px;
+    text-transform:uppercase; color:var(--muted); cursor:pointer; padding:6px 0;}
+  .arch-details .card, .arch-details .daycard{opacity:.7;}
+  .toolbar{display:flex; gap:8px; flex-wrap:wrap; margin:0 0 16px; align-items:center;}
+  .toolbar button{font:inherit; font-weight:700; color:var(--sea-deep); background:#fff;
+    border:1.5px solid var(--line); border-radius:20px; padding:5px 13px;
+    cursor:pointer; font-size:.8rem;}
+  .toolbar button:hover{border-color:var(--sea);}
+  .toolbar .flag{font-size:.74rem; color:var(--gold); font-weight:700;}
+  .errcard{background:#fbe9e4; border-left:4px solid var(--flag); border-radius:10px;
+    padding:14px 16px; margin:20px 0; font-size:.9rem;}
+  .errcard b{color:var(--flag);}
+  #notice{font-size:.78rem; color:var(--muted); margin:8px 0;}
+  .when-line{font-size:.8rem; color:var(--muted); font-style:italic; margin-top:2px;}
+  .modal-wrap{position:fixed; inset:0; background:rgba(26,37,48,.5); display:flex;
+    align-items:center; justify-content:center; padding:16px; z-index:100;}
+  .modal{background:#fff; border-radius:14px; padding:18px; max-width:640px;
+    width:100%; max-height:85vh; overflow:auto;}
+  .modal textarea{width:100%; min-height:200px; font-family:ui-monospace,Menlo,monospace;
+    font-size:.78rem; border:1px solid var(--line); border-radius:8px; padding:10px;}
+  .modal .mrow{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
+  .modal .diff{font-size:.8rem; color:var(--muted); margin-top:8px; white-space:pre-line;}
+  body.share .ctl-row, body.share .grip, body.share .reorderbar{display:none;}
+  .sec-toggle{font:inherit; color:inherit; background:none; border:none; padding:0;
+    display:flex; align-items:center; gap:8px; cursor:pointer; text-align:left;}
+  .sec-toggle .chev{font-size:.8rem; color:var(--muted); width:14px; flex:0 0 auto;}
+  .sec-count{font-size:.78rem; color:var(--muted); font-weight:600; margin-left:6px;}
+  h2.collapsed{opacity:.85; margin-bottom:8px;}
+  body.share .sec-toggle{pointer-events:none;}
+  body.share .sec-toggle .chev{display:none;}
+  .daycard .bd + .bd{border-top:1px dashed var(--line);}
+  .sec-meta{font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.4px;
+    color:var(--sea); margin-bottom:2px;}
+  .title-edit{width:100%; font:inherit; font-size:1rem; font-weight:600; padding:8px 10px;
+    border:1.5px solid var(--sea); border-radius:8px; margin-top:4px;}
+  .empty-day .hd{border-bottom:none;}
+  .empty-day .free-day{padding:6px 16px 10px; font-size:.8rem; color:var(--muted); font-style:italic;}
+  .date-field{font:inherit; font-size:.85rem; padding:6px 10px; border:1px solid var(--line);
+    border-radius:8px; background:#fff; color:var(--ink);}
+  /* narrow phones: trim horizontal chrome so cards get the width */
+  @media (max-width: 430px){
+    .wrap{padding:0 10px 48px;}
+    .wrap>header{margin:0 -10px 16px; padding:20px 14px 16px; border-radius:0 0 16px 16px;}
+    header h1{font-size:1.35rem;}
+    .facts{gap:6px; margin-top:10px;}
+    .chip{padding:4px 9px; font-size:.75rem;}
+    .card{padding:12px 12px; border-radius:12px;}
+    .daycard{border-radius:12px;}
+    .daycard .hd{padding:8px 12px;}
+    .days .daycard .hd{padding-left:38px;}
+    .daycard .bd{padding:10px 12px 12px;}
+    .backup{padding:10px 12px;}
+    .callout, .warn, .errcard{padding:12px 12px;}
+    .toolbar{gap:6px;}
+    .toolbar button{padding:5px 10px; font-size:.75rem;}
+    h2{margin:20px 0 10px;}
+  }
+  @media print{
+    .toolbar, .ctl-row, .grip, .reorderbar, #notice{display:none !important;}
+    body{background:#fff;}
+    .daycard, .card{box-shadow:none; break-inside:avoid;}
+    header{background:var(--sea-deep) !important; -webkit-print-color-adjust:exact;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="notice"></div>
+  <header id="hdr"></header>
+  <div class="toolbar" id="toolbar"></div>
+  <main id="main"></main>
+  <div class="foot" id="foot"></div>
+</div>
+<div id="modal"></div>
+
+<script type="application/json" id="city-data">
+{
+  "schema": 1,
+  "city": {
+    "name": "Example City", "country": "XX",
+    "dates": {"from": "2026-01-01", "to": "2026-01-07"},
+    "accommodation": {"name": "Example Stay", "lat": 0, "lng": 0},
+    "currency": {"code": "USD", "usd": 1},
+    "notes": ["Replace this block with generated city JSON"]
+  },
+  "sections": [
+    {"id": "dinner", "label": "Dinner", "icon": "🍽️"}
+  ],
+  "items": [{
+    "id": "example",
+    "section": "dinner",
+    "status": "plan",
+    "day": "2026-01-02",
+    "when": "First evening",
+    "name": "Example Restaurant",
+    "price": {"text": "~$20"},
+    "note": "Replace me. This item exists so the empty template renders.",
+    "hours": {"text": "12:00-23:00 daily", "class": "late"},
+    "tags": [],
+    "links": [],
+    "place_id": null,
+    "verified": null
+  }]
+}
+</script>
+
+<script id="app">
+<!--CITYOPS_ENGINE-->
+</script>
+</body>
+</html>
