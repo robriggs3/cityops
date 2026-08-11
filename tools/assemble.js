@@ -41,6 +41,13 @@ function guideTemplateBlock() {
     (m, open, close) => open + '\n__CITY_DATA__\n' + close
   );
   if (marked === template) throw new Error('city-data block not found in template.html');
+  // Symmetric guard: if the template already contains a literal escaped sequence
+  // before WE escape it, the app's export-time unescape (which reverses exactly
+  // one layer of `<\/script` -> `</script`) would corrupt it. This should never
+  // happen today (guide-shell.html has no such text) but fail loudly if it does.
+  if (marked.indexOf('<\\/script') !== -1) {
+    throw new Error('marked template already contains an escaped <\\/script sequence; embedding would not reverse cleanly');
+  }
   // A <script type="text/plain"> block ends at the first `</script`, so every
   // one inside the embedded copy is escaped; the app reverses this on export.
   const escaped = marked.replace(/<\/script/g, '<\\/script');
