@@ -12,7 +12,7 @@
      appended after it), and a translucent chip in the header's top-right opens
      Add-city. Both live inside #hdr, which the engine fully replaces
      (innerHTML='') on every render, so decorateHeader() re-appends them from
-     CityOps.onStateChange every time — see the appshell script below. The
+     CityOps.onStateChange every time: see the appshell script below. The
      header must not grow to fit these; they overlay the existing chrome. */
   #hdr{position:relative;}
   #hdr h1{cursor:pointer; display:inline-flex; align-items:center; gap:2px;}
@@ -251,7 +251,7 @@
   // Re-decorates the freshly rendered #hdr (the engine wipes it with
   // innerHTML='' on every render): appends the chevron to h1 and wires it as
   // the switcher trigger, and appends the header's + Add chip. Called once
-  // per engine render via CityOps.onStateChange — never from a plain
+  // per engine render via CityOps.onStateChange: never from a plain
   // open/close toggle, which would duplicate these onto the still-live h1.
   function decorateHeader() {
     var h = document.getElementById('hdr');
