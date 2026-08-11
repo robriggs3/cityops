@@ -227,6 +227,7 @@
     background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
     padding:5px 13px; cursor:pointer;}
   .cityact button:hover{border-color:var(--accent);}
+  .blank-cc{width:56px; flex:0 0 auto; text-transform:uppercase;}
   .name-confirm{width:100%; font:inherit; font-size:.9rem; padding:8px 10px; margin-top:8px;
     border:1px solid var(--border-light); border-radius:8px; background:#fff; color:var(--text);}
   .modal .ctl[disabled]{opacity:.45; cursor:not-allowed; border-color:var(--border-light);}
@@ -622,6 +623,42 @@ var CityOps = (function () {
   // stored active city (if still present), else the first city in order, else
   // null when the store is empty. Extracted so the app shell's boot-target
   // logic is unit-testable without a DOM.
+  function blankCity(name, country, from, to) {
+    if (!name || !String(name).replace(/^\s+|\s+$/g, '')) throw new Error('city name required');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new Error('dates must be YYYY-MM-DD');
+    if (from > to) throw new Error('start date must not be after end date');
+    return {
+      schema: 1,
+      city: {
+        name: String(name).replace(/^\s+|\s+$/g, ''),
+        country: (country || '').toUpperCase().slice(0, 2),
+        dates: { from: from, to: to },
+        notes: []
+      },
+      sections: [
+        { id: 'dinner', label: 'Dinner', icon: '🍽️' },
+        { id: 'breakfast', label: 'Breakfast', icon: '🍳' },
+        { id: 'lunch', label: 'Lunch', icon: '🥙' },
+        { id: 'coffee', label: 'Coffee', icon: '☕' },
+        { id: 'cowork', label: 'Coworking', icon: '💻' },
+        { id: 'activities', label: 'Activities', icon: '🏛️' },
+        { id: 'services', label: 'Services', icon: '🧺' },
+        { id: 'practical', label: 'Practical', icon: '💡' }
+      ],
+      items: [{
+        id: 'getting-started',
+        section: 'practical',
+        status: 'plan',
+        name: 'Fill this city with real data',
+        note: 'This is a blank scaffold. Run PROMPT.md for this city (see the README), then paste the generated JSON via the Update data button to fill every section. Until then you can adjust dates and plan the shape of the stay.',
+        tags: [],
+        links: [],
+        place_id: null,
+        verified: null
+      }]
+    };
+  }
+
   function resolveStartCity(store, hashId) {
     if (hashId && Object.prototype.hasOwnProperty.call(store.cities, hashId)) return hashId;
     if (store.active && Object.prototype.hasOwnProperty.call(store.cities, store.active)) return store.active;
@@ -1418,7 +1455,7 @@ var CityOps = (function () {
     appStore: {
       normalize: normalizeAppStore, add: appAddCity,
       remove: appRemoveCity, keepBothName: keepBothName,
-      resolveStartCity: resolveStartCity
+      resolveStartCity: resolveStartCity, blankCity: blankCity
     },
     onStateChange: null, liveState: liveState,
     emptyState: emptyState, makeStore: makeStore, setStatus: setStatus,
@@ -2016,6 +2053,42 @@ var CityOps = (function () {
   // stored active city (if still present), else the first city in order, else
   // null when the store is empty. Extracted so the app shell's boot-target
   // logic is unit-testable without a DOM.
+  function blankCity(name, country, from, to) {
+    if (!name || !String(name).replace(/^\s+|\s+$/g, '')) throw new Error('city name required');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new Error('dates must be YYYY-MM-DD');
+    if (from > to) throw new Error('start date must not be after end date');
+    return {
+      schema: 1,
+      city: {
+        name: String(name).replace(/^\s+|\s+$/g, ''),
+        country: (country || '').toUpperCase().slice(0, 2),
+        dates: { from: from, to: to },
+        notes: []
+      },
+      sections: [
+        { id: 'dinner', label: 'Dinner', icon: '🍽️' },
+        { id: 'breakfast', label: 'Breakfast', icon: '🍳' },
+        { id: 'lunch', label: 'Lunch', icon: '🥙' },
+        { id: 'coffee', label: 'Coffee', icon: '☕' },
+        { id: 'cowork', label: 'Coworking', icon: '💻' },
+        { id: 'activities', label: 'Activities', icon: '🏛️' },
+        { id: 'services', label: 'Services', icon: '🧺' },
+        { id: 'practical', label: 'Practical', icon: '💡' }
+      ],
+      items: [{
+        id: 'getting-started',
+        section: 'practical',
+        status: 'plan',
+        name: 'Fill this city with real data',
+        note: 'This is a blank scaffold. Run PROMPT.md for this city (see the README), then paste the generated JSON via the Update data button to fill every section. Until then you can adjust dates and plan the shape of the stay.',
+        tags: [],
+        links: [],
+        place_id: null,
+        verified: null
+      }]
+    };
+  }
+
   function resolveStartCity(store, hashId) {
     if (hashId && Object.prototype.hasOwnProperty.call(store.cities, hashId)) return hashId;
     if (store.active && Object.prototype.hasOwnProperty.call(store.cities, store.active)) return store.active;
@@ -2812,7 +2885,7 @@ var CityOps = (function () {
     appStore: {
       normalize: normalizeAppStore, add: appAddCity,
       remove: appRemoveCity, keepBothName: keepBothName,
-      resolveStartCity: resolveStartCity
+      resolveStartCity: resolveStartCity, blankCity: blankCity
     },
     onStateChange: null, liveState: liveState,
     emptyState: emptyState, makeStore: makeStore, setStatus: setStatus,
@@ -2980,6 +3053,10 @@ CityOps.init();
       panel.appendChild(prow);
     });
     var acts = el('div', 'cityact');
+    var add = el('button', 'cityadd', '+ Add city');
+    add.type = 'button';
+    add.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); openAddModal(); };
+    acts.appendChild(add);
     var rm = el('button', null, 'Remove city');
     rm.type = 'button';
     rm.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); openRemoveModal(); };
@@ -3026,7 +3103,7 @@ CityOps.init();
     h1.onkeydown = function (e) {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); h1.click(); }
     };
-    var add = el('button', 'hdr-add', '+ Add');
+    var add = el('button', 'hdr-add', '+ Add city');
     add.type = 'button';
     add.onclick = function (e) {
       e.stopPropagation();
@@ -3044,13 +3121,43 @@ CityOps.init();
     var wrap = el('div', 'modal-wrap');
     var box = el('div', 'modal');
     box.appendChild(el('h3', null, 'Add a city'));
-    box.appendChild(el('p', 'diff', 'Paste schema v1 city JSON (the output of PROMPT.md). It is saved in this browser only.'));
+    box.appendChild(el('p', 'diff', 'Start blank now and fill it with generated data later, or paste ready-made city JSON below.'));
+
+    var brow = el('div', 'mrow');
+    var bn = document.createElement('input');
+    bn.type = 'text'; bn.className = 'date-field'; bn.placeholder = 'City name';
+    var bc = document.createElement('input');
+    bc.type = 'text'; bc.className = 'date-field blank-cc'; bc.placeholder = 'CC'; bc.maxLength = 2;
+    brow.appendChild(bn); brow.appendChild(bc);
+    box.appendChild(brow);
+    var drow = el('div', 'mrow');
+    var bf = document.createElement('input'); bf.type = 'date'; bf.className = 'date-field';
+    var bt2 = document.createElement('input'); bt2.type = 'date'; bt2.className = 'date-field';
+    drow.appendChild(el('span', 'diff', 'From')); drow.appendChild(bf);
+    drow.appendChild(el('span', 'diff', 'To')); drow.appendChild(bt2);
+    box.appendChild(drow);
+    var bmsg = el('div', 'diff', '');
+    box.appendChild(bmsg);
+    var brow2 = el('div', 'mrow');
+    var bcreate = el('button', 'ctl to-done', 'Create blank city');
+    bcreate.type = 'button';
+    box.appendChild(brow2);
+    brow2.appendChild(bcreate);
+
+    box.appendChild(el('p', 'diff', 'Or paste schema v1 city JSON (the output of PROMPT.md). Either way it is saved in this browser only.'));
     var ta = document.createElement('textarea');
     box.appendChild(ta);
     var msg = el('div', 'diff', '');
     box.appendChild(msg);
     var row = el('div', 'mrow');
     box.appendChild(row);
+
+    bcreate.onclick = function () {
+      var data;
+      try { data = CityOps.appStore.blankCity(bn.value, bc.value, bf.value, bt2.value); }
+      catch (e) { bmsg.textContent = 'Invalid: ' + e.message; return; }
+      handleParsed(data);
+    };
 
     function close() { wrap.remove(); }
 
@@ -3107,14 +3214,18 @@ CityOps.init();
       row.appendChild(cancel);
     }
 
+    function handleParsed(data) {
+      var id = CityOps.cityId(data);
+      if (has(store.cities, id)) { askDuplicate(data, id); return; }
+      commit(data);
+    }
+
     var apply = el('button', 'ctl', 'Apply');
     apply.type = 'button';
     apply.onclick = function () {
       var res = CityOps.parse(ta.value);
       if (!res.data) { msg.textContent = 'Invalid:\n' + res.errors.join('\n'); return; }
-      var id = CityOps.cityId(res.data);
-      if (has(store.cities, id)) { askDuplicate(res.data, id); return; }
-      commit(res.data);
+      handleParsed(res.data);
     };
     var cancel = el('button', 'ctl', 'Cancel');
     cancel.type = 'button';
@@ -3125,7 +3236,7 @@ CityOps.init();
     wrap.appendChild(box);
     wrap.onclick = function (e) { if (e.target === wrap) close(); };
     host.appendChild(wrap);
-    ta.focus();
+    bn.focus();
   }
 
   function openRemoveModal() {
