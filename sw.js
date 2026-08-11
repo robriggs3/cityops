@@ -1,5 +1,5 @@
 // CityOps app-shell service worker. Bump CACHE on each release.
-var CACHE = 'cityops-app-v1';
+var CACHE = 'cityops-app-v2';
 var SHELL = ['./', './index.html'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); }));
