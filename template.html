@@ -142,6 +142,10 @@
   .modal .mrow{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
   .modal .diff{font-size:.8rem; color:var(--muted); margin-top:8px; white-space:pre-line;}
   body.share .ctl-row, body.share .grip, body.share .reorderbar{display:none;}
+  .empty-day .hd{border-bottom:none;}
+  .empty-day .free-day{padding:6px 16px 10px; font-size:.8rem; color:var(--muted); font-style:italic;}
+  .date-field{font:inherit; font-size:.85rem; padding:6px 10px; border:1px solid var(--line);
+    border-radius:8px; background:#fff; color:var(--ink);}
   /* narrow phones: trim horizontal chrome so cards get the width */
   @media (max-width: 430px){
     .wrap{padding:0 10px 48px;}
@@ -278,7 +282,7 @@ var CityOps = (function () {
   };
 
   function emptyState() {
-    return { itemStatus: {}, itemDay: {}, dayOrder: {}, dataOverride: null, updated: null };
+    return { itemStatus: {}, itemDay: {}, dayOrder: {}, dataOverride: null, stayOverride: null, updated: null };
   }
 
   function normalizeState(st) {
@@ -287,6 +291,7 @@ var CityOps = (function () {
     st.itemDay = st.itemDay || {};
     st.dayOrder = st.dayOrder || {};
     if (!('dataOverride' in st)) st.dataOverride = null;
+    if (!('stayOverride' in st)) st.stayOverride = null;
     return st;
   }
 
@@ -342,10 +347,12 @@ var CityOps = (function () {
     return state;
   }
 
-  function stayDates(city) {
+  function isIso(s) { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s); }
+
+  function stayDates(dates) {
     var out = [];
-    var d = new Date(city.dates.from + 'T12:00:00');
-    var end = new Date(city.dates.to + 'T12:00:00');
+    var d = new Date(dates.from + 'T12:00:00');
+    var end = new Date(dates.to + 'T12:00:00');
     while (d <= end && out.length < 60) {
       var m = d.getMonth() + 1;
       var day = d.getDate();
@@ -358,6 +365,19 @@ var CityOps = (function () {
   function effectiveData(base, state) {
     if (state.dataOverride && !validate(state.dataOverride).length) return state.dataOverride;
     return base;
+  }
+
+  function effectiveDates(data, state) {
+    var o = state.stayOverride;
+    if (o && isIso(o.from) && isIso(o.to) && o.from <= o.to) return o;
+    return data.city.dates;
+  }
+
+  function setStayDates(state, from, to) {
+    if (!isIso(from) || !isIso(to)) throw new Error('dates must be YYYY-MM-DD');
+    if (from > to) throw new Error('from must not be after to');
+    state.stayOverride = { from: from, to: to };
+    return state;
   }
 
   function viewModel(data, state) {
@@ -373,22 +393,43 @@ var CityOps = (function () {
       // reordering moves a card's CONTENT into a different date slot. A card's
       // stable identity (key) is its group's effective day in the data; the date
       // it renders under (iso) is the chronological slot it currently occupies.
+      // Sections with any dayed item get a slot for EVERY date in the stay, so
+      // empty days are visible and are valid drag targets.
       var keys = [];
       dayed.forEach(function (it) {
         var d = effectiveDay(it, state);
         if (keys.indexOf(d) === -1) keys.push(d);
       });
+      var range = null;
+      if (keys.length) {
+        range = effectiveDates(data, state);
+        stayDates(range).forEach(function (d) { if (keys.indexOf(d) === -1) keys.push(d); });
+      }
       var slots = keys.slice().sort();
-      var order = [];
+      // Keys absent from the saved arrangement sit on their own date's slot;
+      // arranged keys fill the remaining slots in saved order. Default (no
+      // arrangement) is therefore content-on-its-own-date, and saved orders
+      // from before empty slots existed keep content where the user left it.
+      var stated = [];
       (state.dayOrder[sec.id] || []).forEach(function (k) {
-        if (keys.indexOf(k) !== -1 && order.indexOf(k) === -1) order.push(k);
+        if (keys.indexOf(k) !== -1 && stated.indexOf(k) === -1) stated.push(k);
       });
-      slots.forEach(function (k) { if (order.indexOf(k) === -1) order.push(k); });
+      var slotKey = {};
+      keys.forEach(function (k) {
+        if (stated.indexOf(k) === -1) slotKey[k] = k;
+      });
+      var si = 0;
+      stated.forEach(function (k) {
+        while (slotKey[slots[si]] !== undefined) si++;
+        slotKey[slots[si]] = k;
+      });
       return {
         section: sec,
-        days: order.map(function (key, i) {
+        days: slots.map(function (iso) {
+          var key = slotKey[iso];
           return {
-            key: key, iso: slots[i], label: dayLabel(slots[i]),
+            key: key, iso: iso, label: dayLabel(iso),
+            outside: range ? (iso < range.from || iso > range.to) : false,
             items: dayed.filter(function (it) { return effectiveDay(it, state) === key; })
           };
         }),
@@ -492,8 +533,8 @@ var CityOps = (function () {
       // Day picker: promoting into a day-carded section needs a date slot.
       frag.appendChild(el('p', 'when-line', 'Promote to which day?'));
       var pick = el('div', 'ctl-row');
-      var city = effectiveData(ctx.base, ctx.store.load()).city;
-      stayDates(city).forEach(function (iso) {
+      var pst = ctx.store.load();
+      stayDates(effectiveDates(effectiveData(ctx.base, pst), pst)).forEach(function (iso) {
         var db = el('button', 'ctl', dayLabel(iso));
         db.type = 'button';
         db.onclick = function () { promoteTo(it.id, iso); };
@@ -536,8 +577,14 @@ var CityOps = (function () {
     dc.dataset.day = day.key; // stable group identity; the rendered date is the slot
     var hd = el('div', 'hd');
     hd.appendChild(el('span', 'd', day.label));
+    if (day.outside) hd.appendChild(el('span', 'tag', 'Outside stay'));
     if (day.items.length === 1 && day.items[0].when) hd.appendChild(el('span', 't', day.items[0].when));
     dc.appendChild(hd);
+    if (!day.items.length) {
+      dc.className += ' empty-day';
+      dc.appendChild(el('div', 'bd free-day', 'free'));
+      return dc;
+    }
     day.items.forEach(function (it) {
       var status = effectiveStatus(it, state);
       var bd = el('div', 'bd' + (status === 'done' ? ' item-done' : ''));
@@ -547,12 +594,14 @@ var CityOps = (function () {
     return dc;
   }
 
-  function renderHeader(data) {
+  function renderHeader(data, state) {
     var c = data.city;
+    var dates = effectiveDates(data, state);
     var h = document.getElementById('hdr');
     h.innerHTML = '';
     h.appendChild(el('h1', null, c.name));
-    var sub = fmtRange(c.dates) + (c.accommodation && c.accommodation.name ? ' · ' + c.accommodation.name : '');
+    var sub = fmtRange(dates) + (c.accommodation && c.accommodation.name ? ' · ' + c.accommodation.name : '');
+    if (state.stayOverride) sub += ' · dates adjusted';
     h.appendChild(el('div', 'sub', sub));
     var facts = el('div', 'facts');
     if (c.currency && c.currency.code !== 'USD') {
@@ -560,7 +609,7 @@ var CityOps = (function () {
     }
     (c.notes || []).forEach(function (n) { facts.appendChild(el('span', 'chip', n)); });
     h.appendChild(facts);
-    document.title = c.name + ' Guide · ' + fmtRange(c.dates);
+    document.title = c.name + ' Guide · ' + fmtRange(dates);
   }
 
   function renderSection(sv, state) {
@@ -762,7 +811,7 @@ var CityOps = (function () {
     drag = null;
     var state = ctx.store.load();
     var data = effectiveData(ctx.base, state);
-    renderHeader(data);
+    renderHeader(data, state);
     renderToolbar(data, state);
     if (shareOn) {
       renderShare();
@@ -781,12 +830,13 @@ var CityOps = (function () {
 
   function buildExport(data, state) {
     var out = JSON.parse(JSON.stringify(data));
+    out.city.dates = JSON.parse(JSON.stringify(effectiveDates(data, state)));
     out.items.forEach(function (it) {
       it.status = effectiveStatus(it, state);
       var d = effectiveDay(it, state);
       if (d) { it.day = d; } else { delete it.day; }
     });
-    var vm = viewModel(out, { itemStatus: {}, itemDay: {}, dayOrder: state.dayOrder || {}, dataOverride: null });
+    var vm = viewModel(out, { itemStatus: {}, itemDay: {}, dayOrder: state.dayOrder || {}, dataOverride: null, stayOverride: null });
     var rank = {};
     var r = 0;
     var byId = {};
@@ -819,6 +869,68 @@ var CityOps = (function () {
     });
     var removed = Object.keys(oldIds).length;
     return added + ' added, ' + removed + ' removed, ' + unchanged + ' unchanged';
+  }
+
+  function openDatesModal() {
+    var host = document.getElementById('modal');
+    host.innerHTML = '';
+    var st0 = ctx.store.load();
+    var cur = effectiveDates(effectiveData(ctx.base, st0), st0);
+    var wrap = el('div', 'modal-wrap');
+    var box = el('div', 'modal');
+    box.appendChild(el('h3', null, 'Edit stay dates'));
+    box.appendChild(el('p', 'diff', 'Adjusts the stay on this device and adds empty day cards for the new range. The file is not changed; Export bakes the new dates in.'));
+    function dateInput(iso) {
+      var inp = document.createElement('input');
+      inp.type = 'date';
+      inp.className = 'date-field';
+      inp.value = iso;
+      return inp;
+    }
+    var fromIn = dateInput(cur.from);
+    var toIn = dateInput(cur.to);
+    var row1 = el('div', 'mrow');
+    row1.appendChild(el('span', 'diff', 'From'));
+    row1.appendChild(fromIn);
+    row1.appendChild(el('span', 'diff', 'To'));
+    row1.appendChild(toIn);
+    box.appendChild(row1);
+    var msg = el('div', 'diff', '');
+    box.appendChild(msg);
+    var row = el('div', 'mrow');
+    var apply = el('button', 'ctl', 'Apply');
+    apply.type = 'button';
+    apply.onclick = function () {
+      var st = ctx.store.load();
+      try { setStayDates(st, fromIn.value, toIn.value); }
+      catch (e) { msg.textContent = 'Invalid: ' + e.message; return; }
+      ctx.store.save(st);
+      wrap.remove();
+      rerender();
+    };
+    var revert = el('button', 'ctl', 'Reset to file dates');
+    revert.type = 'button';
+    if (st0.stayOverride) {
+      revert.onclick = function () {
+        var st = ctx.store.load();
+        st.stayOverride = null;
+        ctx.store.save(st);
+        wrap.remove();
+        rerender();
+      };
+    } else {
+      revert.disabled = true;
+      revert.title = 'No date adjustment is active';
+    }
+    var cancel = el('button', 'ctl', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = function () { wrap.remove(); };
+    row.appendChild(apply); row.appendChild(revert); row.appendChild(cancel);
+    box.appendChild(row);
+    wrap.appendChild(box);
+    wrap.onclick = function (e) { if (e.target === wrap) wrap.remove(); };
+    host.appendChild(wrap);
+    fromIn.focus();
   }
 
   function openUpdateModal() {
@@ -908,6 +1020,10 @@ var CityOps = (function () {
       upd.type = 'button';
       upd.onclick = openUpdateModal;
       tb.appendChild(upd);
+      var dts = el('button', null, 'Edit dates');
+      dts.type = 'button';
+      dts.onclick = openDatesModal;
+      tb.appendChild(dts);
     }
     if (state.dataOverride) {
       tb.appendChild(el('span', 'flag', 'Data updated in-app: export and paste into the file to make permanent'));
@@ -949,7 +1065,8 @@ var CityOps = (function () {
     TRANSITIONS: TRANSITIONS, fmtRange: fmtRange, buildExport: buildExport,
     diffSummary: diffSummary, shareModel: shareModel,
     effectiveDay: effectiveDay, setDay: setDay, stayDates: stayDates,
-    normalizeState: normalizeState
+    normalizeState: normalizeState, effectiveDates: effectiveDates,
+    setStayDates: setStayDates
   };
 })();
 CityOps.init();

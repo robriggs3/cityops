@@ -107,29 +107,65 @@ test('effectiveStatus: live state wins over authored status', () => {
   C.setStatus(st, 'brasserie', 'done');
   assert.equal(C.effectiveStatus(GOOD.items[0], st), 'done');
 });
-test('viewModel groups by section: day slots chronological, backups split out', () => {
+const STAY = ['2026-08-08', '2026-08-09', '2026-08-10', '2026-08-11',
+  '2026-08-12', '2026-08-13', '2026-08-14', '2026-08-15'];
+function slotOf(vm, iso) { return vm[0].days.find(d => d.iso === iso); }
+test('viewModel: every stay date gets a slot, content sits on its own date', () => {
   const vm = C.viewModel(GOOD, C.emptyState());
   assert.equal(vm.length, 2);
   const dinner = vm[0];
-  // slots render chronologically; with no saved order, group key === slot date
-  assert.deepEqual(dinner.days.map(d => d.iso), ['2026-08-10', '2026-08-13']);
-  assert.deepEqual(dinner.days.map(d => d.key), ['2026-08-10', '2026-08-13']);
-  assert.equal(dinner.days[0].label, 'Mon 10');
-  assert.equal(dinner.days[1].items[0].id, 'brasserie');
+  assert.deepEqual(dinner.days.map(d => d.iso), STAY);
+  assert.deepEqual(dinner.days.map(d => d.key), STAY); // default: key === own slot
+  assert.equal(slotOf(vm, '2026-08-10').items[0].id, 'tanini');
+  assert.equal(slotOf(vm, '2026-08-13').items[0].id, 'brasserie');
+  assert.equal(slotOf(vm, '2026-08-08').items.length, 0); // empty day exists
+  assert.ok(dinner.days.every(d => !d.outside));
   assert.deepEqual(dinner.backups.map(i => i.id), ['sisters']);
-  assert.equal(dinner.archived.length, 0);
+  assert.equal(vm[1].days.length, 0); // coffee has no dayed items: no day cards
   assert.deepEqual(vm[1].undated.map(i => i.id), ['nord']);
+});
+test('pre-empty-slot saved orders keep content on its dates (migration)', () => {
+  const st = C.emptyState();
+  st.dayOrder.dinner = ['2026-08-10', '2026-08-13']; // an old identity arrangement, no empty keys
+  const vm = C.viewModel(GOOD, st);
+  assert.equal(slotOf(vm, '2026-08-10').items[0].id, 'tanini');
+  assert.equal(slotOf(vm, '2026-08-13').items[0].id, 'brasserie');
+  assert.equal(slotOf(vm, '2026-08-08').items.length, 0);
+});
+test('stay dates override drives slots, out-of-range days flagged', () => {
+  const st = C.emptyState();
+  C.setStayDates(st, '2026-08-12', '2026-08-14');
+  const vm = C.viewModel(GOOD, st);
+  assert.deepEqual(vm[0].days.map(d => d.iso),
+    ['2026-08-10', '2026-08-12', '2026-08-13', '2026-08-14']);
+  assert.equal(slotOf(vm, '2026-08-10').outside, true);
+  assert.equal(slotOf(vm, '2026-08-13').outside, false);
+  assert.throws(() => C.setStayDates(C.emptyState(), '2026-08-14', '2026-08-12'));
+  assert.throws(() => C.setStayDates(C.emptyState(), 'nope', '2026-08-12'));
+});
+test('effectiveDates: valid override wins, malformed falls back', () => {
+  const st = C.emptyState();
+  assert.deepEqual(C.effectiveDates(GOOD, st), GOOD.city.dates);
+  st.stayOverride = { from: '2026-08-07', to: '2026-08-16' };
+  assert.equal(C.effectiveDates(GOOD, st).from, '2026-08-07');
+  st.stayOverride = { from: 'garbage', to: '2026-08-16' };
+  assert.deepEqual(C.effectiveDates(GOOD, st), GOOD.city.dates);
+});
+test('buildExport bakes overridden stay dates', () => {
+  const st = C.emptyState();
+  C.setStayDates(st, '2026-08-07', '2026-08-16');
+  const out = C.buildExport(GOOD, st);
+  assert.deepEqual(out.city.dates, { from: '2026-08-07', to: '2026-08-16' });
+  assert.deepEqual(GOOD.city.dates, { from: '2026-08-08', to: '2026-08-15' }); // source untouched
 });
 test('reordering re-slots dates: content moves, dates stay chronological', () => {
   const st = C.emptyState();
   st.dayOrder.dinner = ['2026-08-13', '2026-08-10', '2026-01-01']; // brasserie group first; bogus ignored
   const vm = C.viewModel(GOOD, st);
-  // slot 0 is still Mon 10 but now holds brasserie's content; slot 1 is Thu 13 with tanini
-  assert.deepEqual(vm[0].days.map(d => d.iso), ['2026-08-10', '2026-08-13']);
-  assert.deepEqual(vm[0].days.map(d => d.key), ['2026-08-13', '2026-08-10']);
-  assert.equal(vm[0].days[0].label, 'Mon 10');
-  assert.equal(vm[0].days[0].items[0].id, 'brasserie');
-  assert.equal(vm[0].days[1].items[0].id, 'tanini');
+  assert.deepEqual(vm[0].days.map(d => d.iso), STAY);
+  assert.equal(slotOf(vm, '2026-08-10').key, '2026-08-13');
+  assert.equal(slotOf(vm, '2026-08-10').items[0].id, 'brasserie');
+  assert.equal(slotOf(vm, '2026-08-13').items[0].id, 'tanini');
 });
 test('effectiveDay: itemDay override wins, null clears, setDay validates', () => {
   const st = C.emptyState();
@@ -145,32 +181,35 @@ test('promoted backup with a day joins the day slots', () => {
   C.setStatus(st, 'sisters', 'plan');
   C.setDay(st, 'sisters', '2026-08-10');
   const vm = C.viewModel(GOOD, st);
-  assert.deepEqual(vm[0].days[0].items.map(i => i.id), ['tanini', 'sisters']);
+  assert.deepEqual(slotOf(vm, '2026-08-10').items.map(i => i.id), ['tanini', 'sisters']);
   assert.equal(vm[0].backups.length, 0);
 });
 test('itemDay override merging two groups into one slot is safe', () => {
   const st = C.emptyState();
   C.setDay(st, 'brasserie', '2026-08-10'); // joins tanini's group
   const vm = C.viewModel(GOOD, st);
-  assert.deepEqual(vm[0].days.map(d => d.iso), ['2026-08-10']);
-  assert.deepEqual(vm[0].days[0].items.map(i => i.id), ['brasserie', 'tanini']);
+  assert.deepEqual(vm[0].days.map(d => d.iso), STAY);
+  assert.deepEqual(slotOf(vm, '2026-08-10').items.map(i => i.id), ['brasserie', 'tanini']);
+  assert.equal(slotOf(vm, '2026-08-13').items.length, 0);
 });
 test('duplicate keys in stored dayOrder are deduped, no phantom slots', () => {
   const st = C.emptyState();
   st.dayOrder.dinner = ['2026-08-13', '2026-08-13', '2026-08-10'];
   const vm = C.viewModel(GOOD, st);
-  assert.deepEqual(vm[0].days.map(d => d.key), ['2026-08-13', '2026-08-10']);
-  assert.deepEqual(vm[0].days.map(d => d.iso), ['2026-08-10', '2026-08-13']);
+  assert.deepEqual(vm[0].days.map(d => d.iso), STAY);
+  assert.equal(slotOf(vm, '2026-08-10').items[0].id, 'brasserie');
+  assert.equal(slotOf(vm, '2026-08-13').items[0].id, 'tanini');
   assert.ok(vm[0].days.every(d => d.label && d.label.indexOf('NaN') === -1));
 });
 test('stayDates spans the stay inclusive', () => {
-  assert.deepEqual(C.stayDates(GOOD.city).slice(0, 2), ['2026-08-08', '2026-08-09']);
-  assert.equal(C.stayDates(GOOD.city).length, 8);
+  assert.deepEqual(C.stayDates(GOOD.city.dates).slice(0, 2), ['2026-08-08', '2026-08-09']);
+  assert.equal(C.stayDates(GOOD.city.dates).length, 8);
 });
 test('normalizeState fills missing keys from older stored state', () => {
   const st = C.normalizeState({ itemStatus: { a: 'done' }, dayOrder: {} });
   assert.deepEqual(st.itemDay, {});
   assert.equal(st.dataOverride, null);
+  assert.equal(st.stayOverride, null);
   assert.equal(st.itemStatus.a, 'done');
 });
 test('viewModel keeps done items in place, moves archived out', () => {
@@ -178,8 +217,9 @@ test('viewModel keeps done items in place, moves archived out', () => {
   C.setStatus(st, 'brasserie', 'done');
   C.setStatus(st, 'tanini', 'archived');
   const vm = C.viewModel(GOOD, st);
-  assert.deepEqual(vm[0].days.map(d => d.iso), ['2026-08-13']);
-  assert.equal(vm[0].days[0].items[0].id, 'brasserie');
+  assert.deepEqual(vm[0].days.map(d => d.iso), STAY);
+  assert.equal(slotOf(vm, '2026-08-13').items[0].id, 'brasserie');
+  assert.equal(slotOf(vm, '2026-08-10').items.length, 0); // archived group leaves an empty day
   assert.deepEqual(vm[0].archived.map(i => i.id), ['tanini']);
 });
 test('stale state ids for removed items are ignored', () => {
