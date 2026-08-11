@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CityOps Guide</title>
+<style>
+/*CITYOPS_CSS*/
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="notice"></div>
+  <header id="hdr"></header>
+  <div class="toolbar" id="toolbar"></div>
+  <main id="main"></main>
+  <div class="foot" id="foot"></div>
+</div>
+<div id="modal"></div>
+
+<script type="application/json" id="city-data">
+{
+  "schema": 1,
+  "city": {
+    "name": "Example City", "country": "XX",
+    "dates": {"from": "2026-01-01", "to": "2026-01-07"},
+    "accommodation": {"name": "Example Stay", "lat": 0, "lng": 0},
+    "currency": {"code": "USD", "usd": 1},
+    "notes": ["Replace this block with generated city JSON"]
+  },
+  "sections": [
+    {"id": "dinner", "label": "Dinner", "icon": "🍽️"}
+  ],
+  "items": [{
+    "id": "example",
+    "section": "dinner",
+    "status": "plan",
+    "day": "2026-01-02",
+    "when": "First evening",
+    "name": "Example Restaurant",
+    "price": {"text": "~$20"},
+    "note": "Replace me. This item exists so the empty template renders.",
+    "hours": {"text": "12:00-23:00 daily", "class": "late"},
+    "tags": [],
+    "links": [],
+    "place_id": null,
+    "verified": null
+  }]
+}
+</script>
+
+<script id="app">
+<!--CITYOPS_ENGINE-->
+</script>
+</body>
+</html>

@@ -3,49 +3,3269 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CityOps · living city guides</title>
+<title>CityOps</title>
 <style>
-  :root{--sea:#0b6e8f; --sea-deep:#084c63; --sand:#f5efe3; --ink:#1a2530; --muted:#5c6b78; --line:#e2ddd2;}
+  :root{
+    --bg:#cccccc; --bg-card:#ffffff; --bg-soft:#bdbdbd; --bg-softer:#e8e8e8;
+    --border:#a8a8a8; --border-light:#d0d0d0;
+    --text:#242424; --text-2:#4a4a4a; --text-3:#666666;
+    --accent:#c72027; --accent-hover:#9c181d; --accent-soft:#f3d1d3;
+    --green:#2d7d34; --green-soft:#d4e8d5;
+    --blue:#2c5d8a; --blue-soft:#d3e0ee;
+    --amber:#8a6d00; --amber-soft:#ede1be;
+    --amber-ink:#6b5400; --green-ink:#226428;
+  }
   *{box-sizing:border-box; margin:0; padding:0}
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    background:var(--sand); color:var(--ink); line-height:1.5;}
-  .wrap{max-width:640px; margin:0 auto; padding:0 16px 60px;}
-  header{background:linear-gradient(160deg,var(--sea) 0%,var(--sea-deep) 100%); color:#fff;
-    padding:28px 20px 24px; margin:0 -16px 24px; border-radius:0 0 20px 20px;}
-  header h1{font-size:1.5rem;}
-  header p{opacity:.9; font-size:.95rem; margin-top:6px;}
-  .guide{display:block; background:#fff; border:1px solid var(--line); border-radius:14px;
-    padding:16px 18px; margin-bottom:12px; text-decoration:none; color:var(--ink);
-    box-shadow:0 1px 2px rgba(0,0,0,.03);}
-  .guide:active{background:#eef4f8;}
-  .guide .name{font-weight:700; font-size:1.05rem; color:var(--sea-deep);}
-  .guide .meta{font-size:.85rem; color:var(--muted); margin-top:3px;}
-  .foot{font-size:.8rem; color:var(--muted); margin-top:28px; line-height:1.6;}
-  .foot a{color:var(--sea);}
+    background:var(--bg); color:var(--text); line-height:1.5; -webkit-text-size-adjust:100%;}
+  .wrap{max-width:760px; margin:0 auto; padding:0 16px 60px;}
+  header{background:linear-gradient(160deg,var(--accent) 0%,var(--accent-hover) 100%); color:#fff;
+    padding:26px 20px 22px;}
+  .wrap>header{margin:0 -16px 20px; border-radius:0;}
+  header h1{font-size:1.55rem; letter-spacing:.2px;}
+  header .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
+  .facts{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;}
+  .chip{background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25);
+    padding:5px 10px; border-radius:20px; font-size:.8rem;}
+  h2{font-size:1.15rem; margin:26px 0 12px; color:var(--text);
+    display:flex; align-items:center; gap:8px;}
+  h2 .ic{font-size:1.1rem}
+  .card{background:var(--bg-card); border:1px solid var(--border-light); border-radius:14px;
+    padding:14px 16px; margin-bottom:12px; box-shadow:0 1px 2px rgba(0,0,0,.03);}
+  .card h3{font-size:1.02rem; display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap;}
+  .card h3 .price{font-size:.82rem; color:var(--text-3); font-weight:600; white-space:nowrap;}
+  .card p{font-size:.9rem; color:var(--text-3); margin-top:5px;}
+  .row{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:10px;}
+  .hours{display:inline-block; font-size:.78rem; font-weight:600;
+    padding:3px 9px; border-radius:6px;}
+  .late{background:var(--green-soft); color:var(--green-ink);}
+  .day{background:var(--amber-soft); color:var(--amber-ink);}
+  .eve{background:var(--blue-soft); color:var(--blue);}
+  .maplink{display:inline-flex; align-items:center; gap:5px; font-size:.78rem; font-weight:700;
+    color:#fff; background:var(--accent); padding:5px 11px; border-radius:20px; text-decoration:none;}
+  .maplink:active{background:var(--accent-hover);}
+  .weblink{display:inline-flex; align-items:center; gap:5px; font-size:.78rem; font-weight:700;
+    color:var(--accent-hover); background:#fff; border:1.5px solid var(--accent);
+    padding:4px 11px; border-radius:20px; text-decoration:none;}
+  .weblink:active{background:var(--accent-soft);}
+  .phonelink{display:inline-flex; align-items:center; gap:5px; font-size:.78rem; font-weight:700;
+    color:var(--text-3); background:#fff; border:1.5px solid var(--border-light);
+    padding:4px 11px; border-radius:20px; text-decoration:none;}
+  .phonelink:active{background:var(--bg-softer);}
+  .nosite{font-size:.74rem; color:var(--text-3); font-style:italic;}
+  .callout{background:var(--amber-soft); border:1px solid var(--amber); border-left:4px solid var(--amber);
+    border-radius:10px; padding:14px 16px; margin:4px 0 20px; font-size:.9rem;}
+  .callout b{color:var(--amber-ink);}
+  .lead{font-size:.92rem; color:var(--text-3); margin-bottom:6px;}
+  .tag{display:inline-block; font-size:.72rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.4px; color:var(--accent-hover); background:var(--accent-soft); padding:2px 7px; border-radius:5px; margin-right:6px;}
+  .foot{font-size:.78rem; color:var(--text-3); margin-top:24px; text-align:center; line-height:1.6;}
+  a{color:var(--accent);}
+
+
+  /* --- v5: drag to reorder --- */
+  .days .daycard{position:relative; touch-action:pan-y;}
+  .days .daycard .hd{padding-left:40px;}
+  .grip{position:absolute; left:8px; top:7px; width:26px; height:30px;
+    display:flex; align-items:center; justify-content:center; cursor:grab;
+    touch-action:none; border-radius:7px; color:var(--accent-hover); opacity:.45;}
+  .grip:active{cursor:grabbing; opacity:1; background:rgba(199,32,39,.10);}
+  .grip svg{width:15px; height:15px; pointer-events:none;}
+  .daycard.dragging{opacity:.9; box-shadow:0 10px 24px rgba(157,24,29,.22);
+    transform:scale(1.015); z-index:50; position:relative;}
+  .daycard.shifting{transition:transform .18s ease;}
+  .dropline{height:3px; background:var(--accent); border-radius:2px; margin:6px 0;}
+  .reorderbar{display:flex; align-items:center; justify-content:space-between;
+    gap:10px; flex-wrap:wrap; margin:0 0 12px; font-size:.8rem; color:var(--text-3);}
+  .reorderbar button{font:inherit; font-weight:700; color:var(--accent-hover);
+    background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
+    padding:5px 13px; cursor:pointer;}
+  .reorderbar button:hover{border-color:var(--accent);}
+  .reorderbar .saved{color:var(--green); font-weight:700;}
+  @media (prefers-reduced-motion: reduce){ .daycard.shifting{transition:none} }
+
+  /* --- v3 additions --- */
+  .daycard{background:var(--bg-card); border:1px solid var(--border-light); border-radius:14px;
+    padding:0; margin-bottom:12px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.03);}
+  .daycard .hd{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+    background:var(--bg-softer); padding:9px 16px; border-bottom:1px solid var(--border-light);}
+  .daycard .hd .d{font-weight:800; font-size:.8rem; letter-spacing:.6px;
+    text-transform:uppercase; color:var(--text);}
+  .daycard .hd .t{font-size:.82rem; color:var(--text-3);}
+  .daycard .bd{padding:12px 16px 14px;}
+  .daycard .bd h3{font-size:1.02rem; display:flex; justify-content:space-between;
+    align-items:baseline; gap:10px; flex-wrap:wrap;}
+  .daycard .bd h3 .price{font-size:.82rem; color:var(--text-3); font-weight:600; white-space:nowrap;}
+  .daycard .bd p{font-size:.9rem; color:var(--text-3); margin-top:5px;}
+  .backup{background:var(--amber-soft); border:1px dashed var(--amber); border-radius:12px;
+    padding:12px 16px; margin:2px 0 22px;}
+  .backup .bt{font-size:.72rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+    color:var(--amber-ink); margin-bottom:7px;}
+  .backup ul{margin:0; padding-left:18px;}
+  .backup li{font-size:.86rem; color:var(--text-3); margin-bottom:5px;}
+  .backup li b{color:var(--text);}
+  .warn{background:var(--accent-soft); border-left:4px solid var(--accent); border-radius:10px;
+    padding:12px 16px; margin:4px 0 20px; font-size:.88rem; color:var(--text);}
+  .warn b{color:var(--accent-hover);}
+  .links{margin-top:9px; font-size:.82rem;}
+  .links a{font-weight:600; text-decoration:none;}
+  .links span{color:var(--border-light); margin:0 5px;}
+
+  /* --- cityops additions --- */
+  /* neutral badge when no class given */
+  .hours:not(.late):not(.day):not(.eve){background:var(--bg-softer); color:var(--text-3);}
+  .ctl-row{display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;}
+  .ctl{font:inherit; font-size:.74rem; font-weight:700; color:var(--accent-hover);
+    background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
+    padding:4px 11px; cursor:pointer;}
+  .ctl:hover{border-color:var(--accent);}
+  .ctl.to-done:hover{border-color:var(--green); color:var(--green);}
+  .ctl.to-archived:hover{border-color:var(--accent); color:var(--accent);}
+  .item-done{opacity:.55;}
+  .donemark{color:var(--green); font-weight:800; margin-right:6px;}
+  .arch-details{margin:2px 0 22px;}
+  .arch-details summary{font-size:.72rem; font-weight:800; letter-spacing:.6px;
+    text-transform:uppercase; color:var(--text-3); cursor:pointer; padding:6px 0;}
+  .arch-details .card, .arch-details .daycard{opacity:.7;}
+  .toolbar{display:flex; gap:8px; flex-wrap:wrap; margin:0 0 16px; align-items:center;}
+  .toolbar button{font:inherit; font-weight:700; color:var(--accent-hover); background:#fff;
+    border:1.5px solid var(--border-light); border-radius:20px; padding:5px 13px;
+    cursor:pointer; font-size:.8rem;}
+  .toolbar button:hover{border-color:var(--accent);}
+  .toolbar .flag{font-size:.74rem; color:var(--amber); font-weight:700;}
+  .errcard{background:var(--accent-soft); border-left:4px solid var(--accent); border-radius:10px;
+    padding:14px 16px; margin:20px 0; font-size:.9rem;}
+  .errcard b{color:var(--accent-hover);}
+  #notice{font-size:.78rem; color:var(--text-3); margin:8px 0;}
+  .when-line{font-size:.8rem; color:var(--text-3); font-style:italic; margin-top:2px;}
+  .modal-wrap{position:fixed; inset:0; background:rgba(36,36,36,.5); display:flex;
+    align-items:center; justify-content:center; padding:16px; z-index:100;}
+  .modal{background:#fff; border-radius:14px; padding:18px; max-width:640px;
+    width:100%; max-height:85vh; overflow:auto;}
+  .modal textarea{width:100%; min-height:200px; font-family:ui-monospace,Menlo,monospace;
+    font-size:.78rem; border:1px solid var(--border-light); border-radius:8px; padding:10px;}
+  .modal .mrow{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
+  .modal .diff{font-size:.8rem; color:var(--text-3); margin-top:8px; white-space:pre-line;}
+  body.share .ctl-row, body.share .grip, body.share .reorderbar{display:none;}
+  .sec-toggle{font:inherit; color:inherit; background:none; border:none; padding:0;
+    display:flex; align-items:center; gap:8px; cursor:pointer; text-align:left;}
+  .sec-toggle .chev{font-size:.8rem; color:var(--text-3); width:14px; flex:0 0 auto;}
+  .sec-count{font-size:.78rem; color:var(--text-3); font-weight:600; margin-left:6px;}
+  h2.collapsed{opacity:.85; margin-bottom:8px;}
+  body.share .sec-toggle{pointer-events:none;}
+  body.share .sec-toggle .chev{display:none;}
+  .daycard .bd + .bd{border-top:1px dashed var(--border-light);}
+  .sec-meta{font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.4px;
+    color:var(--accent); margin-bottom:2px;}
+  .title-edit{width:100%; font:inherit; font-size:1rem; font-weight:600; padding:8px 10px;
+    border:1.5px solid var(--accent); border-radius:8px; margin-top:4px;}
+  .empty-day .hd{border-bottom:none;}
+  .empty-day .free-day{padding:6px 16px 10px; font-size:.8rem; color:var(--text-3); font-style:italic;}
+  .date-field{font:inherit; font-size:.85rem; padding:6px 10px; border:1px solid var(--border-light);
+    border-radius:8px; background:#fff; color:var(--text);}
+  /* narrow phones: trim horizontal chrome so cards get the width */
+  @media (max-width: 430px){
+    .wrap{padding:0 10px 48px;}
+    .wrap>header{margin:0 -10px 16px; padding:20px 14px 16px; border-radius:0;}
+    header h1{font-size:1.35rem;}
+    .facts{gap:6px; margin-top:10px;}
+    .chip{padding:4px 9px; font-size:.75rem;}
+    .card{padding:12px 12px; border-radius:12px;}
+    .daycard{border-radius:12px;}
+    .daycard .hd{padding:8px 12px;}
+    .days .daycard .hd{padding-left:38px;}
+    .daycard .bd{padding:10px 12px 12px;}
+    .backup{padding:10px 12px;}
+    .callout, .warn, .errcard{padding:12px 12px;}
+    .toolbar{gap:6px;}
+    .toolbar button{padding:5px 10px; font-size:.75rem;}
+    h2{margin:20px 0 10px;}
+  }
+  @media print{
+    .toolbar, .ctl-row, .grip, .reorderbar, #notice{display:none !important;}
+    body{background:#fff;}
+    .daycard, .card{box-shadow:none; break-inside:avoid;}
+    header{background:var(--accent-hover) !important; -webkit-print-color-adjust:exact;}
+  }
+
+  /* --- app shell: multi-city switcher (index.html only) --- */
+  /* Dense in-header controls: the h1 itself is the switcher trigger (chevron
+     appended after it), and a translucent chip in the header's top-right opens
+     Add-city. Both live inside #hdr, which the engine fully replaces
+     (innerHTML='') on every render, so decorateHeader() re-appends them from
+     CityOps.onStateChange every time — see the appshell script below. The
+     header must not grow to fit these; they overlay the existing chrome. */
+  #hdr{position:relative;}
+  #hdr h1{cursor:pointer; display:inline-flex; align-items:center; gap:2px;}
+  .hdr-chev{font-size:.85rem; opacity:.85;}
+  .hdr-add{position:absolute; top:24px; right:20px; font:inherit; font-size:.75rem; font-weight:700;
+    color:#fff; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.4);
+    border-radius:20px; padding:5px 11px; cursor:pointer; white-space:nowrap;}
+  .hdr-add:hover{background:rgba(255,255,255,.25);}
+
+  /* Dropdown panel: floats directly under the header (does not add header
+     height); #citybar is its host, positioned inside .wrap right after
+     #hdr so it shares the content width. */
+  #citybar{position:relative;}
+  .citypanel{position:absolute; top:6px; left:0; right:0; z-index:60;
+    background:var(--bg-card); border:1px solid var(--border-light); border-radius:12px;
+    overflow:hidden; box-shadow:0 6px 18px rgba(0,0,0,.12);}
+  .cityrow{display:block; width:100%; font:inherit; text-align:left; color:var(--text);
+    background:none; border:none; border-bottom:1px solid var(--border-light);
+    padding:11px 14px; cursor:pointer;}
+  .cityrow:last-of-type{border-bottom:none;}
+  .cityrow:hover{background:var(--bg-softer);}
+  .cityrow.current{background:var(--accent-soft);}
+  .cityrow .cname{font-weight:600; font-size:.9rem;}
+  .cityrow.current .cname{font-weight:800;}
+  .cityrow .dot{display:inline-block; width:6px; height:6px; border-radius:50%;
+    background:var(--accent); margin-left:7px; vertical-align:middle;}
+  .cityrow .cdates{display:block; font-size:.76rem; color:var(--text-3); margin-top:1px;}
+  .cityact{display:flex; gap:8px; flex-wrap:wrap; padding:10px 14px;
+    background:var(--bg-softer); border-top:1px solid var(--border-light);}
+  .cityact button{font:inherit; font-size:.78rem; font-weight:700; color:var(--accent-hover);
+    background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
+    padding:5px 13px; cursor:pointer;}
+  .cityact button:hover{border-color:var(--accent);}
+  .name-confirm{width:100%; font:inherit; font-size:.9rem; padding:8px 10px; margin-top:8px;
+    border:1px solid var(--border-light); border-radius:8px; background:#fff; color:var(--text);}
+  .modal .ctl[disabled]{opacity:.45; cursor:not-allowed; border-color:var(--border-light);}
+  .modal .ctl[disabled]:hover{border-color:var(--border-light);}
+  @media (max-width: 430px){
+    .hdr-add{top:17px; right:14px; padding:4px 9px; font-size:.7rem;}
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-<header>
-  <h1>CityOps</h1>
-  <p>A living city guide you operate, not just read. One file per city: plan, reorder, promote backups, mark done.</p>
-</header>
-<a class="guide" href="yerevan.html">
-  <div class="name">Yerevan 🗺️</div>
-  <div class="meta">Aug 15-22, 2026 · 75 items · dinners, coffee, coworking, day trips</div>
-</a>
-<a class="guide" href="batumi.html">
-  <div class="name">Batumi 🌊</div>
-  <div class="meta">Aug 8-15, 2026 · 58 items · the guide this project grew out of</div>
-</a>
-<a class="guide" href="template.html">
-  <div class="name">Blank template</div>
-  <div class="meta">Paste your own city JSON in and go. See the README for the generation prompt.</div>
-</a>
-<div class="foot">
-  Open source. Generate a city with any AI engine using <a href="PROMPT.md">the prompt</a>,
-  paste the JSON into the template, and you have a working guide: offline-friendly, phone-first, no build step.
+  <div id="notice"></div>
+  <header id="hdr"></header>
+  <div id="citybar"></div>
+  <div class="toolbar" id="toolbar"></div>
+  <main id="main"></main>
+  <div class="foot" id="foot"></div>
 </div>
+<div id="modal"></div>
+
+<script id="app">
+var CityOps = (function () {
+  'use strict';
+
+  var STATUSES = ['plan', 'backup', 'archived', 'done'];
+
+  function slug(s) {
+    return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  }
+  function cityId(data) {
+    return slug(data.city.name) + '-' + data.city.dates.from;
+  }
+  function dayLabel(iso) {
+    var d = new Date(iso + 'T12:00:00');
+    var names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return names[d.getDay()] + ' ' + d.getDate();
+  }
+
+  function validate(data) {
+    var errors = [];
+    if (!data || typeof data !== 'object') return ['Root is not an object'];
+    if (data.schema !== 1) errors.push('schema must be 1');
+    if (!data.city || !data.city.name) errors.push('city.name required');
+    if (!data.city || !data.city.dates || !data.city.dates.from || !data.city.dates.to) {
+      errors.push('city.dates.from and city.dates.to required');
+    }
+    if (!Array.isArray(data.sections) || !data.sections.length) {
+      errors.push('sections[] required');
+    } else {
+      data.sections.forEach(function (s, i) {
+        if (!s.id || !s.label) errors.push('sections[' + i + '] needs id and label');
+      });
+    }
+    if (!Array.isArray(data.items)) {
+      errors.push('items[] required');
+    } else {
+      var secIds = {};
+      (data.sections || []).forEach(function (s) { secIds[s.id] = 1; });
+      var seen = {};
+      data.items.forEach(function (it, i) {
+        var ref = 'items[' + i + ']' + (it && it.id ? ' (' + it.id + ')' : '');
+        if (!it.id) errors.push(ref + ' needs id');
+        else if (seen[it.id]) errors.push('duplicate item id "' + it.id + '"');
+        else seen[it.id] = 1;
+        if (!it.name) errors.push(ref + ' needs name');
+        if (!secIds[it.section]) errors.push(ref + ' unknown section "' + it.section + '"');
+        if (STATUSES.indexOf(it.status) === -1) errors.push(ref + ' bad status "' + it.status + '"');
+        if (it.day && !/^\d{4}-\d{2}-\d{2}$/.test(it.day)) errors.push(ref + ' day must be YYYY-MM-DD');
+      });
+    }
+    return errors;
+  }
+
+  function parse(text) {
+    var data;
+    try { data = JSON.parse(text); }
+    catch (e) { return { data: null, errors: ['JSON parse error: ' + e.message] }; }
+    var errors = validate(data);
+    return { data: errors.length ? null : data, errors: errors };
+  }
+
+  var TRANSITIONS = {
+    plan:     [{ to: 'done', label: '✓ Done' }, { to: 'backup', label: '↓ Backup' }, { to: 'archived', label: '✕ Archive' }],
+    backup:   [{ to: 'plan', label: '↑ Promote' }, { to: 'archived', label: '✕ Archive' }],
+    done:     [{ to: 'plan', label: '↩ Undo' }],
+    archived: [{ to: 'backup', label: '↩ Restore' }]
+  };
+
+  function emptyState() {
+    return { itemStatus: {}, itemDay: {}, itemTitle: {}, dayOrder: {}, collapsedSections: {}, viewMode: 'type', dataOverride: null, stayOverride: null, updated: null };
+  }
+
+  function normalizeState(st) {
+    if (!st || typeof st !== 'object') return emptyState();
+    st.itemStatus = st.itemStatus || {};
+    st.itemDay = st.itemDay || {};
+    st.dayOrder = st.dayOrder || {};
+    st.collapsedSections = st.collapsedSections || {};
+    st.itemTitle = st.itemTitle || {};
+    if (st.viewMode !== 'type' && st.viewMode !== 'day') st.viewMode = 'type';
+    if (!('dataOverride' in st)) st.dataOverride = null;
+    if (!('stayOverride' in st)) st.stayOverride = null;
+    return st;
+  }
+
+  function makeStore(id, storage) {
+    var key = 'cityops.' + id + '.v1';
+    var mem = null;
+    var ok = true;
+    if (!storage) ok = false;
+    try {
+      storage.setItem(key + '.t', '1');
+      storage.removeItem(key + '.t');
+    } catch (e) { ok = false; }
+    return {
+      persistent: ok,
+      load: function () {
+        if (mem) return normalizeState(JSON.parse(JSON.stringify(mem)));
+        if (!ok) return emptyState();
+        try {
+          var raw = storage.getItem(key);
+          return raw ? normalizeState(JSON.parse(raw)) : emptyState();
+        } catch (e) { return emptyState(); }
+      },
+      save: function (st) {
+        st.updated = new Date().toISOString();
+        mem = JSON.parse(JSON.stringify(st));
+        if (ok) {
+          try { storage.setItem(key, JSON.stringify(st)); } catch (e) { ok = false; }
+        }
+      }
+    };
+  }
+
+  function setStatus(state, id, to) {
+    if (STATUSES.indexOf(to) === -1) throw new Error('bad status "' + to + '"');
+    state.itemStatus[id] = to;
+    return state;
+  }
+
+  function effectiveStatus(it, state) {
+    return state.itemStatus[it.id] || it.status;
+  }
+
+  function effectiveDay(it, state) {
+    if (state.itemDay && Object.prototype.hasOwnProperty.call(state.itemDay, it.id)) {
+      return state.itemDay[it.id] || null;
+    }
+    return it.day || null;
+  }
+
+  function setDay(state, id, iso) {
+    if (iso !== null && !/^\d{4}-\d{2}-\d{2}$/.test(iso)) throw new Error('bad day "' + iso + '"');
+    state.itemDay[id] = iso;
+    return state;
+  }
+
+  function isIso(s) { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s); }
+
+  function stayDates(dates) {
+    var out = [];
+    var d = new Date(dates.from + 'T12:00:00');
+    var end = new Date(dates.to + 'T12:00:00');
+    while (d <= end && out.length < 60) {
+      var m = d.getMonth() + 1;
+      var day = d.getDate();
+      out.push(d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day);
+      d.setDate(d.getDate() + 1);
+    }
+    return out;
+  }
+
+  function effectiveData(base, state) {
+    if (state.dataOverride && !validate(state.dataOverride).length) return state.dataOverride;
+    return base;
+  }
+
+  function effectiveDates(data, state) {
+    var o = state.stayOverride;
+    if (o && isIso(o.from) && isIso(o.to) && o.from <= o.to) return o;
+    return data.city.dates;
+  }
+
+  function effectiveName(it, state) {
+    return (state.itemTitle && state.itemTitle[it.id]) || it.name;
+  }
+
+  function setTitle(state, id, title) {
+    state.itemTitle = state.itemTitle || {};
+    var t = (title === null || title === undefined) ? '' : String(title).replace(/^\s+|\s+$/g, '');
+    if (t) state.itemTitle[id] = t;
+    else delete state.itemTitle[id];
+    return state;
+  }
+
+  function setViewMode(state, mode) {
+    if (mode !== 'type' && mode !== 'day') throw new Error('bad view mode "' + mode + '"');
+    state.viewMode = mode;
+    return state;
+  }
+
+  function keyForDisplayedDate(data, state, secId, iso) {
+    // Pickers speak in DISPLAYED dates. After reorders, the group occupying
+    // the slot for a date may be keyed by a different date; joining a day
+    // means joining whatever group the user SEES on that date.
+    var sv = null;
+    viewModel(data, state).forEach(function (v) { if (v.section.id === secId) sv = v; });
+    if (sv) {
+      for (var i = 0; i < sv.days.length; i++) {
+        if (sv.days[i].iso === iso) return sv.days[i].key;
+      }
+    }
+    return iso;
+  }
+
+  function calendarModel(data, state) {
+    var byIso = {};
+    var undated = [];
+    var vms = viewModel(data, state);
+    vms.forEach(function (sv) {
+      sv.days.forEach(function (d) {
+        if (!byIso[d.iso]) byIso[d.iso] = [];
+        d.items.forEach(function (it) {
+          byIso[d.iso].push({ sec: sv.section, it: it, status: effectiveStatus(it, state) });
+        });
+      });
+      sv.undated.forEach(function (it) {
+        undated.push({ sec: sv.section, it: it, status: effectiveStatus(it, state) });
+      });
+    });
+    var isos = Object.keys(byIso).sort();
+    return {
+      days: isos.map(function (iso) { return { iso: iso, label: dayLabel(iso), entries: byIso[iso] }; }),
+      undated: undated,
+      sections: vms
+    };
+  }
+
+  function toggleSection(state, secId) {
+    state.collapsedSections = state.collapsedSections || {};
+    if (state.collapsedSections[secId]) delete state.collapsedSections[secId];
+    else state.collapsedSections[secId] = true;
+    return state;
+  }
+
+  function setStayDates(state, from, to) {
+    if (!isIso(from) || !isIso(to)) throw new Error('dates must be YYYY-MM-DD');
+    if (from > to) throw new Error('from must not be after to');
+    state.stayOverride = { from: from, to: to };
+    return state;
+  }
+
+  function viewModel(data, state) {
+    return data.sections.map(function (sec) {
+      var items = data.items.filter(function (it) { return it.section === sec.id; });
+      var active = items.filter(function (it) {
+        var s = effectiveStatus(it, state);
+        return s === 'plan' || s === 'done';
+      });
+      var dayed = active.filter(function (it) { return effectiveDay(it, state); });
+      var undated = active.filter(function (it) { return !effectiveDay(it, state); });
+      // Day cards are SLOTS: the dates always render in chronological order, and
+      // reordering moves a card's CONTENT into a different date slot. A card's
+      // stable identity (key) is its group's effective day in the data; the date
+      // it renders under (iso) is the chronological slot it currently occupies.
+      // Sections with any dayed item get a slot for EVERY date in the stay, so
+      // empty days are visible and are valid drag targets.
+      var keys = [];
+      dayed.forEach(function (it) {
+        var d = effectiveDay(it, state);
+        if (keys.indexOf(d) === -1) keys.push(d);
+      });
+      var range = null;
+      if (keys.length) {
+        range = effectiveDates(data, state);
+        stayDates(range).forEach(function (d) { if (keys.indexOf(d) === -1) keys.push(d); });
+      }
+      var slots = keys.slice().sort();
+      // Keys absent from the saved arrangement sit on their own date's slot;
+      // arranged keys fill the remaining slots in saved order. Default (no
+      // arrangement) is therefore content-on-its-own-date, and saved orders
+      // from before empty slots existed keep content where the user left it.
+      var stated = [];
+      (state.dayOrder[sec.id] || []).forEach(function (k) {
+        if (keys.indexOf(k) !== -1 && stated.indexOf(k) === -1) stated.push(k);
+      });
+      var slotKey = {};
+      keys.forEach(function (k) {
+        if (stated.indexOf(k) === -1) slotKey[k] = k;
+      });
+      var si = 0;
+      stated.forEach(function (k) {
+        while (slotKey[slots[si]] !== undefined) si++;
+        slotKey[slots[si]] = k;
+      });
+      return {
+        section: sec,
+        days: slots.map(function (iso) {
+          var key = slotKey[iso];
+          return {
+            key: key, iso: iso, label: dayLabel(iso),
+            outside: range ? (iso < range.from || iso > range.to) : false,
+            items: dayed.filter(function (it) { return effectiveDay(it, state) === key; })
+          };
+        }),
+        undated: undated,
+        backups: items.filter(function (it) { return effectiveStatus(it, state) === 'backup'; }),
+        archived: items.filter(function (it) { return effectiveStatus(it, state) === 'archived'; })
+      };
+    });
+  }
+
+  function shareModel(data, state) {
+    // Share view uses the same slot-assigned dates the planner shows.
+    var byDay = {};
+    var undated = [];
+    viewModel(data, state).forEach(function (sv) {
+      sv.days.forEach(function (d) {
+        d.items.forEach(function (it) {
+          if (!byDay[d.iso]) byDay[d.iso] = [];
+          byDay[d.iso].push({ sec: sv.section, it: it, status: effectiveStatus(it, state) });
+        });
+      });
+      sv.undated.forEach(function (it) {
+        undated.push({ sec: sv.section, it: it, status: effectiveStatus(it, state) });
+      });
+    });
+    var isos = Object.keys(byDay).sort();
+    return {
+      days: isos.map(function (iso) { return { iso: iso, label: dayLabel(iso), entries: byDay[iso] }; }),
+      undated: undated
+    };
+  }
+
+  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  function fmtRange(d) {
+    var a = new Date(d.from + 'T12:00:00');
+    var b = new Date(d.to + 'T12:00:00');
+    if (a.getMonth() === b.getMonth()) {
+      return MONTHS[a.getMonth()] + ' ' + a.getDate() + '-' + b.getDate() + ', ' + b.getFullYear();
+    }
+    return MONTHS[a.getMonth()] + ' ' + a.getDate() + ' - ' + MONTHS[b.getMonth()] + ' ' + b.getDate() + ', ' + b.getFullYear();
+  }
+
+  // ---- multi-city app store (used by the app shell, not by standalone files) ----
+  // Shape: { cities: {cityId: cityJson}, order: [cityId], active: cityId|null }.
+  // Pure helpers only: reading and writing localStorage stays in the app shell.
+  function normalizeAppStore(raw) {
+    var src = (raw && typeof raw === 'object') ? raw : {};
+    var srcCities = (src.cities && typeof src.cities === 'object') ? src.cities : {};
+    var cities = {};
+    Object.keys(srcCities).forEach(function (id) {
+      var d = srcCities[id];
+      if (d && d.city && d.city.name && d.city.dates) cities[id] = d;
+    });
+    var order = [];
+    var seen = {};
+    (Array.isArray(src.order) ? src.order : []).forEach(function (id) {
+      if (!seen[id] && Object.prototype.hasOwnProperty.call(cities, id)) { seen[id] = 1; order.push(id); }
+    });
+    Object.keys(cities).forEach(function (id) {
+      if (!seen[id]) { seen[id] = 1; order.push(id); }
+    });
+    var active = (typeof src.active === 'string' && order.indexOf(src.active) !== -1)
+      ? src.active : (order.length ? order[0] : null);
+    return { cities: cities, order: order, active: active };
+  }
+
+  function appAddCity(store, data) {
+    var s = normalizeAppStore(store);
+    var id = cityId(data);
+    var replaced = Object.prototype.hasOwnProperty.call(s.cities, id);
+    s.cities[id] = data;
+    if (s.order.indexOf(id) === -1) s.order.push(id);
+    return { store: s, cityId: id, replaced: replaced };
+  }
+
+  function appRemoveCity(store, id) {
+    var s = normalizeAppStore(store);
+    delete s.cities[id];
+    s.order = s.order.filter(function (x) { return x !== id; });
+    if (s.order.indexOf(s.active) === -1) s.active = s.order.length ? s.order[0] : null;
+    return s;
+  }
+
+  // Keep-both renames the incoming city so cityId() derives a fresh id.
+  function keepBothName(name) {
+    return String(name) + ' 2';
+  }
+
+  // Pure start-city resolution: hash (if it names a known city) wins, else the
+  // stored active city (if still present), else the first city in order, else
+  // null when the store is empty. Extracted so the app shell's boot-target
+  // logic is unit-testable without a DOM.
+  function resolveStartCity(store, hashId) {
+    if (hashId && Object.prototype.hasOwnProperty.call(store.cities, hashId)) return hashId;
+    if (store.active && Object.prototype.hasOwnProperty.call(store.cities, store.active)) return store.active;
+    return store.order.length ? store.order[0] : null;
+  }
+
+  // ---- DOM rendering (browser only) ----
+  var ctx = null; // { base, store }; replaced wholesale when the app boots another city
+  var drag = null; // { card, grip, startY, list, cards, sec } while a pointer drag is in progress
+  var listenersBound = false; // window drag listeners bind once per page, not per boot
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+
+  function linkPill(l) {
+    var a = document.createElement('a');
+    a.href = l.href;
+    if (l.kind === 'map') { a.className = 'maplink'; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = '📍 ' + l.label; }
+    else if (l.kind === 'web') { a.className = 'weblink'; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = '🌐 ' + l.label; }
+    else { a.className = 'phonelink'; a.textContent = '📞 ' + l.label; }
+    return a;
+  }
+
+  function onStatus(id, to) {
+    var st = ctx.store.load();
+    setStatus(st, id, to);
+    ctx.store.save(st);
+    rerender();
+  }
+
+  var curState = null;       // state snapshot for the current render pass
+  var pendingPromote = null; // item id whose promote day-picker is open (session-only UI state)
+  var pendingMove = null;    // item id whose move day-picker is open
+  var pendingEdit = null;    // item id whose title editor is open
+
+  function promoteTo(it, iso) {
+    var st = ctx.store.load();
+    // Resolve the slot BEFORE flipping status: once the item counts as active,
+    // its own stale day from a prior plan stint could contaminate the lookup.
+    var key = (iso === null) ? null : keyForDisplayedDate(effectiveData(ctx.base, st), st, it.section, iso);
+    setStatus(st, it.id, 'plan');
+    setDay(st, it.id, key);
+    ctx.store.save(st);
+    pendingPromote = null;
+    rerender();
+  }
+
+  function moveTo(it, iso) {
+    var st = ctx.store.load();
+    var key = (iso === null) ? null : keyForDisplayedDate(effectiveData(ctx.base, st), st, it.section, iso);
+    setDay(st, it.id, key);
+    ctx.store.save(st);
+    pendingMove = null;
+    rerender();
+  }
+
+  function dayPickerRow(hint, onPick, onCancel) {
+    var frag = document.createDocumentFragment();
+    frag.appendChild(el('p', 'when-line', hint));
+    var pick = el('div', 'ctl-row');
+    var pst = ctx.store.load();
+    stayDates(effectiveDates(effectiveData(ctx.base, pst), pst)).forEach(function (iso) {
+      var db = el('button', 'ctl', dayLabel(iso));
+      db.type = 'button';
+      db.onclick = function () { onPick(iso); };
+      pick.appendChild(db);
+    });
+    var nd = el('button', 'ctl', 'No day');
+    nd.type = 'button';
+    nd.onclick = function () { onPick(null); };
+    pick.appendChild(nd);
+    var cancel = el('button', 'ctl to-archived', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = onCancel;
+    pick.appendChild(cancel);
+    frag.appendChild(pick);
+    return frag;
+  }
+
+  function itemBody(it, status, showWhen, withDayPicker) {
+    var frag = document.createDocumentFragment();
+    if (pendingEdit === it.id) {
+      frag.appendChild(el('p', 'when-line', 'Rename this item'));
+      var inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'title-edit';
+      inp.value = effectiveName(it, curState);
+      frag.appendChild(inp);
+      var erow = el('div', 'ctl-row');
+      var save = el('button', 'ctl to-done', 'Save');
+      save.type = 'button';
+      save.onclick = function () {
+        var st = ctx.store.load();
+        setTitle(st, it.id, inp.value);
+        ctx.store.save(st);
+        pendingEdit = null;
+        rerender();
+      };
+      var orig = el('button', 'ctl', 'Original name');
+      orig.type = 'button';
+      orig.onclick = function () {
+        var st = ctx.store.load();
+        setTitle(st, it.id, null);
+        ctx.store.save(st);
+        pendingEdit = null;
+        rerender();
+      };
+      var ecancel = el('button', 'ctl to-archived', 'Cancel');
+      ecancel.type = 'button';
+      ecancel.onclick = function () { pendingEdit = null; rerender(); };
+      erow.appendChild(save); erow.appendChild(orig); erow.appendChild(ecancel);
+      frag.appendChild(erow);
+      var focusLater = inp;
+      setTimeout(function () { try { focusLater.focus(); focusLater.select(); } catch (e) {} }, 0);
+      return frag;
+    }
+    var h3 = el('h3');
+    var tname = el('span', 'tname');
+    if (status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
+    tname.appendChild(document.createTextNode(effectiveName(it, curState)));
+    h3.appendChild(tname);
+    if (it.price) h3.appendChild(el('span', 'price', it.price.text));
+    frag.appendChild(h3);
+    if (showWhen && it.when) frag.appendChild(el('p', 'when-line', it.when));
+    if (it.tags && it.tags.length) {
+      var tp = el('p');
+      it.tags.forEach(function (t) { tp.appendChild(el('span', 'tag', t)); });
+      frag.appendChild(tp);
+    }
+    if (it.note) frag.appendChild(el('p', null, it.note));
+    var row = el('div', 'row');
+    if (it.hours) row.appendChild(el('span', 'hours' + (it.hours.class ? ' ' + it.hours.class : ''), it.hours.text));
+    (it.links || []).forEach(function (l) { row.appendChild(linkPill(l)); });
+    if (row.children.length) frag.appendChild(row);
+    if (status === 'backup' && withDayPicker && pendingPromote === it.id) {
+      frag.appendChild(dayPickerRow('Promote to which day?',
+        function (iso) { promoteTo(it, iso); },
+        function () { pendingPromote = null; rerender(); }));
+      return frag;
+    }
+    if (pendingMove === it.id) {
+      frag.appendChild(dayPickerRow('Move to which day?',
+        function (iso) { moveTo(it, iso); },
+        function () { pendingMove = null; rerender(); }));
+      return frag;
+    }
+    var ctl = el('div', 'ctl-row');
+    (TRANSITIONS[status] || []).forEach(function (t) {
+      var b = el('button', 'ctl to-' + t.to, t.label);
+      b.type = 'button';
+      if (t.to === 'plan' && status === 'backup' && withDayPicker) {
+        b.onclick = function () { pendingPromote = it.id; rerender(); };
+      } else {
+        b.onclick = function () { onStatus(it.id, t.to); };
+      }
+      ctl.appendChild(b);
+    });
+    if (withDayPicker && (status === 'plan' || status === 'done')) {
+      var mv = el('button', 'ctl', '⇄ Day');
+      mv.type = 'button';
+      mv.onclick = function () { pendingMove = it.id; rerender(); };
+      ctl.appendChild(mv);
+    }
+    if (status !== 'archived') {
+      var ed = el('button', 'ctl', '✎');
+      ed.type = 'button';
+      ed.setAttribute('aria-label', 'Rename');
+      ed.onclick = function () { pendingEdit = it.id; rerender(); };
+      ctl.appendChild(ed);
+    }
+    if (ctl.children.length) frag.appendChild(ctl);
+    return frag;
+  }
+
+  function renderCard(it, status, withDayPicker) {
+    var card = el('div', 'card' + (status === 'done' ? ' item-done' : ''));
+    card.appendChild(itemBody(it, status, true, withDayPicker));
+    return card;
+  }
+
+  function renderDayCard(day, state) {
+    var dc = el('div', 'daycard');
+    dc.dataset.day = day.key; // stable group identity; the rendered date is the slot
+    var hd = el('div', 'hd');
+    hd.appendChild(el('span', 'd', day.label));
+    if (day.outside) hd.appendChild(el('span', 'tag', 'Outside stay'));
+    if (day.items.length === 1 && day.items[0].when) hd.appendChild(el('span', 't', day.items[0].when));
+    dc.appendChild(hd);
+    if (!day.items.length) {
+      dc.className += ' empty-day';
+      dc.appendChild(el('div', 'bd free-day', 'free'));
+      return dc;
+    }
+    day.items.forEach(function (it) {
+      var status = effectiveStatus(it, state);
+      var bd = el('div', 'bd' + (status === 'done' ? ' item-done' : ''));
+      bd.appendChild(itemBody(it, status, day.items.length > 1, true));
+      dc.appendChild(bd);
+    });
+    return dc;
+  }
+
+  function renderHeader(data, state) {
+    var c = data.city;
+    var dates = effectiveDates(data, state);
+    var h = document.getElementById('hdr');
+    h.innerHTML = '';
+    h.appendChild(el('h1', null, c.name));
+    var sub = fmtRange(dates) + (c.accommodation && c.accommodation.name ? ' · ' + c.accommodation.name : '');
+    if (state.stayOverride) sub += ' · dates adjusted';
+    h.appendChild(el('div', 'sub', sub));
+    var facts = el('div', 'facts');
+    if (c.currency && c.currency.code !== 'USD') {
+      facts.appendChild(el('span', 'chip', c.currency.code + ' = $' + c.currency.usd));
+    }
+    (c.notes || []).forEach(function (n) { facts.appendChild(el('span', 'chip', n)); });
+    h.appendChild(facts);
+    document.title = c.name + ' Guide · ' + fmtRange(dates);
+  }
+
+  function renderSection(sv, state) {
+    var frag = document.createDocumentFragment();
+    var collapsed = !!(state.collapsedSections && state.collapsedSections[sv.section.id]);
+    var h2 = el('h2', collapsed ? 'collapsed' : null);
+    var tbtn = el('button', 'sec-toggle');
+    tbtn.type = 'button';
+    tbtn.setAttribute('aria-expanded', String(!collapsed));
+    tbtn.appendChild(el('span', 'chev', collapsed ? '▸' : '▾'));
+    if (sv.section.icon) tbtn.appendChild(el('span', 'ic', sv.section.icon));
+    tbtn.appendChild(document.createTextNode(' ' + sv.section.label));
+    if (collapsed) {
+      var n = sv.undated.length + sv.backups.length + sv.archived.length;
+      sv.days.forEach(function (d) { n += d.items.length; });
+      tbtn.appendChild(el('span', 'sec-count', n + (n === 1 ? ' item' : ' items')));
+    }
+    tbtn.onclick = function () {
+      var st = ctx.store.load();
+      toggleSection(st, sv.section.id);
+      ctx.store.save(st);
+      rerender();
+    };
+    h2.appendChild(tbtn);
+    frag.appendChild(h2);
+    if (collapsed) return frag;
+    if (sv.days.length) {
+      var days = el('div', 'days');
+      days.dataset.sec = sv.section.id;
+      sv.days.forEach(function (d) { days.appendChild(renderDayCard(d, state)); });
+      frag.appendChild(days);
+    }
+    sv.undated.forEach(function (it) { frag.appendChild(renderCard(it, effectiveStatus(it, state), sv.days.length > 0)); });
+    if (sv.backups.length) {
+      var withPicker = sv.days.length > 0;
+      var bk = el('div', 'backup');
+      bk.appendChild(el('div', 'bt', '↩ Backups: if Plan A is full, closed, or you want a change'));
+      sv.backups.forEach(function (it) { bk.appendChild(renderCard(it, 'backup', withPicker)); });
+      frag.appendChild(bk);
+    }
+    if (sv.archived.length) {
+      var det = el('details', 'arch-details');
+      det.appendChild(el('summary', null, 'Archived (' + sv.archived.length + ')'));
+      sv.archived.forEach(function (it) { det.appendChild(renderCard(it, 'archived')); });
+      frag.appendChild(det);
+    }
+    return frag;
+  }
+
+  function saveDayOrder(sec, keys, focusKey) {
+    var st = ctx.store.load();
+    st.dayOrder[sec] = keys;
+    ctx.store.save(st);
+    // Dates are slots: after a reorder the cards must re-label to their new
+    // chronological slots, so a full rerender is required (not just a DOM move).
+    rerender();
+    if (focusKey) {
+      var g = document.querySelector('.days[data-sec="' + sec + '"] .daycard[data-day="' + focusKey + '"] .grip');
+      if (g) g.focus();
+    }
+  }
+
+  // Window-level pointermove/pointerup/pointercancel are bound once in init()
+  // (not per rerender, which would stack duplicate listeners). They read the
+  // shared module-scope `drag` context and no-op when it is null.
+  function onDragPointerMove(e) {
+    if (!drag) return;
+    var list = drag.list, cards = drag.cards;
+    if (!list.contains(drag.card)) { drag = null; return; }
+    e.preventDefault();
+    var y = e.clientY;
+    drag.card.style.transform = 'translateY(' + (y - drag.startY) + 'px) scale(1.015)';
+    var others = cards().filter(function (c) { return c !== drag.card; });
+    for (var i = 0; i < others.length; i++) {
+      var r = others[i].getBoundingClientRect();
+      var mid = r.top + r.height / 2;
+      var after = drag.card.compareDocumentPosition(others[i]) & Node.DOCUMENT_POSITION_FOLLOWING;
+      if (after && y > mid) {
+        drag.card.style.transform = '';
+        list.insertBefore(others[i], drag.card);
+        drag.startY = y;
+        drag.card.style.transform = 'scale(1.015)';
+        return;
+      }
+      if (!after && y < mid) {
+        drag.card.style.transform = '';
+        list.insertBefore(drag.card, others[i]);
+        drag.startY = y;
+        drag.card.style.transform = 'scale(1.015)';
+        return;
+      }
+    }
+  }
+
+  function onDragPointerEnd(e) {
+    if (!drag) return;
+    var d = drag;
+    if (!d.list.contains(d.card)) { drag = null; return; }
+    d.card.classList.remove('dragging');
+    d.card.style.transform = '';
+    try { d.grip.releasePointerCapture(e.pointerId); } catch (err) {}
+    drag = null;
+    saveDayOrder(d.sec, d.cards().map(function (c) { return c.dataset.day; }));
+  }
+
+  function attachReorder() {
+    var lists = document.querySelectorAll('.days');
+    Array.prototype.forEach.call(lists, function (list) {
+      var sec = list.dataset.sec;
+      var cards = function () { return Array.prototype.slice.call(list.querySelectorAll('.daycard')); };
+      if (cards().length < 2) return;
+
+      var bar = el('div', 'reorderbar');
+      var status = el('span', null, 'Drag the ⠿ handle to reorder days. Saved on this device.');
+      var reset = el('button', null, 'Reset to date order');
+      reset.type = 'button';
+      reset.onclick = function () {
+        var st = ctx.store.load();
+        delete st.dayOrder[sec];
+        ctx.store.save(st);
+        rerender();
+      };
+      bar.appendChild(status);
+      bar.appendChild(reset);
+      list.parentNode.insertBefore(bar, list);
+
+      cards().forEach(function (card) {
+        var g = el('div', 'grip');
+        g.setAttribute('role', 'button');
+        g.setAttribute('tabindex', '0');
+        g.setAttribute('aria-label', 'Reorder this day. Use arrow up and arrow down keys.');
+        g.innerHTML = '<svg viewBox="0 0 10 16" fill="currentColor" aria-hidden="true">' +
+          '<circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/>' +
+          '<circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/>' +
+          '<circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg>';
+        card.appendChild(g);
+      });
+
+      list.addEventListener('pointerdown', function (e) {
+        var grip = e.target.closest('.grip');
+        if (!grip) return;
+        var card = grip.closest('.daycard');
+        if (!card) return;
+        e.preventDefault();
+        grip.setPointerCapture(e.pointerId);
+        drag = { card: card, grip: grip, startY: e.clientY, list: list, cards: cards, sec: sec };
+        card.classList.add('dragging');
+      });
+
+      list.addEventListener('keydown', function (e) {
+        var grip = e.target.closest('.grip');
+        if (!grip) return;
+        var card = grip.closest('.daycard');
+        if (e.key === 'ArrowUp' && card.previousElementSibling) {
+          e.preventDefault();
+          list.insertBefore(card, card.previousElementSibling);
+          saveDayOrder(sec, cards().map(function (c) { return c.dataset.day; }), card.dataset.day);
+        } else if (e.key === 'ArrowDown' && card.nextElementSibling) {
+          e.preventDefault();
+          list.insertBefore(card.nextElementSibling, card);
+          saveDayOrder(sec, cards().map(function (c) { return c.dataset.day; }), card.dataset.day);
+        }
+      });
+    });
+  }
+
+  var shareOn = false;
+
+  function renderShare() {
+    var state = ctx.store.load();
+    curState = state;
+    var data = effectiveData(ctx.base, state);
+    var sm = shareModel(data, state);
+    var main = document.getElementById('main');
+    main.innerHTML = '';
+    sm.days.forEach(function (d) {
+      var dc = el('div', 'daycard');
+      var hd = el('div', 'hd');
+      hd.appendChild(el('span', 'd', d.label));
+      dc.appendChild(hd);
+      d.entries.forEach(function (e) {
+        var bd = el('div', 'bd' + (e.status === 'done' ? ' item-done' : ''));
+        var h3 = el('h3');
+        var tname = el('span', 'tname');
+        if (e.status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
+        tname.appendChild(document.createTextNode(effectiveName(e.it, state)));
+        h3.appendChild(tname);
+        if (e.it.price) h3.appendChild(el('span', 'price', e.it.price.text));
+        bd.appendChild(h3);
+        var meta = (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label + (e.it.when ? ' · ' + e.it.when : '');
+        bd.appendChild(el('p', 'when-line', meta));
+        if (e.it.hours) {
+          var row = el('div', 'row');
+          row.appendChild(el('span', 'hours' + (e.it.hours.class ? ' ' + e.it.hours.class : ''), e.it.hours.text));
+          bd.appendChild(row);
+        }
+        dc.appendChild(bd);
+      });
+      main.appendChild(dc);
+    });
+    if (sm.undated.length) {
+      var h2 = el('h2', null, 'Anytime');
+      main.appendChild(h2);
+      sm.undated.forEach(function (e) {
+        var card = el('div', 'card' + (e.status === 'done' ? ' item-done' : ''));
+        var h3 = el('h3');
+        var tname = el('span', 'tname');
+        if (e.status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
+        tname.appendChild(document.createTextNode(effectiveName(e.it, state)));
+        h3.appendChild(tname);
+        if (e.it.price) h3.appendChild(el('span', 'price', e.it.price.text));
+        card.appendChild(h3);
+        card.appendChild(el('p', 'when-line', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
+        main.appendChild(card);
+      });
+    }
+  }
+
+  function renderCalendar(data, state) {
+    var cm = calendarModel(data, state);
+    var main = document.getElementById('main');
+    main.innerHTML = '';
+    cm.days.forEach(function (d) {
+      var dc = el('div', 'daycard' + (d.entries.length ? '' : ' empty-day'));
+      var hd = el('div', 'hd');
+      hd.appendChild(el('span', 'd', d.label));
+      dc.appendChild(hd);
+      if (!d.entries.length) {
+        dc.appendChild(el('div', 'bd free-day', 'free'));
+      }
+      d.entries.forEach(function (e) {
+        var bd = el('div', 'bd' + (e.status === 'done' ? ' item-done' : ''));
+        bd.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
+        bd.appendChild(itemBody(e.it, e.status, true, true));
+        dc.appendChild(bd);
+      });
+      main.appendChild(dc);
+    });
+    if (cm.undated.length) {
+      main.appendChild(el('h2', null, 'Anytime'));
+      cm.undated.forEach(function (e) {
+        var card = el('div', 'card' + (e.status === 'done' ? ' item-done' : ''));
+        card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
+        card.appendChild(itemBody(e.it, e.status, true, true));
+        main.appendChild(card);
+      });
+    }
+    cm.sections.forEach(function (sv) {
+      if (sv.backups.length) {
+        var bk = el('div', 'backup');
+        bk.appendChild(el('div', 'bt', '↩ ' + sv.section.label + ' backups'));
+        sv.backups.forEach(function (it) { bk.appendChild(renderCard(it, 'backup', true)); });
+        main.appendChild(bk);
+      }
+      if (sv.archived.length) {
+        var det = el('details', 'arch-details');
+        det.appendChild(el('summary', null, sv.section.label + ': archived (' + sv.archived.length + ')'));
+        sv.archived.forEach(function (it) { det.appendChild(renderCard(it, 'archived')); });
+        main.appendChild(det);
+      }
+    });
+  }
+
+  function rerender() {
+    // Any in-flight drag references nodes from the previous render's #main;
+    // drop it so a stray window pointerup after a rerender is a no-op.
+    drag = null;
+    var state = ctx.store.load();
+    curState = state;
+    var data = effectiveData(ctx.base, state);
+    renderHeader(data, state);
+    renderToolbar(data, state);
+    if (shareOn) {
+      renderShare();
+    } else if (state.viewMode === 'day') {
+      renderCalendar(data, state);
+    } else {
+      var main = document.getElementById('main');
+      main.innerHTML = '';
+      viewModel(data, state).forEach(function (sv) { main.appendChild(renderSection(sv, state)); });
+      attachReorder();
+    }
+    var foot = document.getElementById('foot');
+    foot.textContent = 'cityops · schema v1 · state saved on this device';
+    var notice = document.getElementById('notice');
+    notice.textContent = ctx.store.persistent ? '' :
+      'Private mode: changes hold for this session only and are not saved.';
+    // Additive hook: the app shell sets this to re-render its citybar (name/dates)
+    // whenever engine state changes, without the shell re-implementing rerender.
+    if (CityOps.onStateChange) CityOps.onStateChange();
+  }
+
+  // Live in-memory state for the currently booted city, bypassing a fresh
+  // makeStore() read. In private/incognito mode makeStore() falls back to a
+  // per-instance memory cache that a NEW store instance would not see, so
+  // exportStandalone must read the live ctx.store rather than re-deriving one.
+  function liveState() {
+    return ctx ? ctx.store.load() : null;
+  }
+
+  function buildExport(data, state) {
+    var out = JSON.parse(JSON.stringify(data));
+    out.city.dates = JSON.parse(JSON.stringify(effectiveDates(data, state)));
+    out.items.forEach(function (it) {
+      it.status = effectiveStatus(it, state);
+      it.name = effectiveName(it, state);
+      var d = effectiveDay(it, state);
+      if (d) { it.day = d; } else { delete it.day; }
+    });
+    var vm = viewModel(out, { itemStatus: {}, itemDay: {}, dayOrder: state.dayOrder || {}, dataOverride: null, stayOverride: null });
+    var rank = {};
+    var r = 0;
+    var byId = {};
+    out.items.forEach(function (it) { byId[it.id] = it; });
+    vm.forEach(function (sv) {
+      sv.days.forEach(function (d) {
+        d.items.forEach(function (it) {
+          byId[it.id].day = d.iso; // bake the slot date the planner displays
+          rank[it.id] = r++;
+        });
+      });
+      sv.undated.forEach(function (it) { rank[it.id] = r++; });
+      sv.backups.forEach(function (it) { rank[it.id] = r++; });
+      sv.archived.forEach(function (it) { rank[it.id] = r++; });
+    });
+    out.items.sort(function (a, b) {
+      var ra = (rank[a.id] !== undefined) ? rank[a.id] : 1e9;
+      var rb = (rank[b.id] !== undefined) ? rank[b.id] : 1e9;
+      return ra - rb;
+    });
+    return out;
+  }
+
+  function diffSummary(oldData, newData) {
+    var oldIds = {};
+    oldData.items.forEach(function (i) { oldIds[i.id] = 1; });
+    var added = 0, unchanged = 0;
+    newData.items.forEach(function (i) {
+      if (oldIds[i.id]) { unchanged++; delete oldIds[i.id]; } else { added++; }
+    });
+    var removed = Object.keys(oldIds).length;
+    return added + ' added, ' + removed + ' removed, ' + unchanged + ' unchanged';
+  }
+
+  function openDatesModal() {
+    var host = document.getElementById('modal');
+    host.innerHTML = '';
+    var st0 = ctx.store.load();
+    var cur = effectiveDates(effectiveData(ctx.base, st0), st0);
+    var wrap = el('div', 'modal-wrap');
+    var box = el('div', 'modal');
+    box.appendChild(el('h3', null, 'Edit stay dates'));
+    box.appendChild(el('p', 'diff', 'Adjusts the stay on this device and adds empty day cards for the new range. The file is not changed; Export bakes the new dates in.'));
+    function dateInput(iso) {
+      var inp = document.createElement('input');
+      inp.type = 'date';
+      inp.className = 'date-field';
+      inp.value = iso;
+      return inp;
+    }
+    var fromIn = dateInput(cur.from);
+    var toIn = dateInput(cur.to);
+    var row1 = el('div', 'mrow');
+    row1.appendChild(el('span', 'diff', 'From'));
+    row1.appendChild(fromIn);
+    row1.appendChild(el('span', 'diff', 'To'));
+    row1.appendChild(toIn);
+    box.appendChild(row1);
+    var msg = el('div', 'diff', '');
+    box.appendChild(msg);
+    var row = el('div', 'mrow');
+    var apply = el('button', 'ctl', 'Apply');
+    apply.type = 'button';
+    apply.onclick = function () {
+      var st = ctx.store.load();
+      try { setStayDates(st, fromIn.value, toIn.value); }
+      catch (e) { msg.textContent = 'Invalid: ' + e.message; return; }
+      ctx.store.save(st);
+      wrap.remove();
+      rerender();
+    };
+    var revert = el('button', 'ctl', 'Reset to file dates');
+    revert.type = 'button';
+    if (st0.stayOverride) {
+      revert.onclick = function () {
+        var st = ctx.store.load();
+        st.stayOverride = null;
+        ctx.store.save(st);
+        wrap.remove();
+        rerender();
+      };
+    } else {
+      revert.disabled = true;
+      revert.title = 'No date adjustment is active';
+    }
+    var cancel = el('button', 'ctl', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = function () { wrap.remove(); };
+    row.appendChild(apply); row.appendChild(revert); row.appendChild(cancel);
+    box.appendChild(row);
+    wrap.appendChild(box);
+    wrap.onclick = function (e) { if (e.target === wrap) wrap.remove(); };
+    host.appendChild(wrap);
+    fromIn.focus();
+  }
+
+  function openUpdateModal() {
+    var host = document.getElementById('modal');
+    host.innerHTML = '';
+    var wrap = el('div', 'modal-wrap');
+    var box = el('div', 'modal');
+    box.appendChild(el('h3', null, 'Update city data'));
+    box.appendChild(el('p', 'diff', 'Paste schema v1 JSON. It is stored on this device as an override; the file itself is not changed. Export and paste into the file to make it permanent.'));
+    var ta = document.createElement('textarea');
+    box.appendChild(ta);
+    var msg = el('div', 'diff', '');
+    box.appendChild(msg);
+    var row = el('div', 'mrow');
+    var apply = el('button', 'ctl', 'Apply');
+    apply.type = 'button';
+    apply.onclick = function () {
+      var res = parse(ta.value);
+      if (!res.data) { msg.textContent = 'Invalid:\n' + res.errors.join('\n'); return; }
+      var st = ctx.store.load();
+      var current = effectiveData(ctx.base, st);
+      var summary = diffSummary(current, res.data);
+      st.dataOverride = res.data;
+      ctx.store.save(st);
+      pendingPromote = pendingMove = pendingEdit = null; // item ids may change under an override
+      wrap.remove();
+      rerender();
+      document.getElementById('notice').textContent = 'Data updated: ' + summary + '.';
+    };
+    var revert = el('button', 'ctl', 'Revert to file data');
+    revert.type = 'button';
+    var hasOverride = !!ctx.store.load().dataOverride;
+    if (hasOverride) {
+      revert.onclick = function () {
+        var st = ctx.store.load();
+        st.dataOverride = null;
+        ctx.store.save(st);
+        pendingPromote = pendingMove = pendingEdit = null;
+        wrap.remove();
+        rerender();
+      };
+    } else {
+      revert.disabled = true;
+      revert.title = 'No in-app override is active';
+    }
+    var cancel = el('button', 'ctl', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = function () { wrap.remove(); };
+    row.appendChild(apply); row.appendChild(revert); row.appendChild(cancel);
+    box.appendChild(row);
+    wrap.appendChild(box);
+    wrap.onclick = function (e) { if (e.target === wrap) wrap.remove(); };
+    host.appendChild(wrap);
+    ta.focus();
+  }
+
+  function renderToolbar(data, state) {
+    var tb = document.getElementById('toolbar');
+    tb.innerHTML = '';
+    var share = el('button', null, shareOn ? 'Back to planner' : 'Share view');
+    share.type = 'button';
+    share.id = 'btn-share';
+    share.onclick = function () {
+      shareOn = !shareOn;
+      document.body.classList.toggle('share', shareOn);
+      rerender();
+    };
+    tb.appendChild(share);
+    if (!shareOn) {
+      var vw = el('button', null, state.viewMode === 'day' ? 'By type' : 'Calendar');
+      vw.type = 'button';
+      vw.onclick = function () {
+        var st = ctx.store.load();
+        setViewMode(st, st.viewMode === 'day' ? 'type' : 'day');
+        ctx.store.save(st);
+        rerender();
+      };
+      tb.appendChild(vw);
+      var exp = el('button', null, 'Export JSON');
+      exp.type = 'button';
+      exp.id = 'btn-export';
+      exp.onclick = function () {
+        var st = ctx.store.load();
+        var out = buildExport(effectiveData(ctx.base, st), st);
+        var blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = cityId(out) + '.cityops.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+      };
+      tb.appendChild(exp);
+      var upd = el('button', null, 'Update data');
+      upd.type = 'button';
+      upd.onclick = openUpdateModal;
+      tb.appendChild(upd);
+      var dts = el('button', null, 'Edit dates');
+      dts.type = 'button';
+      dts.onclick = openDatesModal;
+      tb.appendChild(dts);
+      // App context only: standalone guide files have no CityOpsApp, so this
+      // button never appears in them.
+      if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.exportStandalone) {
+        var expg = el('button', null, 'Export guide');
+        expg.type = 'button';
+        expg.id = 'btn-export-guide';
+        expg.onclick = function () { window.CityOpsApp.exportStandalone(); };
+        tb.appendChild(expg);
+      }
+    }
+    if (state.dataOverride) {
+      var flagText = 'Data updated in-app: export and paste into the file to make permanent';
+      if (typeof window !== 'undefined' && window && window.CityOpsApp) {
+        flagText = 'Data updated in-app: this override wins until you Replace the city or revert it';
+      }
+      tb.appendChild(el('span', 'flag', flagText));
+    }
+  }
+
+  function renderError(errors) {
+    var main = document.getElementById('main');
+    main.innerHTML = '';
+    var card = el('div', 'errcard');
+    var b = el('b', null, 'This guide\'s city data has a problem.');
+    card.appendChild(b);
+    errors.forEach(function (m) { card.appendChild(el('p', null, m)); });
+    card.appendChild(el('p', null, 'Fix the JSON inside the <script id="city-data"> block and reload.'));
+    main.appendChild(card);
+  }
+
+  // boot(data) renders a parsed city. The app shell calls it again on every city
+  // switch, so every piece of per-city session state is reset here; only the
+  // window-level drag listeners survive, and they bind exactly once.
+  function boot(data) {
+    var storageRef = null;
+    try { storageRef = (typeof localStorage !== 'undefined') ? localStorage : null; }
+    catch (e) { storageRef = null; }
+    ctx = { base: data, store: makeStore(cityId(data), storageRef) };
+    curState = null;
+    shareOn = false;
+    pendingPromote = null;
+    pendingMove = null;
+    pendingEdit = null;
+    drag = null;
+    if (typeof document !== 'undefined' && document.body) document.body.classList.remove('share');
+    if (!listenersBound && typeof window !== 'undefined' && window && window.addEventListener) {
+      window.addEventListener('pointermove', onDragPointerMove, { passive: false });
+      window.addEventListener('pointerup', onDragPointerEnd);
+      window.addEventListener('pointercancel', onDragPointerEnd);
+      listenersBound = true;
+    }
+    rerender();
+  }
+
+  function init() {
+    var elData = document.getElementById('city-data');
+    if (!elData) return; // Node test harness path, and the app shell (no data block)
+    var res = parse(elData.textContent);
+    if (!res.data) { renderError(res.errors); return; }
+    boot(res.data);
+  }
+
+  return {
+    STATUSES: STATUSES, slug: slug, cityId: cityId, dayLabel: dayLabel,
+    validate: validate, parse: parse, init: init, boot: boot,
+    appStore: {
+      normalize: normalizeAppStore, add: appAddCity,
+      remove: appRemoveCity, keepBothName: keepBothName,
+      resolveStartCity: resolveStartCity
+    },
+    onStateChange: null, liveState: liveState,
+    emptyState: emptyState, makeStore: makeStore, setStatus: setStatus,
+    effectiveStatus: effectiveStatus, effectiveData: effectiveData, viewModel: viewModel,
+    TRANSITIONS: TRANSITIONS, fmtRange: fmtRange, buildExport: buildExport,
+    diffSummary: diffSummary, shareModel: shareModel,
+    effectiveDay: effectiveDay, setDay: setDay, stayDates: stayDates,
+    normalizeState: normalizeState, effectiveDates: effectiveDates,
+    setStayDates: setStayDates, toggleSection: toggleSection,
+    effectiveName: effectiveName, setTitle: setTitle, setViewMode: setViewMode,
+    keyForDisplayedDate: keyForDisplayedDate, calendarModel: calendarModel
+  };
+})();
+CityOps.init();
+</script>
+
+<script type="text/plain" id="guide-template">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CityOps Guide</title>
+<style>
+  :root{
+    --bg:#cccccc; --bg-card:#ffffff; --bg-soft:#bdbdbd; --bg-softer:#e8e8e8;
+    --border:#a8a8a8; --border-light:#d0d0d0;
+    --text:#242424; --text-2:#4a4a4a; --text-3:#666666;
+    --accent:#c72027; --accent-hover:#9c181d; --accent-soft:#f3d1d3;
+    --green:#2d7d34; --green-soft:#d4e8d5;
+    --blue:#2c5d8a; --blue-soft:#d3e0ee;
+    --amber:#8a6d00; --amber-soft:#ede1be;
+    --amber-ink:#6b5400; --green-ink:#226428;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--text); line-height:1.5; -webkit-text-size-adjust:100%;}
+  .wrap{max-width:760px; margin:0 auto; padding:0 16px 60px;}
+  header{background:linear-gradient(160deg,var(--accent) 0%,var(--accent-hover) 100%); color:#fff;
+    padding:26px 20px 22px;}
+  .wrap>header{margin:0 -16px 20px; border-radius:0;}
+  header h1{font-size:1.55rem; letter-spacing:.2px;}
+  header .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
+  .facts{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;}
+  .chip{background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25);
+    padding:5px 10px; border-radius:20px; font-size:.8rem;}
+  h2{font-size:1.15rem; margin:26px 0 12px; color:var(--text);
+    display:flex; align-items:center; gap:8px;}
+  h2 .ic{font-size:1.1rem}
+  .card{background:var(--bg-card); border:1px solid var(--border-light); border-radius:14px;
+    padding:14px 16px; margin-bottom:12px; box-shadow:0 1px 2px rgba(0,0,0,.03);}
+  .card h3{font-size:1.02rem; display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap;}
+  .card h3 .price{font-size:.82rem; color:var(--text-3); font-weight:600; white-space:nowrap;}
+  .card p{font-size:.9rem; color:var(--text-3); margin-top:5px;}
+  .row{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:10px;}
+  .hours{display:inline-block; font-size:.78rem; font-weight:600;
+    padding:3px 9px; border-radius:6px;}
+  .late{background:var(--green-soft); color:var(--green-ink);}
+  .day{background:var(--amber-soft); color:var(--amber-ink);}
+  .eve{background:var(--blue-soft); color:var(--blue);}
+  .maplink{display:inline-flex; align-items:center; gap:5px; font-size:.78rem; font-weight:700;
+    color:#fff; background:var(--accent); padding:5px 11px; border-radius:20px; text-decoration:none;}
+  .maplink:active{background:var(--accent-hover);}
+  .weblink{display:inline-flex; align-items:center; gap:5px; font-size:.78rem; font-weight:700;
+    color:var(--accent-hover); background:#fff; border:1.5px solid var(--accent);
+    padding:4px 11px; border-radius:20px; text-decoration:none;}
+  .weblink:active{background:var(--accent-soft);}
+  .phonelink{display:inline-flex; align-items:center; gap:5px; font-size:.78rem; font-weight:700;
+    color:var(--text-3); background:#fff; border:1.5px solid var(--border-light);
+    padding:4px 11px; border-radius:20px; text-decoration:none;}
+  .phonelink:active{background:var(--bg-softer);}
+  .nosite{font-size:.74rem; color:var(--text-3); font-style:italic;}
+  .callout{background:var(--amber-soft); border:1px solid var(--amber); border-left:4px solid var(--amber);
+    border-radius:10px; padding:14px 16px; margin:4px 0 20px; font-size:.9rem;}
+  .callout b{color:var(--amber-ink);}
+  .lead{font-size:.92rem; color:var(--text-3); margin-bottom:6px;}
+  .tag{display:inline-block; font-size:.72rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.4px; color:var(--accent-hover); background:var(--accent-soft); padding:2px 7px; border-radius:5px; margin-right:6px;}
+  .foot{font-size:.78rem; color:var(--text-3); margin-top:24px; text-align:center; line-height:1.6;}
+  a{color:var(--accent);}
+
+
+  /* --- v5: drag to reorder --- */
+  .days .daycard{position:relative; touch-action:pan-y;}
+  .days .daycard .hd{padding-left:40px;}
+  .grip{position:absolute; left:8px; top:7px; width:26px; height:30px;
+    display:flex; align-items:center; justify-content:center; cursor:grab;
+    touch-action:none; border-radius:7px; color:var(--accent-hover); opacity:.45;}
+  .grip:active{cursor:grabbing; opacity:1; background:rgba(199,32,39,.10);}
+  .grip svg{width:15px; height:15px; pointer-events:none;}
+  .daycard.dragging{opacity:.9; box-shadow:0 10px 24px rgba(157,24,29,.22);
+    transform:scale(1.015); z-index:50; position:relative;}
+  .daycard.shifting{transition:transform .18s ease;}
+  .dropline{height:3px; background:var(--accent); border-radius:2px; margin:6px 0;}
+  .reorderbar{display:flex; align-items:center; justify-content:space-between;
+    gap:10px; flex-wrap:wrap; margin:0 0 12px; font-size:.8rem; color:var(--text-3);}
+  .reorderbar button{font:inherit; font-weight:700; color:var(--accent-hover);
+    background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
+    padding:5px 13px; cursor:pointer;}
+  .reorderbar button:hover{border-color:var(--accent);}
+  .reorderbar .saved{color:var(--green); font-weight:700;}
+  @media (prefers-reduced-motion: reduce){ .daycard.shifting{transition:none} }
+
+  /* --- v3 additions --- */
+  .daycard{background:var(--bg-card); border:1px solid var(--border-light); border-radius:14px;
+    padding:0; margin-bottom:12px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.03);}
+  .daycard .hd{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+    background:var(--bg-softer); padding:9px 16px; border-bottom:1px solid var(--border-light);}
+  .daycard .hd .d{font-weight:800; font-size:.8rem; letter-spacing:.6px;
+    text-transform:uppercase; color:var(--text);}
+  .daycard .hd .t{font-size:.82rem; color:var(--text-3);}
+  .daycard .bd{padding:12px 16px 14px;}
+  .daycard .bd h3{font-size:1.02rem; display:flex; justify-content:space-between;
+    align-items:baseline; gap:10px; flex-wrap:wrap;}
+  .daycard .bd h3 .price{font-size:.82rem; color:var(--text-3); font-weight:600; white-space:nowrap;}
+  .daycard .bd p{font-size:.9rem; color:var(--text-3); margin-top:5px;}
+  .backup{background:var(--amber-soft); border:1px dashed var(--amber); border-radius:12px;
+    padding:12px 16px; margin:2px 0 22px;}
+  .backup .bt{font-size:.72rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+    color:var(--amber-ink); margin-bottom:7px;}
+  .backup ul{margin:0; padding-left:18px;}
+  .backup li{font-size:.86rem; color:var(--text-3); margin-bottom:5px;}
+  .backup li b{color:var(--text);}
+  .warn{background:var(--accent-soft); border-left:4px solid var(--accent); border-radius:10px;
+    padding:12px 16px; margin:4px 0 20px; font-size:.88rem; color:var(--text);}
+  .warn b{color:var(--accent-hover);}
+  .links{margin-top:9px; font-size:.82rem;}
+  .links a{font-weight:600; text-decoration:none;}
+  .links span{color:var(--border-light); margin:0 5px;}
+
+  /* --- cityops additions --- */
+  /* neutral badge when no class given */
+  .hours:not(.late):not(.day):not(.eve){background:var(--bg-softer); color:var(--text-3);}
+  .ctl-row{display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;}
+  .ctl{font:inherit; font-size:.74rem; font-weight:700; color:var(--accent-hover);
+    background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
+    padding:4px 11px; cursor:pointer;}
+  .ctl:hover{border-color:var(--accent);}
+  .ctl.to-done:hover{border-color:var(--green); color:var(--green);}
+  .ctl.to-archived:hover{border-color:var(--accent); color:var(--accent);}
+  .item-done{opacity:.55;}
+  .donemark{color:var(--green); font-weight:800; margin-right:6px;}
+  .arch-details{margin:2px 0 22px;}
+  .arch-details summary{font-size:.72rem; font-weight:800; letter-spacing:.6px;
+    text-transform:uppercase; color:var(--text-3); cursor:pointer; padding:6px 0;}
+  .arch-details .card, .arch-details .daycard{opacity:.7;}
+  .toolbar{display:flex; gap:8px; flex-wrap:wrap; margin:0 0 16px; align-items:center;}
+  .toolbar button{font:inherit; font-weight:700; color:var(--accent-hover); background:#fff;
+    border:1.5px solid var(--border-light); border-radius:20px; padding:5px 13px;
+    cursor:pointer; font-size:.8rem;}
+  .toolbar button:hover{border-color:var(--accent);}
+  .toolbar .flag{font-size:.74rem; color:var(--amber); font-weight:700;}
+  .errcard{background:var(--accent-soft); border-left:4px solid var(--accent); border-radius:10px;
+    padding:14px 16px; margin:20px 0; font-size:.9rem;}
+  .errcard b{color:var(--accent-hover);}
+  #notice{font-size:.78rem; color:var(--text-3); margin:8px 0;}
+  .when-line{font-size:.8rem; color:var(--text-3); font-style:italic; margin-top:2px;}
+  .modal-wrap{position:fixed; inset:0; background:rgba(36,36,36,.5); display:flex;
+    align-items:center; justify-content:center; padding:16px; z-index:100;}
+  .modal{background:#fff; border-radius:14px; padding:18px; max-width:640px;
+    width:100%; max-height:85vh; overflow:auto;}
+  .modal textarea{width:100%; min-height:200px; font-family:ui-monospace,Menlo,monospace;
+    font-size:.78rem; border:1px solid var(--border-light); border-radius:8px; padding:10px;}
+  .modal .mrow{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
+  .modal .diff{font-size:.8rem; color:var(--text-3); margin-top:8px; white-space:pre-line;}
+  body.share .ctl-row, body.share .grip, body.share .reorderbar{display:none;}
+  .sec-toggle{font:inherit; color:inherit; background:none; border:none; padding:0;
+    display:flex; align-items:center; gap:8px; cursor:pointer; text-align:left;}
+  .sec-toggle .chev{font-size:.8rem; color:var(--text-3); width:14px; flex:0 0 auto;}
+  .sec-count{font-size:.78rem; color:var(--text-3); font-weight:600; margin-left:6px;}
+  h2.collapsed{opacity:.85; margin-bottom:8px;}
+  body.share .sec-toggle{pointer-events:none;}
+  body.share .sec-toggle .chev{display:none;}
+  .daycard .bd + .bd{border-top:1px dashed var(--border-light);}
+  .sec-meta{font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.4px;
+    color:var(--accent); margin-bottom:2px;}
+  .title-edit{width:100%; font:inherit; font-size:1rem; font-weight:600; padding:8px 10px;
+    border:1.5px solid var(--accent); border-radius:8px; margin-top:4px;}
+  .empty-day .hd{border-bottom:none;}
+  .empty-day .free-day{padding:6px 16px 10px; font-size:.8rem; color:var(--text-3); font-style:italic;}
+  .date-field{font:inherit; font-size:.85rem; padding:6px 10px; border:1px solid var(--border-light);
+    border-radius:8px; background:#fff; color:var(--text);}
+  /* narrow phones: trim horizontal chrome so cards get the width */
+  @media (max-width: 430px){
+    .wrap{padding:0 10px 48px;}
+    .wrap>header{margin:0 -10px 16px; padding:20px 14px 16px; border-radius:0;}
+    header h1{font-size:1.35rem;}
+    .facts{gap:6px; margin-top:10px;}
+    .chip{padding:4px 9px; font-size:.75rem;}
+    .card{padding:12px 12px; border-radius:12px;}
+    .daycard{border-radius:12px;}
+    .daycard .hd{padding:8px 12px;}
+    .days .daycard .hd{padding-left:38px;}
+    .daycard .bd{padding:10px 12px 12px;}
+    .backup{padding:10px 12px;}
+    .callout, .warn, .errcard{padding:12px 12px;}
+    .toolbar{gap:6px;}
+    .toolbar button{padding:5px 10px; font-size:.75rem;}
+    h2{margin:20px 0 10px;}
+  }
+  @media print{
+    .toolbar, .ctl-row, .grip, .reorderbar, #notice{display:none !important;}
+    body{background:#fff;}
+    .daycard, .card{box-shadow:none; break-inside:avoid;}
+    header{background:var(--accent-hover) !important; -webkit-print-color-adjust:exact;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="notice"></div>
+  <header id="hdr"></header>
+  <div class="toolbar" id="toolbar"></div>
+  <main id="main"></main>
+  <div class="foot" id="foot"></div>
 </div>
+<div id="modal"></div>
+
+<script type="application/json" id="city-data">
+__CITY_DATA__
+<\/script>
+
+<script id="app">
+var CityOps = (function () {
+  'use strict';
+
+  var STATUSES = ['plan', 'backup', 'archived', 'done'];
+
+  function slug(s) {
+    return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  }
+  function cityId(data) {
+    return slug(data.city.name) + '-' + data.city.dates.from;
+  }
+  function dayLabel(iso) {
+    var d = new Date(iso + 'T12:00:00');
+    var names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return names[d.getDay()] + ' ' + d.getDate();
+  }
+
+  function validate(data) {
+    var errors = [];
+    if (!data || typeof data !== 'object') return ['Root is not an object'];
+    if (data.schema !== 1) errors.push('schema must be 1');
+    if (!data.city || !data.city.name) errors.push('city.name required');
+    if (!data.city || !data.city.dates || !data.city.dates.from || !data.city.dates.to) {
+      errors.push('city.dates.from and city.dates.to required');
+    }
+    if (!Array.isArray(data.sections) || !data.sections.length) {
+      errors.push('sections[] required');
+    } else {
+      data.sections.forEach(function (s, i) {
+        if (!s.id || !s.label) errors.push('sections[' + i + '] needs id and label');
+      });
+    }
+    if (!Array.isArray(data.items)) {
+      errors.push('items[] required');
+    } else {
+      var secIds = {};
+      (data.sections || []).forEach(function (s) { secIds[s.id] = 1; });
+      var seen = {};
+      data.items.forEach(function (it, i) {
+        var ref = 'items[' + i + ']' + (it && it.id ? ' (' + it.id + ')' : '');
+        if (!it.id) errors.push(ref + ' needs id');
+        else if (seen[it.id]) errors.push('duplicate item id "' + it.id + '"');
+        else seen[it.id] = 1;
+        if (!it.name) errors.push(ref + ' needs name');
+        if (!secIds[it.section]) errors.push(ref + ' unknown section "' + it.section + '"');
+        if (STATUSES.indexOf(it.status) === -1) errors.push(ref + ' bad status "' + it.status + '"');
+        if (it.day && !/^\d{4}-\d{2}-\d{2}$/.test(it.day)) errors.push(ref + ' day must be YYYY-MM-DD');
+      });
+    }
+    return errors;
+  }
+
+  function parse(text) {
+    var data;
+    try { data = JSON.parse(text); }
+    catch (e) { return { data: null, errors: ['JSON parse error: ' + e.message] }; }
+    var errors = validate(data);
+    return { data: errors.length ? null : data, errors: errors };
+  }
+
+  var TRANSITIONS = {
+    plan:     [{ to: 'done', label: '✓ Done' }, { to: 'backup', label: '↓ Backup' }, { to: 'archived', label: '✕ Archive' }],
+    backup:   [{ to: 'plan', label: '↑ Promote' }, { to: 'archived', label: '✕ Archive' }],
+    done:     [{ to: 'plan', label: '↩ Undo' }],
+    archived: [{ to: 'backup', label: '↩ Restore' }]
+  };
+
+  function emptyState() {
+    return { itemStatus: {}, itemDay: {}, itemTitle: {}, dayOrder: {}, collapsedSections: {}, viewMode: 'type', dataOverride: null, stayOverride: null, updated: null };
+  }
+
+  function normalizeState(st) {
+    if (!st || typeof st !== 'object') return emptyState();
+    st.itemStatus = st.itemStatus || {};
+    st.itemDay = st.itemDay || {};
+    st.dayOrder = st.dayOrder || {};
+    st.collapsedSections = st.collapsedSections || {};
+    st.itemTitle = st.itemTitle || {};
+    if (st.viewMode !== 'type' && st.viewMode !== 'day') st.viewMode = 'type';
+    if (!('dataOverride' in st)) st.dataOverride = null;
+    if (!('stayOverride' in st)) st.stayOverride = null;
+    return st;
+  }
+
+  function makeStore(id, storage) {
+    var key = 'cityops.' + id + '.v1';
+    var mem = null;
+    var ok = true;
+    if (!storage) ok = false;
+    try {
+      storage.setItem(key + '.t', '1');
+      storage.removeItem(key + '.t');
+    } catch (e) { ok = false; }
+    return {
+      persistent: ok,
+      load: function () {
+        if (mem) return normalizeState(JSON.parse(JSON.stringify(mem)));
+        if (!ok) return emptyState();
+        try {
+          var raw = storage.getItem(key);
+          return raw ? normalizeState(JSON.parse(raw)) : emptyState();
+        } catch (e) { return emptyState(); }
+      },
+      save: function (st) {
+        st.updated = new Date().toISOString();
+        mem = JSON.parse(JSON.stringify(st));
+        if (ok) {
+          try { storage.setItem(key, JSON.stringify(st)); } catch (e) { ok = false; }
+        }
+      }
+    };
+  }
+
+  function setStatus(state, id, to) {
+    if (STATUSES.indexOf(to) === -1) throw new Error('bad status "' + to + '"');
+    state.itemStatus[id] = to;
+    return state;
+  }
+
+  function effectiveStatus(it, state) {
+    return state.itemStatus[it.id] || it.status;
+  }
+
+  function effectiveDay(it, state) {
+    if (state.itemDay && Object.prototype.hasOwnProperty.call(state.itemDay, it.id)) {
+      return state.itemDay[it.id] || null;
+    }
+    return it.day || null;
+  }
+
+  function setDay(state, id, iso) {
+    if (iso !== null && !/^\d{4}-\d{2}-\d{2}$/.test(iso)) throw new Error('bad day "' + iso + '"');
+    state.itemDay[id] = iso;
+    return state;
+  }
+
+  function isIso(s) { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s); }
+
+  function stayDates(dates) {
+    var out = [];
+    var d = new Date(dates.from + 'T12:00:00');
+    var end = new Date(dates.to + 'T12:00:00');
+    while (d <= end && out.length < 60) {
+      var m = d.getMonth() + 1;
+      var day = d.getDate();
+      out.push(d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day);
+      d.setDate(d.getDate() + 1);
+    }
+    return out;
+  }
+
+  function effectiveData(base, state) {
+    if (state.dataOverride && !validate(state.dataOverride).length) return state.dataOverride;
+    return base;
+  }
+
+  function effectiveDates(data, state) {
+    var o = state.stayOverride;
+    if (o && isIso(o.from) && isIso(o.to) && o.from <= o.to) return o;
+    return data.city.dates;
+  }
+
+  function effectiveName(it, state) {
+    return (state.itemTitle && state.itemTitle[it.id]) || it.name;
+  }
+
+  function setTitle(state, id, title) {
+    state.itemTitle = state.itemTitle || {};
+    var t = (title === null || title === undefined) ? '' : String(title).replace(/^\s+|\s+$/g, '');
+    if (t) state.itemTitle[id] = t;
+    else delete state.itemTitle[id];
+    return state;
+  }
+
+  function setViewMode(state, mode) {
+    if (mode !== 'type' && mode !== 'day') throw new Error('bad view mode "' + mode + '"');
+    state.viewMode = mode;
+    return state;
+  }
+
+  function keyForDisplayedDate(data, state, secId, iso) {
+    // Pickers speak in DISPLAYED dates. After reorders, the group occupying
+    // the slot for a date may be keyed by a different date; joining a day
+    // means joining whatever group the user SEES on that date.
+    var sv = null;
+    viewModel(data, state).forEach(function (v) { if (v.section.id === secId) sv = v; });
+    if (sv) {
+      for (var i = 0; i < sv.days.length; i++) {
+        if (sv.days[i].iso === iso) return sv.days[i].key;
+      }
+    }
+    return iso;
+  }
+
+  function calendarModel(data, state) {
+    var byIso = {};
+    var undated = [];
+    var vms = viewModel(data, state);
+    vms.forEach(function (sv) {
+      sv.days.forEach(function (d) {
+        if (!byIso[d.iso]) byIso[d.iso] = [];
+        d.items.forEach(function (it) {
+          byIso[d.iso].push({ sec: sv.section, it: it, status: effectiveStatus(it, state) });
+        });
+      });
+      sv.undated.forEach(function (it) {
+        undated.push({ sec: sv.section, it: it, status: effectiveStatus(it, state) });
+      });
+    });
+    var isos = Object.keys(byIso).sort();
+    return {
+      days: isos.map(function (iso) { return { iso: iso, label: dayLabel(iso), entries: byIso[iso] }; }),
+      undated: undated,
+      sections: vms
+    };
+  }
+
+  function toggleSection(state, secId) {
+    state.collapsedSections = state.collapsedSections || {};
+    if (state.collapsedSections[secId]) delete state.collapsedSections[secId];
+    else state.collapsedSections[secId] = true;
+    return state;
+  }
+
+  function setStayDates(state, from, to) {
+    if (!isIso(from) || !isIso(to)) throw new Error('dates must be YYYY-MM-DD');
+    if (from > to) throw new Error('from must not be after to');
+    state.stayOverride = { from: from, to: to };
+    return state;
+  }
+
+  function viewModel(data, state) {
+    return data.sections.map(function (sec) {
+      var items = data.items.filter(function (it) { return it.section === sec.id; });
+      var active = items.filter(function (it) {
+        var s = effectiveStatus(it, state);
+        return s === 'plan' || s === 'done';
+      });
+      var dayed = active.filter(function (it) { return effectiveDay(it, state); });
+      var undated = active.filter(function (it) { return !effectiveDay(it, state); });
+      // Day cards are SLOTS: the dates always render in chronological order, and
+      // reordering moves a card's CONTENT into a different date slot. A card's
+      // stable identity (key) is its group's effective day in the data; the date
+      // it renders under (iso) is the chronological slot it currently occupies.
+      // Sections with any dayed item get a slot for EVERY date in the stay, so
+      // empty days are visible and are valid drag targets.
+      var keys = [];
+      dayed.forEach(function (it) {
+        var d = effectiveDay(it, state);
+        if (keys.indexOf(d) === -1) keys.push(d);
+      });
+      var range = null;
+      if (keys.length) {
+        range = effectiveDates(data, state);
+        stayDates(range).forEach(function (d) { if (keys.indexOf(d) === -1) keys.push(d); });
+      }
+      var slots = keys.slice().sort();
+      // Keys absent from the saved arrangement sit on their own date's slot;
+      // arranged keys fill the remaining slots in saved order. Default (no
+      // arrangement) is therefore content-on-its-own-date, and saved orders
+      // from before empty slots existed keep content where the user left it.
+      var stated = [];
+      (state.dayOrder[sec.id] || []).forEach(function (k) {
+        if (keys.indexOf(k) !== -1 && stated.indexOf(k) === -1) stated.push(k);
+      });
+      var slotKey = {};
+      keys.forEach(function (k) {
+        if (stated.indexOf(k) === -1) slotKey[k] = k;
+      });
+      var si = 0;
+      stated.forEach(function (k) {
+        while (slotKey[slots[si]] !== undefined) si++;
+        slotKey[slots[si]] = k;
+      });
+      return {
+        section: sec,
+        days: slots.map(function (iso) {
+          var key = slotKey[iso];
+          return {
+            key: key, iso: iso, label: dayLabel(iso),
+            outside: range ? (iso < range.from || iso > range.to) : false,
+            items: dayed.filter(function (it) { return effectiveDay(it, state) === key; })
+          };
+        }),
+        undated: undated,
+        backups: items.filter(function (it) { return effectiveStatus(it, state) === 'backup'; }),
+        archived: items.filter(function (it) { return effectiveStatus(it, state) === 'archived'; })
+      };
+    });
+  }
+
+  function shareModel(data, state) {
+    // Share view uses the same slot-assigned dates the planner shows.
+    var byDay = {};
+    var undated = [];
+    viewModel(data, state).forEach(function (sv) {
+      sv.days.forEach(function (d) {
+        d.items.forEach(function (it) {
+          if (!byDay[d.iso]) byDay[d.iso] = [];
+          byDay[d.iso].push({ sec: sv.section, it: it, status: effectiveStatus(it, state) });
+        });
+      });
+      sv.undated.forEach(function (it) {
+        undated.push({ sec: sv.section, it: it, status: effectiveStatus(it, state) });
+      });
+    });
+    var isos = Object.keys(byDay).sort();
+    return {
+      days: isos.map(function (iso) { return { iso: iso, label: dayLabel(iso), entries: byDay[iso] }; }),
+      undated: undated
+    };
+  }
+
+  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  function fmtRange(d) {
+    var a = new Date(d.from + 'T12:00:00');
+    var b = new Date(d.to + 'T12:00:00');
+    if (a.getMonth() === b.getMonth()) {
+      return MONTHS[a.getMonth()] + ' ' + a.getDate() + '-' + b.getDate() + ', ' + b.getFullYear();
+    }
+    return MONTHS[a.getMonth()] + ' ' + a.getDate() + ' - ' + MONTHS[b.getMonth()] + ' ' + b.getDate() + ', ' + b.getFullYear();
+  }
+
+  // ---- multi-city app store (used by the app shell, not by standalone files) ----
+  // Shape: { cities: {cityId: cityJson}, order: [cityId], active: cityId|null }.
+  // Pure helpers only: reading and writing localStorage stays in the app shell.
+  function normalizeAppStore(raw) {
+    var src = (raw && typeof raw === 'object') ? raw : {};
+    var srcCities = (src.cities && typeof src.cities === 'object') ? src.cities : {};
+    var cities = {};
+    Object.keys(srcCities).forEach(function (id) {
+      var d = srcCities[id];
+      if (d && d.city && d.city.name && d.city.dates) cities[id] = d;
+    });
+    var order = [];
+    var seen = {};
+    (Array.isArray(src.order) ? src.order : []).forEach(function (id) {
+      if (!seen[id] && Object.prototype.hasOwnProperty.call(cities, id)) { seen[id] = 1; order.push(id); }
+    });
+    Object.keys(cities).forEach(function (id) {
+      if (!seen[id]) { seen[id] = 1; order.push(id); }
+    });
+    var active = (typeof src.active === 'string' && order.indexOf(src.active) !== -1)
+      ? src.active : (order.length ? order[0] : null);
+    return { cities: cities, order: order, active: active };
+  }
+
+  function appAddCity(store, data) {
+    var s = normalizeAppStore(store);
+    var id = cityId(data);
+    var replaced = Object.prototype.hasOwnProperty.call(s.cities, id);
+    s.cities[id] = data;
+    if (s.order.indexOf(id) === -1) s.order.push(id);
+    return { store: s, cityId: id, replaced: replaced };
+  }
+
+  function appRemoveCity(store, id) {
+    var s = normalizeAppStore(store);
+    delete s.cities[id];
+    s.order = s.order.filter(function (x) { return x !== id; });
+    if (s.order.indexOf(s.active) === -1) s.active = s.order.length ? s.order[0] : null;
+    return s;
+  }
+
+  // Keep-both renames the incoming city so cityId() derives a fresh id.
+  function keepBothName(name) {
+    return String(name) + ' 2';
+  }
+
+  // Pure start-city resolution: hash (if it names a known city) wins, else the
+  // stored active city (if still present), else the first city in order, else
+  // null when the store is empty. Extracted so the app shell's boot-target
+  // logic is unit-testable without a DOM.
+  function resolveStartCity(store, hashId) {
+    if (hashId && Object.prototype.hasOwnProperty.call(store.cities, hashId)) return hashId;
+    if (store.active && Object.prototype.hasOwnProperty.call(store.cities, store.active)) return store.active;
+    return store.order.length ? store.order[0] : null;
+  }
+
+  // ---- DOM rendering (browser only) ----
+  var ctx = null; // { base, store }; replaced wholesale when the app boots another city
+  var drag = null; // { card, grip, startY, list, cards, sec } while a pointer drag is in progress
+  var listenersBound = false; // window drag listeners bind once per page, not per boot
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+
+  function linkPill(l) {
+    var a = document.createElement('a');
+    a.href = l.href;
+    if (l.kind === 'map') { a.className = 'maplink'; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = '📍 ' + l.label; }
+    else if (l.kind === 'web') { a.className = 'weblink'; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = '🌐 ' + l.label; }
+    else { a.className = 'phonelink'; a.textContent = '📞 ' + l.label; }
+    return a;
+  }
+
+  function onStatus(id, to) {
+    var st = ctx.store.load();
+    setStatus(st, id, to);
+    ctx.store.save(st);
+    rerender();
+  }
+
+  var curState = null;       // state snapshot for the current render pass
+  var pendingPromote = null; // item id whose promote day-picker is open (session-only UI state)
+  var pendingMove = null;    // item id whose move day-picker is open
+  var pendingEdit = null;    // item id whose title editor is open
+
+  function promoteTo(it, iso) {
+    var st = ctx.store.load();
+    // Resolve the slot BEFORE flipping status: once the item counts as active,
+    // its own stale day from a prior plan stint could contaminate the lookup.
+    var key = (iso === null) ? null : keyForDisplayedDate(effectiveData(ctx.base, st), st, it.section, iso);
+    setStatus(st, it.id, 'plan');
+    setDay(st, it.id, key);
+    ctx.store.save(st);
+    pendingPromote = null;
+    rerender();
+  }
+
+  function moveTo(it, iso) {
+    var st = ctx.store.load();
+    var key = (iso === null) ? null : keyForDisplayedDate(effectiveData(ctx.base, st), st, it.section, iso);
+    setDay(st, it.id, key);
+    ctx.store.save(st);
+    pendingMove = null;
+    rerender();
+  }
+
+  function dayPickerRow(hint, onPick, onCancel) {
+    var frag = document.createDocumentFragment();
+    frag.appendChild(el('p', 'when-line', hint));
+    var pick = el('div', 'ctl-row');
+    var pst = ctx.store.load();
+    stayDates(effectiveDates(effectiveData(ctx.base, pst), pst)).forEach(function (iso) {
+      var db = el('button', 'ctl', dayLabel(iso));
+      db.type = 'button';
+      db.onclick = function () { onPick(iso); };
+      pick.appendChild(db);
+    });
+    var nd = el('button', 'ctl', 'No day');
+    nd.type = 'button';
+    nd.onclick = function () { onPick(null); };
+    pick.appendChild(nd);
+    var cancel = el('button', 'ctl to-archived', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = onCancel;
+    pick.appendChild(cancel);
+    frag.appendChild(pick);
+    return frag;
+  }
+
+  function itemBody(it, status, showWhen, withDayPicker) {
+    var frag = document.createDocumentFragment();
+    if (pendingEdit === it.id) {
+      frag.appendChild(el('p', 'when-line', 'Rename this item'));
+      var inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'title-edit';
+      inp.value = effectiveName(it, curState);
+      frag.appendChild(inp);
+      var erow = el('div', 'ctl-row');
+      var save = el('button', 'ctl to-done', 'Save');
+      save.type = 'button';
+      save.onclick = function () {
+        var st = ctx.store.load();
+        setTitle(st, it.id, inp.value);
+        ctx.store.save(st);
+        pendingEdit = null;
+        rerender();
+      };
+      var orig = el('button', 'ctl', 'Original name');
+      orig.type = 'button';
+      orig.onclick = function () {
+        var st = ctx.store.load();
+        setTitle(st, it.id, null);
+        ctx.store.save(st);
+        pendingEdit = null;
+        rerender();
+      };
+      var ecancel = el('button', 'ctl to-archived', 'Cancel');
+      ecancel.type = 'button';
+      ecancel.onclick = function () { pendingEdit = null; rerender(); };
+      erow.appendChild(save); erow.appendChild(orig); erow.appendChild(ecancel);
+      frag.appendChild(erow);
+      var focusLater = inp;
+      setTimeout(function () { try { focusLater.focus(); focusLater.select(); } catch (e) {} }, 0);
+      return frag;
+    }
+    var h3 = el('h3');
+    var tname = el('span', 'tname');
+    if (status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
+    tname.appendChild(document.createTextNode(effectiveName(it, curState)));
+    h3.appendChild(tname);
+    if (it.price) h3.appendChild(el('span', 'price', it.price.text));
+    frag.appendChild(h3);
+    if (showWhen && it.when) frag.appendChild(el('p', 'when-line', it.when));
+    if (it.tags && it.tags.length) {
+      var tp = el('p');
+      it.tags.forEach(function (t) { tp.appendChild(el('span', 'tag', t)); });
+      frag.appendChild(tp);
+    }
+    if (it.note) frag.appendChild(el('p', null, it.note));
+    var row = el('div', 'row');
+    if (it.hours) row.appendChild(el('span', 'hours' + (it.hours.class ? ' ' + it.hours.class : ''), it.hours.text));
+    (it.links || []).forEach(function (l) { row.appendChild(linkPill(l)); });
+    if (row.children.length) frag.appendChild(row);
+    if (status === 'backup' && withDayPicker && pendingPromote === it.id) {
+      frag.appendChild(dayPickerRow('Promote to which day?',
+        function (iso) { promoteTo(it, iso); },
+        function () { pendingPromote = null; rerender(); }));
+      return frag;
+    }
+    if (pendingMove === it.id) {
+      frag.appendChild(dayPickerRow('Move to which day?',
+        function (iso) { moveTo(it, iso); },
+        function () { pendingMove = null; rerender(); }));
+      return frag;
+    }
+    var ctl = el('div', 'ctl-row');
+    (TRANSITIONS[status] || []).forEach(function (t) {
+      var b = el('button', 'ctl to-' + t.to, t.label);
+      b.type = 'button';
+      if (t.to === 'plan' && status === 'backup' && withDayPicker) {
+        b.onclick = function () { pendingPromote = it.id; rerender(); };
+      } else {
+        b.onclick = function () { onStatus(it.id, t.to); };
+      }
+      ctl.appendChild(b);
+    });
+    if (withDayPicker && (status === 'plan' || status === 'done')) {
+      var mv = el('button', 'ctl', '⇄ Day');
+      mv.type = 'button';
+      mv.onclick = function () { pendingMove = it.id; rerender(); };
+      ctl.appendChild(mv);
+    }
+    if (status !== 'archived') {
+      var ed = el('button', 'ctl', '✎');
+      ed.type = 'button';
+      ed.setAttribute('aria-label', 'Rename');
+      ed.onclick = function () { pendingEdit = it.id; rerender(); };
+      ctl.appendChild(ed);
+    }
+    if (ctl.children.length) frag.appendChild(ctl);
+    return frag;
+  }
+
+  function renderCard(it, status, withDayPicker) {
+    var card = el('div', 'card' + (status === 'done' ? ' item-done' : ''));
+    card.appendChild(itemBody(it, status, true, withDayPicker));
+    return card;
+  }
+
+  function renderDayCard(day, state) {
+    var dc = el('div', 'daycard');
+    dc.dataset.day = day.key; // stable group identity; the rendered date is the slot
+    var hd = el('div', 'hd');
+    hd.appendChild(el('span', 'd', day.label));
+    if (day.outside) hd.appendChild(el('span', 'tag', 'Outside stay'));
+    if (day.items.length === 1 && day.items[0].when) hd.appendChild(el('span', 't', day.items[0].when));
+    dc.appendChild(hd);
+    if (!day.items.length) {
+      dc.className += ' empty-day';
+      dc.appendChild(el('div', 'bd free-day', 'free'));
+      return dc;
+    }
+    day.items.forEach(function (it) {
+      var status = effectiveStatus(it, state);
+      var bd = el('div', 'bd' + (status === 'done' ? ' item-done' : ''));
+      bd.appendChild(itemBody(it, status, day.items.length > 1, true));
+      dc.appendChild(bd);
+    });
+    return dc;
+  }
+
+  function renderHeader(data, state) {
+    var c = data.city;
+    var dates = effectiveDates(data, state);
+    var h = document.getElementById('hdr');
+    h.innerHTML = '';
+    h.appendChild(el('h1', null, c.name));
+    var sub = fmtRange(dates) + (c.accommodation && c.accommodation.name ? ' · ' + c.accommodation.name : '');
+    if (state.stayOverride) sub += ' · dates adjusted';
+    h.appendChild(el('div', 'sub', sub));
+    var facts = el('div', 'facts');
+    if (c.currency && c.currency.code !== 'USD') {
+      facts.appendChild(el('span', 'chip', c.currency.code + ' = $' + c.currency.usd));
+    }
+    (c.notes || []).forEach(function (n) { facts.appendChild(el('span', 'chip', n)); });
+    h.appendChild(facts);
+    document.title = c.name + ' Guide · ' + fmtRange(dates);
+  }
+
+  function renderSection(sv, state) {
+    var frag = document.createDocumentFragment();
+    var collapsed = !!(state.collapsedSections && state.collapsedSections[sv.section.id]);
+    var h2 = el('h2', collapsed ? 'collapsed' : null);
+    var tbtn = el('button', 'sec-toggle');
+    tbtn.type = 'button';
+    tbtn.setAttribute('aria-expanded', String(!collapsed));
+    tbtn.appendChild(el('span', 'chev', collapsed ? '▸' : '▾'));
+    if (sv.section.icon) tbtn.appendChild(el('span', 'ic', sv.section.icon));
+    tbtn.appendChild(document.createTextNode(' ' + sv.section.label));
+    if (collapsed) {
+      var n = sv.undated.length + sv.backups.length + sv.archived.length;
+      sv.days.forEach(function (d) { n += d.items.length; });
+      tbtn.appendChild(el('span', 'sec-count', n + (n === 1 ? ' item' : ' items')));
+    }
+    tbtn.onclick = function () {
+      var st = ctx.store.load();
+      toggleSection(st, sv.section.id);
+      ctx.store.save(st);
+      rerender();
+    };
+    h2.appendChild(tbtn);
+    frag.appendChild(h2);
+    if (collapsed) return frag;
+    if (sv.days.length) {
+      var days = el('div', 'days');
+      days.dataset.sec = sv.section.id;
+      sv.days.forEach(function (d) { days.appendChild(renderDayCard(d, state)); });
+      frag.appendChild(days);
+    }
+    sv.undated.forEach(function (it) { frag.appendChild(renderCard(it, effectiveStatus(it, state), sv.days.length > 0)); });
+    if (sv.backups.length) {
+      var withPicker = sv.days.length > 0;
+      var bk = el('div', 'backup');
+      bk.appendChild(el('div', 'bt', '↩ Backups: if Plan A is full, closed, or you want a change'));
+      sv.backups.forEach(function (it) { bk.appendChild(renderCard(it, 'backup', withPicker)); });
+      frag.appendChild(bk);
+    }
+    if (sv.archived.length) {
+      var det = el('details', 'arch-details');
+      det.appendChild(el('summary', null, 'Archived (' + sv.archived.length + ')'));
+      sv.archived.forEach(function (it) { det.appendChild(renderCard(it, 'archived')); });
+      frag.appendChild(det);
+    }
+    return frag;
+  }
+
+  function saveDayOrder(sec, keys, focusKey) {
+    var st = ctx.store.load();
+    st.dayOrder[sec] = keys;
+    ctx.store.save(st);
+    // Dates are slots: after a reorder the cards must re-label to their new
+    // chronological slots, so a full rerender is required (not just a DOM move).
+    rerender();
+    if (focusKey) {
+      var g = document.querySelector('.days[data-sec="' + sec + '"] .daycard[data-day="' + focusKey + '"] .grip');
+      if (g) g.focus();
+    }
+  }
+
+  // Window-level pointermove/pointerup/pointercancel are bound once in init()
+  // (not per rerender, which would stack duplicate listeners). They read the
+  // shared module-scope `drag` context and no-op when it is null.
+  function onDragPointerMove(e) {
+    if (!drag) return;
+    var list = drag.list, cards = drag.cards;
+    if (!list.contains(drag.card)) { drag = null; return; }
+    e.preventDefault();
+    var y = e.clientY;
+    drag.card.style.transform = 'translateY(' + (y - drag.startY) + 'px) scale(1.015)';
+    var others = cards().filter(function (c) { return c !== drag.card; });
+    for (var i = 0; i < others.length; i++) {
+      var r = others[i].getBoundingClientRect();
+      var mid = r.top + r.height / 2;
+      var after = drag.card.compareDocumentPosition(others[i]) & Node.DOCUMENT_POSITION_FOLLOWING;
+      if (after && y > mid) {
+        drag.card.style.transform = '';
+        list.insertBefore(others[i], drag.card);
+        drag.startY = y;
+        drag.card.style.transform = 'scale(1.015)';
+        return;
+      }
+      if (!after && y < mid) {
+        drag.card.style.transform = '';
+        list.insertBefore(drag.card, others[i]);
+        drag.startY = y;
+        drag.card.style.transform = 'scale(1.015)';
+        return;
+      }
+    }
+  }
+
+  function onDragPointerEnd(e) {
+    if (!drag) return;
+    var d = drag;
+    if (!d.list.contains(d.card)) { drag = null; return; }
+    d.card.classList.remove('dragging');
+    d.card.style.transform = '';
+    try { d.grip.releasePointerCapture(e.pointerId); } catch (err) {}
+    drag = null;
+    saveDayOrder(d.sec, d.cards().map(function (c) { return c.dataset.day; }));
+  }
+
+  function attachReorder() {
+    var lists = document.querySelectorAll('.days');
+    Array.prototype.forEach.call(lists, function (list) {
+      var sec = list.dataset.sec;
+      var cards = function () { return Array.prototype.slice.call(list.querySelectorAll('.daycard')); };
+      if (cards().length < 2) return;
+
+      var bar = el('div', 'reorderbar');
+      var status = el('span', null, 'Drag the ⠿ handle to reorder days. Saved on this device.');
+      var reset = el('button', null, 'Reset to date order');
+      reset.type = 'button';
+      reset.onclick = function () {
+        var st = ctx.store.load();
+        delete st.dayOrder[sec];
+        ctx.store.save(st);
+        rerender();
+      };
+      bar.appendChild(status);
+      bar.appendChild(reset);
+      list.parentNode.insertBefore(bar, list);
+
+      cards().forEach(function (card) {
+        var g = el('div', 'grip');
+        g.setAttribute('role', 'button');
+        g.setAttribute('tabindex', '0');
+        g.setAttribute('aria-label', 'Reorder this day. Use arrow up and arrow down keys.');
+        g.innerHTML = '<svg viewBox="0 0 10 16" fill="currentColor" aria-hidden="true">' +
+          '<circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/>' +
+          '<circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/>' +
+          '<circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg>';
+        card.appendChild(g);
+      });
+
+      list.addEventListener('pointerdown', function (e) {
+        var grip = e.target.closest('.grip');
+        if (!grip) return;
+        var card = grip.closest('.daycard');
+        if (!card) return;
+        e.preventDefault();
+        grip.setPointerCapture(e.pointerId);
+        drag = { card: card, grip: grip, startY: e.clientY, list: list, cards: cards, sec: sec };
+        card.classList.add('dragging');
+      });
+
+      list.addEventListener('keydown', function (e) {
+        var grip = e.target.closest('.grip');
+        if (!grip) return;
+        var card = grip.closest('.daycard');
+        if (e.key === 'ArrowUp' && card.previousElementSibling) {
+          e.preventDefault();
+          list.insertBefore(card, card.previousElementSibling);
+          saveDayOrder(sec, cards().map(function (c) { return c.dataset.day; }), card.dataset.day);
+        } else if (e.key === 'ArrowDown' && card.nextElementSibling) {
+          e.preventDefault();
+          list.insertBefore(card.nextElementSibling, card);
+          saveDayOrder(sec, cards().map(function (c) { return c.dataset.day; }), card.dataset.day);
+        }
+      });
+    });
+  }
+
+  var shareOn = false;
+
+  function renderShare() {
+    var state = ctx.store.load();
+    curState = state;
+    var data = effectiveData(ctx.base, state);
+    var sm = shareModel(data, state);
+    var main = document.getElementById('main');
+    main.innerHTML = '';
+    sm.days.forEach(function (d) {
+      var dc = el('div', 'daycard');
+      var hd = el('div', 'hd');
+      hd.appendChild(el('span', 'd', d.label));
+      dc.appendChild(hd);
+      d.entries.forEach(function (e) {
+        var bd = el('div', 'bd' + (e.status === 'done' ? ' item-done' : ''));
+        var h3 = el('h3');
+        var tname = el('span', 'tname');
+        if (e.status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
+        tname.appendChild(document.createTextNode(effectiveName(e.it, state)));
+        h3.appendChild(tname);
+        if (e.it.price) h3.appendChild(el('span', 'price', e.it.price.text));
+        bd.appendChild(h3);
+        var meta = (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label + (e.it.when ? ' · ' + e.it.when : '');
+        bd.appendChild(el('p', 'when-line', meta));
+        if (e.it.hours) {
+          var row = el('div', 'row');
+          row.appendChild(el('span', 'hours' + (e.it.hours.class ? ' ' + e.it.hours.class : ''), e.it.hours.text));
+          bd.appendChild(row);
+        }
+        dc.appendChild(bd);
+      });
+      main.appendChild(dc);
+    });
+    if (sm.undated.length) {
+      var h2 = el('h2', null, 'Anytime');
+      main.appendChild(h2);
+      sm.undated.forEach(function (e) {
+        var card = el('div', 'card' + (e.status === 'done' ? ' item-done' : ''));
+        var h3 = el('h3');
+        var tname = el('span', 'tname');
+        if (e.status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
+        tname.appendChild(document.createTextNode(effectiveName(e.it, state)));
+        h3.appendChild(tname);
+        if (e.it.price) h3.appendChild(el('span', 'price', e.it.price.text));
+        card.appendChild(h3);
+        card.appendChild(el('p', 'when-line', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
+        main.appendChild(card);
+      });
+    }
+  }
+
+  function renderCalendar(data, state) {
+    var cm = calendarModel(data, state);
+    var main = document.getElementById('main');
+    main.innerHTML = '';
+    cm.days.forEach(function (d) {
+      var dc = el('div', 'daycard' + (d.entries.length ? '' : ' empty-day'));
+      var hd = el('div', 'hd');
+      hd.appendChild(el('span', 'd', d.label));
+      dc.appendChild(hd);
+      if (!d.entries.length) {
+        dc.appendChild(el('div', 'bd free-day', 'free'));
+      }
+      d.entries.forEach(function (e) {
+        var bd = el('div', 'bd' + (e.status === 'done' ? ' item-done' : ''));
+        bd.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
+        bd.appendChild(itemBody(e.it, e.status, true, true));
+        dc.appendChild(bd);
+      });
+      main.appendChild(dc);
+    });
+    if (cm.undated.length) {
+      main.appendChild(el('h2', null, 'Anytime'));
+      cm.undated.forEach(function (e) {
+        var card = el('div', 'card' + (e.status === 'done' ? ' item-done' : ''));
+        card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
+        card.appendChild(itemBody(e.it, e.status, true, true));
+        main.appendChild(card);
+      });
+    }
+    cm.sections.forEach(function (sv) {
+      if (sv.backups.length) {
+        var bk = el('div', 'backup');
+        bk.appendChild(el('div', 'bt', '↩ ' + sv.section.label + ' backups'));
+        sv.backups.forEach(function (it) { bk.appendChild(renderCard(it, 'backup', true)); });
+        main.appendChild(bk);
+      }
+      if (sv.archived.length) {
+        var det = el('details', 'arch-details');
+        det.appendChild(el('summary', null, sv.section.label + ': archived (' + sv.archived.length + ')'));
+        sv.archived.forEach(function (it) { det.appendChild(renderCard(it, 'archived')); });
+        main.appendChild(det);
+      }
+    });
+  }
+
+  function rerender() {
+    // Any in-flight drag references nodes from the previous render's #main;
+    // drop it so a stray window pointerup after a rerender is a no-op.
+    drag = null;
+    var state = ctx.store.load();
+    curState = state;
+    var data = effectiveData(ctx.base, state);
+    renderHeader(data, state);
+    renderToolbar(data, state);
+    if (shareOn) {
+      renderShare();
+    } else if (state.viewMode === 'day') {
+      renderCalendar(data, state);
+    } else {
+      var main = document.getElementById('main');
+      main.innerHTML = '';
+      viewModel(data, state).forEach(function (sv) { main.appendChild(renderSection(sv, state)); });
+      attachReorder();
+    }
+    var foot = document.getElementById('foot');
+    foot.textContent = 'cityops · schema v1 · state saved on this device';
+    var notice = document.getElementById('notice');
+    notice.textContent = ctx.store.persistent ? '' :
+      'Private mode: changes hold for this session only and are not saved.';
+    // Additive hook: the app shell sets this to re-render its citybar (name/dates)
+    // whenever engine state changes, without the shell re-implementing rerender.
+    if (CityOps.onStateChange) CityOps.onStateChange();
+  }
+
+  // Live in-memory state for the currently booted city, bypassing a fresh
+  // makeStore() read. In private/incognito mode makeStore() falls back to a
+  // per-instance memory cache that a NEW store instance would not see, so
+  // exportStandalone must read the live ctx.store rather than re-deriving one.
+  function liveState() {
+    return ctx ? ctx.store.load() : null;
+  }
+
+  function buildExport(data, state) {
+    var out = JSON.parse(JSON.stringify(data));
+    out.city.dates = JSON.parse(JSON.stringify(effectiveDates(data, state)));
+    out.items.forEach(function (it) {
+      it.status = effectiveStatus(it, state);
+      it.name = effectiveName(it, state);
+      var d = effectiveDay(it, state);
+      if (d) { it.day = d; } else { delete it.day; }
+    });
+    var vm = viewModel(out, { itemStatus: {}, itemDay: {}, dayOrder: state.dayOrder || {}, dataOverride: null, stayOverride: null });
+    var rank = {};
+    var r = 0;
+    var byId = {};
+    out.items.forEach(function (it) { byId[it.id] = it; });
+    vm.forEach(function (sv) {
+      sv.days.forEach(function (d) {
+        d.items.forEach(function (it) {
+          byId[it.id].day = d.iso; // bake the slot date the planner displays
+          rank[it.id] = r++;
+        });
+      });
+      sv.undated.forEach(function (it) { rank[it.id] = r++; });
+      sv.backups.forEach(function (it) { rank[it.id] = r++; });
+      sv.archived.forEach(function (it) { rank[it.id] = r++; });
+    });
+    out.items.sort(function (a, b) {
+      var ra = (rank[a.id] !== undefined) ? rank[a.id] : 1e9;
+      var rb = (rank[b.id] !== undefined) ? rank[b.id] : 1e9;
+      return ra - rb;
+    });
+    return out;
+  }
+
+  function diffSummary(oldData, newData) {
+    var oldIds = {};
+    oldData.items.forEach(function (i) { oldIds[i.id] = 1; });
+    var added = 0, unchanged = 0;
+    newData.items.forEach(function (i) {
+      if (oldIds[i.id]) { unchanged++; delete oldIds[i.id]; } else { added++; }
+    });
+    var removed = Object.keys(oldIds).length;
+    return added + ' added, ' + removed + ' removed, ' + unchanged + ' unchanged';
+  }
+
+  function openDatesModal() {
+    var host = document.getElementById('modal');
+    host.innerHTML = '';
+    var st0 = ctx.store.load();
+    var cur = effectiveDates(effectiveData(ctx.base, st0), st0);
+    var wrap = el('div', 'modal-wrap');
+    var box = el('div', 'modal');
+    box.appendChild(el('h3', null, 'Edit stay dates'));
+    box.appendChild(el('p', 'diff', 'Adjusts the stay on this device and adds empty day cards for the new range. The file is not changed; Export bakes the new dates in.'));
+    function dateInput(iso) {
+      var inp = document.createElement('input');
+      inp.type = 'date';
+      inp.className = 'date-field';
+      inp.value = iso;
+      return inp;
+    }
+    var fromIn = dateInput(cur.from);
+    var toIn = dateInput(cur.to);
+    var row1 = el('div', 'mrow');
+    row1.appendChild(el('span', 'diff', 'From'));
+    row1.appendChild(fromIn);
+    row1.appendChild(el('span', 'diff', 'To'));
+    row1.appendChild(toIn);
+    box.appendChild(row1);
+    var msg = el('div', 'diff', '');
+    box.appendChild(msg);
+    var row = el('div', 'mrow');
+    var apply = el('button', 'ctl', 'Apply');
+    apply.type = 'button';
+    apply.onclick = function () {
+      var st = ctx.store.load();
+      try { setStayDates(st, fromIn.value, toIn.value); }
+      catch (e) { msg.textContent = 'Invalid: ' + e.message; return; }
+      ctx.store.save(st);
+      wrap.remove();
+      rerender();
+    };
+    var revert = el('button', 'ctl', 'Reset to file dates');
+    revert.type = 'button';
+    if (st0.stayOverride) {
+      revert.onclick = function () {
+        var st = ctx.store.load();
+        st.stayOverride = null;
+        ctx.store.save(st);
+        wrap.remove();
+        rerender();
+      };
+    } else {
+      revert.disabled = true;
+      revert.title = 'No date adjustment is active';
+    }
+    var cancel = el('button', 'ctl', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = function () { wrap.remove(); };
+    row.appendChild(apply); row.appendChild(revert); row.appendChild(cancel);
+    box.appendChild(row);
+    wrap.appendChild(box);
+    wrap.onclick = function (e) { if (e.target === wrap) wrap.remove(); };
+    host.appendChild(wrap);
+    fromIn.focus();
+  }
+
+  function openUpdateModal() {
+    var host = document.getElementById('modal');
+    host.innerHTML = '';
+    var wrap = el('div', 'modal-wrap');
+    var box = el('div', 'modal');
+    box.appendChild(el('h3', null, 'Update city data'));
+    box.appendChild(el('p', 'diff', 'Paste schema v1 JSON. It is stored on this device as an override; the file itself is not changed. Export and paste into the file to make it permanent.'));
+    var ta = document.createElement('textarea');
+    box.appendChild(ta);
+    var msg = el('div', 'diff', '');
+    box.appendChild(msg);
+    var row = el('div', 'mrow');
+    var apply = el('button', 'ctl', 'Apply');
+    apply.type = 'button';
+    apply.onclick = function () {
+      var res = parse(ta.value);
+      if (!res.data) { msg.textContent = 'Invalid:\n' + res.errors.join('\n'); return; }
+      var st = ctx.store.load();
+      var current = effectiveData(ctx.base, st);
+      var summary = diffSummary(current, res.data);
+      st.dataOverride = res.data;
+      ctx.store.save(st);
+      pendingPromote = pendingMove = pendingEdit = null; // item ids may change under an override
+      wrap.remove();
+      rerender();
+      document.getElementById('notice').textContent = 'Data updated: ' + summary + '.';
+    };
+    var revert = el('button', 'ctl', 'Revert to file data');
+    revert.type = 'button';
+    var hasOverride = !!ctx.store.load().dataOverride;
+    if (hasOverride) {
+      revert.onclick = function () {
+        var st = ctx.store.load();
+        st.dataOverride = null;
+        ctx.store.save(st);
+        pendingPromote = pendingMove = pendingEdit = null;
+        wrap.remove();
+        rerender();
+      };
+    } else {
+      revert.disabled = true;
+      revert.title = 'No in-app override is active';
+    }
+    var cancel = el('button', 'ctl', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = function () { wrap.remove(); };
+    row.appendChild(apply); row.appendChild(revert); row.appendChild(cancel);
+    box.appendChild(row);
+    wrap.appendChild(box);
+    wrap.onclick = function (e) { if (e.target === wrap) wrap.remove(); };
+    host.appendChild(wrap);
+    ta.focus();
+  }
+
+  function renderToolbar(data, state) {
+    var tb = document.getElementById('toolbar');
+    tb.innerHTML = '';
+    var share = el('button', null, shareOn ? 'Back to planner' : 'Share view');
+    share.type = 'button';
+    share.id = 'btn-share';
+    share.onclick = function () {
+      shareOn = !shareOn;
+      document.body.classList.toggle('share', shareOn);
+      rerender();
+    };
+    tb.appendChild(share);
+    if (!shareOn) {
+      var vw = el('button', null, state.viewMode === 'day' ? 'By type' : 'Calendar');
+      vw.type = 'button';
+      vw.onclick = function () {
+        var st = ctx.store.load();
+        setViewMode(st, st.viewMode === 'day' ? 'type' : 'day');
+        ctx.store.save(st);
+        rerender();
+      };
+      tb.appendChild(vw);
+      var exp = el('button', null, 'Export JSON');
+      exp.type = 'button';
+      exp.id = 'btn-export';
+      exp.onclick = function () {
+        var st = ctx.store.load();
+        var out = buildExport(effectiveData(ctx.base, st), st);
+        var blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = cityId(out) + '.cityops.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+      };
+      tb.appendChild(exp);
+      var upd = el('button', null, 'Update data');
+      upd.type = 'button';
+      upd.onclick = openUpdateModal;
+      tb.appendChild(upd);
+      var dts = el('button', null, 'Edit dates');
+      dts.type = 'button';
+      dts.onclick = openDatesModal;
+      tb.appendChild(dts);
+      // App context only: standalone guide files have no CityOpsApp, so this
+      // button never appears in them.
+      if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.exportStandalone) {
+        var expg = el('button', null, 'Export guide');
+        expg.type = 'button';
+        expg.id = 'btn-export-guide';
+        expg.onclick = function () { window.CityOpsApp.exportStandalone(); };
+        tb.appendChild(expg);
+      }
+    }
+    if (state.dataOverride) {
+      var flagText = 'Data updated in-app: export and paste into the file to make permanent';
+      if (typeof window !== 'undefined' && window && window.CityOpsApp) {
+        flagText = 'Data updated in-app: this override wins until you Replace the city or revert it';
+      }
+      tb.appendChild(el('span', 'flag', flagText));
+    }
+  }
+
+  function renderError(errors) {
+    var main = document.getElementById('main');
+    main.innerHTML = '';
+    var card = el('div', 'errcard');
+    var b = el('b', null, 'This guide\'s city data has a problem.');
+    card.appendChild(b);
+    errors.forEach(function (m) { card.appendChild(el('p', null, m)); });
+    card.appendChild(el('p', null, 'Fix the JSON inside the <script id="city-data"> block and reload.'));
+    main.appendChild(card);
+  }
+
+  // boot(data) renders a parsed city. The app shell calls it again on every city
+  // switch, so every piece of per-city session state is reset here; only the
+  // window-level drag listeners survive, and they bind exactly once.
+  function boot(data) {
+    var storageRef = null;
+    try { storageRef = (typeof localStorage !== 'undefined') ? localStorage : null; }
+    catch (e) { storageRef = null; }
+    ctx = { base: data, store: makeStore(cityId(data), storageRef) };
+    curState = null;
+    shareOn = false;
+    pendingPromote = null;
+    pendingMove = null;
+    pendingEdit = null;
+    drag = null;
+    if (typeof document !== 'undefined' && document.body) document.body.classList.remove('share');
+    if (!listenersBound && typeof window !== 'undefined' && window && window.addEventListener) {
+      window.addEventListener('pointermove', onDragPointerMove, { passive: false });
+      window.addEventListener('pointerup', onDragPointerEnd);
+      window.addEventListener('pointercancel', onDragPointerEnd);
+      listenersBound = true;
+    }
+    rerender();
+  }
+
+  function init() {
+    var elData = document.getElementById('city-data');
+    if (!elData) return; // Node test harness path, and the app shell (no data block)
+    var res = parse(elData.textContent);
+    if (!res.data) { renderError(res.errors); return; }
+    boot(res.data);
+  }
+
+  return {
+    STATUSES: STATUSES, slug: slug, cityId: cityId, dayLabel: dayLabel,
+    validate: validate, parse: parse, init: init, boot: boot,
+    appStore: {
+      normalize: normalizeAppStore, add: appAddCity,
+      remove: appRemoveCity, keepBothName: keepBothName,
+      resolveStartCity: resolveStartCity
+    },
+    onStateChange: null, liveState: liveState,
+    emptyState: emptyState, makeStore: makeStore, setStatus: setStatus,
+    effectiveStatus: effectiveStatus, effectiveData: effectiveData, viewModel: viewModel,
+    TRANSITIONS: TRANSITIONS, fmtRange: fmtRange, buildExport: buildExport,
+    diffSummary: diffSummary, shareModel: shareModel,
+    effectiveDay: effectiveDay, setDay: setDay, stayDates: stayDates,
+    normalizeState: normalizeState, effectiveDates: effectiveDates,
+    setStayDates: setStayDates, toggleSection: toggleSection,
+    effectiveName: effectiveName, setTitle: setTitle, setViewMode: setViewMode,
+    keyForDisplayedDate: keyForDisplayedDate, calendarModel: calendarModel
+  };
+})();
+CityOps.init();
+<\/script>
+</body>
+</html>
+
+</script>
+
+<script id="appshell">
+(function () {
+  'use strict';
+
+  var APP_KEY = 'cityops.app.v1';
+
+  // Bundled first-run city: the same example block standalone template.html ships
+  // with, so a stranger opening the app sees a working guide immediately.
+  var SEED_CITY = {
+    "schema": 1,
+    "city": {
+      "name": "Example City", "country": "XX",
+      "dates": {"from": "2026-01-01", "to": "2026-01-07"},
+      "accommodation": {"name": "Example Stay", "lat": 0, "lng": 0},
+      "currency": {"code": "USD", "usd": 1},
+      "notes": ["This is an example city. Tap the city name above, then Add city, and paste your own generated JSON."]
+    },
+    "sections": [
+      {"id": "dinner", "label": "Dinner", "icon": "🍽️"}
+    ],
+    "items": [{
+      "id": "example",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-01-02",
+      "when": "First evening",
+      "name": "Example Restaurant",
+      "price": {"text": "~$20"},
+      "note": "Replace me. This item exists so the empty template renders.",
+      "hours": {"text": "12:00-23:00 daily", "class": "late"},
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    }]
+  };
+
+  var LS = null;
+  try { LS = (typeof localStorage !== 'undefined') ? localStorage : null; }
+  catch (e) { LS = null; }
+
+  var memStore = null;   // session fallback when localStorage refuses writes
+  var store = null;      // {cities, order, active}
+  var activeId = null;
+  var panelOpen = false;
+  var docClickBound = false; // outside-click listener is bound only while the panel is open
+
+  function has(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+
+  function loadStore() {
+    var raw = null;
+    if (LS) { try { raw = LS.getItem(APP_KEY); } catch (e) { raw = null; } }
+    var obj = null;
+    if (raw) { try { obj = JSON.parse(raw); } catch (e) { obj = null; } }
+    if (!obj) obj = memStore;
+    return CityOps.appStore.normalize(obj);
+  }
+
+  function saveStore(s) {
+    memStore = s;
+    if (LS) { try { LS.setItem(APP_KEY, JSON.stringify(s)); } catch (e) {} }
+  }
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+
+  function hashCity() {
+    var m = String(location.hash || '').match(/^#city=(.+)$/);
+    if (!m) return null;
+    try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; }
+  }
+
+  function setHash(id) {
+    var target = '#city=' + encodeURIComponent(id);
+    if (location.hash === target) return;
+    try {
+      history.replaceState(null, '', location.pathname + location.search + target);
+    } catch (e) {
+      location.hash = target;
+    }
+  }
+
+  // Switching cities means: remember it, reflect it in the URL, hand the engine
+  // a fresh copy of that city's data. The engine reloads that city's own
+  // cityops.<cityId>.v1 state, so progress per city is preserved untouched.
+  function activateCity(id) {
+    store.active = id;
+    saveStore(store);
+    activeId = id;
+    setHash(id);
+    // CityOps.boot -> rerender() calls CityOps.onStateChange() itself (see
+    // below), which re-renders the panel and decorates the fresh header; no
+    // separate call needed here.
+    CityOps.boot(clone(store.cities[id]));
+  }
+
+  // Closing on an outside click: bound to document only while the panel is
+  // open, and removed as soon as it closes (by any path), so it never lingers.
+  // The header counts as "inside" too: it now hosts the trigger (h1) and the
+  // Add chip, and those already have their own click handlers.
+  function onOutsideClick(e) {
+    var bar = document.getElementById('citybar');
+    var hdr = document.getElementById('hdr');
+    var insideBar = bar && bar.contains(e.target);
+    var insideHdr = hdr && hdr.contains(e.target);
+    if (panelOpen && !insideBar && !insideHdr) {
+      panelOpen = false;
+      updateHeaderExpanded();
+      renderPanel();
+    }
+  }
+
+  // Renders (or clears) the dropdown panel: city list + Remove city. Add city
+  // now lives in the header chip, so the panel's own action row only has Remove.
+  function renderPanel() {
+    var bar = document.getElementById('citybar');
+    bar.innerHTML = '';
+    if (!panelOpen) {
+      if (docClickBound) { document.removeEventListener('click', onOutsideClick, true); docClickBound = false; }
+      return;
+    }
+    var panel = el('div', 'citypanel');
+    store.order.forEach(function (id) {
+      var d = store.cities[id];
+      var isCurrent = id === activeId;
+      var prow = el('button', 'cityrow' + (isCurrent ? ' current' : ''));
+      prow.type = 'button';
+      var nameWrap = el('span', 'cname', d.city.name);
+      if (isCurrent) nameWrap.appendChild(el('span', 'dot'));
+      prow.appendChild(nameWrap);
+      prow.appendChild(el('span', 'cdates', CityOps.fmtRange(d.city.dates)));
+      prow.onclick = function () {
+        panelOpen = false;
+        // activateCity triggers a real engine render, which calls
+        // decorateHeader() via onStateChange and updates aria-expanded there;
+        // only the same-city no-op path needs to refresh it itself.
+        if (id === activeId) { updateHeaderExpanded(); renderPanel(); return; }
+        activateCity(id);
+      };
+      panel.appendChild(prow);
+    });
+    var acts = el('div', 'cityact');
+    var rm = el('button', null, 'Remove city');
+    rm.type = 'button';
+    rm.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); openRemoveModal(); };
+    acts.appendChild(rm);
+    panel.appendChild(acts);
+    bar.appendChild(panel);
+
+    if (!docClickBound) {
+      // Deferred: adding the listener synchronously would let it observe the
+      // very click (bubbling to document) that just opened the panel.
+      setTimeout(function () { document.addEventListener('click', onOutsideClick, true); }, 0);
+      docClickBound = true;
+    }
+  }
+
+  // Just refreshes the aria-expanded flag on the current h1 in place. Toggling
+  // the panel does not itself trigger an engine render, so this must NOT go
+  // through decorateHeader() below (that appends the chevron/chip afresh and
+  // would duplicate them on an h1 the engine hasn't wiped since last time).
+  function updateHeaderExpanded() {
+    var h1 = document.querySelector('#hdr h1');
+    if (h1) h1.setAttribute('aria-expanded', String(panelOpen));
+  }
+
+  // Re-decorates the freshly rendered #hdr (the engine wipes it with
+  // innerHTML='' on every render): appends the chevron to h1 and wires it as
+  // the switcher trigger, and appends the header's + Add chip. Called once
+  // per engine render via CityOps.onStateChange — never from a plain
+  // open/close toggle, which would duplicate these onto the still-live h1.
+  function decorateHeader() {
+    var h = document.getElementById('hdr');
+    if (!h) return;
+    var h1 = h.querySelector('h1');
+    if (!h1) return;
+    h1.setAttribute('role', 'button');
+    h1.setAttribute('tabindex', '0');
+    h1.setAttribute('aria-expanded', String(panelOpen));
+    h1.appendChild(el('span', 'hdr-chev', ' ▾'));
+    h1.onclick = function () {
+      panelOpen = !panelOpen;
+      updateHeaderExpanded();
+      renderPanel();
+    };
+    h1.onkeydown = function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); h1.click(); }
+    };
+    var add = el('button', 'hdr-add', '+ Add');
+    add.type = 'button';
+    add.onclick = function (e) {
+      e.stopPropagation();
+      panelOpen = false;
+      updateHeaderExpanded();
+      renderPanel();
+      openAddModal();
+    };
+    h.appendChild(add);
+  }
+
+  function openAddModal() {
+    var host = document.getElementById('modal');
+    host.innerHTML = '';
+    var wrap = el('div', 'modal-wrap');
+    var box = el('div', 'modal');
+    box.appendChild(el('h3', null, 'Add a city'));
+    box.appendChild(el('p', 'diff', 'Paste schema v1 city JSON (the output of PROMPT.md). It is saved in this browser only.'));
+    var ta = document.createElement('textarea');
+    box.appendChild(ta);
+    var msg = el('div', 'diff', '');
+    box.appendChild(msg);
+    var row = el('div', 'mrow');
+    box.appendChild(row);
+
+    function close() { wrap.remove(); }
+
+    // `clearOverride`: only the Replace path passes this. Replacing a city with
+    // freshly pasted file data must win outright; a stale in-app dataOverride
+    // from before the replace would otherwise keep masking the new data via
+    // effectiveData(), so the city's own store is cleared right after the
+    // replace commits (Keep-both never needs this: it derives a brand-new id
+    // with no prior state to clear).
+    function commit(data, clearOverride) {
+      var res = CityOps.appStore.add(store, data);
+      store = res.store;
+      saveStore(store);
+      close();
+      if (clearOverride) {
+        var s = CityOps.makeStore(res.cityId, LS);
+        var st = s.load();
+        st.dataOverride = null;
+        s.save(st);
+      }
+      activateCity(res.cityId);
+    }
+
+    function askDuplicate(data, id) {
+      msg.textContent = '"' + store.cities[id].city.name + '" is already saved under the id ' +
+        id + '. Replace it with the pasted data, or keep both?';
+      row.innerHTML = '';
+      var rep = el('button', 'ctl', 'Replace');
+      rep.type = 'button';
+      rep.onclick = function () { commit(data, true); };
+      var both = el('button', 'ctl', 'Keep both');
+      both.type = 'button';
+      both.onclick = function () {
+        var copy = clone(data);
+        var guard = 0;
+        do {
+          copy.city.name = CityOps.appStore.keepBothName(copy.city.name);
+          guard++;
+        } while (has(store.cities, CityOps.cityId(copy)) && guard < 20);
+        if (has(store.cities, CityOps.cityId(copy))) {
+          // Fail closed: 20 renames were not enough to escape the collision.
+          // Do not commit a city that would silently overwrite another one.
+          msg.textContent = 'Could not find a free name for "' + copy.city.name +
+            '" after 20 tries. Rename the city in the pasted JSON and try again.';
+          return;
+        }
+        commit(copy);
+      };
+      var cancel = el('button', 'ctl', 'Cancel');
+      cancel.type = 'button';
+      cancel.onclick = close;
+      row.appendChild(rep);
+      row.appendChild(both);
+      row.appendChild(cancel);
+    }
+
+    var apply = el('button', 'ctl', 'Apply');
+    apply.type = 'button';
+    apply.onclick = function () {
+      var res = CityOps.parse(ta.value);
+      if (!res.data) { msg.textContent = 'Invalid:\n' + res.errors.join('\n'); return; }
+      var id = CityOps.cityId(res.data);
+      if (has(store.cities, id)) { askDuplicate(res.data, id); return; }
+      commit(res.data);
+    };
+    var cancel = el('button', 'ctl', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = close;
+    row.appendChild(apply);
+    row.appendChild(cancel);
+
+    wrap.appendChild(box);
+    wrap.onclick = function (e) { if (e.target === wrap) close(); };
+    host.appendChild(wrap);
+    ta.focus();
+  }
+
+  function openRemoveModal() {
+    var host = document.getElementById('modal');
+    host.innerHTML = '';
+    var cur = store.cities[activeId];
+    if (!cur) return;
+    var name = cur.city.name;
+    var wrap = el('div', 'modal-wrap');
+    var box = el('div', 'modal');
+    box.appendChild(el('h3', null, 'Remove ' + name));
+    box.appendChild(el('p', 'diff', 'This deletes the city and its saved progress on this device. ' +
+      'Type the city name exactly to enable the Remove button.'));
+    var inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'name-confirm';
+    inp.placeholder = name;
+    inp.setAttribute('aria-label', 'Type the city name to confirm removal');
+    box.appendChild(inp);
+    var row = el('div', 'mrow');
+    var rm = el('button', 'ctl to-archived', 'Remove');
+    rm.type = 'button';
+    rm.disabled = true;
+    rm.title = 'Type "' + name + '" to enable';
+    inp.oninput = function () {
+      var ok = inp.value === name;
+      rm.disabled = !ok;
+      rm.title = ok ? '' : 'Type "' + name + '" to enable';
+    };
+    rm.onclick = function () {
+      if (inp.value !== name) return;
+      var gone = activeId;
+      store = CityOps.appStore.remove(store, gone);
+      if (LS) { try { LS.removeItem('cityops.' + gone + '.v1'); } catch (e) {} }
+      if (!store.order.length) {
+        var res = CityOps.appStore.add(store, clone(SEED_CITY));
+        store = res.store;
+        store.active = res.cityId;
+      }
+      saveStore(store);
+      wrap.remove();
+      activateCity(store.active);
+    };
+    var cancel = el('button', 'ctl', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = function () { wrap.remove(); };
+    row.appendChild(rm);
+    row.appendChild(cancel);
+    box.appendChild(row);
+    wrap.appendChild(box);
+    wrap.onclick = function (e) { if (e.target === wrap) wrap.remove(); };
+    host.appendChild(wrap);
+    inp.focus();
+  }
+
+  // The assembler embeds the fully assembled standalone template here, with every
+  // closing script tag escaped so the text/plain block cannot end early. Undo that,
+  // drop the exported city JSON into the data block, and the result is a
+  // self-contained guide file identical to what tools/embed.js produces.
+  // (Never write that closing sequence literally in this file: it would end THIS
+  // script element. The assembler counts script tags to keep that honest.)
+  function exportStandalone() {
+    var node = document.getElementById('guide-template');
+    if (!node) return;
+    var closeTag = '<' + '/script'; // assembled, never written literally: see above
+    var raw = node.textContent;
+    // The assembler pads the block with one newline on each side; strip exactly
+    // those so the download is byte-identical to what tools/embed.js writes.
+    if (raw.charAt(0) === '\n') raw = raw.slice(1);
+    if (raw.charAt(raw.length - 1) === '\n') raw = raw.slice(0, -1);
+    var tpl = raw.replace(/<\\\/script/g, closeTag);
+    var base = store.cities[activeId];
+    // Prefer the live in-memory state of the booted city: in private/incognito
+    // mode makeStore() falls back to a per-instance memory cache, and a FRESH
+    // makeStore() call here would get its own empty cache, silently dropping
+    // any session-only progress. Fall back to a fresh read only if nothing is
+    // currently booted (defensive; exportStandalone is only wired up in-app).
+    var st = CityOps.liveState() || CityOps.makeStore(activeId, LS).load();
+    var out = CityOps.buildExport(CityOps.effectiveData(base, st), st);
+    // Escape every "</" so a closing-script-like sequence inside item data
+    // cannot break out of the embedded data block. "\/" is a valid JSON escape
+    // for "/", so this is lossless: JSON.parse of the escaped text reproduces
+    // the original object exactly.
+    var json = JSON.stringify(out, null, 2).replace(/<\//g, '<\\/');
+    var html = tpl.replace('__CITY_DATA__', function () { return json; });
+    var blob = new Blob([html], { type: 'text/html' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = CityOps.cityId(out) + '.html';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+  }
+
+  // Set before the first boot so the engine's toolbar picks up the app-only button.
+  window.CityOpsApp = { exportStandalone: exportStandalone };
+
+  // Re-decorate the header and re-render the panel on every engine state
+  // change (not just on city switch, which activateCity already triggers via
+  // CityOps.boot -> rerender -> this hook): this catches things like the
+  // Edit-dates modal applying a stay override, and future-proofs any M2 sync
+  // path that mutates state outside the app shell's own click handlers. The
+  // engine wipes #hdr on every render, so decorateHeader() must re-run here
+  // every time too, not just once at startup.
+  CityOps.onStateChange = function () { renderPanel(); decorateHeader(); };
+
+  function start() {
+    store = loadStore();
+    if (!store.order.length) {
+      var seeded = CityOps.appStore.add(store, clone(SEED_CITY));
+      store = seeded.store;
+      store.active = seeded.cityId;
+      saveStore(store);
+    }
+    var wanted = hashCity();
+    var target = CityOps.appStore.resolveStartCity(store, wanted);
+    activateCity(target);
+    window.addEventListener('hashchange', function () {
+      var id = hashCity();
+      if (id && has(store.cities, id) && id !== activeId) activateCity(id);
+    });
+  }
+
+  // Offline support: register the app-shell service worker. Feature-detected
+  // (older browsers just skip it) and gated to http/https so opening the app
+  // as a local file:// (the standalone-guide path) never tries and never
+  // logs a scary console error. Silent on failure: a registration error
+  // should not block the app from working online.
+  function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
+    try {
+      navigator.serviceWorker.register('./sw.js');
+    } catch (e) {}
+  }
+
+  start();
+  registerServiceWorker();
+})();
+</script>
 </body>
 </html>
