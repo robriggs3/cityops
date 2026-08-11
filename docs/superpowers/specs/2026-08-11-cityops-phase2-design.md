@@ -174,6 +174,29 @@ client, anon key only.
    announcement time).
 5. Announcement waits for Yerevan field days (decided 2026-08-11).
 
+## Parallelism with wheres.robriggs.com (direction, decided 2026-08-11)
+
+Rob's goal: the two apps run as parallel as possible; full integration is
+an open future option, deferred to the engineering call. The call: parallel
+codebases, converging surfaces. Concretely in this phase:
+
+1. Shared token language: cityops adopts not just wheres's palette VALUES
+   but its custom-property NAMES (--bg, --bg-card, --accent, --accent-soft,
+   --text/-2/-3, --border/-light, --green/-soft, --blue/-soft,
+   --amber/-soft). Restyling either app later means editing one token block
+   that reads identically in both.
+2. Cross-navigation ships with the app (not just at announcement): a quiet
+   header/footer link each way once wheres side is edited.
+3. Deep links: the app honors a `#city=<cityId>` hash (select that city on
+   load, update hash on switch), so wheres city rows can link straight into
+   the matching cityops city. This is the first plank of the PRD Phase 3
+   bridge.
+4. Full integration decision point: revisit after the Phase 3 plan-ahead
+   bridge (stop export -> scaffolded city; done-items -> trip record) has
+   run for a real leg. If the bridge feels like friction rather than glue,
+   merging becomes the answer; the shared tokens and schema keep that step
+   small.
+
 ## Tracked separately (not this spec)
 
 - wheres.robriggs.com UX improvements: Rob wants a pass on it after cityops
