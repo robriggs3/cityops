@@ -338,5 +338,82 @@ test('batumi.json is valid and complete', () => {
   assert.ok(res.data.items.some(i => i.status === 'archived'), 'skip entries should be archived');
 });
 
+// Iteration 5: titles, view mode, displayed-date mapping, calendar model
+test('effectiveName override, trim, and revert', () => {
+  const st = C.emptyState();
+  assert.equal(C.effectiveName(GOOD.items[1], st), 'Tanini');
+  C.setTitle(st, 'tanini', '  Tanini or Sakhli  ');
+  assert.equal(C.effectiveName(GOOD.items[1], st), 'Tanini or Sakhli');
+  C.setTitle(st, 'tanini', '');
+  assert.equal(C.effectiveName(GOOD.items[1], st), 'Tanini');
+  C.setTitle(st, 'tanini', null);
+  assert.ok(!('tanini' in st.itemTitle));
+});
+test('setViewMode validates', () => {
+  const st = C.emptyState();
+  C.setViewMode(st, 'day');
+  assert.equal(st.viewMode, 'day');
+  assert.throws(() => C.setViewMode(st, 'week'));
+});
+test('normalizeState defaults viewMode and itemTitle', () => {
+  const st = C.normalizeState({ itemStatus: {}, viewMode: 'bogus' });
+  assert.equal(st.viewMode, 'type');
+  assert.deepEqual(st.itemTitle, {});
+});
+test('keyForDisplayedDate maps the date the user sees to its group', () => {
+  const st = C.emptyState();
+  assert.equal(C.keyForDisplayedDate(GOOD, st, 'dinner', '2026-08-10'), '2026-08-10');
+  st.dayOrder.dinner = ['2026-08-13', '2026-08-10']; // brasserie group displayed on Aug 10
+  assert.equal(C.keyForDisplayedDate(GOOD, st, 'dinner', '2026-08-10'), '2026-08-13');
+  assert.equal(C.keyForDisplayedDate(GOOD, st, 'coffee', '2026-08-10'), '2026-08-10'); // no day cards: raw date
+});
+test('joining a displayed date joins its visible group', () => {
+  const st = C.emptyState();
+  st.dayOrder.dinner = ['2026-08-13', '2026-08-10'];
+  const key = C.keyForDisplayedDate(GOOD, st, 'dinner', '2026-08-10');
+  C.setStatus(st, 'sisters', 'plan');
+  C.setDay(st, 'sisters', key);
+  const vm = C.viewModel(GOOD, st);
+  const mon = vm[0].days.find(d => d.iso === '2026-08-10');
+  assert.deepEqual(mon.items.map(i => i.id), ['brasserie', 'sisters']);
+});
+test('calendarModel merges sections by displayed date with empty fill', () => {
+  const st = C.emptyState();
+  C.setStatus(st, 'nord', 'plan');
+  C.setDay(st, 'nord', '2026-08-10'); // coffee item joins Monday
+  const cm = C.calendarModel(GOOD, st);
+  assert.equal(cm.days.length, 8); // full stay, empty days included
+  const mon = cm.days.find(d => d.iso === '2026-08-10');
+  assert.deepEqual(mon.entries.map(e => e.it.id), ['tanini', 'nord']); // section order within the day
+  assert.equal(mon.entries[1].sec.id, 'coffee');
+  const sat = cm.days.find(d => d.iso === '2026-08-08');
+  assert.equal(sat.entries.length, 0);
+  assert.equal(cm.undated.length, 0);
+  assert.equal(cm.sections.length, 2);
+});
+test('buildExport bakes custom titles, round trip stays lossless', () => {
+  const st = C.emptyState();
+  C.setTitle(st, 'tanini', 'Tanini or Sakhli');
+  C.setStatus(st, 'sisters', 'plan');
+  C.setDay(st, 'sisters', '2026-08-11');
+  const out = C.buildExport(GOOD, st);
+  assert.equal(out.items.find(i => i.id === 'tanini').name, 'Tanini or Sakhli');
+  assert.equal(GOOD.items.find(i => i.id === 'tanini').name, 'Tanini'); // source untouched
+  const again = C.buildExport(C.parse(JSON.stringify(out)).data, C.emptyState());
+  assert.deepEqual(again, out);
+});
+
+test('promote resolves the displayed slot before the item turns active', () => {
+  // A backup item carrying a stale day must not contaminate its own slot lookup.
+  const data = clone(GOOD);
+  data.items.find(i => i.id === 'sisters').day = '2026-08-11'; // stale day on a backup
+  const st = C.emptyState();
+  st.dayOrder.dinner = ['2026-08-11', '2026-08-10']; // stale arrangement
+  C.setStatus(st, 'brasserie', 'backup');
+  C.setStatus(st, 'tanini', 'backup'); // section now has zero active dayed items
+  const key = C.keyForDisplayedDate(data, st, 'dinner', '2026-08-10');
+  assert.equal(key, '2026-08-10'); // with nothing active, displayed Mon IS Mon
+});
+
 console.log(pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);
