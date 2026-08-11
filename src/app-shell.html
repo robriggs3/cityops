@@ -9,10 +9,15 @@
 
   /* --- app shell: multi-city switcher (index.html only) --- */
   #citybar{max-width:760px; margin:0 auto; padding:10px 16px 0;}
+  .citybar-row{display:flex; align-items:stretch; gap:8px;}
   .citybtn{display:flex; align-items:center; justify-content:space-between; gap:10px;
-    width:100%; font:inherit; text-align:left; color:var(--text); background:var(--bg-card);
+    flex:1 1 auto; min-width:0; font:inherit; text-align:left; color:var(--text); background:var(--bg-card);
     border:1px solid var(--border-light); border-radius:12px; padding:10px 14px;
     cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.03);}
+  .citybar-add{flex:0 0 auto; font:inherit; font-size:.78rem; font-weight:700; color:var(--accent-hover);
+    background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
+    padding:0 13px; cursor:pointer; white-space:nowrap;}
+  .citybar-add:hover{border-color:var(--accent);}
   .citybtn:hover{border-color:var(--accent);}
   .citybtn .cname{font-weight:700; font-size:.95rem;}
   .citybtn .cdates{display:block; font-size:.78rem; color:var(--text-3); margin-top:1px;}
@@ -74,7 +79,7 @@
       "dates": {"from": "2026-01-01", "to": "2026-01-07"},
       "accommodation": {"name": "Example Stay", "lat": 0, "lng": 0},
       "currency": {"code": "USD", "usd": 1},
-      "notes": ["Replace this block with generated city JSON"]
+      "notes": ["This is an example city. Tap the city name above, then Add city, and paste your own generated JSON."]
     },
     "sections": [
       {"id": "dinner", "label": "Dinner", "icon": "🍽️"}
@@ -104,6 +109,7 @@
   var store = null;      // {cities, order, active}
   var activeId = null;
   var panelOpen = false;
+  var docClickBound = false; // outside-click listener is bound only while the panel is open
 
   function has(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
@@ -157,49 +163,88 @@
     renderCitybar();
   }
 
+  // Closing on an outside click: bound to document only while the panel is
+  // open, and removed as soon as it closes (by any path), so it never lingers.
+  function onOutsideClick(e) {
+    var bar = document.getElementById('citybar');
+    if (panelOpen && bar && !bar.contains(e.target)) {
+      panelOpen = false;
+      renderCitybar();
+    }
+  }
+
   function renderCitybar() {
     var bar = document.getElementById('citybar');
     bar.innerHTML = '';
     var cur = store.cities[activeId];
     if (!cur) return;
+    // Live values: the header already shows the effective (override-aware) dates
+    // for the active city; the citybar should agree rather than showing the
+    // authored file dates while a stay override is active. The city name stays
+    // the authored name: renaming a city in-app is not a feature.
+    var liveSt = CityOps.makeStore(activeId, LS).load();
+    var range = CityOps.effectiveDates({ city: cur.city }, liveSt);
+
+    var row = el('div', 'citybar-row');
     var btn = el('button', 'citybtn');
     btn.type = 'button';
     btn.setAttribute('aria-expanded', String(panelOpen));
     var lab = el('span');
     lab.appendChild(el('span', 'cname', cur.city.name));
-    lab.appendChild(el('span', 'cdates', CityOps.fmtRange(cur.city.dates) +
+    lab.appendChild(el('span', 'cdates', CityOps.fmtRange(range) +
       ' · ' + store.order.length + (store.order.length === 1 ? ' city' : ' cities')));
     btn.appendChild(lab);
     btn.appendChild(el('span', 'chev', panelOpen ? '▴' : '▾'));
     btn.onclick = function () { panelOpen = !panelOpen; renderCitybar(); };
-    bar.appendChild(btn);
-    if (!panelOpen) return;
+    row.appendChild(btn);
 
-    var panel = el('div', 'citypanel');
-    store.order.forEach(function (id) {
-      var d = store.cities[id];
-      var row = el('button', 'cityrow' + (id === activeId ? ' current' : ''));
-      row.type = 'button';
-      row.appendChild(el('span', 'cname', d.city.name));
-      row.appendChild(el('span', 'cdates', CityOps.fmtRange(d.city.dates)));
-      row.onclick = function () {
-        panelOpen = false;
-        if (id === activeId) { renderCitybar(); return; }
-        activateCity(id);
-      };
-      panel.appendChild(row);
-    });
-    var acts = el('div', 'cityact');
-    var add = el('button', null, '+ Add city');
-    add.type = 'button';
-    add.onclick = function () { panelOpen = false; renderCitybar(); openAddModal(); };
-    acts.appendChild(add);
-    var rm = el('button', null, 'Remove city');
-    rm.type = 'button';
-    rm.onclick = function () { panelOpen = false; renderCitybar(); openRemoveModal(); };
-    acts.appendChild(rm);
-    panel.appendChild(acts);
-    bar.appendChild(panel);
+    // Always-visible affordance beside the switcher toggle, not only inside
+    // the dropdown: a first-time visitor should not have to open the panel to
+    // discover how to add their own city.
+    var quickAdd = el('button', 'citybar-add', '+ Add city');
+    quickAdd.type = 'button';
+    quickAdd.onclick = function () { panelOpen = false; renderCitybar(); openAddModal(); };
+    row.appendChild(quickAdd);
+
+    bar.appendChild(row);
+
+    if (panelOpen) {
+      var panel = el('div', 'citypanel');
+      store.order.forEach(function (id) {
+        var d = store.cities[id];
+        var prow = el('button', 'cityrow' + (id === activeId ? ' current' : ''));
+        prow.type = 'button';
+        prow.appendChild(el('span', 'cname', d.city.name));
+        prow.appendChild(el('span', 'cdates', CityOps.fmtRange(d.city.dates)));
+        prow.onclick = function () {
+          panelOpen = false;
+          if (id === activeId) { renderCitybar(); return; }
+          activateCity(id);
+        };
+        panel.appendChild(prow);
+      });
+      var acts = el('div', 'cityact');
+      var add = el('button', null, '+ Add city');
+      add.type = 'button';
+      add.onclick = function () { panelOpen = false; renderCitybar(); openAddModal(); };
+      acts.appendChild(add);
+      var rm = el('button', null, 'Remove city');
+      rm.type = 'button';
+      rm.onclick = function () { panelOpen = false; renderCitybar(); openRemoveModal(); };
+      acts.appendChild(rm);
+      panel.appendChild(acts);
+      bar.appendChild(panel);
+    }
+
+    if (panelOpen && !docClickBound) {
+      // Deferred: adding the listener synchronously would let it observe the
+      // very click (bubbling to document) that just opened the panel.
+      setTimeout(function () { document.addEventListener('click', onOutsideClick, true); }, 0);
+      docClickBound = true;
+    } else if (!panelOpen && docClickBound) {
+      document.removeEventListener('click', onOutsideClick, true);
+      docClickBound = false;
+    }
   }
 
   function openAddModal() {
@@ -218,11 +263,23 @@
 
     function close() { wrap.remove(); }
 
-    function commit(data) {
+    // `clearOverride`: only the Replace path passes this. Replacing a city with
+    // freshly pasted file data must win outright; a stale in-app dataOverride
+    // from before the replace would otherwise keep masking the new data via
+    // effectiveData(), so the city's own store is cleared right after the
+    // replace commits (Keep-both never needs this: it derives a brand-new id
+    // with no prior state to clear).
+    function commit(data, clearOverride) {
       var res = CityOps.appStore.add(store, data);
       store = res.store;
       saveStore(store);
       close();
+      if (clearOverride) {
+        var s = CityOps.makeStore(res.cityId, LS);
+        var st = s.load();
+        st.dataOverride = null;
+        s.save(st);
+      }
       activateCity(res.cityId);
     }
 
@@ -232,7 +289,7 @@
       row.innerHTML = '';
       var rep = el('button', 'ctl', 'Replace');
       rep.type = 'button';
-      rep.onclick = function () { commit(data); };
+      rep.onclick = function () { commit(data, true); };
       var both = el('button', 'ctl', 'Keep both');
       both.type = 'button';
       both.onclick = function () {
@@ -242,6 +299,13 @@
           copy.city.name = CityOps.appStore.keepBothName(copy.city.name);
           guard++;
         } while (has(store.cities, CityOps.cityId(copy)) && guard < 20);
+        if (has(store.cities, CityOps.cityId(copy))) {
+          // Fail closed: 20 renames were not enough to escape the collision.
+          // Do not commit a city that would silently overwrite another one.
+          msg.textContent = 'Could not find a free name for "' + copy.city.name +
+            '" after 20 tries. Rename the city in the pasted JSON and try again.';
+          return;
+        }
         commit(copy);
       };
       var cancel = el('button', 'ctl', 'Cancel');
@@ -343,9 +407,19 @@
     if (raw.charAt(raw.length - 1) === '\n') raw = raw.slice(0, -1);
     var tpl = raw.replace(/<\\\/script/g, closeTag);
     var base = store.cities[activeId];
-    var st = CityOps.makeStore(activeId, LS).load();
+    // Prefer the live in-memory state of the booted city: in private/incognito
+    // mode makeStore() falls back to a per-instance memory cache, and a FRESH
+    // makeStore() call here would get its own empty cache, silently dropping
+    // any session-only progress. Fall back to a fresh read only if nothing is
+    // currently booted (defensive; exportStandalone is only wired up in-app).
+    var st = CityOps.liveState() || CityOps.makeStore(activeId, LS).load();
     var out = CityOps.buildExport(CityOps.effectiveData(base, st), st);
-    var html = tpl.replace('__CITY_DATA__', function () { return JSON.stringify(out, null, 2); });
+    // Escape every "</" so a closing-script-like sequence inside item data
+    // cannot break out of the embedded data block. "\/" is a valid JSON escape
+    // for "/", so this is lossless: JSON.parse of the escaped text reproduces
+    // the original object exactly.
+    var json = JSON.stringify(out, null, 2).replace(/<\//g, '<\\/');
+    var html = tpl.replace('__CITY_DATA__', function () { return json; });
     var blob = new Blob([html], { type: 'text/html' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -359,6 +433,12 @@
   // Set before the first boot so the engine's toolbar picks up the app-only button.
   window.CityOpsApp = { exportStandalone: exportStandalone };
 
+  // Re-render the citybar on every engine state change (not just on city
+  // switch, which activateCity already handles directly): this catches things
+  // like the Edit-dates modal applying a stay override, and future-proofs any
+  // M2 sync path that mutates state outside the app shell's own click handlers.
+  CityOps.onStateChange = function () { renderCitybar(); };
+
   function start() {
     store = loadStore();
     if (!store.order.length) {
@@ -368,9 +448,7 @@
       saveStore(store);
     }
     var wanted = hashCity();
-    var target = (wanted && has(store.cities, wanted)) ? wanted
-      : (store.active && has(store.cities, store.active)) ? store.active
-      : store.order[0];
+    var target = CityOps.appStore.resolveStartCity(store, wanted);
     activateCity(target);
     window.addEventListener('hashchange', function () {
       var id = hashCity();

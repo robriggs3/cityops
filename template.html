@@ -562,7 +562,10 @@ var CityOps = (function () {
     var src = (raw && typeof raw === 'object') ? raw : {};
     var srcCities = (src.cities && typeof src.cities === 'object') ? src.cities : {};
     var cities = {};
-    Object.keys(srcCities).forEach(function (id) { cities[id] = srcCities[id]; });
+    Object.keys(srcCities).forEach(function (id) {
+      var d = srcCities[id];
+      if (d && d.city && d.city.name && d.city.dates) cities[id] = d;
+    });
     var order = [];
     var seen = {};
     (Array.isArray(src.order) ? src.order : []).forEach(function (id) {
@@ -596,6 +599,16 @@ var CityOps = (function () {
   // Keep-both renames the incoming city so cityId() derives a fresh id.
   function keepBothName(name) {
     return String(name) + ' 2';
+  }
+
+  // Pure start-city resolution: hash (if it names a known city) wins, else the
+  // stored active city (if still present), else the first city in order, else
+  // null when the store is empty. Extracted so the app shell's boot-target
+  // logic is unit-testable without a DOM.
+  function resolveStartCity(store, hashId) {
+    if (hashId && Object.prototype.hasOwnProperty.call(store.cities, hashId)) return hashId;
+    if (store.active && Object.prototype.hasOwnProperty.call(store.cities, store.active)) return store.active;
+    return store.order.length ? store.order[0] : null;
   }
 
   // ---- DOM rendering (browser only) ----
@@ -1101,6 +1114,17 @@ var CityOps = (function () {
     var notice = document.getElementById('notice');
     notice.textContent = ctx.store.persistent ? '' :
       'Private mode: changes hold for this session only and are not saved.';
+    // Additive hook: the app shell sets this to re-render its citybar (name/dates)
+    // whenever engine state changes, without the shell re-implementing rerender.
+    if (CityOps.onStateChange) CityOps.onStateChange();
+  }
+
+  // Live in-memory state for the currently booted city, bypassing a fresh
+  // makeStore() read. In private/incognito mode makeStore() falls back to a
+  // per-instance memory cache that a NEW store instance would not see, so
+  // exportStandalone must read the live ctx.store rather than re-deriving one.
+  function liveState() {
+    return ctx ? ctx.store.load() : null;
   }
 
   function buildExport(data, state) {
@@ -1320,7 +1344,11 @@ var CityOps = (function () {
       }
     }
     if (state.dataOverride) {
-      tb.appendChild(el('span', 'flag', 'Data updated in-app: export and paste into the file to make permanent'));
+      var flagText = 'Data updated in-app: export and paste into the file to make permanent';
+      if (typeof window !== 'undefined' && window && window.CityOpsApp) {
+        flagText = 'Data updated in-app: this override wins until you Replace the city or revert it';
+      }
+      tb.appendChild(el('span', 'flag', flagText));
     }
   }
 
@@ -1372,8 +1400,10 @@ var CityOps = (function () {
     validate: validate, parse: parse, init: init, boot: boot,
     appStore: {
       normalize: normalizeAppStore, add: appAddCity,
-      remove: appRemoveCity, keepBothName: keepBothName
+      remove: appRemoveCity, keepBothName: keepBothName,
+      resolveStartCity: resolveStartCity
     },
+    onStateChange: null, liveState: liveState,
     emptyState: emptyState, makeStore: makeStore, setStatus: setStatus,
     effectiveStatus: effectiveStatus, effectiveData: effectiveData, viewModel: viewModel,
     TRANSITIONS: TRANSITIONS, fmtRange: fmtRange, buildExport: buildExport,

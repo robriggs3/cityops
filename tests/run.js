@@ -424,12 +424,19 @@ test('appStore.normalize fills missing keys and repairs order/active', () => {
   const empty = C.appStore.normalize(null);
   assert.deepEqual(empty, { cities: {}, order: [], active: null });
   const s = C.appStore.normalize({
-    cities: { a: CITY_B, b: CITY_Y },
-    order: ['b', 'b', 'ghost'],
+    cities: {
+      a: CITY_B, b: CITY_Y,
+      c: { city: { name: 'Broken' } },   // missing dates
+      d: null,                            // not an object
+      e: { notCity: 1 },                  // missing city entirely
+      f: { city: { dates: { from: '2026-01-01', to: '2026-01-02' } } } // missing name
+    },
+    order: ['b', 'b', 'ghost', 'c', 'd', 'f'],
     active: 'ghost'
   });
-  assert.deepEqual(s.order, ['b', 'a']); // dedupe, drop unknown, append orphans
+  assert.deepEqual(s.order, ['b', 'a']); // dedupe, drop unknown, drop malformed, append orphans
   assert.equal(s.active, 'b');           // unknown active falls back to the first city
+  assert.deepEqual(Object.keys(s.cities).sort(), ['a', 'b']); // malformed entries dropped entirely
 });
 test('appStore.add derives the id, appends order, flags replacement', () => {
   let s = C.appStore.normalize(null);
@@ -468,6 +475,73 @@ test('appStore.remove of an inactive city leaves active alone', () => {
   s.active = 'yerevan-2026-08-15';
   s = C.appStore.remove(s, 'batumi-2026-08-08');
   assert.equal(s.active, 'yerevan-2026-08-15');
+});
+
+// T3 review fix wave
+test('appStore.resolveStartCity: hash known > active > first > null', () => {
+  let s = C.appStore.add(C.appStore.normalize(null), CITY_B).store;
+  s = C.appStore.add(s, CITY_Y).store;
+  s.active = 'batumi-2026-08-08';
+  assert.equal(C.appStore.resolveStartCity(s, 'yerevan-2026-08-15'), 'yerevan-2026-08-15'); // hash wins
+  assert.equal(C.appStore.resolveStartCity(s, 'ghost-hash'), 'batumi-2026-08-08');          // unknown hash: active
+  assert.equal(C.appStore.resolveStartCity(s, null), 'batumi-2026-08-08');                  // no hash: active
+  const s2 = { cities: s.cities, order: s.order, active: 'ghost-active' };
+  assert.equal(C.appStore.resolveStartCity(s2, null), s.order[0]);                          // unknown active: first
+  const empty = C.appStore.normalize(null);
+  assert.equal(C.appStore.resolveStartCity(empty, null), null);                             // nothing: null
+});
+test('keep-both collision loop finds a free id past a multi-deep collision chain', () => {
+  // Mirrors the app shell's do/while loop in openAddModal: repeatedly apply
+  // keepBothName and re-derive the id until it stops colliding, guarded at 20.
+  let s = C.appStore.normalize(null);
+  let name = 'Batumi';
+  for (let i = 0; i < 3; i++) {
+    name = C.appStore.keepBothName(name);
+    const d = clone(CITY_B);
+    d.city.name = name;
+    s = C.appStore.add(s, d).store;
+  }
+  const copy = clone(CITY_B);
+  let guard = 0;
+  do {
+    copy.city.name = C.appStore.keepBothName(copy.city.name);
+    guard++;
+  } while (Object.prototype.hasOwnProperty.call(s.cities, C.cityId(copy)) && guard < 20);
+  assert.equal(guard, 4); // 3 pre-seeded collisions plus the first fresh one
+  assert.ok(!Object.prototype.hasOwnProperty.call(s.cities, C.cityId(copy)));
+});
+test('keep-both collision loop fails closed when 20 renames are not enough', () => {
+  let s = C.appStore.normalize(null);
+  let name = 'Batumi';
+  for (let i = 0; i < 20; i++) {
+    name = C.appStore.keepBothName(name);
+    const d = clone(CITY_B);
+    d.city.name = name;
+    s = C.appStore.add(s, d).store;
+  }
+  const copy = clone(CITY_B);
+  let guard = 0;
+  do {
+    copy.city.name = C.appStore.keepBothName(copy.city.name);
+    guard++;
+  } while (Object.prototype.hasOwnProperty.call(s.cities, C.cityId(copy)) && guard < 20);
+  assert.equal(guard, 20);
+  // Still colliding after the guard trips: the caller (app shell) must treat
+  // this as a failure and refuse to commit, not silently overwrite the city.
+  assert.ok(Object.prototype.hasOwnProperty.call(s.cities, C.cityId(copy)));
+});
+test('export escaping: </script in a note round-trips losslessly and never appears raw in the data block', () => {
+  const st = C.emptyState();
+  const data = clone(GOOD);
+  data.items[0].note = '</script><img src=x>';
+  const out = C.buildExport(data, st);
+  // Same transform as exportStandalone() in src/app-shell.html.
+  const escaped = JSON.stringify(out, null, 2).replace(/<\//g, '<\\/');
+  // "\/" is a valid JSON escape for "/", so escaping is lossless.
+  assert.deepEqual(JSON.parse(escaped), out);
+  const block = '<script type="application/json" id="city-data">\n' + escaped + '\n</script>';
+  const inner = block.slice(block.indexOf('\n') + 1, block.lastIndexOf('\n'));
+  assert.equal(inner.indexOf('</script'), -1); // no raw close-tag sequence survives inside the block
 });
 
 test('template.html contains src/cityops.js verbatim (assembler sync)', () => {
