@@ -149,6 +149,11 @@
   h2.collapsed{opacity:.85; margin-bottom:8px;}
   body.share .sec-toggle{pointer-events:none;}
   body.share .sec-toggle .chev{display:none;}
+  .daycard .bd + .bd{border-top:1px dashed var(--line);}
+  .sec-meta{font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.4px;
+    color:var(--sea); margin-bottom:2px;}
+  .title-edit{width:100%; font:inherit; font-size:1rem; font-weight:600; padding:8px 10px;
+    border:1.5px solid var(--sea); border-radius:8px; margin-top:4px;}
   .empty-day .hd{border-bottom:none;}
   .empty-day .free-day{padding:6px 16px 10px; font-size:.8rem; color:var(--muted); font-style:italic;}
   .date-field{font:inherit; font-size:.85rem; padding:6px 10px; border:1px solid var(--line);
@@ -289,7 +294,7 @@ var CityOps = (function () {
   };
 
   function emptyState() {
-    return { itemStatus: {}, itemDay: {}, dayOrder: {}, collapsedSections: {}, dataOverride: null, stayOverride: null, updated: null };
+    return { itemStatus: {}, itemDay: {}, itemTitle: {}, dayOrder: {}, collapsedSections: {}, viewMode: 'type', dataOverride: null, stayOverride: null, updated: null };
   }
 
   function normalizeState(st) {
@@ -298,6 +303,8 @@ var CityOps = (function () {
     st.itemDay = st.itemDay || {};
     st.dayOrder = st.dayOrder || {};
     st.collapsedSections = st.collapsedSections || {};
+    st.itemTitle = st.itemTitle || {};
+    if (st.viewMode !== 'type' && st.viewMode !== 'day') st.viewMode = 'type';
     if (!('dataOverride' in st)) st.dataOverride = null;
     if (!('stayOverride' in st)) st.stayOverride = null;
     return st;
@@ -379,6 +386,61 @@ var CityOps = (function () {
     var o = state.stayOverride;
     if (o && isIso(o.from) && isIso(o.to) && o.from <= o.to) return o;
     return data.city.dates;
+  }
+
+  function effectiveName(it, state) {
+    return (state.itemTitle && state.itemTitle[it.id]) || it.name;
+  }
+
+  function setTitle(state, id, title) {
+    state.itemTitle = state.itemTitle || {};
+    var t = (title === null || title === undefined) ? '' : String(title).replace(/^\s+|\s+$/g, '');
+    if (t) state.itemTitle[id] = t;
+    else delete state.itemTitle[id];
+    return state;
+  }
+
+  function setViewMode(state, mode) {
+    if (mode !== 'type' && mode !== 'day') throw new Error('bad view mode "' + mode + '"');
+    state.viewMode = mode;
+    return state;
+  }
+
+  function keyForDisplayedDate(data, state, secId, iso) {
+    // Pickers speak in DISPLAYED dates. After reorders, the group occupying
+    // the slot for a date may be keyed by a different date; joining a day
+    // means joining whatever group the user SEES on that date.
+    var sv = null;
+    viewModel(data, state).forEach(function (v) { if (v.section.id === secId) sv = v; });
+    if (sv) {
+      for (var i = 0; i < sv.days.length; i++) {
+        if (sv.days[i].iso === iso) return sv.days[i].key;
+      }
+    }
+    return iso;
+  }
+
+  function calendarModel(data, state) {
+    var byIso = {};
+    var undated = [];
+    var vms = viewModel(data, state);
+    vms.forEach(function (sv) {
+      sv.days.forEach(function (d) {
+        if (!byIso[d.iso]) byIso[d.iso] = [];
+        d.items.forEach(function (it) {
+          byIso[d.iso].push({ sec: sv.section, it: it, status: effectiveStatus(it, state) });
+        });
+      });
+      sv.undated.forEach(function (it) {
+        undated.push({ sec: sv.section, it: it, status: effectiveStatus(it, state) });
+      });
+    });
+    var isos = Object.keys(byIso).sort();
+    return {
+      days: isos.map(function (iso) { return { iso: iso, label: dayLabel(iso), entries: byIso[iso] }; }),
+      undated: undated,
+      sections: vms
+    };
   }
 
   function toggleSection(state, secId) {
@@ -515,22 +577,95 @@ var CityOps = (function () {
     rerender();
   }
 
+  var curState = null;       // state snapshot for the current render pass
   var pendingPromote = null; // item id whose promote day-picker is open (session-only UI state)
+  var pendingMove = null;    // item id whose move day-picker is open
+  var pendingEdit = null;    // item id whose title editor is open
 
-  function promoteTo(id, iso) {
+  function promoteTo(it, iso) {
     var st = ctx.store.load();
-    setStatus(st, id, 'plan');
-    setDay(st, id, iso);
+    // Resolve the slot BEFORE flipping status: once the item counts as active,
+    // its own stale day from a prior plan stint could contaminate the lookup.
+    var key = (iso === null) ? null : keyForDisplayedDate(effectiveData(ctx.base, st), st, it.section, iso);
+    setStatus(st, it.id, 'plan');
+    setDay(st, it.id, key);
     ctx.store.save(st);
     pendingPromote = null;
     rerender();
   }
 
+  function moveTo(it, iso) {
+    var st = ctx.store.load();
+    var key = (iso === null) ? null : keyForDisplayedDate(effectiveData(ctx.base, st), st, it.section, iso);
+    setDay(st, it.id, key);
+    ctx.store.save(st);
+    pendingMove = null;
+    rerender();
+  }
+
+  function dayPickerRow(hint, onPick, onCancel) {
+    var frag = document.createDocumentFragment();
+    frag.appendChild(el('p', 'when-line', hint));
+    var pick = el('div', 'ctl-row');
+    var pst = ctx.store.load();
+    stayDates(effectiveDates(effectiveData(ctx.base, pst), pst)).forEach(function (iso) {
+      var db = el('button', 'ctl', dayLabel(iso));
+      db.type = 'button';
+      db.onclick = function () { onPick(iso); };
+      pick.appendChild(db);
+    });
+    var nd = el('button', 'ctl', 'No day');
+    nd.type = 'button';
+    nd.onclick = function () { onPick(null); };
+    pick.appendChild(nd);
+    var cancel = el('button', 'ctl to-archived', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = onCancel;
+    pick.appendChild(cancel);
+    frag.appendChild(pick);
+    return frag;
+  }
+
   function itemBody(it, status, showWhen, withDayPicker) {
     var frag = document.createDocumentFragment();
+    if (pendingEdit === it.id) {
+      frag.appendChild(el('p', 'when-line', 'Rename this item'));
+      var inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'title-edit';
+      inp.value = effectiveName(it, curState);
+      frag.appendChild(inp);
+      var erow = el('div', 'ctl-row');
+      var save = el('button', 'ctl to-done', 'Save');
+      save.type = 'button';
+      save.onclick = function () {
+        var st = ctx.store.load();
+        setTitle(st, it.id, inp.value);
+        ctx.store.save(st);
+        pendingEdit = null;
+        rerender();
+      };
+      var orig = el('button', 'ctl', 'Original name');
+      orig.type = 'button';
+      orig.onclick = function () {
+        var st = ctx.store.load();
+        setTitle(st, it.id, null);
+        ctx.store.save(st);
+        pendingEdit = null;
+        rerender();
+      };
+      var ecancel = el('button', 'ctl to-archived', 'Cancel');
+      ecancel.type = 'button';
+      ecancel.onclick = function () { pendingEdit = null; rerender(); };
+      erow.appendChild(save); erow.appendChild(orig); erow.appendChild(ecancel);
+      frag.appendChild(erow);
+      var focusLater = inp;
+      setTimeout(function () { try { focusLater.focus(); focusLater.select(); } catch (e) {} }, 0);
+      return frag;
+    }
     var h3 = el('h3');
     if (status === 'done') h3.appendChild(el('span', 'donemark', '✓'));
-    h3.appendChild(document.createTextNode(it.name));
+    h3.appendChild(document.createTextNode(effectiveName(it, curState)));
     if (it.price) h3.appendChild(el('span', 'price', it.price.text));
     frag.appendChild(h3);
     if (showWhen && it.when) frag.appendChild(el('p', 'when-line', it.when));
@@ -545,25 +680,15 @@ var CityOps = (function () {
     (it.links || []).forEach(function (l) { row.appendChild(linkPill(l)); });
     if (row.children.length) frag.appendChild(row);
     if (status === 'backup' && withDayPicker && pendingPromote === it.id) {
-      // Day picker: promoting into a day-carded section needs a date slot.
-      frag.appendChild(el('p', 'when-line', 'Promote to which day?'));
-      var pick = el('div', 'ctl-row');
-      var pst = ctx.store.load();
-      stayDates(effectiveDates(effectiveData(ctx.base, pst), pst)).forEach(function (iso) {
-        var db = el('button', 'ctl', dayLabel(iso));
-        db.type = 'button';
-        db.onclick = function () { promoteTo(it.id, iso); };
-        pick.appendChild(db);
-      });
-      var nd = el('button', 'ctl', 'No day');
-      nd.type = 'button';
-      nd.onclick = function () { promoteTo(it.id, null); };
-      pick.appendChild(nd);
-      var cancel = el('button', 'ctl to-archived', 'Cancel');
-      cancel.type = 'button';
-      cancel.onclick = function () { pendingPromote = null; rerender(); };
-      pick.appendChild(cancel);
-      frag.appendChild(pick);
+      frag.appendChild(dayPickerRow('Promote to which day?',
+        function (iso) { promoteTo(it, iso); },
+        function () { pendingPromote = null; rerender(); }));
+      return frag;
+    }
+    if (pendingMove === it.id) {
+      frag.appendChild(dayPickerRow('Move to which day?',
+        function (iso) { moveTo(it, iso); },
+        function () { pendingMove = null; rerender(); }));
       return frag;
     }
     var ctl = el('div', 'ctl-row');
@@ -577,6 +702,19 @@ var CityOps = (function () {
       }
       ctl.appendChild(b);
     });
+    if (withDayPicker && (status === 'plan' || status === 'done')) {
+      var mv = el('button', 'ctl', '⇄ Day');
+      mv.type = 'button';
+      mv.onclick = function () { pendingMove = it.id; rerender(); };
+      ctl.appendChild(mv);
+    }
+    if (status !== 'archived') {
+      var ed = el('button', 'ctl', '✎');
+      ed.type = 'button';
+      ed.setAttribute('aria-label', 'Rename');
+      ed.onclick = function () { pendingEdit = it.id; rerender(); };
+      ctl.appendChild(ed);
+    }
     if (ctl.children.length) frag.appendChild(ctl);
     return frag;
   }
@@ -603,7 +741,7 @@ var CityOps = (function () {
     day.items.forEach(function (it) {
       var status = effectiveStatus(it, state);
       var bd = el('div', 'bd' + (status === 'done' ? ' item-done' : ''));
-      bd.appendChild(itemBody(it, status, day.items.length > 1));
+      bd.appendChild(itemBody(it, status, day.items.length > 1, true));
       dc.appendChild(bd);
     });
     return dc;
@@ -657,7 +795,7 @@ var CityOps = (function () {
       sv.days.forEach(function (d) { days.appendChild(renderDayCard(d, state)); });
       frag.appendChild(days);
     }
-    sv.undated.forEach(function (it) { frag.appendChild(renderCard(it, effectiveStatus(it, state))); });
+    sv.undated.forEach(function (it) { frag.appendChild(renderCard(it, effectiveStatus(it, state), sv.days.length > 0)); });
     if (sv.backups.length) {
       var withPicker = sv.days.length > 0;
       var bk = el('div', 'backup');
@@ -795,6 +933,7 @@ var CityOps = (function () {
 
   function renderShare() {
     var state = ctx.store.load();
+    curState = state;
     var data = effectiveData(ctx.base, state);
     var sm = shareModel(data, state);
     var main = document.getElementById('main');
@@ -808,7 +947,7 @@ var CityOps = (function () {
         var bd = el('div', 'bd' + (e.status === 'done' ? ' item-done' : ''));
         var h3 = el('h3');
         if (e.status === 'done') h3.appendChild(el('span', 'donemark', '✓'));
-        h3.appendChild(document.createTextNode(e.it.name));
+        h3.appendChild(document.createTextNode(effectiveName(e.it, state)));
         if (e.it.price) h3.appendChild(el('span', 'price', e.it.price.text));
         bd.appendChild(h3);
         var meta = (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label + (e.it.when ? ' · ' + e.it.when : '');
@@ -829,7 +968,7 @@ var CityOps = (function () {
         var card = el('div', 'card' + (e.status === 'done' ? ' item-done' : ''));
         var h3 = el('h3');
         if (e.status === 'done') h3.appendChild(el('span', 'donemark', '✓'));
-        h3.appendChild(document.createTextNode(e.it.name));
+        h3.appendChild(document.createTextNode(effectiveName(e.it, state)));
         if (e.it.price) h3.appendChild(el('span', 'price', e.it.price.text));
         card.appendChild(h3);
         card.appendChild(el('p', 'when-line', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
@@ -838,16 +977,64 @@ var CityOps = (function () {
     }
   }
 
+  function renderCalendar(data, state) {
+    var cm = calendarModel(data, state);
+    var main = document.getElementById('main');
+    main.innerHTML = '';
+    cm.days.forEach(function (d) {
+      var dc = el('div', 'daycard' + (d.entries.length ? '' : ' empty-day'));
+      var hd = el('div', 'hd');
+      hd.appendChild(el('span', 'd', d.label));
+      dc.appendChild(hd);
+      if (!d.entries.length) {
+        dc.appendChild(el('div', 'bd free-day', 'free'));
+      }
+      d.entries.forEach(function (e) {
+        var bd = el('div', 'bd' + (e.status === 'done' ? ' item-done' : ''));
+        bd.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
+        bd.appendChild(itemBody(e.it, e.status, true, true));
+        dc.appendChild(bd);
+      });
+      main.appendChild(dc);
+    });
+    if (cm.undated.length) {
+      main.appendChild(el('h2', null, 'Anytime'));
+      cm.undated.forEach(function (e) {
+        var card = el('div', 'card' + (e.status === 'done' ? ' item-done' : ''));
+        card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
+        card.appendChild(itemBody(e.it, e.status, true, true));
+        main.appendChild(card);
+      });
+    }
+    cm.sections.forEach(function (sv) {
+      if (sv.backups.length) {
+        var bk = el('div', 'backup');
+        bk.appendChild(el('div', 'bt', '↩ ' + sv.section.label + ' backups'));
+        sv.backups.forEach(function (it) { bk.appendChild(renderCard(it, 'backup', true)); });
+        main.appendChild(bk);
+      }
+      if (sv.archived.length) {
+        var det = el('details', 'arch-details');
+        det.appendChild(el('summary', null, sv.section.label + ': archived (' + sv.archived.length + ')'));
+        sv.archived.forEach(function (it) { det.appendChild(renderCard(it, 'archived')); });
+        main.appendChild(det);
+      }
+    });
+  }
+
   function rerender() {
     // Any in-flight drag references nodes from the previous render's #main;
     // drop it so a stray window pointerup after a rerender is a no-op.
     drag = null;
     var state = ctx.store.load();
+    curState = state;
     var data = effectiveData(ctx.base, state);
     renderHeader(data, state);
     renderToolbar(data, state);
     if (shareOn) {
       renderShare();
+    } else if (state.viewMode === 'day') {
+      renderCalendar(data, state);
     } else {
       var main = document.getElementById('main');
       main.innerHTML = '';
@@ -866,6 +1053,7 @@ var CityOps = (function () {
     out.city.dates = JSON.parse(JSON.stringify(effectiveDates(data, state)));
     out.items.forEach(function (it) {
       it.status = effectiveStatus(it, state);
+      it.name = effectiveName(it, state);
       var d = effectiveDay(it, state);
       if (d) { it.day = d; } else { delete it.day; }
     });
@@ -988,7 +1176,7 @@ var CityOps = (function () {
       var summary = diffSummary(current, res.data);
       st.dataOverride = res.data;
       ctx.store.save(st);
-      pendingPromote = null; // item ids may change under an override
+      pendingPromote = pendingMove = pendingEdit = null; // item ids may change under an override
       wrap.remove();
       rerender();
       document.getElementById('notice').textContent = 'Data updated: ' + summary + '.';
@@ -1001,7 +1189,7 @@ var CityOps = (function () {
         var st = ctx.store.load();
         st.dataOverride = null;
         ctx.store.save(st);
-        pendingPromote = null;
+        pendingPromote = pendingMove = pendingEdit = null;
         wrap.remove();
         rerender();
       };
@@ -1033,6 +1221,15 @@ var CityOps = (function () {
     };
     tb.appendChild(share);
     if (!shareOn) {
+      var vw = el('button', null, state.viewMode === 'day' ? 'By type' : 'Calendar');
+      vw.type = 'button';
+      vw.onclick = function () {
+        var st = ctx.store.load();
+        setViewMode(st, st.viewMode === 'day' ? 'type' : 'day');
+        ctx.store.save(st);
+        rerender();
+      };
+      tb.appendChild(vw);
       var exp = el('button', null, 'Export JSON');
       exp.type = 'button';
       exp.id = 'btn-export';
@@ -1099,7 +1296,9 @@ var CityOps = (function () {
     diffSummary: diffSummary, shareModel: shareModel,
     effectiveDay: effectiveDay, setDay: setDay, stayDates: stayDates,
     normalizeState: normalizeState, effectiveDates: effectiveDates,
-    setStayDates: setStayDates, toggleSection: toggleSection
+    setStayDates: setStayDates, toggleSection: toggleSection,
+    effectiveName: effectiveName, setTitle: setTitle, setViewMode: setViewMode,
+    keyForDisplayedDate: keyForDisplayedDate, calendarModel: calendarModel
   };
 })();
 CityOps.init();
