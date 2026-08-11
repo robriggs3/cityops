@@ -422,7 +422,7 @@ CITY_Y.city.name = 'Yerevan';
 CITY_Y.city.dates = { from: '2026-08-15', to: '2026-08-22' };
 test('appStore.normalize fills missing keys and repairs order/active', () => {
   const empty = C.appStore.normalize(null);
-  assert.deepEqual(empty, { cities: {}, order: [], active: null });
+  assert.deepEqual(empty, { cities: {}, order: [], active: null, updatedAt: {} });
   const s = C.appStore.normalize({
     cities: {
       a: CITY_B, b: CITY_Y,
@@ -595,6 +595,113 @@ test('blankCity scaffolds a valid schema-v1 city', () => {
   assert.throws(() => C.appStore.blankCity('', 'AL', '2026-08-22', '2026-08-29'));
   assert.throws(() => C.appStore.blankCity('Tirana', 'AL', '2026-08-29', '2026-08-22'));
   assert.throws(() => C.appStore.blankCity('Tirana', 'AL', 'soon', '2026-08-29'));
+});
+
+// M2: sync helpers (pure). Network and UI live in src/app-shell.html and are
+// verified in the browser, not here.
+test('appStore stamps updatedAt on add, honours an injected iso, drops it on remove', () => {
+  const before = new Date().toISOString();
+  let s = C.appStore.add(C.appStore.normalize(null), CITY_B).store;
+  const stamp = s.updatedAt['batumi-2026-08-08'];
+  assert.ok(stamp >= before, 'add stamps now by default');
+  assert.ok(!isNaN(Date.parse(stamp)));
+  // A pulled city carries the REMOTE stamp so it does not push straight back.
+  s = C.appStore.add(s, CITY_Y, '2026-08-01T00:00:00.000Z').store;
+  assert.equal(s.updatedAt['yerevan-2026-08-15'], '2026-08-01T00:00:00.000Z');
+  s = C.appStore.remove(s, 'batumi-2026-08-08');
+  assert.ok(!('batumi-2026-08-08' in s.updatedAt));
+  assert.deepEqual(Object.keys(s.updatedAt), ['yerevan-2026-08-15']);
+});
+test('appStore.normalize backfills missing stamps with EPOCH and prunes orphans', () => {
+  let s = C.appStore.add(C.appStore.normalize(null), CITY_B).store;
+  s = C.appStore.add(s, CITY_Y, '2026-08-01T00:00:00.000Z').store;
+  delete s.updatedAt['batumi-2026-08-08'];          // pre-M2 store: no stamp at all
+  s.updatedAt['ghost-city'] = '2026-08-02T00:00:00.000Z'; // stamp for a city that is gone
+  s.updatedAt['yerevan-2026-08-15'] = 42;          // wrong type
+  const n = C.appStore.normalize(s);
+  assert.equal(n.updatedAt['batumi-2026-08-08'], C.syncKit.EPOCH);
+  assert.equal(n.updatedAt['yerevan-2026-08-15'], C.syncKit.EPOCH);
+  assert.ok(!('ghost-city' in n.updatedAt));
+  assert.deepEqual(Object.keys(n.updatedAt).sort(), n.order.slice().sort());
+});
+test('syncKit.decide covers the full newer-wins matrix', () => {
+  const A = '2026-08-11T09:00:00.000Z';   // older
+  const B = '2026-08-11T10:00:00.000Z';   // newer
+  assert.equal(C.syncKit.decide(null, null), 'noop');   // 1 nothing anywhere
+  assert.equal(C.syncKit.decide(A, null), 'push');      // 2 local only
+  assert.equal(C.syncKit.decide(null, A), 'pull');      // 3 remote only
+  assert.equal(C.syncKit.decide(B, A), 'push');         // 4 local newer
+  assert.equal(C.syncKit.decide(A, B), 'pull');         // 5 remote newer
+  assert.equal(C.syncKit.decide(A, A), 'noop');         // 6 exact tie keeps local
+  assert.equal(C.syncKit.decide('not a date', A), 'pull');  // 7 junk local = no local stamp
+  assert.equal(C.syncKit.decide(A, 'not a date'), 'push');  // 8 junk remote = no remote row
+  // 9 same instant, two dialects: PostgREST offset form vs device Z form.
+  assert.equal(C.syncKit.decide('2026-08-11T09:00:00.000Z', '2026-08-11T09:00:00+00:00'), 'noop');
+  // and the offset form still orders correctly against a later Z stamp
+  assert.equal(C.syncKit.decide('2026-08-11T09:00:00+00:00', B), 'pull');
+});
+test('syncKit.plan splits both sides and never resurrects a session-removed city', () => {
+  const A = '2026-08-11T09:00:00.000Z';
+  const B = '2026-08-11T10:00:00.000Z';
+  const p = C.syncKit.plan(
+    { keep: A, newer: B, localonly: A, wasremoved: B },
+    { keep: A, newer: A, remoteonly: A, wasremoved: A, ghost: A },
+    { wasremoved: 1, ghost: 1 }
+  );
+  assert.deepEqual(p.push, ['localonly', 'newer', 'wasremoved']); // local newer wins even for a removed-but-still-present city
+  assert.deepEqual(p.pull, ['remoteonly']);
+  assert.deepEqual(p.noop, ['ghost', 'keep']); // ghost exists only remotely and was removed here: skipped
+  assert.deepEqual(C.syncKit.plan(null, null, null), { push: [], pull: [], noop: [] });
+});
+test('syncKit.buildRows shapes upsert rows and never sends user_id', () => {
+  const rows = C.syncKit.buildRows('data', [
+    { cityId: 'batumi-2026-08-08', payload: CITY_B, updatedAt: '2026-08-11T09:00:00.000Z' },
+    { cityId: 'nostamp-2026-01-01', payload: CITY_Y },
+    { cityId: 'bad', payload: null },
+    null
+  ]);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(Object.keys(rows[0]).sort(), ['city_id', 'data', 'updated_at']);
+  assert.equal(rows[0].data.city.name, 'Batumi');
+  assert.equal(rows[1].updated_at, C.syncKit.EPOCH);
+  const st = C.syncKit.buildRows('state', [{ cityId: 'x', payload: C.emptyState(), updatedAt: '2026-08-11T09:00:00.000Z' }]);
+  assert.deepEqual(Object.keys(st[0]).sort(), ['city_id', 'state', 'updated_at']);
+});
+test('syncKit.parseAuthHash reads a GoTrue fragment and rejects incomplete ones', () => {
+  const now = Date.parse('2026-08-11T09:00:00.000Z');
+  const s = C.syncKit.parseAuthHash(
+    '#access_token=aaa.bbb.ccc&expires_in=3600&refresh_token=rrr&token_type=bearer&type=magiclink', now);
+  assert.equal(s.access_token, 'aaa.bbb.ccc');
+  assert.equal(s.refresh_token, 'rrr');
+  assert.equal(s.token_type, 'bearer');
+  assert.equal(s.expires_at, Math.floor(now / 1000) + 3600);
+  assert.equal(s.email, '');
+  // an explicit expires_at wins over expires_in
+  assert.equal(C.syncKit.parseAuthHash('#access_token=a&refresh_token=r&expires_in=3600&expires_at=1800000000', now).expires_at, 1800000000);
+  // email rides along when the fragment carries one (url-encoded)
+  assert.equal(C.syncKit.parseAuthHash('#access_token=a&refresh_token=r&email=rob%40example.com', now).email, 'rob@example.com');
+  // no expiry information at all: mark it already expired so first use refreshes
+  assert.equal(C.syncKit.parseAuthHash('#access_token=a&refresh_token=r', now).expires_at, Math.floor(now / 1000));
+  assert.equal(C.syncKit.parseAuthHash('#refresh_token=r&expires_in=3600', now), null);          // no access token
+  assert.equal(C.syncKit.parseAuthHash('#access_token=a&expires_in=3600', now), null);           // no refresh token
+  assert.equal(C.syncKit.parseAuthHash('#city=batumi-2026-08-08', now), null);                   // the app's own hash
+  assert.equal(C.syncKit.parseAuthHash('#error=access_denied&error_description=expired', now), null);
+  assert.equal(C.syncKit.parseAuthHash('', now), null);
+  assert.equal(C.syncKit.parseAuthHash(null, now), null);
+  assert.equal(C.syncKit.parseAuthHash('#####', now), null);
+});
+test('syncKit.sessionExpiringSoon guards the 60s window and every unreadable case', () => {
+  const now = Date.parse('2026-08-11T09:00:00.000Z');
+  const at = (offsetSec) => ({ access_token: 'a', expires_at: Math.floor(now / 1000) + offsetSec });
+  assert.equal(C.syncKit.sessionExpiringSoon(at(3600), now), false);
+  assert.equal(C.syncKit.sessionExpiringSoon(at(61), now), false);
+  assert.equal(C.syncKit.sessionExpiringSoon(at(59), now), true);
+  assert.equal(C.syncKit.sessionExpiringSoon(at(-1), now), true);
+  assert.equal(C.syncKit.sessionExpiringSoon({ access_token: 'a', expires_at: String(Math.floor(now / 1000) + 3600) }, now), false); // string seconds
+  assert.equal(C.syncKit.sessionExpiringSoon({ access_token: 'a', expires_at: now + 3600000 }, now), false); // milliseconds
+  assert.equal(C.syncKit.sessionExpiringSoon({ access_token: 'a' }, now), true);   // no expiry
+  assert.equal(C.syncKit.sessionExpiringSoon({ expires_at: now / 1000 + 3600 }, now), true); // no token
+  assert.equal(C.syncKit.sessionExpiringSoon(null, now), true);
 });
 
 console.log(pass + ' passed, ' + fail + ' failed');
