@@ -109,7 +109,7 @@ example if you want to see the shape at full scale.
 
 ## Live guides
 
-The example guides run at https://robriggs3.github.io/cityops/ : Batumi
+The example guides run at https://cityops.robriggs.com/ : Batumi
 (the original field-tested city) and Yerevan (generated with PROMPT.md,
 in daily use on the road right now). Open one on a phone to see what the
 tool actually feels like: lifecycle buttons, day reordering, the calendar
