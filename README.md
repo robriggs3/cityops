@@ -107,8 +107,18 @@ sections (dinner, coffee, cowork, activities, services, practical),
 extracted from the original Batumi guide. Read it alongside the schema
 example if you want to see the shape at full scale.
 
+## Live guides
+
+The example guides run at https://robriggs3.github.io/cityops/ : Batumi
+(the original field-tested city) and Yerevan (generated with PROMPT.md,
+in daily use on the road right now). Open one on a phone to see what the
+tool actually feels like: lifecycle buttons, day reordering, the calendar
+view, section collapse.
+
 ## Status
 
-Personal tool, schema v1, not yet published. It runs from a local repo,
-not pushed to GitHub. README and polish are draft quality; both are
-expected to tighten before this goes anywhere public.
+Schema v1, MIT licensed, actively dogfooded on a live multi-city trip.
+State (done marks, reorders, renames, preferences) saves per device via
+localStorage; a synced multi-device app that imports this same schema is
+the planned next phase. Issues and city files from other travelers are
+welcome.
