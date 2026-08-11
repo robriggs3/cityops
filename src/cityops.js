@@ -1275,7 +1275,8 @@ var CityOps = (function () {
         document.body.appendChild(a);
         a.click();
         a.remove();
-        URL.revokeObjectURL(a.href);
+        var freeUrl = a.href;
+        setTimeout(function () { URL.revokeObjectURL(freeUrl); }, 4000);
       };
       tb.appendChild(exp);
       var upd = el('button', null, 'Update data');

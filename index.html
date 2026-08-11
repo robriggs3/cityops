@@ -1526,7 +1526,8 @@ var CityOps = (function () {
         document.body.appendChild(a);
         a.click();
         a.remove();
-        URL.revokeObjectURL(a.href);
+        var freeUrl = a.href;
+        setTimeout(function () { URL.revokeObjectURL(freeUrl); }, 4000);
       };
       tb.appendChild(exp);
       var upd = el('button', null, 'Update data');
@@ -3110,7 +3111,8 @@ var CityOps = (function () {
         document.body.appendChild(a);
         a.click();
         a.remove();
-        URL.revokeObjectURL(a.href);
+        var freeUrl = a.href;
+        setTimeout(function () { URL.revokeObjectURL(freeUrl); }, 4000);
       };
       tb.appendChild(exp);
       var upd = el('button', null, 'Update data');
@@ -4294,7 +4296,8 @@ CityOps.init();
     document.body.appendChild(a);
     a.click();
     a.remove();
-    URL.revokeObjectURL(a.href);
+    var freeUrl = a.href;
+    setTimeout(function () { URL.revokeObjectURL(freeUrl); }, 4000);
   }
 
   // Set before the first boot so the engine's toolbar picks up the app-only button.
