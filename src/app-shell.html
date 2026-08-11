@@ -79,6 +79,19 @@
 
   var APP_KEY = 'cityops.app.v1';
 
+  // ---- M2 sync configuration ----
+  // An empty url means sync is OFF: no sign-in button, no listeners, no
+  // network calls, nothing to fail. That is the committed state; the
+  // controller binds the real project values here (BINDING CHECKLIST in
+  // .superpowers/sdd/m2-client-report.md). The anon key is public by design:
+  // row level security is the boundary, and no other key ever reaches a
+  // browser.
+  var SUPA = { url: '', anon: '' };
+
+  var AUTH_KEY = 'cityops.auth.v1';   // {access_token, refresh_token, expires_at, email}
+  var SYNC_KEY = 'cityops.sync.v1';   // {lastSync}
+  var DEV_KEY = 'cityops.supa.dev';   // testing override: {"url":"...","anon":"..."}
+
   // Bundled first-run city: the same example block standalone template.html ships
   // with, so a stranger opening the app sees a working guide immediately.
   var SEED_CITY = {
@@ -172,6 +185,11 @@
     // below), which re-renders the panel and decorates the fresh header; no
     // separate call needed here.
     CityOps.boot(clone(store.cities[id]));
+    // Sync baseline for this city, taken AFTER the boot and independently of
+    // whether a session exists yet: at first load the session is restored after
+    // the first boot, so leaving noteStateChange() to take the baseline lazily
+    // would spend it on the user's first real edit and swallow that push.
+    stateStamp[id] = readStateStamp(id);
   }
 
   // Closing on an outside click: bound to document only while the panel is
@@ -228,6 +246,19 @@
     rm.type = 'button';
     rm.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); openRemoveModal(); };
     acts.appendChild(rm);
+    // Sync control: absent entirely when no project is configured, so an
+    // unconfigured build shows no sign-in affordance it cannot honour.
+    if (syncOn()) {
+      var sy = el('button', null, session ? ('Sync: ' + (syncEmail || 'signed in')) : 'Sign in to sync');
+      sy.type = 'button';
+      sy.onclick = function () {
+        panelOpen = false;
+        updateHeaderExpanded();
+        renderPanel();
+        if (session) openSyncModal(); else openSignInModal();
+      };
+      acts.appendChild(sy);
+    }
     panel.appendChild(acts);
     bar.appendChild(panel);
 
@@ -346,6 +377,8 @@
         s.save(st);
       }
       activateCity(res.cityId);
+      // A pasted, replaced or blank city is a local data edit: queue the upsert.
+      schedulePush('data', res.cityId);
     }
 
     function askDuplicate(data, id) {
@@ -438,6 +471,11 @@
       var gone = activeId;
       store = CityOps.appStore.remove(store, gone);
       if (LS) { try { LS.removeItem('cityops.' + gone + '.v1'); } catch (e) {} }
+      // Removal does not propagate to other devices in v1 (see the report), but
+      // it must not be undone here either: this device refuses to pull the city
+      // back for the rest of the session.
+      removedIds[gone] = 1;
+      delete stateStamp[gone];
       if (!store.order.length) {
         var res = CityOps.appStore.add(store, clone(SEED_CITY));
         store = res.store;
@@ -457,6 +495,588 @@
     wrap.onclick = function (e) { if (e.target === wrap) wrap.remove(); };
     host.appendChild(wrap);
     inp.focus();
+  }
+
+  // ==========================================================================
+  // M2: Supabase sync. Local-first, newer-wins per city.
+  // ==========================================================================
+  // Everything below is inert unless SUPA.url is bound: syncOn() gates the UI,
+  // the listeners and every single fetch, so with no config the app behaves
+  // exactly as it did in M1. Network failure is always a silent no-op (a
+  // console.warn at most): the app must work identically offline, mid-flight
+  // and signed out. The decision logic lives in CityOps.syncKit (pure, unit
+  // tested); only transport, storage and UI live here.
+
+  var session = null;          // {access_token, refresh_token, expires_at, email}
+  var syncEmail = '';
+  var lastSyncIso = null;
+  var removedIds = {};         // cities removed on this device this session
+  var stateStamp = {};         // cityId -> state.updated already seen (push trigger baseline)
+  var pushQueueData = {};      // cityId -> pending data push
+  var pushQueueState = {};     // cityId -> pending state push
+  var pushTimer = null;
+  var refreshInFlight = null;
+  var pullInFlight = false;
+  var lastPullAt = 0;
+
+  function syncOn() {
+    return !!(SUPA.url && SUPA.anon && typeof fetch === 'function');
+  }
+
+  function warn(what, e) {
+    if (typeof console !== 'undefined' && console && console.warn) {
+      console.warn('cityops sync: ' + what + (e && e.message ? ' (' + e.message + ')' : ''));
+    }
+  }
+
+  // Testing override: localStorage cityops.supa.dev = {"url":"...","anon":"..."}
+  // points this device at a scratch project without touching the committed
+  // config. https only, with an explicit exception for a loopback host, so a
+  // bearer token can never ride to a remote origin over plain http.
+  function readDevConfig() {
+    if (!LS) return;
+    var raw = null;
+    try { raw = LS.getItem(DEV_KEY); } catch (e) { return; }
+    if (!raw) return;
+    var cfg = null;
+    try { cfg = JSON.parse(raw); } catch (e2) { warn('dev config is not valid JSON'); return; }
+    if (!cfg || typeof cfg.url !== 'string' || typeof cfg.anon !== 'string' || !cfg.anon) return;
+    var url = cfg.url.replace(/\/+$/, '');
+    var okScheme = /^https:\/\/[^\s\/]+$/.test(url) ||
+      /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(url);
+    if (!okScheme) { warn('dev config url rejected (https, or http on localhost, only)'); return; }
+    SUPA = { url: url, anon: cfg.anon };
+  }
+
+  // ---- session storage ----
+  function loadSession() {
+    if (!LS) return null;
+    var raw = null;
+    try { raw = LS.getItem(AUTH_KEY); } catch (e) { return null; }
+    if (!raw) return null;
+    var s = null;
+    try { s = JSON.parse(raw); } catch (e2) { return null; }
+    if (!s || typeof s.access_token !== 'string' || typeof s.refresh_token !== 'string') return null;
+    return s;
+  }
+
+  function saveSession(s) {
+    session = s;
+    syncEmail = (s && s.email) || '';
+    if (!LS) return; // private mode: the session holds for this tab only
+    try {
+      if (s) LS.setItem(AUTH_KEY, JSON.stringify(s));
+      else LS.removeItem(AUTH_KEY);
+    } catch (e) {}
+  }
+
+  function loadSyncMeta() {
+    if (!LS) return;
+    try {
+      var raw = LS.getItem(SYNC_KEY);
+      if (!raw) return;
+      var m = JSON.parse(raw);
+      if (m && typeof m.lastSync === 'string') lastSyncIso = m.lastSync;
+    } catch (e) {}
+  }
+
+  function stampSync() {
+    lastSyncIso = new Date().toISOString();
+    if (!LS) return;
+    try { LS.setItem(SYNC_KEY, JSON.stringify({ lastSync: lastSyncIso })); } catch (e) {}
+  }
+
+  // The one path that signs a user out on its own: a refresh token the server
+  // refuses. Everything transient (offline, 5xx) keeps the session. Once
+  // dropped, ensureToken returns null forever after, so nothing can loop.
+  function dropSession(msg) {
+    saveSession(null);
+    stateStamp = {};
+    pushQueueData = {};
+    pushQueueState = {};
+    if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
+    if (msg) showSyncNotice(msg);
+    renderPanel();
+  }
+
+  // The engine owns #notice and rewrites it on every render (empty, or the
+  // private-mode warning). A sync notice is appended to whatever the engine
+  // just wrote and lives until the next render restores the engine's own text.
+  // Deliberately transient: no new DOM, nothing for the user to dismiss.
+  function showSyncNotice(text) {
+    var n = document.getElementById('notice');
+    if (!n || !text) return;
+    var base = n.textContent || '';
+    n.textContent = base ? base + ' ' + text : text;
+  }
+
+  function cleanHash() {
+    try {
+      history.replaceState(null, '', location.pathname + location.search);
+    } catch (e) {
+      location.hash = '';
+    }
+  }
+
+  // Runs BEFORE the #city= hash is read. A magic-link return replaces the whole
+  // fragment with the GoTrue session, so there is no city hash left to protect;
+  // the fragment is cleared immediately (access tokens must not sit in the
+  // address bar or in history), and activateCity() writes #city= back a moment
+  // later. Returns a one-line notice to show after the first render, or null.
+  function consumeAuthHash() {
+    if (!syncOn()) return null;
+    var h = String(location.hash || '');
+    if (!h) return null;
+    if (h.indexOf('access_token=') === -1) {
+      // GoTrue reports a dead or already-used link as an error fragment.
+      if (/[#&]error=/.test(h) && h.indexOf('error_description=') !== -1) {
+        cleanHash();
+        return 'That sign-in link did not work. Send yourself a new one.';
+      }
+      return null;
+    }
+    var s = CityOps.syncKit.parseAuthHash(h, Date.now());
+    cleanHash();
+    if (!s) return 'That sign-in link was incomplete. Send yourself a new one.';
+    saveSession(s);
+    fetchUserEmail();
+    return 'Signed in. Syncing your cities.';
+  }
+
+  // Resolves to a usable access token, or null when there is nothing to sync
+  // with. Refreshes inside the 60s window (or when forced by a 401), with one
+  // shared in-flight refresh so a burst of calls cannot stampede GoTrue.
+  function ensureToken(force) {
+    if (!syncOn() || !session) return Promise.resolve(null);
+    if (!force && !CityOps.syncKit.sessionExpiringSoon(session, Date.now())) {
+      return Promise.resolve(session.access_token);
+    }
+    if (refreshInFlight) return refreshInFlight;
+    refreshInFlight = fetch(SUPA.url + '/auth/v1/token?grant_type=refresh_token', {
+      method: 'POST',
+      headers: { 'apikey': SUPA.anon, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: session.refresh_token })
+    }).then(function (r) {
+      if (r.status === 400 || r.status === 401 || r.status === 403) return 'dead';
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.json();
+    }).then(function (j) {
+      if (j === 'dead' || !j || !j.access_token || !j.refresh_token) {
+        dropSession('Sync signed out. Sign in again to resume syncing.');
+        return null;
+      }
+      saveSession({
+        access_token: j.access_token,
+        refresh_token: j.refresh_token,
+        token_type: j.token_type || 'bearer',
+        expires_at: j.expires_at || (Math.floor(Date.now() / 1000) + (j.expires_in || 3600)),
+        email: (j.user && j.user.email) || syncEmail || ''
+      });
+      return session.access_token;
+    }).catch(function (e) {
+      // Offline or a transient server problem: keep the session, skip this
+      // round. Only an explicit rejection above signs the user out.
+      warn('token refresh failed', e);
+      return null;
+    }).then(function (tok) { refreshInFlight = null; return tok; });
+    return refreshInFlight;
+  }
+
+  // Authenticated call against the project. Resolves to parsed JSON, or null
+  // when there is no usable token. Rejects on transport/HTTP errors so every
+  // caller can swallow them in one place.
+  function api(path, opts, retried) {
+    return ensureToken(false).then(function (tok) {
+      if (!tok) return null;
+      var o = opts || {};
+      var headers = { 'apikey': SUPA.anon, 'Authorization': 'Bearer ' + tok };
+      if (o.headers) {
+        Object.keys(o.headers).forEach(function (k) { headers[k] = o.headers[k]; });
+      }
+      return fetch(SUPA.url + path, { method: o.method || 'GET', headers: headers, body: o.body })
+        .then(function (r) {
+          if (r.status === 401 && !retried) {
+            // Rejected before its stated expiry: refresh once, retry once, then
+            // give up for this round. Never a retry loop.
+            return ensureToken(true).then(function (t2) {
+              return t2 ? api(path, opts, true) : null;
+            });
+          }
+          if (!r.ok) throw new Error('http ' + r.status);
+          if (r.status === 204) return null;
+          var ct = (r.headers && r.headers.get) ? (r.headers.get('content-type') || '') : '';
+          return ct.indexOf('json') === -1 ? null : r.json();
+        });
+    });
+  }
+
+  // ---- per-city state access (sync side) ----
+  // The booted city's state lives in the engine's own store, which keeps an
+  // in-memory copy; reading its localStorage key directly would miss unsaved
+  // private-mode state, so the live state wins for the active city.
+  function readStateFull(id) {
+    if (id === activeId) {
+      var live = CityOps.liveState();
+      if (live) return live;
+    }
+    if (!LS) return null;
+    try {
+      var raw = LS.getItem('cityops.' + id + '.v1');
+      return raw ? CityOps.normalizeState(JSON.parse(raw)) : null;
+    } catch (e) { return null; }
+  }
+
+  function readStateStamp(id) {
+    var st = readStateFull(id);
+    return (st && typeof st.updated === 'string') ? st.updated : null;
+  }
+
+  // Writes a pulled state verbatim, keeping the remote `updated` stamp.
+  // makeStore().save() re-stamps with now, which would make a pull look like a
+  // local edit and push it straight back, so the pull path never uses it. The
+  // active city is re-booted right after, which builds a fresh store that reads
+  // this value back. Returns false in private mode (nothing is persisted there,
+  // so pulled state is skipped rather than half applied).
+  function writeStateRaw(id, state) {
+    if (!LS) return false;
+    try { LS.setItem('cityops.' + id + '.v1', JSON.stringify(state)); return true; }
+    catch (e) { return false; }
+  }
+
+  // ---- push ----
+  function pushNow(kind, entries) {
+    if (!syncOn() || !session || !entries || !entries.length) return;
+    var field = (kind === 'state') ? 'state' : 'data';
+    var table = (kind === 'state') ? 'city_state' : 'cities';
+    var rows = CityOps.syncKit.buildRows(field, entries);
+    if (!rows.length) return;
+    api('/rest/v1/' + table + '?on_conflict=user_id,city_id', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates,return=minimal'
+      },
+      body: JSON.stringify(rows)
+    }).then(function () { stampSync(); })
+      .catch(function (e) { warn('push ' + kind + ' failed', e); });
+  }
+
+  // 2s debounce per the spec, shared by both tables: a burst of taps produces
+  // one upsert. A failed flush is NOT retried on a timer; local stays newer
+  // than the server, so the next pull's reconcile pushes it. Local is the queue.
+  function schedulePush(kind, id) {
+    if (!syncOn() || !session || !id) return;
+    if (kind === 'state') pushQueueState[id] = 1; else pushQueueData[id] = 1;
+    if (pushTimer) clearTimeout(pushTimer);
+    pushTimer = setTimeout(flushPush, 2000);
+  }
+
+  function flushPush() {
+    pushTimer = null;
+    var dataEntries = [];
+    Object.keys(pushQueueData).forEach(function (id) {
+      if (has(store.cities, id)) {
+        dataEntries.push({ cityId: id, payload: store.cities[id], updatedAt: store.updatedAt[id] });
+      }
+    });
+    pushQueueData = {};
+    var stateEntries = [];
+    Object.keys(pushQueueState).forEach(function (id) {
+      var st = readStateFull(id);
+      if (st && st.updated) stateEntries.push({ cityId: id, payload: st, updatedAt: st.updated });
+    });
+    pushQueueState = {};
+    pushNow('data', dataEntries);
+    pushNow('state', stateEntries);
+  }
+
+  // Chained onto the engine's state-change hook. A push fires only when the
+  // state stamp actually moved: the first render after a boot just records a
+  // baseline, because pushing there would upload this device's state before the
+  // first pull has had a chance to reconcile it against newer remote state.
+  function noteStateChange() {
+    if (!syncOn() || !session || !activeId) return;
+    var st = CityOps.liveState();
+    if (!st) return;
+    var stamp = st.updated || null;
+    if (!has(stateStamp, activeId)) { stateStamp[activeId] = stamp; return; }
+    if (stateStamp[activeId] === stamp) return;
+    stateStamp[activeId] = stamp;
+    schedulePush('state', activeId);
+  }
+
+  // ---- pull ----
+  function pullAll(force) {
+    if (!syncOn() || !session || pullInFlight) return Promise.resolve(false);
+    var now = Date.now();
+    if (!force && now - lastPullAt < 60000) return Promise.resolve(false);
+    pullInFlight = true;
+    lastPullAt = now;
+    return Promise.all([
+      api('/rest/v1/cities?select=city_id,data,updated_at'),
+      api('/rest/v1/city_state?select=city_id,state,updated_at')
+    ]).then(function (res) {
+      // A null half means "no usable token"; an empty table is []. Never treat
+      // an unanswered read as an empty server, which would push everything up.
+      if (!res || !Array.isArray(res[0]) || !Array.isArray(res[1])) return false;
+      applyPull(res[0], res[1]);
+      stampSync();
+      return true;
+    }).catch(function (e) {
+      warn('pull failed', e);
+      return false;
+    }).then(function (ok) { pullInFlight = false; return ok; });
+  }
+
+  function stampMap(rows, byId) {
+    var stamps = {};
+    (rows || []).forEach(function (r) {
+      if (!r || typeof r.city_id !== 'string' || !r.city_id) return;
+      byId[r.city_id] = r;
+      stamps[r.city_id] = (typeof r.updated_at === 'string') ? r.updated_at : null;
+    });
+    return stamps;
+  }
+
+  function applyPull(cityRows, stateRows) {
+    var remoteData = {}, remoteState = {};
+    var remoteDataStamps = stampMap(cityRows, remoteData);
+    var remoteStateStamps = stampMap(stateRows, remoteState);
+
+    var localDataStamps = {}, localStateStamps = {};
+    store.order.forEach(function (id) {
+      localDataStamps[id] = store.updatedAt[id] || CityOps.syncKit.EPOCH;
+      var s = readStateStamp(id);
+      if (s) localStateStamps[id] = s;
+    });
+
+    var dataPlan = CityOps.syncKit.plan(localDataStamps, remoteDataStamps, removedIds);
+    var statePlan = CityOps.syncKit.plan(localStateStamps, remoteStateStamps, removedIds);
+
+    var pulledNames = [];
+    var rebootActive = false;
+
+    dataPlan.pull.forEach(function (id) {
+      var row = remoteData[id];
+      if (!row || !row.data || typeof row.data !== 'object') return;
+      // These rows are the user's own, but they are still untrusted input:
+      // validate before letting them into the store, and refuse any row whose
+      // payload does not derive the city id it claims to be filed under.
+      if (CityOps.validate(row.data).length) { warn('skipped invalid remote city ' + id); return; }
+      if (CityOps.cityId(row.data) !== id) { warn('skipped mismatched remote city ' + id); return; }
+      var res = CityOps.appStore.add(store, row.data, row.updated_at || null);
+      store = res.store;
+      if (id === activeId) rebootActive = true;
+      if (pulledNames.indexOf(row.data.city.name) === -1) pulledNames.push(row.data.city.name);
+    });
+    if (dataPlan.pull.length) saveStore(store);
+
+    statePlan.pull.forEach(function (id) {
+      if (!has(store.cities, id)) return;  // orphan state row: no city to attach it to
+      var row = remoteState[id];
+      if (!row || !row.state || typeof row.state !== 'object') return;
+      var st = CityOps.normalizeState(clone(row.state));
+      st.updated = row.updated_at || st.updated || null;
+      if (!writeStateRaw(id, st)) return;  // private mode: cannot persist, leave local alone
+      stateStamp[id] = st.updated;         // baseline first, so the re-boot does not push it back
+      if (id === activeId) rebootActive = true;
+      var nm = store.cities[id].city.name;
+      if (pulledNames.indexOf(nm) === -1) pulledNames.push(nm);
+    });
+
+    var dataEntries = [];
+    dataPlan.push.forEach(function (id) {
+      if (!has(store.cities, id)) return;
+      dataEntries.push({ cityId: id, payload: store.cities[id], updatedAt: store.updatedAt[id] });
+    });
+    var stateEntries = [];
+    statePlan.push.forEach(function (id) {
+      var st = readStateFull(id);
+      if (st && st.updated) stateEntries.push({ cityId: id, payload: st, updatedAt: st.updated });
+    });
+    pushNow('data', dataEntries);
+    pushNow('state', stateEntries);
+
+    if (rebootActive && has(store.cities, activeId)) {
+      var y = 0;
+      try { y = window.scrollY || window.pageYOffset || 0; } catch (e) {}
+      CityOps.boot(clone(store.cities[activeId]));
+      try { window.scrollTo(0, y); } catch (e2) {}
+    }
+    if (pulledNames.length) {
+      showSyncNotice('Synced: ' + pulledNames.join(', ') + ' updated from your other device');
+    }
+  }
+
+  // ---- auth actions ----
+  // Once per page load at most: the sign-in path and the startup path both want
+  // the address, and the first call is usually still in flight when the second
+  // would fire. The label falls back to "signed in" if it never arrives.
+  var emailLookupDone = false;
+  function fetchUserEmail() {
+    if (emailLookupDone) return;
+    emailLookupDone = true;
+    api('/auth/v1/user').then(function (u) {
+      if (!u || !u.email || !session) return;
+      session.email = u.email;
+      saveSession(session);
+      renderPanel();  // only visible while the switcher panel is open
+    }).catch(function (e) { warn('user lookup failed', e); });
+  }
+
+  // Resolves to null on success, or a human-readable error string. Rejects only
+  // when the service cannot be reached at all.
+  function sendMagicLink(email) {
+    var redirect = location.origin + location.pathname;
+    return fetch(SUPA.url + '/auth/v1/otp?redirect_to=' + encodeURIComponent(redirect), {
+      method: 'POST',
+      headers: { 'apikey': SUPA.anon, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, create_user: true, gotrue_meta_security: {} })
+    }).then(function (r) {
+      if (r.ok) return null;
+      return r.json().then(function (j) {
+        return (j && (j.msg || j.error_description || j.message)) || ('Sign-in service returned ' + r.status + '.');
+      }, function () { return 'Sign-in service returned ' + r.status + '.'; });
+    });
+  }
+
+  function signOut() {
+    var tok = session && session.access_token;
+    if (tok) {
+      // Best effort revoke. The local session is cleared either way, so the
+      // button can never leave the user half signed out.
+      try {
+        fetch(SUPA.url + '/auth/v1/logout', {
+          method: 'POST',
+          headers: { 'apikey': SUPA.anon, 'Authorization': 'Bearer ' + tok }
+        }).catch(function () {});
+      } catch (e) {}
+    }
+    saveSession(null);
+    stateStamp = {};
+    pushQueueData = {};
+    pushQueueState = {};
+    if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
+    renderPanel();
+  }
+
+  // ---- sync UI ----
+  function lastSyncLine() {
+    if (!lastSyncIso) return 'Not synced yet on this device.';
+    var when = lastSyncIso;
+    try { when = new Date(lastSyncIso).toLocaleString(); } catch (e) {}
+    return 'Last sync: ' + when + '.';
+  }
+
+  function modalShell(title) {
+    var host = document.getElementById('modal');
+    host.innerHTML = '';
+    var wrap = el('div', 'modal-wrap');
+    var box = el('div', 'modal');
+    box.appendChild(el('h3', null, title));
+    wrap.appendChild(box);
+    wrap.onclick = function (e) { if (e.target === wrap) wrap.remove(); };
+    host.appendChild(wrap);
+    return { wrap: wrap, box: box, close: function () { wrap.remove(); } };
+  }
+
+  function openSignInModal() {
+    var m = modalShell('Sign in to sync');
+    m.box.appendChild(el('p', 'diff', 'Your cities and your progress follow you to your other devices. ' +
+      'No password: we email you a link. The app works exactly the same whether you sign in or not.'));
+    var inp = document.createElement('input');
+    inp.type = 'email';
+    inp.className = 'name-confirm';
+    inp.placeholder = 'you@example.com';
+    inp.name = 'email';               // lets the browser autofill, and keeps
+    inp.autocomplete = 'email';       // devtools quiet about an unnamed field
+    inp.setAttribute('aria-label', 'Email address');
+    m.box.appendChild(inp);
+    var msg = el('div', 'diff', '');
+    m.box.appendChild(msg);
+    var row = el('div', 'mrow');
+    var send = el('button', 'ctl to-done', 'Send magic link');
+    send.type = 'button';
+    // Disabled until the field holds something that could be an address: a
+    // button that is going to fail should never look ready to click.
+    send.disabled = true;
+    send.title = 'Enter your email address first';
+    inp.oninput = function () {
+      var ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inp.value.replace(/^\s+|\s+$/g, ''));
+      send.disabled = !ok;
+      send.title = ok ? '' : 'Enter your email address first';
+    };
+    send.onclick = function () {
+      var addr = inp.value.replace(/^\s+|\s+$/g, '');
+      send.disabled = true;
+      send.textContent = 'Sending...';
+      msg.textContent = '';
+      sendMagicLink(addr).then(function (err) {
+        send.textContent = 'Send magic link';
+        if (err) { msg.textContent = err; send.disabled = false; return; }
+        msg.textContent = 'Link sent: open the email on this device.';
+        send.title = 'Link already sent to ' + addr;
+      }).catch(function () {
+        send.textContent = 'Send magic link';
+        send.disabled = false;
+        msg.textContent = 'Could not reach the sync service. Check your connection and try again.';
+      });
+    };
+    var cancel = el('button', 'ctl', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = m.close;
+    row.appendChild(send);
+    row.appendChild(cancel);
+    m.box.appendChild(row);
+    inp.focus();
+  }
+
+  function openSyncModal() {
+    var m = modalShell('Sync');
+    m.box.appendChild(el('p', 'diff', syncEmail ? ('Signed in as ' + syncEmail + '.') : 'Signed in.'));
+    var when = el('p', 'diff', lastSyncLine());
+    m.box.appendChild(when);
+    var row = el('div', 'mrow');
+    var now = el('button', 'ctl', 'Sync now');
+    now.type = 'button';
+    now.onclick = function () {
+      now.disabled = true;
+      now.textContent = 'Syncing...';
+      pullAll(true).then(function (ok) {
+        now.textContent = 'Sync now';
+        now.disabled = false;
+        when.textContent = ok ? lastSyncLine() : 'Could not reach the sync service. Your work is saved on this device.';
+      });
+    };
+    var out = el('button', 'ctl to-archived', 'Sign out');
+    out.type = 'button';
+    out.onclick = function () { signOut(); m.close(); };
+    var close = el('button', 'ctl', 'Close');
+    close.type = 'button';
+    close.onclick = m.close;
+    row.appendChild(now);
+    row.appendChild(out);
+    row.appendChild(close);
+    m.box.appendChild(row);
+  }
+
+  // ---- wiring ----
+  function startSync() {
+    if (!syncOn()) return;
+    loadSyncMeta();
+    if (!session) {
+      var stored = loadSession();
+      if (stored) { session = stored; syncEmail = stored.email || ''; }
+    }
+    if (!session) return;
+    if (!syncEmail) fetchUserEmail();
+    window.addEventListener('online', function () { pullAll(true); });
+    // Mobile tab resume. Throttled to one pull a minute inside pullAll, so
+    // flicking between apps does not hammer the project.
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') pullAll(false);
+    });
+    pullAll(true);
   }
 
   // The assembler embeds the fully assembled standalone template here, with every
@@ -511,7 +1131,23 @@
   // every time too, not just once at startup.
   CityOps.onStateChange = function () { renderPanel(); decorateHeader(); };
 
+  // Sync chains onto that hook rather than replacing it: the citybar still
+  // re-renders exactly as before, and the sync layer additionally notices when
+  // the engine's state stamp moved and queues a debounced push.
+  (function chainStateChange() {
+    var prev = CityOps.onStateChange;
+    CityOps.onStateChange = function () {
+      if (prev) prev();
+      noteStateChange();
+    };
+  })();
+
   function start() {
+    // Config first, then the auth fragment, and only then the #city= hash: a
+    // magic-link return carries tokens in the fragment and must be consumed
+    // (and scrubbed) before anything reads it as a city deep link.
+    readDevConfig();
+    var authNotice = consumeAuthHash();
     store = loadStore();
     if (!store.order.length) {
       var seeded = CityOps.appStore.add(store, clone(SEED_CITY));
@@ -526,6 +1162,10 @@
       var id = hashCity();
       if (id && has(store.cities, id) && id !== activeId) activateCity(id);
     });
+    // After the first render: the engine rewrote #notice during boot, so a
+    // sign-in notice has to be appended once that has happened.
+    if (authNotice) showSyncNotice(authNotice);
+    startSync();
   }
 
   // Offline support: register the app-shell service worker. Feature-detected
