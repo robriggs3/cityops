@@ -4310,7 +4310,20 @@ CityOps.init();
   // path that mutates state outside the app shell's own click handlers. The
   // engine wipes #hdr on every render, so decorateHeader() must re-run here
   // every time too, not just once at startup.
-  CityOps.onStateChange = function () { renderPanel(); decorateHeader(); };
+  // The itinerary companion link is app-only: standalone exported guides must
+  // never carry it, so it decorates #foot here rather than in the engine.
+  function decorateFoot() {
+    var foot = document.getElementById('foot');
+    if (!foot || foot.querySelector('.foot-wheres')) return;
+    foot.appendChild(document.createTextNode(' · itinerary: '));
+    var a = el('a', 'foot-wheres', 'wheres.robriggs.com');
+    a.href = 'https://wheres.robriggs.com';
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    foot.appendChild(a);
+  }
+
+  CityOps.onStateChange = function () { renderPanel(); decorateHeader(); decorateFoot(); };
 
   // Sync chains onto that hook rather than replacing it: the citybar still
   // re-renders exactly as before, and the sync layer additionally notices when
