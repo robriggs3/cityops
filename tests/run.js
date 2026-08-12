@@ -589,6 +589,7 @@ test('blankCity scaffolds a valid schema-v1 city', () => {
   assert.deepEqual(C.validate(b), []);
   assert.equal(b.city.name, 'Tirana');
   assert.equal(b.city.country, 'AL');
+  assert.equal(C.appStore.blankCity('X', 'usa', '2026-01-01', '2026-01-02').city.country, 'USA');
   assert.equal(b.sections.length, 8);
   assert.equal(b.items[0].section, 'practical');
   assert.equal(C.cityId(b), 'tirana-2026-08-22');

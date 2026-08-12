@@ -634,7 +634,7 @@ var CityOps = (function () {
       schema: 1,
       city: {
         name: String(name).replace(/^\s+|\s+$/g, ''),
-        country: (country || '').toUpperCase().slice(0, 2),
+        country: (country || '').toUpperCase().slice(0, 3),
         dates: { from: from, to: to },
         notes: []
       },
