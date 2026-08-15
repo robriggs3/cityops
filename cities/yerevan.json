@@ -113,7 +113,32 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The Italian side of the menu: pasta and risotto, 12 pasta and 15 Italian-cuisine reviews and not one negative between them"
+          },
+          {
+            "tier": "good",
+            "text": "Mushroom soup, named first by reviewers who bother to name anything (soups: 16 reviews, all positive)"
+          },
+          {
+            "tier": "good",
+            "text": "Desserts, 48 reviews at 94 percent: the San Sebastian cheesecake and the baklava are the two named repeatedly"
+          },
+          {
+            "tier": "skip",
+            "text": "The Armenian standards here (dolma, kufta): separate reviewers call the dolma bland with dry meat and the kufta average, while the Italian dishes score 100 percent"
+          }
+        ],
+        "tips": [
+          "Ask for the outdoor patio: reviewers consistently rate the greenery-facing terrace over the inside room",
+          "Typical visit is about 45 minutes, so it does not eat the evening before the 21:00 fountains"
+        ],
+        "source": "Yandex Maps dish-level review tallies plus Google review aggregates on Wanderlog, read Aug 2026"
+      }
     },
     {
       "id": "derian",
@@ -149,7 +174,32 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Manti, named as the favourite dish by reviewers on three separate aggregates and called the best in Yerevan"
+          },
+          {
+            "tier": "must",
+            "text": "Fattoush, repeatedly named the best in the city (one Yandex reviewer's whole point of going)"
+          },
+          {
+            "tier": "good",
+            "text": "Rehan hummus, the basil one, named alongside the manti as a customer favourite rather than the plain version"
+          },
+          {
+            "tier": "good",
+            "text": "Chi kofte, raw kibbeh, singled out by name on TripAdvisor and in the mezze praise"
+          }
+        ],
+        "tips": [
+          "Order mezze plus manti rather than a meat main: the eggplant, grape leaves and hummus are what reviewers name, the grill is not",
+          "Reviewers report being seated where the room wants them even when it is empty, so state a preference on arrival"
+        ],
+        "source": "Yandex Maps reviews, TripAdvisor and Wanderlog Google-review aggregates, Aug 2026 read"
+      }
     },
     {
       "id": "sherep",
@@ -182,7 +232,29 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Khinkali: 50 reviews, 84 percent positive, the best-scoring thing on the menu"
+          },
+          {
+            "tier": "good",
+            "text": "Khachapuri (46 reviews, 80 percent) and the fish (45 reviews, 79 percent)"
+          },
+          {
+            "tier": "skip",
+            "text": "The shashlik: 79 reviews and only 43 percent positive, the worst score of any dish at any restaurant in this guide"
+          }
+        ],
+        "tips": [
+          "Book, and if you want a window table say so when you book: reviewers report the good tables are all pre-reserved",
+          "Reviewers say the room smells strongly of cooking and clothes carry it out after an hour, which is the terrace argument in one line",
+          "Waiting time scores 71 percent across 199 reviews, so order everything at once rather than in courses"
+        ],
+        "source": "Yandex Maps dish-level review tallies plus TripAdvisor and Wanderlog aggregates, Aug 2026 read"
+      }
     },
     {
       "id": "apres",
@@ -249,7 +321,32 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The shashlik and kebabs: 67 shashlik reviews at 90 percent and 143 meat reviews at 87 percent, the best grill numbers in this guide"
+          },
+          {
+            "tier": "must",
+            "text": "The gata itself, baked on site, described by reviewers as fresh and fragrant with a delicate filling"
+          },
+          {
+            "tier": "good",
+            "text": "Lamb with dates, and the homemade pomegranate wine, both named by name in reviews"
+          },
+          {
+            "tier": "skip",
+            "text": "The fish: 16 reviews at 69 percent, with the trout described as over-salted and left too long on the coals"
+          }
+        ],
+        "tips": [
+          "Reserve rather than walk in: reviewers describe reception as abrupt with walk-ins while seated guests rate the waiters highly",
+          "Live music runs every night, so this is not the quiet table"
+        ],
+        "source": "Yandex Maps dish-level review tallies plus TripAdvisor review text, Aug 2026 read"
+      }
     },
     {
       "id": "lavash-restaurant",
@@ -282,7 +379,37 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The Napoleon, the signature dessert, named over and over (desserts: 196 reviews at 89 percent, cakes 106 at 89)"
+          },
+          {
+            "tier": "must",
+            "text": "Khinkali: 112 reviews, 87 percent positive"
+          },
+          {
+            "tier": "good",
+            "text": "Lamb shoulder with emmer wheat pilaf, and the ghapama, the two mains reviewers name by dish rather than by adjective"
+          },
+          {
+            "tier": "skip",
+            "text": "The shashlik: 114 reviews and only 58 percent positive, with the meat repeatedly called small for the price and chewy"
+          },
+          {
+            "tier": "skip",
+            "text": "Coffee here: 30 reviews at 53 percent, the worst-rated thing on the list. Have it elsewhere"
+          }
+        ],
+        "tips": [
+          "Reserve: walk-ins report being turned away, and the crowding complaint is the single most common one",
+          "Service is attentive to the point reviewers call it hovering, so say early that you want to be left alone",
+          "Air conditioning gets run hard: reviewers describe the room as cold, which in August is a feature but bring a layer"
+        ],
+        "source": "Yandex Maps dish-level review tallies (4,102 ratings) plus TripAdvisor and Wanderlog aggregates, Aug 2026 read"
+      }
     },
     {
       "id": "sat-22-departure",
@@ -358,7 +485,29 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "good",
+            "text": "Khinkali: 25 reviews at 91 percent, the best-scoring dish here by a distance"
+          },
+          {
+            "tier": "good",
+            "text": "The dolma, called the most delicious in Yerevan by more than one reviewer, and the soups (27 reviews, 81 percent)"
+          },
+          {
+            "tier": "skip",
+            "text": "The shashlik, despite the reputation: 69 reviews at 66 percent and 105 meat reviews at 71 percent, with cartilage and dry pork kebab named repeatedly"
+          }
+        ],
+        "tips": [
+          "Count your change and read the bill. Multiple reviewers describe service charge being claimed as not included when it was, and change not coming back",
+          "The ground floor is under renovation: the entrance is through the courtyard and seating is upstairs, so it looks shut from the street",
+          "Staff scores 53 percent across 151 reviews and waiting time 47 percent across 53, so this is a sit-down-and-be-patient place"
+        ],
+        "source": "Yandex Maps dish-level review tallies plus TripAdvisor review text, Aug 2026 read"
+      }
     },
     {
       "id": "tavern-yerevan-khorenatsi",
@@ -386,7 +535,29 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "good",
+            "text": "Khinkali (45 reviews, 76 percent), including the fried version reviewers ask for by name, and the lamb"
+          },
+          {
+            "tier": "good",
+            "text": "The pomegranate wine, named in review after review"
+          },
+          {
+            "tier": "skip",
+            "text": "The shashlik: 76 reviews at 55 percent, with veal shashlik described as salty and dry"
+          }
+        ],
+        "tips": [
+          "A 10 percent service charge is added automatically, so do not tip twice",
+          "Portions are described as large by most reviewers, so order fewer plates than the menu suggests",
+          "Late in the evening reviewers report parts of the menu already unavailable, so order the thing you came for first"
+        ],
+        "source": "Yandex Maps dish tallies for Tavern Yerevan (chain data, mostly the Amiryan branch, not the Khorenatsi one) plus Wanderlog aggregates, Aug 2026 read"
+      }
     },
     {
       "id": "lali-kitchen",
@@ -452,7 +623,28 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The ribs. Overwhelmingly the most-named dish, called the best in Armenia, with honey teriyaki and kimchi the two glazes reviewers pick out"
+          },
+          {
+            "tier": "good",
+            "text": "The burgers and the cocktails, both named repeatedly and both rated well above the sides"
+          },
+          {
+            "tier": "skip",
+            "text": "The fries: the one item reviewers actively call weak. Take a salad instead"
+          }
+        ],
+        "tips": [
+          "Tables sit very close together and weekend seating runs out, so this is a book-ahead or go-early room",
+          "It is priced high for Yerevan, which is the recurring complaint even in positive reviews"
+        ],
+        "source": "Yandex Maps review analysis (1,296 ratings, 452 reviews) plus TripAdvisor, Aug 2026 read"
+      }
     },
     {
       "id": "shirvan",
@@ -480,7 +672,28 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The kebabs, koobideh and barg, named as amazing across Google, Yandex and TripAdvisor alike"
+          },
+          {
+            "tier": "good",
+            "text": "Zereshk polo, the barberry rice with chicken, named by reviewers on two separate platforms"
+          },
+          {
+            "tier": "skip",
+            "text": "Ghormeh sabzi: an Iranian reviewer describes it as bitter with no meat in it, and it is the dish the negative reviews keep landing on"
+          }
+        ],
+        "tips": [
+          "Read the bill: one reviewer reports a plain salad billed at 2,000 AMD / $5 against an expected 500 AMD / $1",
+          "Hookah is a big part of the room and reviewers praise it, which is another way of saying the air is smoky"
+        ],
+        "source": "Yandex Maps reviews plus Wanderlog Google-review aggregate, Aug 2026 read"
+      }
     },
     {
       "id": "caucasus-tavern",
@@ -513,7 +726,24 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "good",
+            "text": "Khinkali, the one dish multiple reviewers name positively here, at about 400 AMD / $1 for five"
+          },
+          {
+            "tier": "good",
+            "text": "Khash and khashlama, the boiled lamb: the reason locals come at odd hours, and what the 24-hour licence is actually for"
+          }
+        ],
+        "tips": [
+          "The menu is split into Armenian and Georgian sections and printed in several languages, so ordering at 02:00 with no shared language works",
+          "Typical visit is about 45 minutes and service slows noticeably at peak, so it is a late-night answer rather than a long evening"
+        ],
+        "source": "Wanderlog Google-review aggregate plus TripAdvisor review text, Aug 2026 read. Note two TripAdvisor listings exist for this name; this is the Hanrapetutyan St one"
+      }
     },
     {
       "id": "tun-lahmajo",
@@ -541,7 +771,28 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Lahmajo with cheese, the dish the place is named for and the only thing reviewers are unanimous about"
+          },
+          {
+            "tier": "good",
+            "text": "Khinkali: 180 reviews at 87 percent, the second-best thing here"
+          },
+          {
+            "tier": "skip",
+            "text": "The khachapuri: 58 reviews and only 55 percent positive, called disappointing and small"
+          }
+        ],
+        "tips": [
+          "Waits of 50 minutes to an hour before anyone takes an order are described repeatedly once it fills, so go before it does",
+          "Reviewers describe the inside as hot, which at midnight in August is worth knowing before you sit down"
+        ],
+        "source": "Yandex Maps dish-level review tallies plus TripAdvisor, Aug 2026 read"
+      }
     },
     {
       "id": "niko-kitchen",
@@ -636,7 +887,27 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The croissants: 90 percent positive on the dish-level review split, against 79 percent for breakfast as a whole"
+          },
+          {
+            "tier": "good",
+            "text": "The croissant with eggs, and the quail croissant, the two made-to-order items reviewers name for a light breakfast"
+          },
+          {
+            "tier": "skip",
+            "text": "Treating it as a full sit-down breakfast: reviewers call the plates overpriced and small, and that is where the 4.1 rating comes from"
+          }
+        ],
+        "tips": [
+          "Waiting time is the weakest score on the listing, so take the pastry from the counter rather than ordering a cooked plate on a work morning"
+        ],
+        "source": "Yandex Maps dish-level review split plus TripAdvisor (Abovyan branch, 172 reviews), Aug 2026 read"
+      }
     },
     {
       "id": "achajour-parpetsi",
@@ -672,7 +943,29 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Eggs benedict, and specifically the salmon version, the one dish reviewers name across every platform"
+          },
+          {
+            "tier": "good",
+            "text": "The coffee, called excellent repeatedly, and the homemade desserts"
+          },
+          {
+            "tier": "skip",
+            "text": "The bagels: reviewers who name them call them small enough to be one bite"
+          }
+        ],
+        "tips": [
+          "It is self-service, which is the number one complaint: you collect your own food, and cooked items run slow",
+          "Only about four outdoor tables, and reviewers report the indoor air conditioning run to full cold, so pick your side of the door deliberately",
+          "Free wifi is capped around two hours and you ask staff to extend it, which matters if this is the work morning"
+        ],
+        "source": "Yandex Maps reviews for the Parpetsi branch (77 ratings) plus Wanderlog and TripAdvisor aggregates, Aug 2026 read"
+      }
     },
     {
       "id": "crumbs-bakery",
@@ -789,7 +1082,29 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The plain lahmajun, thin and crisp, at about 550 AMD / $1.50: 98 percent positive across the meal reviews"
+          },
+          {
+            "tier": "good",
+            "text": "The zaatar, and the zaatar with olives, named by several reviewers as the thing to add"
+          },
+          {
+            "tier": "good",
+            "text": "Mutabbal, and the Aleppo-spiced coffee, both named specifically rather than in passing"
+          }
+        ],
+        "tips": [
+          "The service charge is 10 to 12 percent on dine-in and zero on takeaway, which is what the unexplained charge on your bill will be",
+          "It is deep in a courtyard off Tumanyan and reviewers say it is unfindable without GPS, so pin it before you walk",
+          "It can sell out: reviewers advise arriving well before the 18:30 close, and food comes in 5 to 7 minutes once you order"
+        ],
+        "source": "Yandex Maps reviews plus TripAdvisor and Wanderlog Google-review aggregates, Aug 2026 read"
+      }
     },
     {
       "id": "gum-market-lunch",
@@ -816,7 +1131,25 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Sujukh, the walnut string dipped in grape jelly: the thing the whole front section of the market is built around"
+          },
+          {
+            "tier": "good",
+            "text": "Dried and candied apricots, and the sheets of lavash, which are worth the walk even if you buy nothing"
+          }
+        ],
+        "tips": [
+          "Everything is sold by weight and the candied fruit is far heavier than it looks: name a quantity and ask the price before it goes in the bag",
+          "Cash and small notes only, and take the free samples, vendors push them constantly",
+          "Ask before photographing a stall or a vendor"
+        ],
+        "source": "Wander-Lush and We Did It Our Way market guides plus TripAdvisor reviews, Aug 2026 read"
+      }
     },
     {
       "id": "foodetory-rossia",
@@ -885,7 +1218,28 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The zhingyalov hats itself: 410 reviews at 97 percent, and reviewers say one is enough to carry you through a day on your feet"
+          },
+          {
+            "tier": "good",
+            "text": "The spicy tomato juice, and the thyme and mint herbal tea, the two drinks named repeatedly"
+          },
+          {
+            "tier": "skip",
+            "text": "The tan, the yoghurt drink: reviewers call it insanely salty unless you take the mint version"
+          }
+        ],
+        "tips": [
+          "Order one, not two: reviewers repeatedly say a single serving fed the whole table's expectations",
+          "Six to eight tables only, and it fills, but food arrives in about a minute so turnover is fast"
+        ],
+        "source": "Yandex Maps dish-level review tallies (415 ratings) plus TripAdvisor, Aug 2026 read"
+      }
     },
     {
       "id": "anteb",
@@ -919,7 +1273,28 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The manti, made fresh daily and named by more reviewers than anything else on the menu, including the manti soup version"
+          },
+          {
+            "tier": "good",
+            "text": "The lahmajo, praised for crispy thin dough, and the bulgur pilaf, which reviewers say is the only one in town"
+          },
+          {
+            "tier": "skip",
+            "text": "Defaulting to the kebabs: they score noticeably below the manti and lahmajo and reviewers call them too spicy"
+          }
+        ],
+        "tips": [
+          "Service lapses are the one consistent complaint, including a table forgotten for 50 minutes, so confirm the order before the room fills",
+          "Kunefe is the dessert reviewers name, if you are still there for one"
+        ],
+        "source": "Yandex Maps reviews (252 ratings) plus Wanderlog Google-review aggregate, Aug 2026 read"
+      }
     },
     {
       "id": "mer-taghe",
@@ -948,7 +1323,28 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The lahmajoun, called the best in Armenia by multiple reviewers and served within minutes"
+          },
+          {
+            "tier": "good",
+            "text": "The khachapuri, described as delicate and the reason people come here for breakfast"
+          },
+          {
+            "tier": "skip",
+            "text": "Going late in the day: recent reviewers report burnt lahmajos with dry filling, which is a fresh-batch problem"
+          }
+        ],
+        "tips": [
+          "Count the pieces before you leave: one reviewer got two when three were ordered and had to argue it",
+          "The basement hall is cramped and the outdoor seating is tight, so this is a 20-minute lunch not a sit-down"
+        ],
+        "source": "Yandex Maps review analysis plus TripAdvisor, Aug 2026 read"
+      }
     },
     {
       "id": "jano-tigran-mets",
@@ -1389,7 +1785,28 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Bargain. Reviewers are unanimous that prices are not fixed and that paying the asking price marks you out"
+          },
+          {
+            "tier": "good",
+            "text": "Silver with local stones, wood carving and Soviet-era memorabilia: the three categories reviewers name as genuinely worth carrying home"
+          },
+          {
+            "tier": "skip",
+            "text": "Believing the I made this myself line: reviewers report the same jewellery sold by several vendors each claiming to have handcrafted it"
+          }
+        ],
+        "tips": [
+          "Cash only, and reviewers warn about pickpockets in the weekend crush",
+          "Go early for the widest selection: the good stalls thin out as the day runs"
+        ],
+        "source": "TripAdvisor reviews and the 4stogo Vernissage shopping guide, Aug 2026 read"
+      }
     },
     {
       "id": "republic-square-fountains",
@@ -1417,7 +1834,20 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "good",
+            "text": "Standing close to the jets rather than back on the steps: reviewers say you get wet and that it is the better spot"
+          }
+        ],
+        "tips": [
+          "Reviewers consistently describe arriving around 20:00 for a 21:00 show to get a spot, and the water runs on until 23:00 either way",
+          "Tuesday is the weekly clean and there is no show at all"
+        ],
+        "source": "TripAdvisor Republic Square and Dancing Fountains reviews, Aug 2026 read"
+      }
     },
     {
       "id": "parajanov-museum",
@@ -1454,7 +1884,24 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The prison drawings, and the collages built from shells, buttons, combs and old photographs: the two things reviewers name specifically"
+          },
+          {
+            "tier": "good",
+            "text": "Paying for the guide. Reviewers who took one say it is the difference between fifteen minutes and an afternoon"
+          }
+        ],
+        "tips": [
+          "The photo permit is a small separate fee, and reviewers say it is cheap enough not to think about",
+          "It is two compact floors: without a guide you can be back out in fifteen minutes, so do not build the whole afternoon around it alone"
+        ],
+        "source": "TripAdvisor reviews, Aug 2026 read"
+      }
     },
     {
       "id": "tsitsernakaberd",
@@ -1525,7 +1972,29 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Symphony of Stones. Reviewers name it as their favourite stop and repeatedly note it was NOT in the tour itinerary, so it has to be asked for"
+          },
+          {
+            "tier": "good",
+            "text": "The lavash baking demonstration at Garni: the add-on reviewers say was worth including"
+          },
+          {
+            "tier": "good",
+            "text": "Standing inside Geghard for the acoustics: the carved chambers and the chanting echo are what reviewers describe, not the facade"
+          }
+        ],
+        "tips": [
+          "Agree the Symphony of Stones stop with the driver before you set off, in those words, or it gets skipped",
+          "Entry is roughly 1,500 AMD / $4 for Garni and 300 AMD / $0.80 for the gorge, both cash, and Geghard is free",
+          "Hat, water and real shoes: reviewers flag Garni as fully exposed and the gorge path as rough"
+        ],
+        "source": "TripAdvisor tour product reviews for Garni, Geghard and Symphony of Stones, Aug 2026 read"
+      }
     },
     {
       "id": "matenadaran",
@@ -1557,7 +2026,25 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The 5,000 AMD / $14 guided tour. Reviewers are consistent that without it the manuscripts read as glass cases and you will be bored, English labels notwithstanding"
+          },
+          {
+            "tier": "skip",
+            "text": "Joining a large tour group: reviewers say you stop hearing the guide, so ask for a small one or wait for the next"
+          }
+        ],
+        "tips": [
+          "The guided tour runs about an hour, so a 14:30 arrival still clears the 17:50 close comfortably",
+          "Photography is a small extra fee paid at the desk",
+          "Weekdays are noticeably quieter than the weekend per reviewers"
+        ],
+        "source": "TripAdvisor reviews and Wanderlog aggregate, Aug 2026 read"
+      }
     },
     {
       "id": "blue-mosque",
@@ -1626,7 +2113,29 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Ride the indoor escalators up rather than the outside steps: reviewers say the interior landings are hung with artwork and are the more interesting route, and the steps in August are not"
+          },
+          {
+            "tier": "good",
+            "text": "Late afternoon into sunset from the top terrace, when the light over the city is best and the complex lights up after dark"
+          },
+          {
+            "tier": "skip",
+            "text": "Coming for the Ararat view in the evening: reviewers say it is clearest in the morning before the summer haze builds"
+          }
+        ],
+        "tips": [
+          "The escalators stop at 20:00 sharp. Be inside before then or you are walking all 572 steps down in the dark",
+          "Indoor exhibition halls run 10:00 to 20:00 and current sources put them at Friday to Sunday only",
+          "July and August are the peak crowd months on the steps, so early evening beats mid-evening"
+        ],
+        "source": "TripAdvisor Cafesjian Center reviews plus current visitor guides, Aug 2026 read"
+      }
     },
     {
       "id": "victory-park",
@@ -1828,7 +2337,24 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The 10,000 AMD / $27 tasting (Akhtamar 10, Nairi 20, Dvin 30). Reviewers who took it call it clearly worth the step up from the 4,500 AMD / $12 pair"
+          },
+          {
+            "tier": "skip",
+            "text": "Turning up without a booking. The tour is booked-slot only and reviewers who arrived cold did not get in"
+          }
+        ],
+        "tips": [
+          "The standing English-language slot is 11:30, with Russian at 15:00. Confirm on the phone whether a later English slot exists before you plan an afternoon around it",
+          "Free cancellation up to 24 hours out on the third-party bookings, so holding a slot costs nothing"
+        ],
+        "source": "TripAdvisor ARARAT Museum reviews and GetYourGuide tasting listings, Aug 2026 read"
+      }
     },
     {
       "id": "gum-market",

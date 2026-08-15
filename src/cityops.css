@@ -156,6 +156,18 @@
   .empty-day .free-day{padding:6px 16px 10px; font-size:.8rem; color:var(--text-3); font-style:italic;}
   .date-field{font:inherit; font-size:.85rem; padding:6px 10px; border:1px solid var(--border-light);
     border-radius:8px; background:#fff; color:var(--text);}
+  .intel{margin-top:8px;}
+  .intel summary{font-size:.72rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+    color:var(--text-3); cursor:pointer; padding:4px 0;}
+  .verdict{font-size:.86rem; margin-top:4px;}
+  .tier{display:inline-block; font-size:.68rem; font-weight:800; text-transform:uppercase;
+    letter-spacing:.4px; padding:1px 6px; border-radius:5px; margin-right:6px; vertical-align:middle;}
+  .tier-must{background:var(--green-soft); color:var(--green);}
+  .tier-good{background:var(--bg-softer); color:var(--text-3);}
+  .tier-skip{background:var(--amber-soft); color:var(--amber);}
+  .tips{margin:6px 0 0 18px; font-size:.84rem; color:var(--text-3);}
+  .tips li{margin-bottom:3px;}
+  .intel-src{font-size:.72rem; color:var(--text-3); font-style:italic; margin-top:4px;}
   /* narrow phones: trim horizontal chrome so cards get the width */
   @media (max-width: 430px){
     .wrap{padding:0 10px 48px;}

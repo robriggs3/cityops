@@ -163,6 +163,18 @@
   .empty-day .free-day{padding:6px 16px 10px; font-size:.8rem; color:var(--text-3); font-style:italic;}
   .date-field{font:inherit; font-size:.85rem; padding:6px 10px; border:1px solid var(--border-light);
     border-radius:8px; background:#fff; color:var(--text);}
+  .intel{margin-top:8px;}
+  .intel summary{font-size:.72rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+    color:var(--text-3); cursor:pointer; padding:4px 0;}
+  .verdict{font-size:.86rem; margin-top:4px;}
+  .tier{display:inline-block; font-size:.68rem; font-weight:800; text-transform:uppercase;
+    letter-spacing:.4px; padding:1px 6px; border-radius:5px; margin-right:6px; vertical-align:middle;}
+  .tier-must{background:var(--green-soft); color:var(--green);}
+  .tier-good{background:var(--bg-softer); color:var(--text-3);}
+  .tier-skip{background:var(--amber-soft); color:var(--amber);}
+  .tips{margin:6px 0 0 18px; font-size:.84rem; color:var(--text-3);}
+  .tips li{margin-bottom:3px;}
+  .intel-src{font-size:.72rem; color:var(--text-3); font-style:italic; margin-top:4px;}
   /* narrow phones: trim horizontal chrome so cards get the width */
   @media (max-width: 430px){
     .wrap{padding:0 10px 48px;}
@@ -240,6 +252,24 @@
     border:1px solid var(--border-light); border-radius:8px; background:#fff; color:var(--text);}
   .modal .ctl[disabled]{opacity:.45; cursor:not-allowed; border-color:var(--border-light);}
   .modal .ctl[disabled]:hover{border-color:var(--border-light);}
+
+  /* Profile modal: chip lists reuse the pill vocabulary (rounded, bordered,
+     accent ink) at tag scale, so a chip reads as an editable tag. */
+  .chip-list{display:flex; gap:6px; flex-wrap:wrap; margin:6px 0 0;}
+  .chip-list:empty{margin:0;}
+  .chipx{display:inline-flex; align-items:center; gap:6px; font-size:.78rem; font-weight:600;
+    color:var(--accent-hover); background:#fff; border:1.5px solid var(--border-light);
+    border-radius:20px; padding:3px 6px 3px 11px;}
+  .chipx button{font:inherit; font-size:.9rem; line-height:1; font-weight:700; color:var(--text-3);
+    background:var(--bg-softer); border:none; border-radius:50%; width:17px; height:17px;
+    padding:0; cursor:pointer;}
+  .chipx button:hover{background:var(--accent-soft); color:var(--accent-hover);}
+  .chip-add{width:100%; font:inherit; font-size:.85rem; padding:6px 10px; margin-top:6px;
+    border:1px solid var(--border-light); border-radius:8px; background:#fff; color:var(--text);}
+  .modal textarea.notes{min-height:80px; font-family:inherit; font-size:.85rem;}
+  .modal .promptout{min-height:140px;}
+  .hdr-row{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;}
+  .hdr-row .date-field{flex:1 1 30%; min-width:96px;}
   @media (max-width: 430px){
     .hdr-add{top:17px; right:14px; padding:4px 9px; font-size:.7rem;}
   }
@@ -274,6 +304,68 @@ var CityOps = (function () {
     return names[d.getDay()] + ' ' + d.getDate();
   }
 
+  // Intel validation lives in one place so validate() (whole guide) and
+  // mergeDelta() (intel pass payload) can never drift apart. `ref` is the
+  // caller's prefix, already ending in the separator it wants, e.g.
+  // "items[3] (nord) intel:" or 'intel["nord"]:'.
+  function validateIntel(intel, ref, errors) {
+    if (!intel || typeof intel !== 'object' || Array.isArray(intel)) {
+      errors.push(ref + ' must be an object');
+      return;
+    }
+    if (intel.verdicts !== undefined) {
+      if (!Array.isArray(intel.verdicts)) {
+        errors.push(ref + ' verdicts must be an array');
+      } else {
+        intel.verdicts.forEach(function (v, vi) {
+          if (!v || typeof v !== 'object' || ['must', 'good', 'skip'].indexOf(v.tier) === -1) {
+            errors.push(ref + ' verdicts[' + vi + '] tier must be must|good|skip');
+          }
+          if (!v || typeof v.text !== 'string' || !v.text.trim()) {
+            errors.push(ref + ' verdicts[' + vi + '] needs non-empty text');
+          }
+        });
+      }
+    }
+    if (intel.tips !== undefined) {
+      if (!Array.isArray(intel.tips)) {
+        errors.push(ref + ' tips must be an array');
+      } else {
+        intel.tips.forEach(function (t, ti) {
+          if (typeof t !== 'string' || !t.trim()) {
+            errors.push(ref + ' tips[' + ti + '] must be a non-empty string');
+          }
+        });
+      }
+    }
+    if (intel.source !== undefined && typeof intel.source !== 'string') {
+      errors.push(ref + ' source must be a string');
+    }
+  }
+
+  // The per-item rules, shared by validate() and mergeDelta() for exactly the
+  // same reason. `statuses` is the allowed status list (a whole guide allows
+  // all four; a delta may only introduce plan and backup, since done and
+  // archived are states the traveler sets later in the app) and `statusHint`
+  // is appended to that one error so the delta case explains itself. `seen`
+  // is the caller's duplicate-id map, mutated as ids are accepted.
+  function validateItem(it, ref, secIds, seen, errors, statuses, statusHint) {
+    if (!it || typeof it !== 'object' || Array.isArray(it)) {
+      errors.push(ref + ' is not an object');
+      return;
+    }
+    if (!it.id) errors.push(ref + ' needs id');
+    else if (Object.prototype.hasOwnProperty.call(seen, it.id)) errors.push('duplicate item id "' + it.id + '"');
+    else seen[it.id] = 1;
+    if (!it.name) errors.push(ref + ' needs name');
+    if (!Object.prototype.hasOwnProperty.call(secIds, it.section)) errors.push(ref + ' unknown section "' + it.section + '"');
+    if (statuses.indexOf(it.status) === -1) {
+      errors.push(ref + ' bad status "' + it.status + '"' + (statusHint || ''));
+    }
+    if (it.day && !/^\d{4}-\d{2}-\d{2}$/.test(it.day)) errors.push(ref + ' day must be YYYY-MM-DD');
+    if (it.intel !== undefined && it.intel !== null) validateIntel(it.intel, ref + ' intel:', errors);
+  }
+
   function validate(data) {
     var errors = [];
     if (!data || typeof data !== 'object') return ['Root is not an object'];
@@ -292,18 +384,12 @@ var CityOps = (function () {
     if (!Array.isArray(data.items)) {
       errors.push('items[] required');
     } else {
-      var secIds = {};
+      var secIds = Object.create(null);
       (data.sections || []).forEach(function (s) { secIds[s.id] = 1; });
-      var seen = {};
+      var seen = Object.create(null);
       data.items.forEach(function (it, i) {
         var ref = 'items[' + i + ']' + (it && it.id ? ' (' + it.id + ')' : '');
-        if (!it.id) errors.push(ref + ' needs id');
-        else if (seen[it.id]) errors.push('duplicate item id "' + it.id + '"');
-        else seen[it.id] = 1;
-        if (!it.name) errors.push(ref + ' needs name');
-        if (!secIds[it.section]) errors.push(ref + ' unknown section "' + it.section + '"');
-        if (STATUSES.indexOf(it.status) === -1) errors.push(ref + ' bad status "' + it.status + '"');
-        if (it.day && !/^\d{4}-\d{2}-\d{2}$/.test(it.day)) errors.push(ref + ' day must be YYYY-MM-DD');
+        validateItem(it, ref, secIds, seen, errors, STATUSES, null);
       });
     }
     return errors;
@@ -315,6 +401,152 @@ var CityOps = (function () {
     catch (e) { return { data: null, errors: ['JSON parse error: ' + e.message] }; }
     var errors = validate(data);
     return { data: errors.length ? null : data, errors: errors };
+  }
+
+  // ---- delta merge ----
+  // The core re-run mechanic: a PARTIAL payload from a second AI pass is folded
+  // into a city that already exists, without disturbing anything the traveler
+  // has done. Pure: it reads no state, touches no storage, mutates neither
+  // argument, and returns a fresh deep clone. Live planning state (done marks,
+  // reorders, renames) survives by construction, because it is keyed by item id
+  // in a separate store this function never sees.
+  //
+  // Rules, all of them deliberate:
+  // - errors non-empty means NO merge at all: data is null and the caller shows
+  //   the list. A half-applied delta would be impossible to reason about.
+  // - A delta may only introduce plan and backup items. done and archived are
+  //   traveler states, never generated ones.
+  // - An id that already exists is SKIPPED, never overwritten, and counted. That
+  //   is what makes a re-run safe to repeat: running the same delta twice is a
+  //   no-op, not a clobber. A duplicate id WITHIN one delta is an error, since
+  //   that is a malformed payload rather than an overlap with existing work.
+  // - delta.sections with an id that already exists is ignored, not overwritten
+  //   (the traveler may have renamed a section, and a re-run must not undo it).
+  // - delta.intel replaces the whole intel block on an item that exists after
+  //   the merge (existing or just added); an unknown id is counted in
+  //   intelSkipped, not treated as an error, because an AI naming an item the
+  //   traveler has since removed is expected, not broken.
+  // - city, city.dates and every other field of every existing item are never
+  //   touched. intel is the ONE field an existing item can gain here.
+  var DELTA_STATUSES = ['plan', 'backup'];
+  var DELTA_STATUS_HINT = ' (a delta may only add plan or backup items)';
+
+  function emptyDeltaSummary() {
+    return { added: 0, skipped: 0, sectionsAdded: 0, intelApplied: 0, intelSkipped: 0 };
+  }
+
+  function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
+
+  function mergeDelta(cityData, delta) {
+    var errors = [];
+    if (!cityData || typeof cityData !== 'object' || Array.isArray(cityData)) {
+      return { data: null, summary: emptyDeltaSummary(), errors: ['No city data to merge into'] };
+    }
+    if (!delta || typeof delta !== 'object' || Array.isArray(delta)) {
+      return { data: null, summary: emptyDeltaSummary(), errors: ['Delta is not an object'] };
+    }
+    if (delta.schema !== 1) errors.push('schema must be 1');
+    if (delta.delta !== true) {
+      errors.push('delta must be true: this is a partial payload, not a whole guide');
+    }
+
+    // Sections first: a new item may legitimately reference a section this same
+    // delta introduces, so the allowed-section set has to include them.
+    var newSections = [];
+    if (delta.sections !== undefined && delta.sections !== null) {
+      if (!Array.isArray(delta.sections)) {
+        errors.push('sections must be an array');
+      } else {
+        delta.sections.forEach(function (s, i) {
+          if (!s || typeof s !== 'object' || Array.isArray(s) || !s.id || !s.label) {
+            errors.push('sections[' + i + '] needs id and label');
+          } else {
+            newSections.push(s);
+          }
+        });
+      }
+    }
+
+    var secIds = Object.create(null);
+    (Array.isArray(cityData.sections) ? cityData.sections : []).forEach(function (s) {
+      if (s && s.id) secIds[s.id] = 1;
+    });
+    newSections.forEach(function (s) { secIds[s.id] = 1; });
+
+    var existingIds = {};
+    (Array.isArray(cityData.items) ? cityData.items : []).forEach(function (it) {
+      if (it && it.id) existingIds[it.id] = 1;
+    });
+
+    var toAdd = [];
+    var skipped = 0;
+    if (delta.items !== undefined && delta.items !== null) {
+      if (!Array.isArray(delta.items)) {
+        errors.push('items must be an array');
+      } else {
+        var seen = Object.create(null);
+        delta.items.forEach(function (it, i) {
+          var ref = 'items[' + i + ']' + (it && it.id ? ' (' + it.id + ')' : '');
+          var before = errors.length;
+          validateItem(it, ref, secIds, seen, errors, DELTA_STATUSES, DELTA_STATUS_HINT);
+          if (errors.length !== before) return;
+          if (existingIds[it.id]) { skipped++; return; }
+          toAdd.push(it);
+        });
+      }
+    }
+
+    var intelMap = null;
+    if (delta.intel !== undefined && delta.intel !== null) {
+      if (typeof delta.intel !== 'object' || Array.isArray(delta.intel)) {
+        errors.push('intel must be an object keyed by item id');
+      } else {
+        intelMap = delta.intel;
+        Object.keys(intelMap).forEach(function (id) {
+          validateIntel(intelMap[id], 'intel["' + id + '"]:', errors);
+        });
+      }
+    }
+
+    if (errors.length) return { data: null, summary: emptyDeltaSummary(), errors: errors };
+
+    var summary = emptyDeltaSummary();
+    summary.skipped = skipped;
+    var out = deepClone(cityData);
+    if (!Array.isArray(out.sections)) out.sections = [];
+    if (!Array.isArray(out.items)) out.items = [];
+
+    var haveSec = {};
+    out.sections.forEach(function (s) { if (s && s.id) haveSec[s.id] = 1; });
+    newSections.forEach(function (s) {
+      if (haveSec[s.id]) return;
+      haveSec[s.id] = 1;
+      out.sections.push(deepClone(s));
+      summary.sectionsAdded++;
+    });
+
+    toAdd.forEach(function (it) {
+      var copy = deepClone(it);
+      // Both fields belong to a later verification phase, never to a prompt.
+      // An absent one is normalized to null so every item in the merged guide
+      // has the same shape.
+      if (copy.place_id === undefined) copy.place_id = null;
+      if (copy.verified === undefined) copy.verified = null;
+      out.items.push(copy);
+      summary.added++;
+    });
+
+    if (intelMap) {
+      var byId = Object.create(null);
+      out.items.forEach(function (it) { if (it && it.id) byId[it.id] = it; });
+      Object.keys(intelMap).forEach(function (id) {
+        if (!Object.prototype.hasOwnProperty.call(byId, id)) { summary.intelSkipped++; return; }
+        byId[id].intel = deepClone(intelMap[id]);
+        summary.intelApplied++;
+      });
+    }
+
+    return { data: out, summary: summary, errors: [] };
   }
 
   var TRANSITIONS = {
@@ -618,7 +850,10 @@ var CityOps = (function () {
       var v = srcStamps[id];
       updatedAt[id] = (typeof v === 'string' && v) ? v : EPOCH_ISO;
     });
-    return { cities: cities, order: order, active: active, updatedAt: updatedAt };
+    // The interest profile rides in the app store (one per user, not per city)
+    // and is normalized on every load. Nothing else in the engine reads it: it
+    // is handed to the prompt builders and pushed by the shell's sync layer.
+    return { cities: cities, order: order, active: active, updatedAt: updatedAt, profile: normalizeProfile(src.profile) };
   }
 
   // iso: pass the REMOTE stamp when applying a pulled city, so the pull does not
@@ -692,6 +927,282 @@ var CityOps = (function () {
     if (hashId && Object.prototype.hasOwnProperty.call(store.cities, hashId)) return hashId;
     if (store.active && Object.prototype.hasOwnProperty.call(store.cities, store.active)) return store.active;
     return store.order.length ? store.order[0] : null;
+  }
+
+  // ---- interest profile + prompt assembly (pure) ----
+  // The profile is app-only user data (it syncs as a third row kind), but its
+  // shape and the prompt string assembly live in the engine so both are unit
+  // testable in Node and so nothing about them depends on the DOM. The engine
+  // itself never reads the profile: it is carried in the app store, handed to
+  // the prompt builders, and pushed by the app shell's sync layer.
+  var PROFILE_CAP = 30;        // entries per list; more dilutes the research
+  var PROFILE_NOTES_CAP = 2000;
+
+  function trimStr(v) {
+    return (typeof v === 'string') ? v.replace(/^\s+|\s+$/g, '') : '';
+  }
+
+  // Trims, drops empties, dedupes case-insensitively keeping the FIRST spelling
+  // (order is priority, so the earlier entry is the one the traveler meant),
+  // and caps the list.
+  function normalizeProfileList(v) {
+    var out = [];
+    var seen = {};
+    (Array.isArray(v) ? v : []).forEach(function (x) {
+      var t = trimStr(x);
+      if (!t) return;
+      var k = t.toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(seen, k)) return;
+      seen[k] = 1;
+      if (out.length < PROFILE_CAP) out.push(t);
+    });
+    return out;
+  }
+
+  function normalizeProfile(raw) {
+    var src = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+    return {
+      schema: 1,
+      interests: normalizeProfileList(src.interests),
+      avoid: normalizeProfileList(src.avoid),
+      notes: trimStr(src.notes).slice(0, PROFILE_NOTES_CAP),
+      updated: (typeof src.updated === 'string' && src.updated) ? src.updated : null
+    };
+  }
+
+  // Empty means "nothing for the AI to work with": the stamp does not count.
+  function profileIsEmpty(p) {
+    var n = normalizeProfile(p);
+    return !n.interests.length && !n.avoid.length && !n.notes;
+  }
+
+  var INTERESTS_SECTION = { id: 'interests', label: 'My interests', icon: '⭐' };
+
+  // The landmark lines buildCityPrompt edits in PROMPT.md. Named here so the
+  // unit tests can build a small fake template carrying the same landmarks
+  // instead of the whole file.
+  var PROMPT_COPY_LINE = 'Copy this file per trip, fill in the header, delete this line, and go.';
+
+  // Trip-details bullets, matched by their label. `span` means the bullet has
+  // more placeholders than values (accommodation name plus address), so the
+  // whole bracket span is replaced by the single value rather than leaving a
+  // dangling placeholder behind.
+  var HEADER_BULLETS = [
+    { label: 'City', keys: ['name'] },
+    { label: 'Country', keys: ['country'] },
+    { label: 'Dates', keys: ['from', 'to'] },
+    { label: 'Accommodation', keys: ['accommodation'], span: true },
+    { label: 'Arrival transport', keys: ['arrival'] },
+    { label: 'Departure transport', keys: ['departure'] }
+  ];
+
+  function fillHeaderLine(line, rule, header) {
+    var vals = rule.keys.map(function (k) { return trimStr(header ? header[k] : ''); });
+    if (rule.span) {
+      if (!vals[0]) return line;
+      var first = line.indexOf('[');
+      var last = line.lastIndexOf(']');
+      if (first === -1 || last < first) return line;
+      return line.slice(0, first) + vals[0] + line.slice(last + 1);
+    }
+    var i = 0;
+    // An empty value leaves its placeholder in place, so a half-filled header
+    // still reads as a prompt the traveler can finish by hand.
+    return line.replace(/\[[^\][]*\]/g, function (m) {
+      var v = vals[i++];
+      return v ? v : m;
+    });
+  }
+
+  // `lead` is the one instruction line that only makes sense in a whole-guide
+  // prompt (where the Interests research section is part of the file). The
+  // delta builder shares this formatter and passes no lead, because its own
+  // re-run block already says where the new items go.
+  function interestsBlockLines(p, lead) {
+    var b = ['## Traveler interests', ''];
+    if (lead) b.push(lead, '');
+    if (p.interests.length) {
+      b.push('Interests, in priority order:', '');
+      p.interests.forEach(function (x) { b.push('- ' + x); });
+      b.push('');
+    }
+    if (p.avoid.length) {
+      b.push('Avoid, do not suggest any of these:', '');
+      p.avoid.forEach(function (x) { b.push('- ' + x); });
+      b.push('');
+    }
+    if (p.notes) b.push('Notes: ' + p.notes, '');
+    return b;
+  }
+
+  // The block belongs after the traveler-profile bracket paragraph and before
+  // the rule that closes the header, so it reads as part of who is travelling.
+  // Falls back to the "What I need" heading, then to the end of the text, so a
+  // reshaped template still gets the block rather than silently losing it.
+  function insertInterestsBlock(lines, block) {
+    var start = -1, i;
+    for (i = 0; i < lines.length; i++) {
+      if (/^##\s+Traveler profile\s*$/.test(lines[i])) { start = i; break; }
+    }
+    var at = -1;
+    if (start !== -1) {
+      for (i = start + 1; i < lines.length; i++) {
+        if (lines[i] === '---') { at = i; break; }
+        if (/^##\s/.test(lines[i])) break;
+      }
+    }
+    if (at === -1) {
+      for (i = 0; i < lines.length; i++) {
+        if (/^##\s+What I need\s*$/.test(lines[i])) { at = i; break; }
+      }
+    }
+    if (at === -1) return lines.concat([''], block);
+    return lines.slice(0, at).concat(block, lines.slice(at));
+  }
+
+  // Pure string assembly: fills PROMPT.md's Trip details bullets from `header`
+  // ({name, country, from, to, accommodation, arrival, departure}, all optional
+  // strings), drops the "copy this file" instruction line, and inserts the
+  // Traveler interests block when the profile has anything in it.
+  function buildCityPrompt(templateText, header, profile) {
+    var text = (templateText === null || templateText === undefined) ? '' : String(templateText);
+    var lines = text.split('\n');
+    var out = [];
+    var inTrip = false;
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (line === PROMPT_COPY_LINE) {
+        // Drop the instruction and the blank line under it, so no gap is left.
+        if (lines[i + 1] === '') i++;
+        continue;
+      }
+      if (/^##\s/.test(line)) inTrip = /^##\s+Trip details\s*$/.test(line);
+      if (inTrip && line.indexOf('- **') === 0) {
+        for (var r = 0; r < HEADER_BULLETS.length; r++) {
+          if (line.indexOf('- **' + HEADER_BULLETS[r].label + ':**') === 0) {
+            line = fillHeaderLine(line, HEADER_BULLETS[r], header);
+            break;
+          }
+        }
+      }
+      out.push(line);
+    }
+    var p = normalizeProfile(profile);
+    if (!profileIsEmpty(p)) {
+      out = insertInterestsBlock(out, interestsBlockLines(p, INTERESTS_LEAD));
+    }
+    return out.join('\n');
+  }
+
+  // ---- re-run (delta) prompt builders ----
+  // Both build a self-contained prompt for the traveler's own AI out of three
+  // things: fixed instruction text sliced verbatim from PROMPT.md between HTML
+  // comment landmarks, the city they already have, and (for interests) their
+  // profile. Nothing is invented here and nothing is paraphrased: PROMPT.md
+  // stays the single source of prompt wording, and these functions only choose
+  // which parts of it to include and in what order.
+  //
+  // A missing landmark throws rather than silently building a prompt with a
+  // hole in it. The app shows the message inline; it means the build shipped an
+  // older PROMPT.md than the engine expects.
+  function sliceLandmark(templateText, name) {
+    var text = (templateText === null || templateText === undefined) ? '' : String(templateText);
+    // Built by concatenation on purpose: a literal HTML comment opener in
+    // engine source would put the tokenizer into script-data-escaped state
+    // inside the app's embedded copy of the guide template (the assembler
+    // rejects it outright).
+    var mark = '<' + '!--';
+    var open = mark + ' ' + name + ' -->';
+    var close = mark + ' /' + name + ' -->';
+    var a = text.indexOf(open);
+    var b = text.indexOf(close);
+    if (a === -1 || b === -1 || b < a) {
+      throw new Error('The prompt template in this build has no ' + name +
+        ' block. Update PROMPT.md from the repo and rebuild.');
+    }
+    return text.slice(a + open.length, b).replace(/^\n+/, '').replace(/\n+$/, '');
+  }
+
+  // The city, as the AI needs to see it in a re-run: enough to know where and
+  // when, and nothing else. Fields the city does not carry are left out rather
+  // than emitted empty.
+  function cityHeaderLines(data) {
+    var c = (data && data.city) ? data.city : {};
+    var d = c.dates || {};
+    var b = ['## The city', ''];
+    b.push('- **City:** ' + trimStr(c.name));
+    if (trimStr(c.country)) b.push('- **Country:** ' + trimStr(c.country));
+    if (trimStr(d.from) || trimStr(d.to)) {
+      b.push('- **Dates:** ' + trimStr(d.from) + ' to ' + trimStr(d.to));
+    }
+    var acc = (c.accommodation && trimStr(c.accommodation.name)) ? trimStr(c.accommodation.name) : '';
+    if (acc) b.push('- **Accommodation:** ' + acc);
+    b.push('');
+    return b;
+  }
+
+  // One line per item, in the compact form both re-run blocks refer to.
+  function itemListLines(items) {
+    var b = [];
+    (Array.isArray(items) ? items : []).forEach(function (it) {
+      if (!it || !it.id) return;
+      b.push('- ' + it.id + ' | ' + trimStr(it.section) + ' | ' + trimStr(it.name));
+    });
+    return b;
+  }
+
+  var INTERESTS_LEAD = 'Add a ninth section for these interests as described under Interests below.';
+
+  // Assembly order, top to bottom:
+  //   1. one header line saying what this run is
+  //   2. the city block (name, country, dates, accommodation name)
+  //   3. the Traveler interests block, same formatter buildCityPrompt uses
+  //   4. the RERUN:INTERESTS instructions, verbatim from PROMPT.md
+  //   5. the existing-item list the re-run block refers to as "below"
+  //   6. the CONTRACT:ITEM rules, verbatim, so the AI has the item shape
+  // Step 6 is the item-level half of PROMPT.md's output contract only: the
+  // whole-guide half (city, dates, the eight-section list) would tell the AI to
+  // emit exactly what a delta must never contain.
+  function buildInterestsDeltaPrompt(templateText, cityData, profile) {
+    var rerun = sliceLandmark(templateText, 'RERUN:INTERESTS');
+    var contract = sliceLandmark(templateText, 'CONTRACT:ITEM');
+    var p = normalizeProfile(profile);
+    var out = ['You are extending an existing CityOps city guide.', ''];
+    out = out.concat(cityHeaderLines(cityData));
+    if (!profileIsEmpty(p)) out = out.concat(interestsBlockLines(p, null));
+    out.push('## What I need', '', rerun, '');
+    out.push('## Existing items (do not re-suggest these)', '');
+    out = out.concat(itemListLines(cityData && cityData.items));
+    out.push('');
+    out.push('## Item shape', '', contract, '');
+    return out.join('\n');
+  }
+
+  // Assembly order, top to bottom:
+  //   1. one header line saying what this run is
+  //   2. the city block
+  //   3. the Intel quality rules, verbatim, BEFORE the instructions that say
+  //      "follow the Intel quality rules above"
+  //   4. the RERUN:INTEL instructions, verbatim
+  //   5. the item list the re-run block refers to as "below", archived items
+  //      omitted (nobody needs intel on something already put away)
+  //   6. the coverage instruction
+  function buildIntelPassPrompt(templateText, cityData) {
+    var rules = sliceLandmark(templateText, 'RULES:INTEL');
+    var rerun = sliceLandmark(templateText, 'RERUN:INTEL');
+    var items = (cityData && Array.isArray(cityData.items) ? cityData.items : [])
+      .filter(function (it) { return it && it.status !== 'archived'; });
+    var out = ['You are adding review-verified intel to an existing CityOps city guide.', ''];
+    out = out.concat(cityHeaderLines(cityData));
+    out.push('## Intel quality rules', '', rules, '');
+    out.push('## What I need', '', rerun, '');
+    out.push('## Items', '');
+    out = out.concat(itemListLines(items));
+    out.push('');
+    out.push('Cover as many of these as you can verify from real reviews. ' +
+      'Leave out the ones you cannot: a partial payload of real intel is the ' +
+      'correct answer, a complete one of invented intel is not.', '');
+    return out.join('\n');
   }
 
   // ---- sync helpers (pure) ----
@@ -835,6 +1346,57 @@ var CityOps = (function () {
     return n;
   }
 
+  function tierLabel(tier) {
+    return tier === 'must' ? 'Must' : (tier === 'skip' ? 'Skip' : 'Good');
+  }
+
+  function verdictRow(v) {
+    var p = el('p', 'verdict');
+    p.appendChild(el('span', 'tier tier-' + v.tier, tierLabel(v.tier)));
+    p.appendChild(document.createTextNode(v.text));
+    return p;
+  }
+
+  function intelBody(intel, verdictsOnly) {
+    var frag = document.createDocumentFragment();
+    (intel.verdicts || []).forEach(function (v) { frag.appendChild(verdictRow(v)); });
+    if (!verdictsOnly) {
+      if (intel.tips && intel.tips.length) {
+        var ul = el('ul', 'tips');
+        intel.tips.forEach(function (t) { ul.appendChild(el('li', null, t)); });
+        frag.appendChild(ul);
+      }
+      if (intel.source) frag.appendChild(el('p', 'intel-src', intel.source));
+    }
+    return frag;
+  }
+
+  // Full render (planner/calendar): inline when small, collapsed behind a
+  // <details> toggle once there is enough content to be worth hiding.
+  function intelStrip(intel) {
+    var verdicts = intel.verdicts || [];
+    var tips = intel.tips || [];
+    var total = verdicts.length + tips.length;
+    if (!total) return null;
+    if (total <= 2) {
+      var div = el('div', 'intel');
+      div.appendChild(intelBody(intel, false));
+      return div;
+    }
+    var det = el('details', 'intel');
+    det.appendChild(el('summary', null, 'Intel: ' + verdicts.length + ' verdicts, ' + tips.length + ' tips'));
+    det.appendChild(intelBody(intel, false));
+    return det;
+  }
+
+  // Share view: verdicts only, always inline, no tips/source/details.
+  function intelShareStrip(intel) {
+    if (!intel.verdicts || !intel.verdicts.length) return null;
+    var div = el('div', 'intel');
+    div.appendChild(intelBody(intel, true));
+    return div;
+  }
+
   function linkPill(l) {
     var a = document.createElement('a');
     a.href = l.href;
@@ -951,6 +1513,10 @@ var CityOps = (function () {
       frag.appendChild(tp);
     }
     if (it.note) frag.appendChild(el('p', null, it.note));
+    if (it.intel) {
+      var strip = intelStrip(it.intel);
+      if (strip) frag.appendChild(strip);
+    }
     var row = el('div', 'row');
     if (it.hours) row.appendChild(el('span', 'hours' + (it.hours.class ? ' ' + it.hours.class : ''), it.hours.text));
     (it.links || []).forEach(function (l) { row.appendChild(linkPill(l)); });
@@ -1235,6 +1801,10 @@ var CityOps = (function () {
           row.appendChild(el('span', 'hours' + (e.it.hours.class ? ' ' + e.it.hours.class : ''), e.it.hours.text));
           bd.appendChild(row);
         }
+        if (e.it.intel) {
+          var shareStrip = intelShareStrip(e.it.intel);
+          if (shareStrip) bd.appendChild(shareStrip);
+        }
         dc.appendChild(bd);
       });
       main.appendChild(dc);
@@ -1252,6 +1822,10 @@ var CityOps = (function () {
         if (e.it.price) h3.appendChild(el('span', 'price', e.it.price.text));
         card.appendChild(h3);
         card.appendChild(el('p', 'when-line', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
+        if (e.it.intel) {
+          var undatedStrip = intelShareStrip(e.it.intel);
+          if (undatedStrip) card.appendChild(undatedStrip);
+        }
         main.appendChild(card);
       });
     }
@@ -1546,6 +2120,14 @@ var CityOps = (function () {
       dts.type = 'button';
       dts.onclick = openDatesModal;
       tb.appendChild(dts);
+      // App-only toolbar buttons whose LABEL must not ship inside standalone
+      // guides either. The re-run button is the case in point: it builds
+      // prompts out of PROMPT.md, which guide files do not carry at all. The
+      // shell appends those buttons here; guide files have no CityOpsApp, so
+      // nothing is added and no trace of them exists in template.html.
+      if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.toolbarExtras) {
+        window.CityOpsApp.toolbarExtras(tb);
+      }
       // App context only: standalone guide files have no CityOpsApp, so this
       // button never appears in them.
       if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.exportStandalone) {
@@ -1611,10 +2193,18 @@ var CityOps = (function () {
   return {
     STATUSES: STATUSES, slug: slug, cityId: cityId, dayLabel: dayLabel,
     validate: validate, parse: parse, init: init, boot: boot,
+    mergeDelta: mergeDelta,
     appStore: {
       normalize: normalizeAppStore, add: appAddCity,
       remove: appRemoveCity, keepBothName: keepBothName,
       resolveStartCity: resolveStartCity, blankCity: blankCity
+    },
+    profile: { normalize: normalizeProfile, isEmpty: profileIsEmpty },
+    promptKit: {
+      buildCityPrompt: buildCityPrompt, INTERESTS_SECTION: INTERESTS_SECTION,
+      COPY_LINE: PROMPT_COPY_LINE,
+      buildInterestsDeltaPrompt: buildInterestsDeltaPrompt,
+      buildIntelPassPrompt: buildIntelPassPrompt
     },
     syncKit: {
       EPOCH: EPOCH_ISO, decide: decideSync, plan: planSync, buildRows: buildRows,
@@ -1801,6 +2391,18 @@ CityOps.init();
   .empty-day .free-day{padding:6px 16px 10px; font-size:.8rem; color:var(--text-3); font-style:italic;}
   .date-field{font:inherit; font-size:.85rem; padding:6px 10px; border:1px solid var(--border-light);
     border-radius:8px; background:#fff; color:var(--text);}
+  .intel{margin-top:8px;}
+  .intel summary{font-size:.72rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+    color:var(--text-3); cursor:pointer; padding:4px 0;}
+  .verdict{font-size:.86rem; margin-top:4px;}
+  .tier{display:inline-block; font-size:.68rem; font-weight:800; text-transform:uppercase;
+    letter-spacing:.4px; padding:1px 6px; border-radius:5px; margin-right:6px; vertical-align:middle;}
+  .tier-must{background:var(--green-soft); color:var(--green);}
+  .tier-good{background:var(--bg-softer); color:var(--text-3);}
+  .tier-skip{background:var(--amber-soft); color:var(--amber);}
+  .tips{margin:6px 0 0 18px; font-size:.84rem; color:var(--text-3);}
+  .tips li{margin-bottom:3px;}
+  .intel-src{font-size:.72rem; color:var(--text-3); font-style:italic; margin-top:4px;}
   /* narrow phones: trim horizontal chrome so cards get the width */
   @media (max-width: 430px){
     .wrap{padding:0 10px 48px;}
@@ -1859,6 +2461,68 @@ var CityOps = (function () {
     return names[d.getDay()] + ' ' + d.getDate();
   }
 
+  // Intel validation lives in one place so validate() (whole guide) and
+  // mergeDelta() (intel pass payload) can never drift apart. `ref` is the
+  // caller's prefix, already ending in the separator it wants, e.g.
+  // "items[3] (nord) intel:" or 'intel["nord"]:'.
+  function validateIntel(intel, ref, errors) {
+    if (!intel || typeof intel !== 'object' || Array.isArray(intel)) {
+      errors.push(ref + ' must be an object');
+      return;
+    }
+    if (intel.verdicts !== undefined) {
+      if (!Array.isArray(intel.verdicts)) {
+        errors.push(ref + ' verdicts must be an array');
+      } else {
+        intel.verdicts.forEach(function (v, vi) {
+          if (!v || typeof v !== 'object' || ['must', 'good', 'skip'].indexOf(v.tier) === -1) {
+            errors.push(ref + ' verdicts[' + vi + '] tier must be must|good|skip');
+          }
+          if (!v || typeof v.text !== 'string' || !v.text.trim()) {
+            errors.push(ref + ' verdicts[' + vi + '] needs non-empty text');
+          }
+        });
+      }
+    }
+    if (intel.tips !== undefined) {
+      if (!Array.isArray(intel.tips)) {
+        errors.push(ref + ' tips must be an array');
+      } else {
+        intel.tips.forEach(function (t, ti) {
+          if (typeof t !== 'string' || !t.trim()) {
+            errors.push(ref + ' tips[' + ti + '] must be a non-empty string');
+          }
+        });
+      }
+    }
+    if (intel.source !== undefined && typeof intel.source !== 'string') {
+      errors.push(ref + ' source must be a string');
+    }
+  }
+
+  // The per-item rules, shared by validate() and mergeDelta() for exactly the
+  // same reason. `statuses` is the allowed status list (a whole guide allows
+  // all four; a delta may only introduce plan and backup, since done and
+  // archived are states the traveler sets later in the app) and `statusHint`
+  // is appended to that one error so the delta case explains itself. `seen`
+  // is the caller's duplicate-id map, mutated as ids are accepted.
+  function validateItem(it, ref, secIds, seen, errors, statuses, statusHint) {
+    if (!it || typeof it !== 'object' || Array.isArray(it)) {
+      errors.push(ref + ' is not an object');
+      return;
+    }
+    if (!it.id) errors.push(ref + ' needs id');
+    else if (Object.prototype.hasOwnProperty.call(seen, it.id)) errors.push('duplicate item id "' + it.id + '"');
+    else seen[it.id] = 1;
+    if (!it.name) errors.push(ref + ' needs name');
+    if (!Object.prototype.hasOwnProperty.call(secIds, it.section)) errors.push(ref + ' unknown section "' + it.section + '"');
+    if (statuses.indexOf(it.status) === -1) {
+      errors.push(ref + ' bad status "' + it.status + '"' + (statusHint || ''));
+    }
+    if (it.day && !/^\d{4}-\d{2}-\d{2}$/.test(it.day)) errors.push(ref + ' day must be YYYY-MM-DD');
+    if (it.intel !== undefined && it.intel !== null) validateIntel(it.intel, ref + ' intel:', errors);
+  }
+
   function validate(data) {
     var errors = [];
     if (!data || typeof data !== 'object') return ['Root is not an object'];
@@ -1877,18 +2541,12 @@ var CityOps = (function () {
     if (!Array.isArray(data.items)) {
       errors.push('items[] required');
     } else {
-      var secIds = {};
+      var secIds = Object.create(null);
       (data.sections || []).forEach(function (s) { secIds[s.id] = 1; });
-      var seen = {};
+      var seen = Object.create(null);
       data.items.forEach(function (it, i) {
         var ref = 'items[' + i + ']' + (it && it.id ? ' (' + it.id + ')' : '');
-        if (!it.id) errors.push(ref + ' needs id');
-        else if (seen[it.id]) errors.push('duplicate item id "' + it.id + '"');
-        else seen[it.id] = 1;
-        if (!it.name) errors.push(ref + ' needs name');
-        if (!secIds[it.section]) errors.push(ref + ' unknown section "' + it.section + '"');
-        if (STATUSES.indexOf(it.status) === -1) errors.push(ref + ' bad status "' + it.status + '"');
-        if (it.day && !/^\d{4}-\d{2}-\d{2}$/.test(it.day)) errors.push(ref + ' day must be YYYY-MM-DD');
+        validateItem(it, ref, secIds, seen, errors, STATUSES, null);
       });
     }
     return errors;
@@ -1900,6 +2558,152 @@ var CityOps = (function () {
     catch (e) { return { data: null, errors: ['JSON parse error: ' + e.message] }; }
     var errors = validate(data);
     return { data: errors.length ? null : data, errors: errors };
+  }
+
+  // ---- delta merge ----
+  // The core re-run mechanic: a PARTIAL payload from a second AI pass is folded
+  // into a city that already exists, without disturbing anything the traveler
+  // has done. Pure: it reads no state, touches no storage, mutates neither
+  // argument, and returns a fresh deep clone. Live planning state (done marks,
+  // reorders, renames) survives by construction, because it is keyed by item id
+  // in a separate store this function never sees.
+  //
+  // Rules, all of them deliberate:
+  // - errors non-empty means NO merge at all: data is null and the caller shows
+  //   the list. A half-applied delta would be impossible to reason about.
+  // - A delta may only introduce plan and backup items. done and archived are
+  //   traveler states, never generated ones.
+  // - An id that already exists is SKIPPED, never overwritten, and counted. That
+  //   is what makes a re-run safe to repeat: running the same delta twice is a
+  //   no-op, not a clobber. A duplicate id WITHIN one delta is an error, since
+  //   that is a malformed payload rather than an overlap with existing work.
+  // - delta.sections with an id that already exists is ignored, not overwritten
+  //   (the traveler may have renamed a section, and a re-run must not undo it).
+  // - delta.intel replaces the whole intel block on an item that exists after
+  //   the merge (existing or just added); an unknown id is counted in
+  //   intelSkipped, not treated as an error, because an AI naming an item the
+  //   traveler has since removed is expected, not broken.
+  // - city, city.dates and every other field of every existing item are never
+  //   touched. intel is the ONE field an existing item can gain here.
+  var DELTA_STATUSES = ['plan', 'backup'];
+  var DELTA_STATUS_HINT = ' (a delta may only add plan or backup items)';
+
+  function emptyDeltaSummary() {
+    return { added: 0, skipped: 0, sectionsAdded: 0, intelApplied: 0, intelSkipped: 0 };
+  }
+
+  function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
+
+  function mergeDelta(cityData, delta) {
+    var errors = [];
+    if (!cityData || typeof cityData !== 'object' || Array.isArray(cityData)) {
+      return { data: null, summary: emptyDeltaSummary(), errors: ['No city data to merge into'] };
+    }
+    if (!delta || typeof delta !== 'object' || Array.isArray(delta)) {
+      return { data: null, summary: emptyDeltaSummary(), errors: ['Delta is not an object'] };
+    }
+    if (delta.schema !== 1) errors.push('schema must be 1');
+    if (delta.delta !== true) {
+      errors.push('delta must be true: this is a partial payload, not a whole guide');
+    }
+
+    // Sections first: a new item may legitimately reference a section this same
+    // delta introduces, so the allowed-section set has to include them.
+    var newSections = [];
+    if (delta.sections !== undefined && delta.sections !== null) {
+      if (!Array.isArray(delta.sections)) {
+        errors.push('sections must be an array');
+      } else {
+        delta.sections.forEach(function (s, i) {
+          if (!s || typeof s !== 'object' || Array.isArray(s) || !s.id || !s.label) {
+            errors.push('sections[' + i + '] needs id and label');
+          } else {
+            newSections.push(s);
+          }
+        });
+      }
+    }
+
+    var secIds = Object.create(null);
+    (Array.isArray(cityData.sections) ? cityData.sections : []).forEach(function (s) {
+      if (s && s.id) secIds[s.id] = 1;
+    });
+    newSections.forEach(function (s) { secIds[s.id] = 1; });
+
+    var existingIds = {};
+    (Array.isArray(cityData.items) ? cityData.items : []).forEach(function (it) {
+      if (it && it.id) existingIds[it.id] = 1;
+    });
+
+    var toAdd = [];
+    var skipped = 0;
+    if (delta.items !== undefined && delta.items !== null) {
+      if (!Array.isArray(delta.items)) {
+        errors.push('items must be an array');
+      } else {
+        var seen = Object.create(null);
+        delta.items.forEach(function (it, i) {
+          var ref = 'items[' + i + ']' + (it && it.id ? ' (' + it.id + ')' : '');
+          var before = errors.length;
+          validateItem(it, ref, secIds, seen, errors, DELTA_STATUSES, DELTA_STATUS_HINT);
+          if (errors.length !== before) return;
+          if (existingIds[it.id]) { skipped++; return; }
+          toAdd.push(it);
+        });
+      }
+    }
+
+    var intelMap = null;
+    if (delta.intel !== undefined && delta.intel !== null) {
+      if (typeof delta.intel !== 'object' || Array.isArray(delta.intel)) {
+        errors.push('intel must be an object keyed by item id');
+      } else {
+        intelMap = delta.intel;
+        Object.keys(intelMap).forEach(function (id) {
+          validateIntel(intelMap[id], 'intel["' + id + '"]:', errors);
+        });
+      }
+    }
+
+    if (errors.length) return { data: null, summary: emptyDeltaSummary(), errors: errors };
+
+    var summary = emptyDeltaSummary();
+    summary.skipped = skipped;
+    var out = deepClone(cityData);
+    if (!Array.isArray(out.sections)) out.sections = [];
+    if (!Array.isArray(out.items)) out.items = [];
+
+    var haveSec = {};
+    out.sections.forEach(function (s) { if (s && s.id) haveSec[s.id] = 1; });
+    newSections.forEach(function (s) {
+      if (haveSec[s.id]) return;
+      haveSec[s.id] = 1;
+      out.sections.push(deepClone(s));
+      summary.sectionsAdded++;
+    });
+
+    toAdd.forEach(function (it) {
+      var copy = deepClone(it);
+      // Both fields belong to a later verification phase, never to a prompt.
+      // An absent one is normalized to null so every item in the merged guide
+      // has the same shape.
+      if (copy.place_id === undefined) copy.place_id = null;
+      if (copy.verified === undefined) copy.verified = null;
+      out.items.push(copy);
+      summary.added++;
+    });
+
+    if (intelMap) {
+      var byId = Object.create(null);
+      out.items.forEach(function (it) { if (it && it.id) byId[it.id] = it; });
+      Object.keys(intelMap).forEach(function (id) {
+        if (!Object.prototype.hasOwnProperty.call(byId, id)) { summary.intelSkipped++; return; }
+        byId[id].intel = deepClone(intelMap[id]);
+        summary.intelApplied++;
+      });
+    }
+
+    return { data: out, summary: summary, errors: [] };
   }
 
   var TRANSITIONS = {
@@ -2203,7 +3007,10 @@ var CityOps = (function () {
       var v = srcStamps[id];
       updatedAt[id] = (typeof v === 'string' && v) ? v : EPOCH_ISO;
     });
-    return { cities: cities, order: order, active: active, updatedAt: updatedAt };
+    // The interest profile rides in the app store (one per user, not per city)
+    // and is normalized on every load. Nothing else in the engine reads it: it
+    // is handed to the prompt builders and pushed by the shell's sync layer.
+    return { cities: cities, order: order, active: active, updatedAt: updatedAt, profile: normalizeProfile(src.profile) };
   }
 
   // iso: pass the REMOTE stamp when applying a pulled city, so the pull does not
@@ -2277,6 +3084,282 @@ var CityOps = (function () {
     if (hashId && Object.prototype.hasOwnProperty.call(store.cities, hashId)) return hashId;
     if (store.active && Object.prototype.hasOwnProperty.call(store.cities, store.active)) return store.active;
     return store.order.length ? store.order[0] : null;
+  }
+
+  // ---- interest profile + prompt assembly (pure) ----
+  // The profile is app-only user data (it syncs as a third row kind), but its
+  // shape and the prompt string assembly live in the engine so both are unit
+  // testable in Node and so nothing about them depends on the DOM. The engine
+  // itself never reads the profile: it is carried in the app store, handed to
+  // the prompt builders, and pushed by the app shell's sync layer.
+  var PROFILE_CAP = 30;        // entries per list; more dilutes the research
+  var PROFILE_NOTES_CAP = 2000;
+
+  function trimStr(v) {
+    return (typeof v === 'string') ? v.replace(/^\s+|\s+$/g, '') : '';
+  }
+
+  // Trims, drops empties, dedupes case-insensitively keeping the FIRST spelling
+  // (order is priority, so the earlier entry is the one the traveler meant),
+  // and caps the list.
+  function normalizeProfileList(v) {
+    var out = [];
+    var seen = {};
+    (Array.isArray(v) ? v : []).forEach(function (x) {
+      var t = trimStr(x);
+      if (!t) return;
+      var k = t.toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(seen, k)) return;
+      seen[k] = 1;
+      if (out.length < PROFILE_CAP) out.push(t);
+    });
+    return out;
+  }
+
+  function normalizeProfile(raw) {
+    var src = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+    return {
+      schema: 1,
+      interests: normalizeProfileList(src.interests),
+      avoid: normalizeProfileList(src.avoid),
+      notes: trimStr(src.notes).slice(0, PROFILE_NOTES_CAP),
+      updated: (typeof src.updated === 'string' && src.updated) ? src.updated : null
+    };
+  }
+
+  // Empty means "nothing for the AI to work with": the stamp does not count.
+  function profileIsEmpty(p) {
+    var n = normalizeProfile(p);
+    return !n.interests.length && !n.avoid.length && !n.notes;
+  }
+
+  var INTERESTS_SECTION = { id: 'interests', label: 'My interests', icon: '⭐' };
+
+  // The landmark lines buildCityPrompt edits in PROMPT.md. Named here so the
+  // unit tests can build a small fake template carrying the same landmarks
+  // instead of the whole file.
+  var PROMPT_COPY_LINE = 'Copy this file per trip, fill in the header, delete this line, and go.';
+
+  // Trip-details bullets, matched by their label. `span` means the bullet has
+  // more placeholders than values (accommodation name plus address), so the
+  // whole bracket span is replaced by the single value rather than leaving a
+  // dangling placeholder behind.
+  var HEADER_BULLETS = [
+    { label: 'City', keys: ['name'] },
+    { label: 'Country', keys: ['country'] },
+    { label: 'Dates', keys: ['from', 'to'] },
+    { label: 'Accommodation', keys: ['accommodation'], span: true },
+    { label: 'Arrival transport', keys: ['arrival'] },
+    { label: 'Departure transport', keys: ['departure'] }
+  ];
+
+  function fillHeaderLine(line, rule, header) {
+    var vals = rule.keys.map(function (k) { return trimStr(header ? header[k] : ''); });
+    if (rule.span) {
+      if (!vals[0]) return line;
+      var first = line.indexOf('[');
+      var last = line.lastIndexOf(']');
+      if (first === -1 || last < first) return line;
+      return line.slice(0, first) + vals[0] + line.slice(last + 1);
+    }
+    var i = 0;
+    // An empty value leaves its placeholder in place, so a half-filled header
+    // still reads as a prompt the traveler can finish by hand.
+    return line.replace(/\[[^\][]*\]/g, function (m) {
+      var v = vals[i++];
+      return v ? v : m;
+    });
+  }
+
+  // `lead` is the one instruction line that only makes sense in a whole-guide
+  // prompt (where the Interests research section is part of the file). The
+  // delta builder shares this formatter and passes no lead, because its own
+  // re-run block already says where the new items go.
+  function interestsBlockLines(p, lead) {
+    var b = ['## Traveler interests', ''];
+    if (lead) b.push(lead, '');
+    if (p.interests.length) {
+      b.push('Interests, in priority order:', '');
+      p.interests.forEach(function (x) { b.push('- ' + x); });
+      b.push('');
+    }
+    if (p.avoid.length) {
+      b.push('Avoid, do not suggest any of these:', '');
+      p.avoid.forEach(function (x) { b.push('- ' + x); });
+      b.push('');
+    }
+    if (p.notes) b.push('Notes: ' + p.notes, '');
+    return b;
+  }
+
+  // The block belongs after the traveler-profile bracket paragraph and before
+  // the rule that closes the header, so it reads as part of who is travelling.
+  // Falls back to the "What I need" heading, then to the end of the text, so a
+  // reshaped template still gets the block rather than silently losing it.
+  function insertInterestsBlock(lines, block) {
+    var start = -1, i;
+    for (i = 0; i < lines.length; i++) {
+      if (/^##\s+Traveler profile\s*$/.test(lines[i])) { start = i; break; }
+    }
+    var at = -1;
+    if (start !== -1) {
+      for (i = start + 1; i < lines.length; i++) {
+        if (lines[i] === '---') { at = i; break; }
+        if (/^##\s/.test(lines[i])) break;
+      }
+    }
+    if (at === -1) {
+      for (i = 0; i < lines.length; i++) {
+        if (/^##\s+What I need\s*$/.test(lines[i])) { at = i; break; }
+      }
+    }
+    if (at === -1) return lines.concat([''], block);
+    return lines.slice(0, at).concat(block, lines.slice(at));
+  }
+
+  // Pure string assembly: fills PROMPT.md's Trip details bullets from `header`
+  // ({name, country, from, to, accommodation, arrival, departure}, all optional
+  // strings), drops the "copy this file" instruction line, and inserts the
+  // Traveler interests block when the profile has anything in it.
+  function buildCityPrompt(templateText, header, profile) {
+    var text = (templateText === null || templateText === undefined) ? '' : String(templateText);
+    var lines = text.split('\n');
+    var out = [];
+    var inTrip = false;
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (line === PROMPT_COPY_LINE) {
+        // Drop the instruction and the blank line under it, so no gap is left.
+        if (lines[i + 1] === '') i++;
+        continue;
+      }
+      if (/^##\s/.test(line)) inTrip = /^##\s+Trip details\s*$/.test(line);
+      if (inTrip && line.indexOf('- **') === 0) {
+        for (var r = 0; r < HEADER_BULLETS.length; r++) {
+          if (line.indexOf('- **' + HEADER_BULLETS[r].label + ':**') === 0) {
+            line = fillHeaderLine(line, HEADER_BULLETS[r], header);
+            break;
+          }
+        }
+      }
+      out.push(line);
+    }
+    var p = normalizeProfile(profile);
+    if (!profileIsEmpty(p)) {
+      out = insertInterestsBlock(out, interestsBlockLines(p, INTERESTS_LEAD));
+    }
+    return out.join('\n');
+  }
+
+  // ---- re-run (delta) prompt builders ----
+  // Both build a self-contained prompt for the traveler's own AI out of three
+  // things: fixed instruction text sliced verbatim from PROMPT.md between HTML
+  // comment landmarks, the city they already have, and (for interests) their
+  // profile. Nothing is invented here and nothing is paraphrased: PROMPT.md
+  // stays the single source of prompt wording, and these functions only choose
+  // which parts of it to include and in what order.
+  //
+  // A missing landmark throws rather than silently building a prompt with a
+  // hole in it. The app shows the message inline; it means the build shipped an
+  // older PROMPT.md than the engine expects.
+  function sliceLandmark(templateText, name) {
+    var text = (templateText === null || templateText === undefined) ? '' : String(templateText);
+    // Built by concatenation on purpose: a literal HTML comment opener in
+    // engine source would put the tokenizer into script-data-escaped state
+    // inside the app's embedded copy of the guide template (the assembler
+    // rejects it outright).
+    var mark = '<' + '!--';
+    var open = mark + ' ' + name + ' -->';
+    var close = mark + ' /' + name + ' -->';
+    var a = text.indexOf(open);
+    var b = text.indexOf(close);
+    if (a === -1 || b === -1 || b < a) {
+      throw new Error('The prompt template in this build has no ' + name +
+        ' block. Update PROMPT.md from the repo and rebuild.');
+    }
+    return text.slice(a + open.length, b).replace(/^\n+/, '').replace(/\n+$/, '');
+  }
+
+  // The city, as the AI needs to see it in a re-run: enough to know where and
+  // when, and nothing else. Fields the city does not carry are left out rather
+  // than emitted empty.
+  function cityHeaderLines(data) {
+    var c = (data && data.city) ? data.city : {};
+    var d = c.dates || {};
+    var b = ['## The city', ''];
+    b.push('- **City:** ' + trimStr(c.name));
+    if (trimStr(c.country)) b.push('- **Country:** ' + trimStr(c.country));
+    if (trimStr(d.from) || trimStr(d.to)) {
+      b.push('- **Dates:** ' + trimStr(d.from) + ' to ' + trimStr(d.to));
+    }
+    var acc = (c.accommodation && trimStr(c.accommodation.name)) ? trimStr(c.accommodation.name) : '';
+    if (acc) b.push('- **Accommodation:** ' + acc);
+    b.push('');
+    return b;
+  }
+
+  // One line per item, in the compact form both re-run blocks refer to.
+  function itemListLines(items) {
+    var b = [];
+    (Array.isArray(items) ? items : []).forEach(function (it) {
+      if (!it || !it.id) return;
+      b.push('- ' + it.id + ' | ' + trimStr(it.section) + ' | ' + trimStr(it.name));
+    });
+    return b;
+  }
+
+  var INTERESTS_LEAD = 'Add a ninth section for these interests as described under Interests below.';
+
+  // Assembly order, top to bottom:
+  //   1. one header line saying what this run is
+  //   2. the city block (name, country, dates, accommodation name)
+  //   3. the Traveler interests block, same formatter buildCityPrompt uses
+  //   4. the RERUN:INTERESTS instructions, verbatim from PROMPT.md
+  //   5. the existing-item list the re-run block refers to as "below"
+  //   6. the CONTRACT:ITEM rules, verbatim, so the AI has the item shape
+  // Step 6 is the item-level half of PROMPT.md's output contract only: the
+  // whole-guide half (city, dates, the eight-section list) would tell the AI to
+  // emit exactly what a delta must never contain.
+  function buildInterestsDeltaPrompt(templateText, cityData, profile) {
+    var rerun = sliceLandmark(templateText, 'RERUN:INTERESTS');
+    var contract = sliceLandmark(templateText, 'CONTRACT:ITEM');
+    var p = normalizeProfile(profile);
+    var out = ['You are extending an existing CityOps city guide.', ''];
+    out = out.concat(cityHeaderLines(cityData));
+    if (!profileIsEmpty(p)) out = out.concat(interestsBlockLines(p, null));
+    out.push('## What I need', '', rerun, '');
+    out.push('## Existing items (do not re-suggest these)', '');
+    out = out.concat(itemListLines(cityData && cityData.items));
+    out.push('');
+    out.push('## Item shape', '', contract, '');
+    return out.join('\n');
+  }
+
+  // Assembly order, top to bottom:
+  //   1. one header line saying what this run is
+  //   2. the city block
+  //   3. the Intel quality rules, verbatim, BEFORE the instructions that say
+  //      "follow the Intel quality rules above"
+  //   4. the RERUN:INTEL instructions, verbatim
+  //   5. the item list the re-run block refers to as "below", archived items
+  //      omitted (nobody needs intel on something already put away)
+  //   6. the coverage instruction
+  function buildIntelPassPrompt(templateText, cityData) {
+    var rules = sliceLandmark(templateText, 'RULES:INTEL');
+    var rerun = sliceLandmark(templateText, 'RERUN:INTEL');
+    var items = (cityData && Array.isArray(cityData.items) ? cityData.items : [])
+      .filter(function (it) { return it && it.status !== 'archived'; });
+    var out = ['You are adding review-verified intel to an existing CityOps city guide.', ''];
+    out = out.concat(cityHeaderLines(cityData));
+    out.push('## Intel quality rules', '', rules, '');
+    out.push('## What I need', '', rerun, '');
+    out.push('## Items', '');
+    out = out.concat(itemListLines(items));
+    out.push('');
+    out.push('Cover as many of these as you can verify from real reviews. ' +
+      'Leave out the ones you cannot: a partial payload of real intel is the ' +
+      'correct answer, a complete one of invented intel is not.', '');
+    return out.join('\n');
   }
 
   // ---- sync helpers (pure) ----
@@ -2420,6 +3503,57 @@ var CityOps = (function () {
     return n;
   }
 
+  function tierLabel(tier) {
+    return tier === 'must' ? 'Must' : (tier === 'skip' ? 'Skip' : 'Good');
+  }
+
+  function verdictRow(v) {
+    var p = el('p', 'verdict');
+    p.appendChild(el('span', 'tier tier-' + v.tier, tierLabel(v.tier)));
+    p.appendChild(document.createTextNode(v.text));
+    return p;
+  }
+
+  function intelBody(intel, verdictsOnly) {
+    var frag = document.createDocumentFragment();
+    (intel.verdicts || []).forEach(function (v) { frag.appendChild(verdictRow(v)); });
+    if (!verdictsOnly) {
+      if (intel.tips && intel.tips.length) {
+        var ul = el('ul', 'tips');
+        intel.tips.forEach(function (t) { ul.appendChild(el('li', null, t)); });
+        frag.appendChild(ul);
+      }
+      if (intel.source) frag.appendChild(el('p', 'intel-src', intel.source));
+    }
+    return frag;
+  }
+
+  // Full render (planner/calendar): inline when small, collapsed behind a
+  // <details> toggle once there is enough content to be worth hiding.
+  function intelStrip(intel) {
+    var verdicts = intel.verdicts || [];
+    var tips = intel.tips || [];
+    var total = verdicts.length + tips.length;
+    if (!total) return null;
+    if (total <= 2) {
+      var div = el('div', 'intel');
+      div.appendChild(intelBody(intel, false));
+      return div;
+    }
+    var det = el('details', 'intel');
+    det.appendChild(el('summary', null, 'Intel: ' + verdicts.length + ' verdicts, ' + tips.length + ' tips'));
+    det.appendChild(intelBody(intel, false));
+    return det;
+  }
+
+  // Share view: verdicts only, always inline, no tips/source/details.
+  function intelShareStrip(intel) {
+    if (!intel.verdicts || !intel.verdicts.length) return null;
+    var div = el('div', 'intel');
+    div.appendChild(intelBody(intel, true));
+    return div;
+  }
+
   function linkPill(l) {
     var a = document.createElement('a');
     a.href = l.href;
@@ -2536,6 +3670,10 @@ var CityOps = (function () {
       frag.appendChild(tp);
     }
     if (it.note) frag.appendChild(el('p', null, it.note));
+    if (it.intel) {
+      var strip = intelStrip(it.intel);
+      if (strip) frag.appendChild(strip);
+    }
     var row = el('div', 'row');
     if (it.hours) row.appendChild(el('span', 'hours' + (it.hours.class ? ' ' + it.hours.class : ''), it.hours.text));
     (it.links || []).forEach(function (l) { row.appendChild(linkPill(l)); });
@@ -2820,6 +3958,10 @@ var CityOps = (function () {
           row.appendChild(el('span', 'hours' + (e.it.hours.class ? ' ' + e.it.hours.class : ''), e.it.hours.text));
           bd.appendChild(row);
         }
+        if (e.it.intel) {
+          var shareStrip = intelShareStrip(e.it.intel);
+          if (shareStrip) bd.appendChild(shareStrip);
+        }
         dc.appendChild(bd);
       });
       main.appendChild(dc);
@@ -2837,6 +3979,10 @@ var CityOps = (function () {
         if (e.it.price) h3.appendChild(el('span', 'price', e.it.price.text));
         card.appendChild(h3);
         card.appendChild(el('p', 'when-line', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
+        if (e.it.intel) {
+          var undatedStrip = intelShareStrip(e.it.intel);
+          if (undatedStrip) card.appendChild(undatedStrip);
+        }
         main.appendChild(card);
       });
     }
@@ -3131,6 +4277,14 @@ var CityOps = (function () {
       dts.type = 'button';
       dts.onclick = openDatesModal;
       tb.appendChild(dts);
+      // App-only toolbar buttons whose LABEL must not ship inside standalone
+      // guides either. The re-run button is the case in point: it builds
+      // prompts out of PROMPT.md, which guide files do not carry at all. The
+      // shell appends those buttons here; guide files have no CityOpsApp, so
+      // nothing is added and no trace of them exists in template.html.
+      if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.toolbarExtras) {
+        window.CityOpsApp.toolbarExtras(tb);
+      }
       // App context only: standalone guide files have no CityOpsApp, so this
       // button never appears in them.
       if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.exportStandalone) {
@@ -3196,10 +4350,18 @@ var CityOps = (function () {
   return {
     STATUSES: STATUSES, slug: slug, cityId: cityId, dayLabel: dayLabel,
     validate: validate, parse: parse, init: init, boot: boot,
+    mergeDelta: mergeDelta,
     appStore: {
       normalize: normalizeAppStore, add: appAddCity,
       remove: appRemoveCity, keepBothName: keepBothName,
       resolveStartCity: resolveStartCity, blankCity: blankCity
+    },
+    profile: { normalize: normalizeProfile, isEmpty: profileIsEmpty },
+    promptKit: {
+      buildCityPrompt: buildCityPrompt, INTERESTS_SECTION: INTERESTS_SECTION,
+      COPY_LINE: PROMPT_COPY_LINE,
+      buildInterestsDeltaPrompt: buildInterestsDeltaPrompt,
+      buildIntelPassPrompt: buildIntelPassPrompt
     },
     syncKit: {
       EPOCH: EPOCH_ISO, decide: decideSync, plan: planSync, buildRows: buildRows,
@@ -3221,6 +4383,471 @@ CityOps.init();
 <\/script>
 </body>
 </html>
+
+</script>
+
+<script type="text/plain" id="prompt-template">
+# CityOps generation prompt
+
+This is the prompt Rob pastes into Claude, ChatGPT, or any capable AI engine
+to generate a city guide. Fill in the header, paste the whole file (header
+plus everything below it) into a fresh chat, and the response should be a
+single JSON code block ready to drop into `template.html`'s `city-data`
+block, or to save as `cities/<city>.json` and run through
+`node tools/embed.js cities/<city>.json <city>.html`.
+
+Copy this file per trip, fill in the header, delete this line, and go.
+
+---
+
+## Trip details
+
+- **City:** [city name]
+- **Country:** [country, ISO 2-letter code if you know it, e.g. GE, AM]
+- **Dates:** [arrival date] to [departure date], ISO format (YYYY-MM-DD)
+- **Accommodation:** [name of hotel/apartment/building], [full address]
+- **Arrival transport:** [flight/train/etc, arrival time if known]
+- **Departure transport:** [flight/train/etc, departure time if known]
+
+## Traveler profile
+
+Solo traveler. Works mornings, roughly until 14:00, so mornings are off
+limits for anything besides coffee near the accommodation. Explores in the
+afternoon. Dinner window is 19:00 to 21:00. Walks a lot rather than taking
+short rides, but uses Bolt-class ride apps for anything too far to walk.
+Avoids heavy food late at night. Plans one trip into the city center per
+day, not more: pick the single best anchor for that day rather than
+scattering multiple center trips across it.
+
+[Add anything trip-specific here: dietary constraints, mobility notes,
+known allergies, budget ceiling, anyone traveling along, anything else
+that changes what "a good pick" means this time.]
+
+If a "Traveler interests" block appears below this line, treat it as part of
+the profile: it lists what this traveler seeks out, what to avoid, and any
+notes that change what a good pick means. App users get that block filled in
+automatically by Build my prompt; if you are editing this file by hand and
+want the interests section, write the block yourself in the same shape.
+
+---
+
+## What I need
+
+Research this city and return a single guide covering eight sections:
+dinner, breakfast, lunch, coffee, coworking, activities, services, and
+practical notes. Add a ninth section, interests, only when a Traveler
+interests block appears in the header above.
+Use real, current information: actual restaurants and cafes that exist
+right now, with real review counts and ratings where you can find them,
+not generic or made-up suggestions.
+
+### Dinner
+
+One plan pick per evening of the stay, each assigned to a specific ISO
+date within the stay range. Match the pick to what that day's activity
+plan likely is (a beach day suggests something different from an Old Town
+walking day). Add 5 to 8 backup picks across the whole stay, not tied to a
+specific date, covering a spread of cuisines and price points in case a
+plan pick is closed, full, or wrong on the day.
+
+### Breakfast
+
+2 to 3 plan picks plus a few backups. Opening time is the deciding factor:
+the traveler starts work in the morning, so a breakfast place that opens
+at 10:00 is a backup at best. Favor what actually opens 07:00 to 08:30
+(local breakfast spots, bakeries, early brunch), near the accommodation or
+on the work-morning route. State the opening time prominently in the note.
+No day assignments; breakfast repeats daily.
+
+### Lunch
+
+3 to 4 plan picks plus 3 to 5 backups. The realistic use is a late lunch
+around 14:00 to 15:00 when the work morning ends, either near the
+accommodation, in the center, or on the way to that day's activity. Favor
+light-to-medium local options over heavy sit-down meals (the big meal is
+dinner); include at least one near-accommodation option and one center
+option, plus a market or street-food option if the city has a real one.
+No day assignments.
+
+### Coffee
+
+2 to 3 specialty coffee picks (good espresso, not just "has coffee"), plus
+a few backups. These are for the workday, so weight toward places near the
+accommodation or on the routine commute, with reliable hours in the
+morning. If a coffee pick doubles as the breakfast answer, say so in both
+sections rather than duplicating the item.
+
+### Coworking
+
+The best bookable coworking space (day pass or drop-in), the option
+nearest to the accommodation even if it's not the best space, and a few
+backups. Note weekend hours explicitly: many coworking spaces have
+reduced or closed weekend hours, and a workday plan that assumes normal
+hours on a Saturday will fail.
+
+### Activities
+
+One anchor activity per full day of the stay (the single center trip for
+that day), plus a list of free/anytime options that don't need a
+specific day (a park, a viewpoint, a walk), plus backups. Flag each
+activity as daytime-only or evening-suited, since the traveler profile
+above only frees up afternoons and evenings.
+
+### Services
+
+Laundry, massage or grooming, and a 24-hour or late grocery option near
+the accommodation. These don't need day assignments.
+
+### Practical
+
+Not individual place picks: a short set of notes covering the daily
+rhythm this city rewards, cash-vs-card norms, any scam or overcharging
+pattern that shows up repeatedly in reviews (tourist-price menus, meter
+tricks, "the card machine is broken" cash-only pushes), which ride/transit
+apps actually work here, and any beach, terrain, or walkability notes
+worth knowing before the first day.
+
+### Interests
+
+Include this section ONLY if a "Traveler interests" block appears in the
+header above. If there is no such block, skip this section entirely and
+return the eight sections listed above.
+
+When the block is present, add a ninth section with `"id": "interests"`,
+`"label": "My interests"`, `"icon": "⭐"`, and fill it with 3 to 6 plan picks
+plus 3 to 5 backups that match the listed interests, weighted toward the ones
+listed first (the order is the traveler's priority order). Rules:
+
+- Real, specific places or events only, same standard as every other
+  section: a named climbing gym, a named jazz venue with the night it
+  actually has live music, not "the city has a climbing scene".
+- Never suggest anything that matches the Avoid list, and apply the Notes
+  the same way you apply the traveler profile.
+- No `day` assignments unless the pick only happens on a specific date
+  (a weekly jam night, a match, a market day). Then use the ISO date inside
+  the stay range and say why in `when`.
+- If an interest simply does not exist in this city, say so plainly in a
+  practical note ("no bouldering gym in the city; nearest is 90 minutes
+  away in X") rather than forcing a weak pick to fill the slot. A short,
+  honest section beats a padded one.
+- Do not duplicate a place that already appears in another section. If the
+  best match for an interest is already the coffee or dinner pick, say so
+  in that item's note instead of listing it twice.
+
+## Quality rules
+
+These are lessons from a prior guide (Batumi) that produced bad or
+unusable links and missed real risks. Follow them exactly.
+
+- **Real Maps links only.** Every place needs a real Google Maps link.
+  Prefer the `?cid=` permalink form when you can find or construct it
+  (`https://maps.google.com/?cid=<id>`) since it points at the exact
+  listing rather than a search. If you cannot get a `cid` link, a normal
+  Google Maps search/place URL is acceptable, but never fabricate one.
+- **Never invent URLs.** If you are not confident a URL is real, do not
+  include it. This applies to maps links, websites, and phone numbers
+  alike: a wrong link is worse than a missing one.
+- **No website is normal.** Plenty of good, real places (especially small
+  restaurants and services) have no website. When that's the case, do not
+  leave the place without a way to contact it: use a `tel:` link with the
+  real phone number instead. A missing website is not a signal of low
+  quality and should not push a place out of consideration.
+- **Flag early closers.** Any place that closes before 22:00 needs that
+  called out (in `hours.text` and by not marking it `late` in
+  `hours.class`), so a dinner plan doesn't quietly assume a place is
+  still open for a late seating when it isn't.
+- **Flag weekend crowding.** If reviews or listed hours suggest a place
+  gets noticeably busier or behaves differently on weekends, say so in
+  the note.
+- **Mark book-ahead places.** If reservations are recommended or required
+  (busy, small, high-rated), add a `"Book ahead"` tag.
+- **Prices in both currencies.** Every price should read in local
+  currency and USD, e.g. `"~80-120 GEL / $30-44"`. Use a reasonable
+  current exchange rate; don't need to cite a source for it.
+- **Surface review-verified scam or overcharge patterns.** If reviews
+  repeatedly describe a specific overcharging or scam pattern (fake bill
+  padding, no-menu-price tourist upsell, meter manipulation), note it,
+  either on the specific place or in the Practical section if it's a
+  citywide pattern. Don't invent a risk that isn't backed by what you
+  found; don't soften one that reviews clearly support.
+- **Ratings and review counts in the note where they matter.** A rating
+  with a real review count (e.g. `4.8 stars, 5,545 reviews`) is useful
+  signal; include it in the `note` field when you have it. Don't
+  round up or guess a count.
+
+### Intel
+
+`intel` is the optional block that tells the traveler what to actually order
+or do once they are there. It is worth more than another paragraph of
+description, and it is worth nothing at all if it is invented. Rules:
+
+<!-- RULES:INTEL -->
+- **Restaurants and cafes:** name 2 to 4 specific dishes or drinks with a
+  `must`, `good`, or `skip` verdict. Only include a dish that multiple
+  reviewers name specifically. One person's favourite is not a verdict, and
+  "the food is great" is not a dish. A `skip` needs the same support: say
+  what is wrong with it in the same short line ("seafood platter: frozen,
+  priced for tourists").
+- **Activities and services:** 1 to 3 verdicts on the specifics that change
+  the visit (which route, wing, seat, entrance, add-on, or time of day is
+  the one worth having, and which is the one people regret), plus 1 to 3
+  tips: queue timing, cash-only, where the real entrance is, what to book.
+- **Always a source line.** One line naming where the intel came from and
+  roughly when, e.g. `"Aggregated from Google and TripAdvisor reviews,
+  mid-2026"`. Unverifiable intel is then visibly labeled as such.
+- **Omit `intel` entirely rather than pad it.** An item with nothing
+  review-verified to say gets no `intel` field at all. A thin, invented or
+  generic intel block is worse than none: the traveler acts on these.
+<!-- /RULES:INTEL -->
+
+## Output contract
+
+Respond with **only a JSON code block**. No prose before or after it, no
+explanation, no markdown headers, nothing outside the code block. The JSON
+must be valid against schema v1 (below) with these rules:
+
+- Top level `"schema": 1`.
+- `city.dates.from` and `city.dates.to` match the trip dates given above.
+- `sections` covers the eight sections above, in this order: `dinner`,
+  `breakfast`, `lunch`, `coffee`, `cowork`, `activities`, `services`,
+  `practical`. Use exactly these `id` values so the guide renders
+  correctly. Breakfast and lunch items never carry a `day` field; they
+  repeat daily. When a Traveler interests block is present, `interests` is
+  the ninth and last section, so the full order is `dinner`, `breakfast`,
+  `lunch`, `coffee`, `cowork`, `activities`, `services`, `practical`,
+  `interests`.
+
+<!-- CONTRACT:ITEM -->
+- Every item has `"place_id": null` and `"verified": null`. Those fields
+  are filled by a later phase, never by this prompt.
+- `status` on every generated item is either `"plan"` or `"backup"` only.
+  Never emit `"done"` or `"archived"`: those are states the traveler sets
+  later, in the app.
+- `day`, when present, is an ISO date (`YYYY-MM-DD`) that falls inside the
+  stay range (`city.dates.from` to `city.dates.to` inclusive). Backups and
+  anytime items omit `day` entirely rather than guessing one.
+- `hours.class`, when present, is one of:
+  - `"late"`: open past 22:00.
+  - `"day"`: daytime only (closes at or before roughly 18:00, or is
+    otherwise not suited to an evening visit).
+  - `"eve"`: evening-suited but not necessarily late (a dinner spot that
+    closes at 22:00, for example).
+- `intel` is optional on any item. When present it is an object with any of
+  `verdicts`, `tips`, and `source`, and nothing else:
+  - `verdicts`: array of `{"tier": "must" | "good" | "skip", "text": "..."}`,
+    text non-empty and naming the specific dish, route, seat or add-on.
+  - `tips`: array of short non-empty strings.
+  - `source`: one line of provenance.
+  Include `intel` only where reviews support it; omit otherwise.
+- Every item's `section` matches one of the section ids you defined.
+- Every item has a unique `id` (a short slug, e.g. `"brasserie"`), a
+  `name`, and a `links` array. Place items must have at least a `map`
+  link. Practical-section note items may have an empty array.
+<!-- /CONTRACT:ITEM -->
+
+### Schema v1 shape reference
+
+This is the schema example, taken directly from the CityOps design spec
+(`docs/superpowers/specs/2026-08-10-cityops-phase1-design.md`, section
+"Schema (v1)"). It shows the exact shape to produce, not literal content
+to copy.
+
+```json
+{
+  "schema": 1,
+  "city": {
+    "name": "Batumi", "country": "GE",
+    "dates": {"from": "2026-08-08", "to": "2026-08-15"},
+    "accommodation": {"name": "Example Stay D2", "lat": 41.64, "lng": 41.61},
+    "currency": {"code": "GEL", "usd": 0.37},
+    "notes": ["Bolt works well", "~2.2km south of Old Town"]
+  },
+  "sections": [
+    {"id": "dinner", "label": "Dinner", "icon": "🍽️"}
+  ],
+  "items": [{
+    "id": "brasserie",
+    "section": "dinner",
+    "status": "plan",
+    "day": "2026-08-13",
+    "when": "Old Town office day",
+    "name": "Brasserie 1900",
+    "price": {"text": "~80-120 GEL / $30-44"},
+    "note": "4.8 stars ... reserve.",
+    "hours": {"text": "12:00-23:00 daily", "class": "late"},
+    "tags": ["Book ahead"],
+    "links": [
+      {"kind": "map", "label": "Open in Maps", "href": "https://maps.google.com/?cid=..."},
+      {"kind": "web", "label": "brasserie1900.ge", "href": "https://brasserie1900.ge"},
+      {"kind": "tel", "label": "Book", "href": "tel:+995511222252"}
+    ],
+    "place_id": null,
+    "verified": null
+  }]
+}
+```
+
+Field notes:
+
+- `sections[]` needs one entry per section actually used, each with `id`,
+  `label`, and an `icon` emoji.
+- `city.notes` is a short list of chip-worthy facts (ride app that works,
+  distance from center, cash vs card norm) surfaced in the guide header.
+- `when` is optional, free text tying an item to the day's plan (what it
+  follows or precedes). Use it for dinner plan picks.
+- `price` is optional but should be included whenever you have real
+  price information, in the `text` field, in the local-currency-plus-USD
+  format described above.
+- `tags` is an array of short strings; use it for `"Book ahead"` and
+  similar flags, empty array if none apply.
+- `links[].kind` is `map`, `web`, or `tel`; use `tel` for phone-only
+  contact links per the no-invented-URLs rule above.
+- `city.accommodation.lat`/`lng` should be your best estimate for the
+  accommodation address given above, not left at 0. Approximate from the
+  address is fine; this doesn't need to be survey-precise.
+- `intel`, when you have it, sits alongside `note` on the item:
+
+```json
+"intel": {
+  "verdicts": [
+    {"tier": "must", "text": "Adjarian khachapuri, the boat with the egg"},
+    {"tier": "good", "text": "Pkhali plate to share"},
+    {"tier": "skip", "text": "The seafood platter: frozen, priced for tourists"}
+  ],
+  "tips": [
+    "Go before 13:00 or after 15:00 to skip the queue",
+    "Cash only despite the sign; ATM two doors down"
+  ],
+  "source": "Aggregated from Google and TripAdvisor reviews, mid-2026"
+}
+```
+
+Fill in the header above, paste this whole file into the chat, and return
+only the JSON.
+
+## Re-run prompts
+
+These two prompts run against a city you already have. They return a PARTIAL
+payload (a delta) that gets merged into the existing guide, so the traveler's
+progress, renames and day arrangement all survive. The app builds them for
+you from the Enrich button; by hand, copy the block you want, paste the trip
+header and the current item list under it, and send that.
+
+A delta is never a whole guide. Never re-list an item that already exists,
+never restate `city` or `dates`, and never emit `"status": "done"` or
+`"archived"`.
+
+### Interests delta
+
+Adds new items matching the traveler's interests to a city that already
+exists. Requires a Traveler interests block.
+
+<!-- RERUN:INTERESTS -->
+A delta is never a whole guide. Never re-list an item that already exists,
+never restate `city` or `dates`, and never emit `"status": "done"` or
+`"archived"`.
+
+Research this city for the traveler interests listed above and return ONLY
+new items that match them. The city, its dates and the traveler profile are
+given above; the items the guide already holds are listed below, by id.
+
+Rules:
+
+- Return 3 to 6 new plan picks and up to 5 new backups, weighted toward the
+  interests listed first.
+- Never return an item whose id is already in the list below, and never
+  return the same place under a new id. New ids must be short slugs and
+  unique against that list.
+- Put them in the `interests` section (`{"id": "interests", "label": "My
+  interests", "icon": "⭐"}`). Include that section object in `sections`
+  ONLY if the list below shows the guide does not have it yet. If some picks
+  belong in an existing section (a restaurant that is genuinely a dinner
+  pick), use that existing section id instead.
+- Every item follows the same rules as a full guide: real place, real Maps
+  link, no invented URLs, prices in local currency and USD, `place_id` and
+  `verified` both null, `status` either `plan` or `backup`, `day` only when
+  the pick only works on a specific date inside the stay.
+- Skip anything on the Avoid list, and apply the Notes.
+- If an interest has no real match in this city, leave it out and say
+  nothing: do not pad the delta with weak picks.
+
+Respond with only a JSON code block in this shape, no prose:
+
+```json
+{
+  "schema": 1,
+  "delta": true,
+  "sections": [{"id": "interests", "label": "My interests", "icon": "⭐"}],
+  "items": [
+    {
+      "id": "new-slug",
+      "section": "interests",
+      "status": "plan",
+      "name": "Real Place Name",
+      "note": "Why it matches, with rating and review count if you have it.",
+      "price": {"text": "~2500 AMD / $6"},
+      "hours": {"text": "10:00-22:00 daily", "class": "late"},
+      "tags": [],
+      "links": [{"kind": "map", "label": "Open in Maps", "href": "https://maps.google.com/?cid=..."}],
+      "place_id": null,
+      "verified": null
+    }
+  ]
+}
+```
+
+`sections` is optional: omit it entirely when the section already exists.
+`items` is required and holds new items only.
+<!-- /RERUN:INTERESTS -->
+
+### Intel pass
+
+Adds the `intel` block (verdicts, tips, source) to items the guide already
+holds. It changes nothing else about them.
+
+<!-- RERUN:INTEL -->
+A delta is never a whole guide. Never re-list an item that already exists,
+never restate `city` or `dates`, and never emit `"status": "done"` or
+`"archived"`.
+
+Research the items listed below, by id, and return review-verified intel for
+as many of them as you can support. Do not return new items, do not rewrite
+names, notes, prices, hours or links, and do not return anything for an id
+that is not in the list.
+
+Follow the Intel quality rules above exactly:
+
+- Restaurants and cafes: 2 to 4 named dishes with `must`, `good` or `skip`
+  verdicts, only where multiple reviewers name the dish specifically.
+- Activities and services: 1 to 3 verdicts on the specifics that change the
+  visit, plus 1 to 3 practical tips.
+- Always a one-line `source`.
+- Leave an item out of the payload entirely rather than pad it. Covering
+  half the list with real intel is the correct outcome; covering all of it
+  with invented intel is not.
+
+Respond with only a JSON code block in this shape, no prose:
+
+```json
+{
+  "schema": 1,
+  "delta": true,
+  "intel": {
+    "item-id-from-the-list": {
+      "verdicts": [
+        {"tier": "must", "text": "Adjarian khachapuri, the boat with the egg"},
+        {"tier": "skip", "text": "The seafood platter: frozen, priced for tourists"}
+      ],
+      "tips": ["Go before 13:00 or after 15:00 to skip the queue"],
+      "source": "Aggregated from Google and TripAdvisor reviews, mid-2026"
+    }
+  }
+}
+```
+
+Keys of `intel` are existing item ids. Anything else in the payload is
+ignored.
+<!-- /RERUN:INTEL -->
 
 </script>
 
@@ -3322,6 +4949,7 @@ CityOps.init();
 
   function has(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function trim(s) { return String(s === null || s === undefined ? '' : s).replace(/^\s+|\s+$/g, ''); }
 
   function loadStore() {
     var raw = null;
@@ -3452,6 +5080,10 @@ CityOps.init();
       exb.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); loadExampleCity(); };
       acts.appendChild(exb);
     }
+    var pf = el('button', null, 'Profile');
+    pf.type = 'button';
+    pf.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); openProfileModal(); };
+    acts.appendChild(pf);
     // Sync control: absent entirely when no project is configured, so an
     // unconfigured build shows no sign-in affordance it cannot honour.
     if (syncOn()) {
@@ -3521,6 +5153,306 @@ CityOps.init();
     h.appendChild(add);
   }
 
+  // ---- interest profile (app-only data; the engine owns its shape) ----
+  // A chip list: Enter adds, each chip's x removes. get() also returns whatever
+  // is still sitting unentered in the input, so a typed interest is never
+  // silently dropped by pressing Save instead of Enter.
+  function chipField(box, label, values, placeholder) {
+    box.appendChild(el('p', 'diff', label));
+    var items = values.slice();
+    var list = el('div', 'chip-list');
+    box.appendChild(list);
+    var inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'chip-add';
+    inp.placeholder = placeholder;
+    inp.setAttribute('aria-label', label);
+    box.appendChild(inp);
+
+    function draw() {
+      list.innerHTML = '';
+      items.forEach(function (v, i) {
+        var chip = el('span', 'chipx');
+        chip.appendChild(document.createTextNode(v));
+        var x = el('button', null, '×');
+        x.type = 'button';
+        x.setAttribute('aria-label', 'Remove ' + v);
+        x.onclick = function () { items.splice(i, 1); draw(); };
+        chip.appendChild(x);
+        list.appendChild(chip);
+      });
+    }
+    function add() {
+      var v = trim(inp.value);
+      inp.value = '';
+      if (!v) return;
+      items.push(v);
+      // normalize does the trimming, case-insensitive dedupe and the cap, so
+      // the chips on screen are exactly what a Save would store.
+      items = CityOps.profile.normalize({ interests: items }).interests;
+      draw();
+    }
+    inp.onkeydown = function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); add(); }
+    };
+    draw();
+    return { get: function () { return items.concat(trim(inp.value) ? [trim(inp.value)] : []); } };
+  }
+
+  function openProfileModal() {
+    var m = modalShell('Your interest profile');
+    m.box.appendChild(el('p', 'diff', 'What you seek out in a new city, and what you never want suggested. ' +
+      'Build my prompt hands this to your own AI so it finds places that match you. ' +
+      'Keep it short: 5 to 12 interests research better than 30.'));
+    var p = CityOps.profile.normalize(store.profile);
+    var interests = chipField(m.box, 'Interests, in priority order', p.interests, 'Add an interest, then press Enter');
+    var avoid = chipField(m.box, 'Avoid: never suggest these', p.avoid, 'Add something to avoid, then press Enter');
+    m.box.appendChild(el('p', 'diff', 'Notes: anything that changes what a good pick means (diet, mobility, budget, who is along).'));
+    var ta = document.createElement('textarea');
+    ta.className = 'notes';
+    ta.value = p.notes;
+    ta.setAttribute('aria-label', 'Profile notes');
+    m.box.appendChild(ta);
+    m.box.appendChild(el('p', 'diff', (session && session.access_token)
+      ? 'Saved to your account.'
+      : 'Saved in this browser. Sign in to sync (city menu) to carry your profile across devices.'));
+    var row = el('div', 'mrow');
+    var save = el('button', 'ctl to-done', 'Save');
+    save.type = 'button';
+    save.onclick = function () {
+      var next = CityOps.profile.normalize({
+        interests: interests.get(), avoid: avoid.get(), notes: ta.value
+      });
+      // No-op save: compare against the profile as loaded, `updated` removed
+      // from both sides, so a modal opened and closed unchanged never stamps
+      // a new timestamp or schedules a push.
+      var before = JSON.stringify(Object.assign({}, p, { updated: undefined }));
+      var after = JSON.stringify(Object.assign({}, next, { updated: undefined }));
+      if (before === after) { m.close(); return; }
+      next.updated = new Date().toISOString();
+      store.profile = next;
+      saveStore(store);
+      schedulePush('profile');
+      m.close();
+      showSyncNotice('Profile saved.');
+    };
+    var cancel = el('button', 'ctl', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = m.close;
+    row.appendChild(save);
+    row.appendChild(cancel);
+    if (!has(store.cities, SEED_ID)) {
+      var ex = el('button', 'ctl', 'Load example city');
+      ex.type = 'button';
+      ex.onclick = function () { m.close(); loadExampleCity(); };
+      row.appendChild(ex);
+    }
+    m.box.appendChild(row);
+  }
+
+  // PROMPT.md, embedded by the assembler as a text/plain block so the prompt
+  // builders work offline. Same escaping contract as the guide template: the
+  // assembler writes `<\/script`, this reverses exactly one layer.
+  function promptTemplateText() {
+    var node = document.getElementById('prompt-template');
+    if (!node) return null;
+    var raw = node.textContent;
+    if (raw.charAt(0) === '\n') raw = raw.slice(1);
+    if (raw.charAt(raw.length - 1) === '\n') raw = raw.slice(0, -1);
+    return raw.replace(/<\\\/script/g, '<' + '/script');
+  }
+
+  // ---- Enrich: re-run an existing city through the traveler's own AI ----
+  // Two prompt builders and one paste box. No network and no AI call from the
+  // app: the same zero-cost paste workflow Build my prompt uses.
+  //
+  // MERGE TARGET (the one decision worth spelling out): the delta is merged
+  // into the EFFECTIVE data (the city's canonical store copy with any in-app
+  // dataOverride applied), and the result is written back as the city's new
+  // canonical data with the override cleared. That mirrors the Replace path in
+  // Add city, and it is the only option that cannot lose work:
+  //   - merging into the canonical copy alone would leave a stale override
+  //     still masking it through effectiveData(), so the traveler would see no
+  //     new items at all;
+  //   - merging into the override alone would keep the additions out of the
+  //     synced data row, so they would never reach another device.
+  // Live planning state (done marks, renames, day arrangement) is keyed by item
+  // id in a separate store that neither mergeDelta nor this function touches,
+  // so it survives untouched by construction.
+  function enrichSummaryText(s) {
+    var parts = [];
+    if (s.added) parts.push(s.added + ' added');
+    if (s.skipped) parts.push(s.skipped + ' skipped');
+    if (s.sectionsAdded) parts.push(s.sectionsAdded + (s.sectionsAdded === 1 ? ' section' : ' sections'));
+    if (s.intelApplied) parts.push(s.intelApplied + ' intel applied');
+    if (s.intelSkipped) parts.push(s.intelSkipped + ' intel skipped');
+    return parts.length ? parts.join(', ') : 'nothing new';
+  }
+
+  function openEnrichModal() {
+    if (!activeId || !has(store.cities, activeId)) return;
+    var m = modalShell('Enrich ' + store.cities[activeId].city.name);
+    m.box.appendChild(el('p', 'diff', 'Build a prompt for a second pass over this city, run it in your AI, ' +
+      'and paste the result back. New items are added and nothing you have already planned is disturbed.'));
+
+    var msg = el('div', 'diff', '');
+    var fallbackTa = null;
+
+    // Same stub-friendly pattern as Build my prompt: try the async clipboard,
+    // fall back to a read-only textarea the traveler can copy from by hand.
+    function showFallback(text) {
+      if (!fallbackTa) {
+        fallbackTa = document.createElement('textarea');
+        fallbackTa.className = 'promptout';
+        fallbackTa.readOnly = true;
+        fallbackTa.setAttribute('aria-label', 'Generated prompt');
+        m.box.insertBefore(fallbackTa, msg);
+      }
+      fallbackTa.value = text;
+      msg.textContent = 'Could not reach the clipboard. The prompt is selected above: copy it, ' +
+        'paste it into Claude or ChatGPT, then paste the JSON it returns below.';
+      try { fallbackTa.focus(); fallbackTa.select(); } catch (e) {}
+    }
+    function copyOut(text) {
+      var wrote = null;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) wrote = navigator.clipboard.writeText(text);
+      } catch (e) { wrote = null; }
+      if (wrote && typeof wrote.then === 'function') {
+        wrote.then(function () {
+          msg.textContent = 'Copied. Paste it into Claude or ChatGPT, then paste the JSON it returns below.';
+        }, function () { showFallback(text); });
+      } else {
+        showFallback(text);
+      }
+    }
+    function downloadOut(text, filename) {
+      var blob = new Blob([text], { type: 'text/markdown' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      var freeUrl = a.href;
+      setTimeout(function () { URL.revokeObjectURL(freeUrl); }, 4000);
+      msg.textContent = 'Downloaded ' + filename + '. Paste it into Claude or ChatGPT, ' +
+        'then paste the JSON it returns below.';
+    }
+    // The prompts describe the city as it stands right now, override included,
+    // which is the same data the merge will run against.
+    function currentData() {
+      var st = CityOps.liveState() || CityOps.makeStore(activeId, LS).load();
+      return CityOps.effectiveData(store.cities[activeId], st);
+    }
+    function build(kind) {
+      var tpl = promptTemplateText();
+      if (!tpl) {
+        msg.textContent = 'This build has no prompt template embedded. Use PROMPT.md from the repo.';
+        return null;
+      }
+      try {
+        return (kind === 'intel')
+          ? CityOps.promptKit.buildIntelPassPrompt(tpl, currentData())
+          : CityOps.promptKit.buildInterestsDeltaPrompt(tpl, currentData(), store.profile);
+      } catch (e) {
+        msg.textContent = e.message;
+        return null;
+      }
+    }
+    function promptRow(kind, filename, disabledReason) {
+      var row = el('div', 'mrow');
+      var copy = el('button', 'ctl', 'Copy prompt');
+      copy.type = 'button';
+      var dl = el('button', 'ctl', 'Download .md');
+      dl.type = 'button';
+      if (disabledReason) {
+        // Never offer a control that cannot succeed: disable it and say why.
+        copy.disabled = dl.disabled = true;
+        copy.title = dl.title = disabledReason;
+      } else {
+        copy.onclick = function () { var t = build(kind); if (t !== null) copyOut(t); };
+        dl.onclick = function () { var t = build(kind); if (t !== null) downloadOut(t, filename); };
+      }
+      row.appendChild(copy);
+      row.appendChild(dl);
+      return row;
+    }
+
+    var profileEmpty = CityOps.profile.isEmpty(store.profile);
+    m.box.appendChild(el('p', 'diff', 'Interests delta: new places in this city that match your interest profile, ' +
+      'in their own section, on top of what is already here.'));
+    var irow = promptRow('interests', 'interests-delta.md',
+      profileEmpty ? 'Add interests in Profile first' : null);
+    if (profileEmpty) {
+      var goProfile = el('button', 'ctl', 'Open Profile');
+      goProfile.type = 'button';
+      goProfile.onclick = function () { m.close(); openProfileModal(); };
+      irow.appendChild(goProfile);
+    }
+    m.box.appendChild(irow);
+
+    m.box.appendChild(el('p', 'diff', 'Intel pass: what to actually order or do at the places this guide ' +
+      'already holds, from what reviewers say repeatedly.'));
+    m.box.appendChild(promptRow('intel', 'intel-pass.md', null));
+
+    m.box.appendChild(el('p', 'diff', 'Paste what your AI returns here. It is a partial payload: only new items ' +
+      'and intel, never a whole guide.'));
+    var ta = document.createElement('textarea');
+    ta.setAttribute('aria-label', 'Delta JSON from your AI');
+    m.box.appendChild(ta);
+    m.box.appendChild(msg);
+
+    var row = el('div', 'mrow');
+    var apply = el('button', 'ctl to-done', 'Apply');
+    apply.type = 'button';
+    apply.onclick = function () {
+      var parsed;
+      try { parsed = JSON.parse(ta.value); }
+      catch (e) { msg.textContent = 'That is not valid JSON: ' + e.message; return; }
+      var res = CityOps.mergeDelta(currentData(), parsed);
+      if (!res.data) {
+        msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n');
+        return;
+      }
+      var added = CityOps.appStore.add(store, res.data);   // stamps updatedAt now
+      store = added.store;
+      saveStore(store);
+      // The override's content is part of the canonical data now, so clearing
+      // it changes nothing on screen and stops it masking future merges.
+      var cs = CityOps.makeStore(added.cityId, LS);
+      var cst = cs.load();
+      if (cst.dataOverride) { cst.dataOverride = null; cs.save(cst); }
+      m.close();
+      schedulePush('data', added.cityId);
+      // Same scroll-preserve pattern as applyPull: activateCity reboots the
+      // city (CityOps.boot), which re-renders from the top.
+      var y = 0;
+      try { y = window.scrollY || window.pageYOffset || 0; } catch (e) {}
+      activateCity(added.cityId);   // reboots the city; rewrites #notice
+      try { window.scrollTo(0, y); } catch (e2) {}
+      showSyncNotice('Enriched: ' + enrichSummaryText(res.summary) + '.');
+    };
+    var cancel = el('button', 'ctl', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = m.close;
+    row.appendChild(apply);
+    row.appendChild(cancel);
+    m.box.appendChild(row);
+
+    m.box.appendChild(el('p', 'diff', 'This builds a prompt for your own AI (Claude, ChatGPT). ' +
+      'In-app research is planned for a future version.'));
+  }
+
+  // Appended to the engine's toolbar on every render (app context only).
+  function toolbarExtras(tb) {
+    var b = el('button', null, 'Enrich');
+    b.type = 'button';
+    b.id = 'btn-enrich';
+    b.onclick = openEnrichModal;
+    tb.appendChild(b);
+  }
+
   function openAddModal() {
     var host = document.getElementById('modal');
     host.innerHTML = '';
@@ -3545,6 +5477,20 @@ CityOps.init();
     drow.appendChild(el('span', 'diff', 'From')); drow.appendChild(bf);
     drow.appendChild(el('span', 'diff', 'To')); drow.appendChild(bt2);
     box.appendChild(drow);
+    // Optional header fields: they only exist to fill the prompt's Trip details
+    // block, so a blank city ignores them entirely.
+    function optField(ph) {
+      var i = document.createElement('input');
+      i.type = 'text'; i.className = 'date-field'; i.placeholder = ph;
+      i.setAttribute('aria-label', ph);
+      return i;
+    }
+    var hrow = el('div', 'hdr-row');
+    var bacc = optField('Accommodation');
+    var barr = optField('Arrival');
+    var bdep = optField('Departure');
+    hrow.appendChild(bacc); hrow.appendChild(barr); hrow.appendChild(bdep);
+    box.appendChild(hrow);
     var bmsg = el('div', 'diff', '');
     box.appendChild(bmsg);
     var brow2 = el('div', 'mrow');
@@ -3552,6 +5498,77 @@ CityOps.init();
     bcreate.type = 'button';
     box.appendChild(brow2);
     brow2.appendChild(bcreate);
+
+    // Build my prompt: PROMPT.md with this city's header and the interest
+    // profile filled in, copied out for the traveler's own AI. No network, no
+    // AI call from the app: the traveler pastes the JSON back into this modal.
+    var promptTa = null;
+    function showPromptFallback(text) {
+      if (!promptTa) {
+        promptTa = document.createElement('textarea');
+        promptTa.className = 'promptout';
+        promptTa.readOnly = true;
+        promptTa.setAttribute('aria-label', 'Generated prompt');
+        box.insertBefore(promptTa, bmsg);
+      }
+      promptTa.value = text;
+      bmsg.textContent = 'Could not reach the clipboard. The prompt is selected above: copy it, ' +
+        'paste it into Claude or ChatGPT, then paste the JSON it returns below.';
+      try { promptTa.focus(); promptTa.select(); } catch (e) {}
+    }
+    function buildPromptText() {
+      if (!trim(bn.value) || !bf.value || !bt2.value) {
+        bmsg.textContent = 'Fill city name and dates first';
+        return null;
+      }
+      var tpl = promptTemplateText();
+      if (!tpl) {
+        bmsg.textContent = 'This build has no prompt template embedded. Use PROMPT.md from the repo.';
+        return null;
+      }
+      return CityOps.promptKit.buildCityPrompt(tpl, {
+        name: trim(bn.value), country: trim(bc.value), from: bf.value, to: bt2.value,
+        accommodation: trim(bacc.value), arrival: trim(barr.value), departure: trim(bdep.value)
+      }, store.profile);
+    }
+    var bprompt = el('button', 'ctl', 'Build my prompt');
+    bprompt.type = 'button';
+    bprompt.onclick = function () {
+      var text = buildPromptText();
+      if (text === null) return;
+      var wrote = null;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) wrote = navigator.clipboard.writeText(text);
+      } catch (e) { wrote = null; }
+      if (wrote && typeof wrote.then === 'function') {
+        wrote.then(function () {
+          bmsg.textContent = 'Copied. Paste into Claude or ChatGPT, then paste the JSON it returns below.';
+        }, function () { showPromptFallback(text); });
+      } else {
+        showPromptFallback(text);
+      }
+    };
+    brow2.appendChild(bprompt);
+    var bdl = el('button', 'ctl', 'Download prompt.md');
+    bdl.type = 'button';
+    bdl.onclick = function () {
+      var text = buildPromptText();
+      if (text === null) return;
+      var blob = new Blob([text], { type: 'text/markdown' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'prompt.md';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      var freeUrl = a.href;
+      setTimeout(function () { URL.revokeObjectURL(freeUrl); }, 4000);
+      bmsg.textContent = 'Downloaded prompt.md. Paste it into Claude or ChatGPT, then paste the JSON it returns below.';
+    };
+    brow2.appendChild(bdl);
+    box.appendChild(el('p', 'diff', CityOps.profile.isEmpty(store.profile)
+      ? 'Build my prompt writes PROMPT.md with this header filled in. Add interests in Profile (city menu) and it will ask your AI for a matching ninth section too.'
+      : 'Build my prompt writes PROMPT.md with this header and your interest profile filled in.'));
 
     box.appendChild(el('p', 'diff', 'Or paste schema v1 city JSON (the output of PROMPT.md). ' + whereItGoes));
     var ta = document.createElement('textarea');
@@ -3724,6 +5741,8 @@ CityOps.init();
   var stateStamp = {};         // cityId -> state.updated already seen (push trigger baseline)
   var pushQueueData = {};      // cityId -> pending data push
   var pushQueueState = {};     // cityId -> pending state push
+  var pushQueueProfile = false; // the profile is a single row, so a flag not a map
+  var profileTableMissing = false; // set once if the table is not there yet (SQL unapplied)
   var pushTimer = null;
   var refreshInFlight = null;
   var pullInFlight = false;
@@ -3807,6 +5826,7 @@ CityOps.init();
     stateStamp = {};
     pushQueueData = {};
     pushQueueState = {};
+    pushQueueProfile = false;
     if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
     if (msg) showSyncNotice(msg);
     renderPanel();
@@ -3820,7 +5840,11 @@ CityOps.init();
     var n = document.getElementById('notice');
     if (!n || !text) return;
     var base = n.textContent || '';
-    n.textContent = base ? base + ' ' + text : text;
+    if (!base) { n.textContent = text; return; }
+    // Two sync notices in one round (e.g. cities then profile) read as one
+    // run-on sentence with a plain space; a middle dot keeps them distinct.
+    var sep = base.indexOf('Synced:') !== -1 ? ' · ' : ' ';
+    n.textContent = base + sep + text;
   }
 
   function cleanHash() {
@@ -3975,12 +5999,46 @@ CityOps.init();
       .catch(function (e) { warn('push ' + kind + ' failed', e); });
   }
 
-  // 2s debounce per the spec, shared by both tables: a burst of taps produces
+  // The profile is one row per user, keyed by user_id alone, so it needs no
+  // city id and no buildRows: one payload, one stamp. A profile that was never
+  // edited on this device has a null stamp and is never pushed (that would
+  // overwrite a real profile on the server with this device's empty one).
+  function pushProfileNow() {
+    if (!syncOn() || !session || profileTableMissing) return;
+    var p = CityOps.profile.normalize(store.profile);
+    if (!p.updated) return;
+    api('/rest/v1/profile?on_conflict=user_id', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates,return=minimal'
+      },
+      body: JSON.stringify([{ data: p, updated_at: p.updated }])
+    }).then(function () { stampSync(); })
+      .catch(function (e) { noteProfileTable(e); warn('push profile failed', e); });
+  }
+
+  // The profile table is a Phase 3a addition: a build can be running against a
+  // project where the SQL has not been applied yet. PostgREST answers an
+  // unknown table with 404 (PGRST205). Warn once, mark it off, and let cities
+  // and state keep syncing exactly as before.
+  function noteProfileTable(e) {
+    if (profileTableMissing) return;
+    var msg = (e && e.message) || '';
+    if (msg.indexOf('404') === -1) return;
+    profileTableMissing = true;
+    warn('profile table not found; profile sync is off until the Phase 3a SQL is applied');
+  }
+
+  // 2s debounce per the spec, shared by every table: a burst of taps produces
   // one upsert. A failed flush is NOT retried on a timer; local stays newer
   // than the server, so the next pull's reconcile pushes it. Local is the queue.
   function schedulePush(kind, id) {
-    if (!syncOn() || !session || !id) return;
-    if (kind === 'state') pushQueueState[id] = 1; else pushQueueData[id] = 1;
+    if (!syncOn() || !session) return;
+    if (kind === 'profile') pushQueueProfile = true;
+    else if (!id) return;
+    else if (kind === 'state') pushQueueState[id] = 1;
+    else pushQueueData[id] = 1;
     if (pushTimer) clearTimeout(pushTimer);
     pushTimer = setTimeout(flushPush, 2000);
   }
@@ -4002,6 +6060,7 @@ CityOps.init();
     pushQueueState = {};
     pushNow('data', dataEntries);
     pushNow('state', stateEntries);
+    if (pushQueueProfile) { pushQueueProfile = false; pushProfileNow(); }
   }
 
   // Fires the debounced push immediately instead of waiting out the 2s timer:
@@ -4039,12 +6098,21 @@ CityOps.init();
     lastPullAt = now;
     return Promise.all([
       api('/rest/v1/cities?select=city_id,data,updated_at'),
-      api('/rest/v1/city_state?select=city_id,state,updated_at')
+      api('/rest/v1/city_state?select=city_id,state,updated_at'),
+      // The profile read is isolated: a missing table (the Phase 3a SQL not
+      // applied yet) must not fail the whole round and take cities down with
+      // it, so its rejection resolves to null and the reconcile skips it.
+      profileTableMissing ? Promise.resolve(null) :
+        api('/rest/v1/profile?select=data,updated_at').catch(function (e) {
+          noteProfileTable(e);
+          warn('profile pull failed', e);
+          return null;
+        })
     ]).then(function (res) {
       // A null half means "no usable token"; an empty table is []. Never treat
       // an unanswered read as an empty server, which would push everything up.
       if (!res || !Array.isArray(res[0]) || !Array.isArray(res[1])) return false;
-      applyPull(res[0], res[1]);
+      applyPull(res[0], res[1], res[2]);
       stampSync();
       return true;
     }).catch(function (e) {
@@ -4063,7 +6131,31 @@ CityOps.init();
     return stamps;
   }
 
-  function applyPull(cityRows, stateRows) {
+  // Third row kind, same newer-wins reconcile as cities and state, decided by
+  // syncKit.decide(local profile.updated, remote updated_at). Returns true when
+  // the remote profile was taken, so the caller can say so in the notice.
+  // Non-array rows mean "no usable answer": leave both sides alone.
+  function applyProfilePull(rows) {
+    if (!Array.isArray(rows)) return false;
+    var row = rows.length ? rows[0] : null;
+    var localP = CityOps.profile.normalize(store.profile);
+    var remoteIso = (row && typeof row.updated_at === 'string') ? row.updated_at : null;
+    var d = CityOps.syncKit.decide(localP.updated, remoteIso);
+    if (d === 'pull') {
+      if (!row || !row.data || typeof row.data !== 'object') return false;
+      var p = CityOps.profile.normalize(row.data);
+      p.updated = remoteIso || p.updated;   // keep the REMOTE stamp: this is not a local edit
+      store.profile = p;
+      saveStore(store);
+      return true;
+    }
+    // 'push' can only happen when this device has a stamp, so the never-edited
+    // profile (null stamp) is never sent; decide() returns pull or noop there.
+    if (d === 'push') pushProfileNow();
+    return false;
+  }
+
+  function applyPull(cityRows, stateRows, profileRows) {
     var remoteData = {}, remoteState = {};
     var remoteDataStamps = stampMap(cityRows, remoteData);
     var remoteStateStamps = stampMap(stateRows, remoteState);
@@ -4148,6 +6240,9 @@ CityOps.init();
     if (pulledNames.length) {
       showSyncNotice('Synced: ' + pulledNames.join(', ') + ' updated from your other device');
     }
+    if (applyProfilePull(profileRows)) {
+      showSyncNotice('Synced: profile updated from your other device');
+    }
   }
 
   // ---- auth actions ----
@@ -4198,6 +6293,7 @@ CityOps.init();
     stateStamp = {};
     pushQueueData = {};
     pushQueueState = {};
+    pushQueueProfile = false;
     if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
     // The last-sync record is meaningless once signed out (and stale once
     // signed back in as someone else), so it goes with the session.
@@ -4370,7 +6466,7 @@ CityOps.init();
   }
 
   // Set before the first boot so the engine's toolbar picks up the app-only button.
-  window.CityOpsApp = { exportStandalone: exportStandalone };
+  window.CityOpsApp = { exportStandalone: exportStandalone, toolbarExtras: toolbarExtras };
 
   // Re-decorate the header and re-render the panel on every engine state
   // change (not just on city switch, which activateCity already triggers via

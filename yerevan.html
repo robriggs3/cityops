@@ -163,6 +163,18 @@
   .empty-day .free-day{padding:6px 16px 10px; font-size:.8rem; color:var(--text-3); font-style:italic;}
   .date-field{font:inherit; font-size:.85rem; padding:6px 10px; border:1px solid var(--border-light);
     border-radius:8px; background:#fff; color:var(--text);}
+  .intel{margin-top:8px;}
+  .intel summary{font-size:.72rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+    color:var(--text-3); cursor:pointer; padding:4px 0;}
+  .verdict{font-size:.86rem; margin-top:4px;}
+  .tier{display:inline-block; font-size:.68rem; font-weight:800; text-transform:uppercase;
+    letter-spacing:.4px; padding:1px 6px; border-radius:5px; margin-right:6px; vertical-align:middle;}
+  .tier-must{background:var(--green-soft); color:var(--green);}
+  .tier-good{background:var(--bg-softer); color:var(--text-3);}
+  .tier-skip{background:var(--amber-soft); color:var(--amber);}
+  .tips{margin:6px 0 0 18px; font-size:.84rem; color:var(--text-3);}
+  .tips li{margin-bottom:3px;}
+  .intel-src{font-size:.72rem; color:var(--text-3); font-style:italic; margin-top:4px;}
   /* narrow phones: trim horizontal chrome so cards get the width */
   @media (max-width: 430px){
     .wrap{padding:0 10px 48px;}
@@ -315,7 +327,32 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The Italian side of the menu: pasta and risotto, 12 pasta and 15 Italian-cuisine reviews and not one negative between them"
+          },
+          {
+            "tier": "good",
+            "text": "Mushroom soup, named first by reviewers who bother to name anything (soups: 16 reviews, all positive)"
+          },
+          {
+            "tier": "good",
+            "text": "Desserts, 48 reviews at 94 percent: the San Sebastian cheesecake and the baklava are the two named repeatedly"
+          },
+          {
+            "tier": "skip",
+            "text": "The Armenian standards here (dolma, kufta): separate reviewers call the dolma bland with dry meat and the kufta average, while the Italian dishes score 100 percent"
+          }
+        ],
+        "tips": [
+          "Ask for the outdoor patio: reviewers consistently rate the greenery-facing terrace over the inside room",
+          "Typical visit is about 45 minutes, so it does not eat the evening before the 21:00 fountains"
+        ],
+        "source": "Yandex Maps dish-level review tallies plus Google review aggregates on Wanderlog, read Aug 2026"
+      }
     },
     {
       "id": "derian",
@@ -351,7 +388,32 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Manti, named as the favourite dish by reviewers on three separate aggregates and called the best in Yerevan"
+          },
+          {
+            "tier": "must",
+            "text": "Fattoush, repeatedly named the best in the city (one Yandex reviewer's whole point of going)"
+          },
+          {
+            "tier": "good",
+            "text": "Rehan hummus, the basil one, named alongside the manti as a customer favourite rather than the plain version"
+          },
+          {
+            "tier": "good",
+            "text": "Chi kofte, raw kibbeh, singled out by name on TripAdvisor and in the mezze praise"
+          }
+        ],
+        "tips": [
+          "Order mezze plus manti rather than a meat main: the eggplant, grape leaves and hummus are what reviewers name, the grill is not",
+          "Reviewers report being seated where the room wants them even when it is empty, so state a preference on arrival"
+        ],
+        "source": "Yandex Maps reviews, TripAdvisor and Wanderlog Google-review aggregates, Aug 2026 read"
+      }
     },
     {
       "id": "sherep",
@@ -384,7 +446,29 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Khinkali: 50 reviews, 84 percent positive, the best-scoring thing on the menu"
+          },
+          {
+            "tier": "good",
+            "text": "Khachapuri (46 reviews, 80 percent) and the fish (45 reviews, 79 percent)"
+          },
+          {
+            "tier": "skip",
+            "text": "The shashlik: 79 reviews and only 43 percent positive, the worst score of any dish at any restaurant in this guide"
+          }
+        ],
+        "tips": [
+          "Book, and if you want a window table say so when you book: reviewers report the good tables are all pre-reserved",
+          "Reviewers say the room smells strongly of cooking and clothes carry it out after an hour, which is the terrace argument in one line",
+          "Waiting time scores 71 percent across 199 reviews, so order everything at once rather than in courses"
+        ],
+        "source": "Yandex Maps dish-level review tallies plus TripAdvisor and Wanderlog aggregates, Aug 2026 read"
+      }
     },
     {
       "id": "apres",
@@ -451,7 +535,32 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The shashlik and kebabs: 67 shashlik reviews at 90 percent and 143 meat reviews at 87 percent, the best grill numbers in this guide"
+          },
+          {
+            "tier": "must",
+            "text": "The gata itself, baked on site, described by reviewers as fresh and fragrant with a delicate filling"
+          },
+          {
+            "tier": "good",
+            "text": "Lamb with dates, and the homemade pomegranate wine, both named by name in reviews"
+          },
+          {
+            "tier": "skip",
+            "text": "The fish: 16 reviews at 69 percent, with the trout described as over-salted and left too long on the coals"
+          }
+        ],
+        "tips": [
+          "Reserve rather than walk in: reviewers describe reception as abrupt with walk-ins while seated guests rate the waiters highly",
+          "Live music runs every night, so this is not the quiet table"
+        ],
+        "source": "Yandex Maps dish-level review tallies plus TripAdvisor review text, Aug 2026 read"
+      }
     },
     {
       "id": "lavash-restaurant",
@@ -484,7 +593,37 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The Napoleon, the signature dessert, named over and over (desserts: 196 reviews at 89 percent, cakes 106 at 89)"
+          },
+          {
+            "tier": "must",
+            "text": "Khinkali: 112 reviews, 87 percent positive"
+          },
+          {
+            "tier": "good",
+            "text": "Lamb shoulder with emmer wheat pilaf, and the ghapama, the two mains reviewers name by dish rather than by adjective"
+          },
+          {
+            "tier": "skip",
+            "text": "The shashlik: 114 reviews and only 58 percent positive, with the meat repeatedly called small for the price and chewy"
+          },
+          {
+            "tier": "skip",
+            "text": "Coffee here: 30 reviews at 53 percent, the worst-rated thing on the list. Have it elsewhere"
+          }
+        ],
+        "tips": [
+          "Reserve: walk-ins report being turned away, and the crowding complaint is the single most common one",
+          "Service is attentive to the point reviewers call it hovering, so say early that you want to be left alone",
+          "Air conditioning gets run hard: reviewers describe the room as cold, which in August is a feature but bring a layer"
+        ],
+        "source": "Yandex Maps dish-level review tallies (4,102 ratings) plus TripAdvisor and Wanderlog aggregates, Aug 2026 read"
+      }
     },
     {
       "id": "sat-22-departure",
@@ -560,7 +699,29 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "good",
+            "text": "Khinkali: 25 reviews at 91 percent, the best-scoring dish here by a distance"
+          },
+          {
+            "tier": "good",
+            "text": "The dolma, called the most delicious in Yerevan by more than one reviewer, and the soups (27 reviews, 81 percent)"
+          },
+          {
+            "tier": "skip",
+            "text": "The shashlik, despite the reputation: 69 reviews at 66 percent and 105 meat reviews at 71 percent, with cartilage and dry pork kebab named repeatedly"
+          }
+        ],
+        "tips": [
+          "Count your change and read the bill. Multiple reviewers describe service charge being claimed as not included when it was, and change not coming back",
+          "The ground floor is under renovation: the entrance is through the courtyard and seating is upstairs, so it looks shut from the street",
+          "Staff scores 53 percent across 151 reviews and waiting time 47 percent across 53, so this is a sit-down-and-be-patient place"
+        ],
+        "source": "Yandex Maps dish-level review tallies plus TripAdvisor review text, Aug 2026 read"
+      }
     },
     {
       "id": "tavern-yerevan-khorenatsi",
@@ -588,7 +749,29 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "good",
+            "text": "Khinkali (45 reviews, 76 percent), including the fried version reviewers ask for by name, and the lamb"
+          },
+          {
+            "tier": "good",
+            "text": "The pomegranate wine, named in review after review"
+          },
+          {
+            "tier": "skip",
+            "text": "The shashlik: 76 reviews at 55 percent, with veal shashlik described as salty and dry"
+          }
+        ],
+        "tips": [
+          "A 10 percent service charge is added automatically, so do not tip twice",
+          "Portions are described as large by most reviewers, so order fewer plates than the menu suggests",
+          "Late in the evening reviewers report parts of the menu already unavailable, so order the thing you came for first"
+        ],
+        "source": "Yandex Maps dish tallies for Tavern Yerevan (chain data, mostly the Amiryan branch, not the Khorenatsi one) plus Wanderlog aggregates, Aug 2026 read"
+      }
     },
     {
       "id": "lali-kitchen",
@@ -654,7 +837,28 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The ribs. Overwhelmingly the most-named dish, called the best in Armenia, with honey teriyaki and kimchi the two glazes reviewers pick out"
+          },
+          {
+            "tier": "good",
+            "text": "The burgers and the cocktails, both named repeatedly and both rated well above the sides"
+          },
+          {
+            "tier": "skip",
+            "text": "The fries: the one item reviewers actively call weak. Take a salad instead"
+          }
+        ],
+        "tips": [
+          "Tables sit very close together and weekend seating runs out, so this is a book-ahead or go-early room",
+          "It is priced high for Yerevan, which is the recurring complaint even in positive reviews"
+        ],
+        "source": "Yandex Maps review analysis (1,296 ratings, 452 reviews) plus TripAdvisor, Aug 2026 read"
+      }
     },
     {
       "id": "shirvan",
@@ -682,7 +886,28 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The kebabs, koobideh and barg, named as amazing across Google, Yandex and TripAdvisor alike"
+          },
+          {
+            "tier": "good",
+            "text": "Zereshk polo, the barberry rice with chicken, named by reviewers on two separate platforms"
+          },
+          {
+            "tier": "skip",
+            "text": "Ghormeh sabzi: an Iranian reviewer describes it as bitter with no meat in it, and it is the dish the negative reviews keep landing on"
+          }
+        ],
+        "tips": [
+          "Read the bill: one reviewer reports a plain salad billed at 2,000 AMD / $5 against an expected 500 AMD / $1",
+          "Hookah is a big part of the room and reviewers praise it, which is another way of saying the air is smoky"
+        ],
+        "source": "Yandex Maps reviews plus Wanderlog Google-review aggregate, Aug 2026 read"
+      }
     },
     {
       "id": "caucasus-tavern",
@@ -715,7 +940,24 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "good",
+            "text": "Khinkali, the one dish multiple reviewers name positively here, at about 400 AMD / $1 for five"
+          },
+          {
+            "tier": "good",
+            "text": "Khash and khashlama, the boiled lamb: the reason locals come at odd hours, and what the 24-hour licence is actually for"
+          }
+        ],
+        "tips": [
+          "The menu is split into Armenian and Georgian sections and printed in several languages, so ordering at 02:00 with no shared language works",
+          "Typical visit is about 45 minutes and service slows noticeably at peak, so it is a late-night answer rather than a long evening"
+        ],
+        "source": "Wanderlog Google-review aggregate plus TripAdvisor review text, Aug 2026 read. Note two TripAdvisor listings exist for this name; this is the Hanrapetutyan St one"
+      }
     },
     {
       "id": "tun-lahmajo",
@@ -743,7 +985,28 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Lahmajo with cheese, the dish the place is named for and the only thing reviewers are unanimous about"
+          },
+          {
+            "tier": "good",
+            "text": "Khinkali: 180 reviews at 87 percent, the second-best thing here"
+          },
+          {
+            "tier": "skip",
+            "text": "The khachapuri: 58 reviews and only 55 percent positive, called disappointing and small"
+          }
+        ],
+        "tips": [
+          "Waits of 50 minutes to an hour before anyone takes an order are described repeatedly once it fills, so go before it does",
+          "Reviewers describe the inside as hot, which at midnight in August is worth knowing before you sit down"
+        ],
+        "source": "Yandex Maps dish-level review tallies plus TripAdvisor, Aug 2026 read"
+      }
     },
     {
       "id": "niko-kitchen",
@@ -838,7 +1101,27 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The croissants: 90 percent positive on the dish-level review split, against 79 percent for breakfast as a whole"
+          },
+          {
+            "tier": "good",
+            "text": "The croissant with eggs, and the quail croissant, the two made-to-order items reviewers name for a light breakfast"
+          },
+          {
+            "tier": "skip",
+            "text": "Treating it as a full sit-down breakfast: reviewers call the plates overpriced and small, and that is where the 4.1 rating comes from"
+          }
+        ],
+        "tips": [
+          "Waiting time is the weakest score on the listing, so take the pastry from the counter rather than ordering a cooked plate on a work morning"
+        ],
+        "source": "Yandex Maps dish-level review split plus TripAdvisor (Abovyan branch, 172 reviews), Aug 2026 read"
+      }
     },
     {
       "id": "achajour-parpetsi",
@@ -874,7 +1157,29 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Eggs benedict, and specifically the salmon version, the one dish reviewers name across every platform"
+          },
+          {
+            "tier": "good",
+            "text": "The coffee, called excellent repeatedly, and the homemade desserts"
+          },
+          {
+            "tier": "skip",
+            "text": "The bagels: reviewers who name them call them small enough to be one bite"
+          }
+        ],
+        "tips": [
+          "It is self-service, which is the number one complaint: you collect your own food, and cooked items run slow",
+          "Only about four outdoor tables, and reviewers report the indoor air conditioning run to full cold, so pick your side of the door deliberately",
+          "Free wifi is capped around two hours and you ask staff to extend it, which matters if this is the work morning"
+        ],
+        "source": "Yandex Maps reviews for the Parpetsi branch (77 ratings) plus Wanderlog and TripAdvisor aggregates, Aug 2026 read"
+      }
     },
     {
       "id": "crumbs-bakery",
@@ -991,7 +1296,29 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The plain lahmajun, thin and crisp, at about 550 AMD / $1.50: 98 percent positive across the meal reviews"
+          },
+          {
+            "tier": "good",
+            "text": "The zaatar, and the zaatar with olives, named by several reviewers as the thing to add"
+          },
+          {
+            "tier": "good",
+            "text": "Mutabbal, and the Aleppo-spiced coffee, both named specifically rather than in passing"
+          }
+        ],
+        "tips": [
+          "The service charge is 10 to 12 percent on dine-in and zero on takeaway, which is what the unexplained charge on your bill will be",
+          "It is deep in a courtyard off Tumanyan and reviewers say it is unfindable without GPS, so pin it before you walk",
+          "It can sell out: reviewers advise arriving well before the 18:30 close, and food comes in 5 to 7 minutes once you order"
+        ],
+        "source": "Yandex Maps reviews plus TripAdvisor and Wanderlog Google-review aggregates, Aug 2026 read"
+      }
     },
     {
       "id": "gum-market-lunch",
@@ -1018,7 +1345,25 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Sujukh, the walnut string dipped in grape jelly: the thing the whole front section of the market is built around"
+          },
+          {
+            "tier": "good",
+            "text": "Dried and candied apricots, and the sheets of lavash, which are worth the walk even if you buy nothing"
+          }
+        ],
+        "tips": [
+          "Everything is sold by weight and the candied fruit is far heavier than it looks: name a quantity and ask the price before it goes in the bag",
+          "Cash and small notes only, and take the free samples, vendors push them constantly",
+          "Ask before photographing a stall or a vendor"
+        ],
+        "source": "Wander-Lush and We Did It Our Way market guides plus TripAdvisor reviews, Aug 2026 read"
+      }
     },
     {
       "id": "foodetory-rossia",
@@ -1087,7 +1432,28 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The zhingyalov hats itself: 410 reviews at 97 percent, and reviewers say one is enough to carry you through a day on your feet"
+          },
+          {
+            "tier": "good",
+            "text": "The spicy tomato juice, and the thyme and mint herbal tea, the two drinks named repeatedly"
+          },
+          {
+            "tier": "skip",
+            "text": "The tan, the yoghurt drink: reviewers call it insanely salty unless you take the mint version"
+          }
+        ],
+        "tips": [
+          "Order one, not two: reviewers repeatedly say a single serving fed the whole table's expectations",
+          "Six to eight tables only, and it fills, but food arrives in about a minute so turnover is fast"
+        ],
+        "source": "Yandex Maps dish-level review tallies (415 ratings) plus TripAdvisor, Aug 2026 read"
+      }
     },
     {
       "id": "anteb",
@@ -1121,7 +1487,28 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The manti, made fresh daily and named by more reviewers than anything else on the menu, including the manti soup version"
+          },
+          {
+            "tier": "good",
+            "text": "The lahmajo, praised for crispy thin dough, and the bulgur pilaf, which reviewers say is the only one in town"
+          },
+          {
+            "tier": "skip",
+            "text": "Defaulting to the kebabs: they score noticeably below the manti and lahmajo and reviewers call them too spicy"
+          }
+        ],
+        "tips": [
+          "Service lapses are the one consistent complaint, including a table forgotten for 50 minutes, so confirm the order before the room fills",
+          "Kunefe is the dessert reviewers name, if you are still there for one"
+        ],
+        "source": "Yandex Maps reviews (252 ratings) plus Wanderlog Google-review aggregate, Aug 2026 read"
+      }
     },
     {
       "id": "mer-taghe",
@@ -1150,7 +1537,28 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The lahmajoun, called the best in Armenia by multiple reviewers and served within minutes"
+          },
+          {
+            "tier": "good",
+            "text": "The khachapuri, described as delicate and the reason people come here for breakfast"
+          },
+          {
+            "tier": "skip",
+            "text": "Going late in the day: recent reviewers report burnt lahmajos with dry filling, which is a fresh-batch problem"
+          }
+        ],
+        "tips": [
+          "Count the pieces before you leave: one reviewer got two when three were ordered and had to argue it",
+          "The basement hall is cramped and the outdoor seating is tight, so this is a 20-minute lunch not a sit-down"
+        ],
+        "source": "Yandex Maps review analysis plus TripAdvisor, Aug 2026 read"
+      }
     },
     {
       "id": "jano-tigran-mets",
@@ -1591,7 +1999,28 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Bargain. Reviewers are unanimous that prices are not fixed and that paying the asking price marks you out"
+          },
+          {
+            "tier": "good",
+            "text": "Silver with local stones, wood carving and Soviet-era memorabilia: the three categories reviewers name as genuinely worth carrying home"
+          },
+          {
+            "tier": "skip",
+            "text": "Believing the I made this myself line: reviewers report the same jewellery sold by several vendors each claiming to have handcrafted it"
+          }
+        ],
+        "tips": [
+          "Cash only, and reviewers warn about pickpockets in the weekend crush",
+          "Go early for the widest selection: the good stalls thin out as the day runs"
+        ],
+        "source": "TripAdvisor reviews and the 4stogo Vernissage shopping guide, Aug 2026 read"
+      }
     },
     {
       "id": "republic-square-fountains",
@@ -1619,7 +2048,20 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "good",
+            "text": "Standing close to the jets rather than back on the steps: reviewers say you get wet and that it is the better spot"
+          }
+        ],
+        "tips": [
+          "Reviewers consistently describe arriving around 20:00 for a 21:00 show to get a spot, and the water runs on until 23:00 either way",
+          "Tuesday is the weekly clean and there is no show at all"
+        ],
+        "source": "TripAdvisor Republic Square and Dancing Fountains reviews, Aug 2026 read"
+      }
     },
     {
       "id": "parajanov-museum",
@@ -1656,7 +2098,24 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The prison drawings, and the collages built from shells, buttons, combs and old photographs: the two things reviewers name specifically"
+          },
+          {
+            "tier": "good",
+            "text": "Paying for the guide. Reviewers who took one say it is the difference between fifteen minutes and an afternoon"
+          }
+        ],
+        "tips": [
+          "The photo permit is a small separate fee, and reviewers say it is cheap enough not to think about",
+          "It is two compact floors: without a guide you can be back out in fifteen minutes, so do not build the whole afternoon around it alone"
+        ],
+        "source": "TripAdvisor reviews, Aug 2026 read"
+      }
     },
     {
       "id": "tsitsernakaberd",
@@ -1727,7 +2186,29 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Symphony of Stones. Reviewers name it as their favourite stop and repeatedly note it was NOT in the tour itinerary, so it has to be asked for"
+          },
+          {
+            "tier": "good",
+            "text": "The lavash baking demonstration at Garni: the add-on reviewers say was worth including"
+          },
+          {
+            "tier": "good",
+            "text": "Standing inside Geghard for the acoustics: the carved chambers and the chanting echo are what reviewers describe, not the facade"
+          }
+        ],
+        "tips": [
+          "Agree the Symphony of Stones stop with the driver before you set off, in those words, or it gets skipped",
+          "Entry is roughly 1,500 AMD / $4 for Garni and 300 AMD / $0.80 for the gorge, both cash, and Geghard is free",
+          "Hat, water and real shoes: reviewers flag Garni as fully exposed and the gorge path as rough"
+        ],
+        "source": "TripAdvisor tour product reviews for Garni, Geghard and Symphony of Stones, Aug 2026 read"
+      }
     },
     {
       "id": "matenadaran",
@@ -1759,7 +2240,25 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The 5,000 AMD / $14 guided tour. Reviewers are consistent that without it the manuscripts read as glass cases and you will be bored, English labels notwithstanding"
+          },
+          {
+            "tier": "skip",
+            "text": "Joining a large tour group: reviewers say you stop hearing the guide, so ask for a small one or wait for the next"
+          }
+        ],
+        "tips": [
+          "The guided tour runs about an hour, so a 14:30 arrival still clears the 17:50 close comfortably",
+          "Photography is a small extra fee paid at the desk",
+          "Weekdays are noticeably quieter than the weekend per reviewers"
+        ],
+        "source": "TripAdvisor reviews and Wanderlog aggregate, Aug 2026 read"
+      }
     },
     {
       "id": "blue-mosque",
@@ -1828,7 +2327,29 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Ride the indoor escalators up rather than the outside steps: reviewers say the interior landings are hung with artwork and are the more interesting route, and the steps in August are not"
+          },
+          {
+            "tier": "good",
+            "text": "Late afternoon into sunset from the top terrace, when the light over the city is best and the complex lights up after dark"
+          },
+          {
+            "tier": "skip",
+            "text": "Coming for the Ararat view in the evening: reviewers say it is clearest in the morning before the summer haze builds"
+          }
+        ],
+        "tips": [
+          "The escalators stop at 20:00 sharp. Be inside before then or you are walking all 572 steps down in the dark",
+          "Indoor exhibition halls run 10:00 to 20:00 and current sources put them at Friday to Sunday only",
+          "July and August are the peak crowd months on the steps, so early evening beats mid-evening"
+        ],
+        "source": "TripAdvisor Cafesjian Center reviews plus current visitor guides, Aug 2026 read"
+      }
     },
     {
       "id": "victory-park",
@@ -2030,7 +2551,24 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The 10,000 AMD / $27 tasting (Akhtamar 10, Nairi 20, Dvin 30). Reviewers who took it call it clearly worth the step up from the 4,500 AMD / $12 pair"
+          },
+          {
+            "tier": "skip",
+            "text": "Turning up without a booking. The tour is booked-slot only and reviewers who arrived cold did not get in"
+          }
+        ],
+        "tips": [
+          "The standing English-language slot is 11:30, with Russian at 15:00. Confirm on the phone whether a later English slot exists before you plan an afternoon around it",
+          "Free cancellation up to 24 hours out on the third-party bookings, so holding a slot costs nothing"
+        ],
+        "source": "TripAdvisor ARARAT Museum reviews and GetYourGuide tasting listings, Aug 2026 read"
+      }
     },
     {
       "id": "gum-market",
@@ -2507,6 +3045,68 @@ var CityOps = (function () {
     return names[d.getDay()] + ' ' + d.getDate();
   }
 
+  // Intel validation lives in one place so validate() (whole guide) and
+  // mergeDelta() (intel pass payload) can never drift apart. `ref` is the
+  // caller's prefix, already ending in the separator it wants, e.g.
+  // "items[3] (nord) intel:" or 'intel["nord"]:'.
+  function validateIntel(intel, ref, errors) {
+    if (!intel || typeof intel !== 'object' || Array.isArray(intel)) {
+      errors.push(ref + ' must be an object');
+      return;
+    }
+    if (intel.verdicts !== undefined) {
+      if (!Array.isArray(intel.verdicts)) {
+        errors.push(ref + ' verdicts must be an array');
+      } else {
+        intel.verdicts.forEach(function (v, vi) {
+          if (!v || typeof v !== 'object' || ['must', 'good', 'skip'].indexOf(v.tier) === -1) {
+            errors.push(ref + ' verdicts[' + vi + '] tier must be must|good|skip');
+          }
+          if (!v || typeof v.text !== 'string' || !v.text.trim()) {
+            errors.push(ref + ' verdicts[' + vi + '] needs non-empty text');
+          }
+        });
+      }
+    }
+    if (intel.tips !== undefined) {
+      if (!Array.isArray(intel.tips)) {
+        errors.push(ref + ' tips must be an array');
+      } else {
+        intel.tips.forEach(function (t, ti) {
+          if (typeof t !== 'string' || !t.trim()) {
+            errors.push(ref + ' tips[' + ti + '] must be a non-empty string');
+          }
+        });
+      }
+    }
+    if (intel.source !== undefined && typeof intel.source !== 'string') {
+      errors.push(ref + ' source must be a string');
+    }
+  }
+
+  // The per-item rules, shared by validate() and mergeDelta() for exactly the
+  // same reason. `statuses` is the allowed status list (a whole guide allows
+  // all four; a delta may only introduce plan and backup, since done and
+  // archived are states the traveler sets later in the app) and `statusHint`
+  // is appended to that one error so the delta case explains itself. `seen`
+  // is the caller's duplicate-id map, mutated as ids are accepted.
+  function validateItem(it, ref, secIds, seen, errors, statuses, statusHint) {
+    if (!it || typeof it !== 'object' || Array.isArray(it)) {
+      errors.push(ref + ' is not an object');
+      return;
+    }
+    if (!it.id) errors.push(ref + ' needs id');
+    else if (Object.prototype.hasOwnProperty.call(seen, it.id)) errors.push('duplicate item id "' + it.id + '"');
+    else seen[it.id] = 1;
+    if (!it.name) errors.push(ref + ' needs name');
+    if (!Object.prototype.hasOwnProperty.call(secIds, it.section)) errors.push(ref + ' unknown section "' + it.section + '"');
+    if (statuses.indexOf(it.status) === -1) {
+      errors.push(ref + ' bad status "' + it.status + '"' + (statusHint || ''));
+    }
+    if (it.day && !/^\d{4}-\d{2}-\d{2}$/.test(it.day)) errors.push(ref + ' day must be YYYY-MM-DD');
+    if (it.intel !== undefined && it.intel !== null) validateIntel(it.intel, ref + ' intel:', errors);
+  }
+
   function validate(data) {
     var errors = [];
     if (!data || typeof data !== 'object') return ['Root is not an object'];
@@ -2525,18 +3125,12 @@ var CityOps = (function () {
     if (!Array.isArray(data.items)) {
       errors.push('items[] required');
     } else {
-      var secIds = {};
+      var secIds = Object.create(null);
       (data.sections || []).forEach(function (s) { secIds[s.id] = 1; });
-      var seen = {};
+      var seen = Object.create(null);
       data.items.forEach(function (it, i) {
         var ref = 'items[' + i + ']' + (it && it.id ? ' (' + it.id + ')' : '');
-        if (!it.id) errors.push(ref + ' needs id');
-        else if (seen[it.id]) errors.push('duplicate item id "' + it.id + '"');
-        else seen[it.id] = 1;
-        if (!it.name) errors.push(ref + ' needs name');
-        if (!secIds[it.section]) errors.push(ref + ' unknown section "' + it.section + '"');
-        if (STATUSES.indexOf(it.status) === -1) errors.push(ref + ' bad status "' + it.status + '"');
-        if (it.day && !/^\d{4}-\d{2}-\d{2}$/.test(it.day)) errors.push(ref + ' day must be YYYY-MM-DD');
+        validateItem(it, ref, secIds, seen, errors, STATUSES, null);
       });
     }
     return errors;
@@ -2548,6 +3142,152 @@ var CityOps = (function () {
     catch (e) { return { data: null, errors: ['JSON parse error: ' + e.message] }; }
     var errors = validate(data);
     return { data: errors.length ? null : data, errors: errors };
+  }
+
+  // ---- delta merge ----
+  // The core re-run mechanic: a PARTIAL payload from a second AI pass is folded
+  // into a city that already exists, without disturbing anything the traveler
+  // has done. Pure: it reads no state, touches no storage, mutates neither
+  // argument, and returns a fresh deep clone. Live planning state (done marks,
+  // reorders, renames) survives by construction, because it is keyed by item id
+  // in a separate store this function never sees.
+  //
+  // Rules, all of them deliberate:
+  // - errors non-empty means NO merge at all: data is null and the caller shows
+  //   the list. A half-applied delta would be impossible to reason about.
+  // - A delta may only introduce plan and backup items. done and archived are
+  //   traveler states, never generated ones.
+  // - An id that already exists is SKIPPED, never overwritten, and counted. That
+  //   is what makes a re-run safe to repeat: running the same delta twice is a
+  //   no-op, not a clobber. A duplicate id WITHIN one delta is an error, since
+  //   that is a malformed payload rather than an overlap with existing work.
+  // - delta.sections with an id that already exists is ignored, not overwritten
+  //   (the traveler may have renamed a section, and a re-run must not undo it).
+  // - delta.intel replaces the whole intel block on an item that exists after
+  //   the merge (existing or just added); an unknown id is counted in
+  //   intelSkipped, not treated as an error, because an AI naming an item the
+  //   traveler has since removed is expected, not broken.
+  // - city, city.dates and every other field of every existing item are never
+  //   touched. intel is the ONE field an existing item can gain here.
+  var DELTA_STATUSES = ['plan', 'backup'];
+  var DELTA_STATUS_HINT = ' (a delta may only add plan or backup items)';
+
+  function emptyDeltaSummary() {
+    return { added: 0, skipped: 0, sectionsAdded: 0, intelApplied: 0, intelSkipped: 0 };
+  }
+
+  function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
+
+  function mergeDelta(cityData, delta) {
+    var errors = [];
+    if (!cityData || typeof cityData !== 'object' || Array.isArray(cityData)) {
+      return { data: null, summary: emptyDeltaSummary(), errors: ['No city data to merge into'] };
+    }
+    if (!delta || typeof delta !== 'object' || Array.isArray(delta)) {
+      return { data: null, summary: emptyDeltaSummary(), errors: ['Delta is not an object'] };
+    }
+    if (delta.schema !== 1) errors.push('schema must be 1');
+    if (delta.delta !== true) {
+      errors.push('delta must be true: this is a partial payload, not a whole guide');
+    }
+
+    // Sections first: a new item may legitimately reference a section this same
+    // delta introduces, so the allowed-section set has to include them.
+    var newSections = [];
+    if (delta.sections !== undefined && delta.sections !== null) {
+      if (!Array.isArray(delta.sections)) {
+        errors.push('sections must be an array');
+      } else {
+        delta.sections.forEach(function (s, i) {
+          if (!s || typeof s !== 'object' || Array.isArray(s) || !s.id || !s.label) {
+            errors.push('sections[' + i + '] needs id and label');
+          } else {
+            newSections.push(s);
+          }
+        });
+      }
+    }
+
+    var secIds = Object.create(null);
+    (Array.isArray(cityData.sections) ? cityData.sections : []).forEach(function (s) {
+      if (s && s.id) secIds[s.id] = 1;
+    });
+    newSections.forEach(function (s) { secIds[s.id] = 1; });
+
+    var existingIds = {};
+    (Array.isArray(cityData.items) ? cityData.items : []).forEach(function (it) {
+      if (it && it.id) existingIds[it.id] = 1;
+    });
+
+    var toAdd = [];
+    var skipped = 0;
+    if (delta.items !== undefined && delta.items !== null) {
+      if (!Array.isArray(delta.items)) {
+        errors.push('items must be an array');
+      } else {
+        var seen = Object.create(null);
+        delta.items.forEach(function (it, i) {
+          var ref = 'items[' + i + ']' + (it && it.id ? ' (' + it.id + ')' : '');
+          var before = errors.length;
+          validateItem(it, ref, secIds, seen, errors, DELTA_STATUSES, DELTA_STATUS_HINT);
+          if (errors.length !== before) return;
+          if (existingIds[it.id]) { skipped++; return; }
+          toAdd.push(it);
+        });
+      }
+    }
+
+    var intelMap = null;
+    if (delta.intel !== undefined && delta.intel !== null) {
+      if (typeof delta.intel !== 'object' || Array.isArray(delta.intel)) {
+        errors.push('intel must be an object keyed by item id');
+      } else {
+        intelMap = delta.intel;
+        Object.keys(intelMap).forEach(function (id) {
+          validateIntel(intelMap[id], 'intel["' + id + '"]:', errors);
+        });
+      }
+    }
+
+    if (errors.length) return { data: null, summary: emptyDeltaSummary(), errors: errors };
+
+    var summary = emptyDeltaSummary();
+    summary.skipped = skipped;
+    var out = deepClone(cityData);
+    if (!Array.isArray(out.sections)) out.sections = [];
+    if (!Array.isArray(out.items)) out.items = [];
+
+    var haveSec = {};
+    out.sections.forEach(function (s) { if (s && s.id) haveSec[s.id] = 1; });
+    newSections.forEach(function (s) {
+      if (haveSec[s.id]) return;
+      haveSec[s.id] = 1;
+      out.sections.push(deepClone(s));
+      summary.sectionsAdded++;
+    });
+
+    toAdd.forEach(function (it) {
+      var copy = deepClone(it);
+      // Both fields belong to a later verification phase, never to a prompt.
+      // An absent one is normalized to null so every item in the merged guide
+      // has the same shape.
+      if (copy.place_id === undefined) copy.place_id = null;
+      if (copy.verified === undefined) copy.verified = null;
+      out.items.push(copy);
+      summary.added++;
+    });
+
+    if (intelMap) {
+      var byId = Object.create(null);
+      out.items.forEach(function (it) { if (it && it.id) byId[it.id] = it; });
+      Object.keys(intelMap).forEach(function (id) {
+        if (!Object.prototype.hasOwnProperty.call(byId, id)) { summary.intelSkipped++; return; }
+        byId[id].intel = deepClone(intelMap[id]);
+        summary.intelApplied++;
+      });
+    }
+
+    return { data: out, summary: summary, errors: [] };
   }
 
   var TRANSITIONS = {
@@ -2851,7 +3591,10 @@ var CityOps = (function () {
       var v = srcStamps[id];
       updatedAt[id] = (typeof v === 'string' && v) ? v : EPOCH_ISO;
     });
-    return { cities: cities, order: order, active: active, updatedAt: updatedAt };
+    // The interest profile rides in the app store (one per user, not per city)
+    // and is normalized on every load. Nothing else in the engine reads it: it
+    // is handed to the prompt builders and pushed by the shell's sync layer.
+    return { cities: cities, order: order, active: active, updatedAt: updatedAt, profile: normalizeProfile(src.profile) };
   }
 
   // iso: pass the REMOTE stamp when applying a pulled city, so the pull does not
@@ -2925,6 +3668,282 @@ var CityOps = (function () {
     if (hashId && Object.prototype.hasOwnProperty.call(store.cities, hashId)) return hashId;
     if (store.active && Object.prototype.hasOwnProperty.call(store.cities, store.active)) return store.active;
     return store.order.length ? store.order[0] : null;
+  }
+
+  // ---- interest profile + prompt assembly (pure) ----
+  // The profile is app-only user data (it syncs as a third row kind), but its
+  // shape and the prompt string assembly live in the engine so both are unit
+  // testable in Node and so nothing about them depends on the DOM. The engine
+  // itself never reads the profile: it is carried in the app store, handed to
+  // the prompt builders, and pushed by the app shell's sync layer.
+  var PROFILE_CAP = 30;        // entries per list; more dilutes the research
+  var PROFILE_NOTES_CAP = 2000;
+
+  function trimStr(v) {
+    return (typeof v === 'string') ? v.replace(/^\s+|\s+$/g, '') : '';
+  }
+
+  // Trims, drops empties, dedupes case-insensitively keeping the FIRST spelling
+  // (order is priority, so the earlier entry is the one the traveler meant),
+  // and caps the list.
+  function normalizeProfileList(v) {
+    var out = [];
+    var seen = {};
+    (Array.isArray(v) ? v : []).forEach(function (x) {
+      var t = trimStr(x);
+      if (!t) return;
+      var k = t.toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(seen, k)) return;
+      seen[k] = 1;
+      if (out.length < PROFILE_CAP) out.push(t);
+    });
+    return out;
+  }
+
+  function normalizeProfile(raw) {
+    var src = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+    return {
+      schema: 1,
+      interests: normalizeProfileList(src.interests),
+      avoid: normalizeProfileList(src.avoid),
+      notes: trimStr(src.notes).slice(0, PROFILE_NOTES_CAP),
+      updated: (typeof src.updated === 'string' && src.updated) ? src.updated : null
+    };
+  }
+
+  // Empty means "nothing for the AI to work with": the stamp does not count.
+  function profileIsEmpty(p) {
+    var n = normalizeProfile(p);
+    return !n.interests.length && !n.avoid.length && !n.notes;
+  }
+
+  var INTERESTS_SECTION = { id: 'interests', label: 'My interests', icon: '⭐' };
+
+  // The landmark lines buildCityPrompt edits in PROMPT.md. Named here so the
+  // unit tests can build a small fake template carrying the same landmarks
+  // instead of the whole file.
+  var PROMPT_COPY_LINE = 'Copy this file per trip, fill in the header, delete this line, and go.';
+
+  // Trip-details bullets, matched by their label. `span` means the bullet has
+  // more placeholders than values (accommodation name plus address), so the
+  // whole bracket span is replaced by the single value rather than leaving a
+  // dangling placeholder behind.
+  var HEADER_BULLETS = [
+    { label: 'City', keys: ['name'] },
+    { label: 'Country', keys: ['country'] },
+    { label: 'Dates', keys: ['from', 'to'] },
+    { label: 'Accommodation', keys: ['accommodation'], span: true },
+    { label: 'Arrival transport', keys: ['arrival'] },
+    { label: 'Departure transport', keys: ['departure'] }
+  ];
+
+  function fillHeaderLine(line, rule, header) {
+    var vals = rule.keys.map(function (k) { return trimStr(header ? header[k] : ''); });
+    if (rule.span) {
+      if (!vals[0]) return line;
+      var first = line.indexOf('[');
+      var last = line.lastIndexOf(']');
+      if (first === -1 || last < first) return line;
+      return line.slice(0, first) + vals[0] + line.slice(last + 1);
+    }
+    var i = 0;
+    // An empty value leaves its placeholder in place, so a half-filled header
+    // still reads as a prompt the traveler can finish by hand.
+    return line.replace(/\[[^\][]*\]/g, function (m) {
+      var v = vals[i++];
+      return v ? v : m;
+    });
+  }
+
+  // `lead` is the one instruction line that only makes sense in a whole-guide
+  // prompt (where the Interests research section is part of the file). The
+  // delta builder shares this formatter and passes no lead, because its own
+  // re-run block already says where the new items go.
+  function interestsBlockLines(p, lead) {
+    var b = ['## Traveler interests', ''];
+    if (lead) b.push(lead, '');
+    if (p.interests.length) {
+      b.push('Interests, in priority order:', '');
+      p.interests.forEach(function (x) { b.push('- ' + x); });
+      b.push('');
+    }
+    if (p.avoid.length) {
+      b.push('Avoid, do not suggest any of these:', '');
+      p.avoid.forEach(function (x) { b.push('- ' + x); });
+      b.push('');
+    }
+    if (p.notes) b.push('Notes: ' + p.notes, '');
+    return b;
+  }
+
+  // The block belongs after the traveler-profile bracket paragraph and before
+  // the rule that closes the header, so it reads as part of who is travelling.
+  // Falls back to the "What I need" heading, then to the end of the text, so a
+  // reshaped template still gets the block rather than silently losing it.
+  function insertInterestsBlock(lines, block) {
+    var start = -1, i;
+    for (i = 0; i < lines.length; i++) {
+      if (/^##\s+Traveler profile\s*$/.test(lines[i])) { start = i; break; }
+    }
+    var at = -1;
+    if (start !== -1) {
+      for (i = start + 1; i < lines.length; i++) {
+        if (lines[i] === '---') { at = i; break; }
+        if (/^##\s/.test(lines[i])) break;
+      }
+    }
+    if (at === -1) {
+      for (i = 0; i < lines.length; i++) {
+        if (/^##\s+What I need\s*$/.test(lines[i])) { at = i; break; }
+      }
+    }
+    if (at === -1) return lines.concat([''], block);
+    return lines.slice(0, at).concat(block, lines.slice(at));
+  }
+
+  // Pure string assembly: fills PROMPT.md's Trip details bullets from `header`
+  // ({name, country, from, to, accommodation, arrival, departure}, all optional
+  // strings), drops the "copy this file" instruction line, and inserts the
+  // Traveler interests block when the profile has anything in it.
+  function buildCityPrompt(templateText, header, profile) {
+    var text = (templateText === null || templateText === undefined) ? '' : String(templateText);
+    var lines = text.split('\n');
+    var out = [];
+    var inTrip = false;
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (line === PROMPT_COPY_LINE) {
+        // Drop the instruction and the blank line under it, so no gap is left.
+        if (lines[i + 1] === '') i++;
+        continue;
+      }
+      if (/^##\s/.test(line)) inTrip = /^##\s+Trip details\s*$/.test(line);
+      if (inTrip && line.indexOf('- **') === 0) {
+        for (var r = 0; r < HEADER_BULLETS.length; r++) {
+          if (line.indexOf('- **' + HEADER_BULLETS[r].label + ':**') === 0) {
+            line = fillHeaderLine(line, HEADER_BULLETS[r], header);
+            break;
+          }
+        }
+      }
+      out.push(line);
+    }
+    var p = normalizeProfile(profile);
+    if (!profileIsEmpty(p)) {
+      out = insertInterestsBlock(out, interestsBlockLines(p, INTERESTS_LEAD));
+    }
+    return out.join('\n');
+  }
+
+  // ---- re-run (delta) prompt builders ----
+  // Both build a self-contained prompt for the traveler's own AI out of three
+  // things: fixed instruction text sliced verbatim from PROMPT.md between HTML
+  // comment landmarks, the city they already have, and (for interests) their
+  // profile. Nothing is invented here and nothing is paraphrased: PROMPT.md
+  // stays the single source of prompt wording, and these functions only choose
+  // which parts of it to include and in what order.
+  //
+  // A missing landmark throws rather than silently building a prompt with a
+  // hole in it. The app shows the message inline; it means the build shipped an
+  // older PROMPT.md than the engine expects.
+  function sliceLandmark(templateText, name) {
+    var text = (templateText === null || templateText === undefined) ? '' : String(templateText);
+    // Built by concatenation on purpose: a literal HTML comment opener in
+    // engine source would put the tokenizer into script-data-escaped state
+    // inside the app's embedded copy of the guide template (the assembler
+    // rejects it outright).
+    var mark = '<' + '!--';
+    var open = mark + ' ' + name + ' -->';
+    var close = mark + ' /' + name + ' -->';
+    var a = text.indexOf(open);
+    var b = text.indexOf(close);
+    if (a === -1 || b === -1 || b < a) {
+      throw new Error('The prompt template in this build has no ' + name +
+        ' block. Update PROMPT.md from the repo and rebuild.');
+    }
+    return text.slice(a + open.length, b).replace(/^\n+/, '').replace(/\n+$/, '');
+  }
+
+  // The city, as the AI needs to see it in a re-run: enough to know where and
+  // when, and nothing else. Fields the city does not carry are left out rather
+  // than emitted empty.
+  function cityHeaderLines(data) {
+    var c = (data && data.city) ? data.city : {};
+    var d = c.dates || {};
+    var b = ['## The city', ''];
+    b.push('- **City:** ' + trimStr(c.name));
+    if (trimStr(c.country)) b.push('- **Country:** ' + trimStr(c.country));
+    if (trimStr(d.from) || trimStr(d.to)) {
+      b.push('- **Dates:** ' + trimStr(d.from) + ' to ' + trimStr(d.to));
+    }
+    var acc = (c.accommodation && trimStr(c.accommodation.name)) ? trimStr(c.accommodation.name) : '';
+    if (acc) b.push('- **Accommodation:** ' + acc);
+    b.push('');
+    return b;
+  }
+
+  // One line per item, in the compact form both re-run blocks refer to.
+  function itemListLines(items) {
+    var b = [];
+    (Array.isArray(items) ? items : []).forEach(function (it) {
+      if (!it || !it.id) return;
+      b.push('- ' + it.id + ' | ' + trimStr(it.section) + ' | ' + trimStr(it.name));
+    });
+    return b;
+  }
+
+  var INTERESTS_LEAD = 'Add a ninth section for these interests as described under Interests below.';
+
+  // Assembly order, top to bottom:
+  //   1. one header line saying what this run is
+  //   2. the city block (name, country, dates, accommodation name)
+  //   3. the Traveler interests block, same formatter buildCityPrompt uses
+  //   4. the RERUN:INTERESTS instructions, verbatim from PROMPT.md
+  //   5. the existing-item list the re-run block refers to as "below"
+  //   6. the CONTRACT:ITEM rules, verbatim, so the AI has the item shape
+  // Step 6 is the item-level half of PROMPT.md's output contract only: the
+  // whole-guide half (city, dates, the eight-section list) would tell the AI to
+  // emit exactly what a delta must never contain.
+  function buildInterestsDeltaPrompt(templateText, cityData, profile) {
+    var rerun = sliceLandmark(templateText, 'RERUN:INTERESTS');
+    var contract = sliceLandmark(templateText, 'CONTRACT:ITEM');
+    var p = normalizeProfile(profile);
+    var out = ['You are extending an existing CityOps city guide.', ''];
+    out = out.concat(cityHeaderLines(cityData));
+    if (!profileIsEmpty(p)) out = out.concat(interestsBlockLines(p, null));
+    out.push('## What I need', '', rerun, '');
+    out.push('## Existing items (do not re-suggest these)', '');
+    out = out.concat(itemListLines(cityData && cityData.items));
+    out.push('');
+    out.push('## Item shape', '', contract, '');
+    return out.join('\n');
+  }
+
+  // Assembly order, top to bottom:
+  //   1. one header line saying what this run is
+  //   2. the city block
+  //   3. the Intel quality rules, verbatim, BEFORE the instructions that say
+  //      "follow the Intel quality rules above"
+  //   4. the RERUN:INTEL instructions, verbatim
+  //   5. the item list the re-run block refers to as "below", archived items
+  //      omitted (nobody needs intel on something already put away)
+  //   6. the coverage instruction
+  function buildIntelPassPrompt(templateText, cityData) {
+    var rules = sliceLandmark(templateText, 'RULES:INTEL');
+    var rerun = sliceLandmark(templateText, 'RERUN:INTEL');
+    var items = (cityData && Array.isArray(cityData.items) ? cityData.items : [])
+      .filter(function (it) { return it && it.status !== 'archived'; });
+    var out = ['You are adding review-verified intel to an existing CityOps city guide.', ''];
+    out = out.concat(cityHeaderLines(cityData));
+    out.push('## Intel quality rules', '', rules, '');
+    out.push('## What I need', '', rerun, '');
+    out.push('## Items', '');
+    out = out.concat(itemListLines(items));
+    out.push('');
+    out.push('Cover as many of these as you can verify from real reviews. ' +
+      'Leave out the ones you cannot: a partial payload of real intel is the ' +
+      'correct answer, a complete one of invented intel is not.', '');
+    return out.join('\n');
   }
 
   // ---- sync helpers (pure) ----
@@ -3068,6 +4087,57 @@ var CityOps = (function () {
     return n;
   }
 
+  function tierLabel(tier) {
+    return tier === 'must' ? 'Must' : (tier === 'skip' ? 'Skip' : 'Good');
+  }
+
+  function verdictRow(v) {
+    var p = el('p', 'verdict');
+    p.appendChild(el('span', 'tier tier-' + v.tier, tierLabel(v.tier)));
+    p.appendChild(document.createTextNode(v.text));
+    return p;
+  }
+
+  function intelBody(intel, verdictsOnly) {
+    var frag = document.createDocumentFragment();
+    (intel.verdicts || []).forEach(function (v) { frag.appendChild(verdictRow(v)); });
+    if (!verdictsOnly) {
+      if (intel.tips && intel.tips.length) {
+        var ul = el('ul', 'tips');
+        intel.tips.forEach(function (t) { ul.appendChild(el('li', null, t)); });
+        frag.appendChild(ul);
+      }
+      if (intel.source) frag.appendChild(el('p', 'intel-src', intel.source));
+    }
+    return frag;
+  }
+
+  // Full render (planner/calendar): inline when small, collapsed behind a
+  // <details> toggle once there is enough content to be worth hiding.
+  function intelStrip(intel) {
+    var verdicts = intel.verdicts || [];
+    var tips = intel.tips || [];
+    var total = verdicts.length + tips.length;
+    if (!total) return null;
+    if (total <= 2) {
+      var div = el('div', 'intel');
+      div.appendChild(intelBody(intel, false));
+      return div;
+    }
+    var det = el('details', 'intel');
+    det.appendChild(el('summary', null, 'Intel: ' + verdicts.length + ' verdicts, ' + tips.length + ' tips'));
+    det.appendChild(intelBody(intel, false));
+    return det;
+  }
+
+  // Share view: verdicts only, always inline, no tips/source/details.
+  function intelShareStrip(intel) {
+    if (!intel.verdicts || !intel.verdicts.length) return null;
+    var div = el('div', 'intel');
+    div.appendChild(intelBody(intel, true));
+    return div;
+  }
+
   function linkPill(l) {
     var a = document.createElement('a');
     a.href = l.href;
@@ -3184,6 +4254,10 @@ var CityOps = (function () {
       frag.appendChild(tp);
     }
     if (it.note) frag.appendChild(el('p', null, it.note));
+    if (it.intel) {
+      var strip = intelStrip(it.intel);
+      if (strip) frag.appendChild(strip);
+    }
     var row = el('div', 'row');
     if (it.hours) row.appendChild(el('span', 'hours' + (it.hours.class ? ' ' + it.hours.class : ''), it.hours.text));
     (it.links || []).forEach(function (l) { row.appendChild(linkPill(l)); });
@@ -3468,6 +4542,10 @@ var CityOps = (function () {
           row.appendChild(el('span', 'hours' + (e.it.hours.class ? ' ' + e.it.hours.class : ''), e.it.hours.text));
           bd.appendChild(row);
         }
+        if (e.it.intel) {
+          var shareStrip = intelShareStrip(e.it.intel);
+          if (shareStrip) bd.appendChild(shareStrip);
+        }
         dc.appendChild(bd);
       });
       main.appendChild(dc);
@@ -3485,6 +4563,10 @@ var CityOps = (function () {
         if (e.it.price) h3.appendChild(el('span', 'price', e.it.price.text));
         card.appendChild(h3);
         card.appendChild(el('p', 'when-line', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
+        if (e.it.intel) {
+          var undatedStrip = intelShareStrip(e.it.intel);
+          if (undatedStrip) card.appendChild(undatedStrip);
+        }
         main.appendChild(card);
       });
     }
@@ -3779,6 +4861,14 @@ var CityOps = (function () {
       dts.type = 'button';
       dts.onclick = openDatesModal;
       tb.appendChild(dts);
+      // App-only toolbar buttons whose LABEL must not ship inside standalone
+      // guides either. The re-run button is the case in point: it builds
+      // prompts out of PROMPT.md, which guide files do not carry at all. The
+      // shell appends those buttons here; guide files have no CityOpsApp, so
+      // nothing is added and no trace of them exists in template.html.
+      if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.toolbarExtras) {
+        window.CityOpsApp.toolbarExtras(tb);
+      }
       // App context only: standalone guide files have no CityOpsApp, so this
       // button never appears in them.
       if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.exportStandalone) {
@@ -3844,10 +4934,18 @@ var CityOps = (function () {
   return {
     STATUSES: STATUSES, slug: slug, cityId: cityId, dayLabel: dayLabel,
     validate: validate, parse: parse, init: init, boot: boot,
+    mergeDelta: mergeDelta,
     appStore: {
       normalize: normalizeAppStore, add: appAddCity,
       remove: appRemoveCity, keepBothName: keepBothName,
       resolveStartCity: resolveStartCity, blankCity: blankCity
+    },
+    profile: { normalize: normalizeProfile, isEmpty: profileIsEmpty },
+    promptKit: {
+      buildCityPrompt: buildCityPrompt, INTERESTS_SECTION: INTERESTS_SECTION,
+      COPY_LINE: PROMPT_COPY_LINE,
+      buildInterestsDeltaPrompt: buildInterestsDeltaPrompt,
+      buildIntelPassPrompt: buildIntelPassPrompt
     },
     syncKit: {
       EPOCH: EPOCH_ISO, decide: decideSync, plan: planSync, buildRows: buildRows,

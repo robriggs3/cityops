@@ -59,6 +59,24 @@
     border:1px solid var(--border-light); border-radius:8px; background:#fff; color:var(--text);}
   .modal .ctl[disabled]{opacity:.45; cursor:not-allowed; border-color:var(--border-light);}
   .modal .ctl[disabled]:hover{border-color:var(--border-light);}
+
+  /* Profile modal: chip lists reuse the pill vocabulary (rounded, bordered,
+     accent ink) at tag scale, so a chip reads as an editable tag. */
+  .chip-list{display:flex; gap:6px; flex-wrap:wrap; margin:6px 0 0;}
+  .chip-list:empty{margin:0;}
+  .chipx{display:inline-flex; align-items:center; gap:6px; font-size:.78rem; font-weight:600;
+    color:var(--accent-hover); background:#fff; border:1.5px solid var(--border-light);
+    border-radius:20px; padding:3px 6px 3px 11px;}
+  .chipx button{font:inherit; font-size:.9rem; line-height:1; font-weight:700; color:var(--text-3);
+    background:var(--bg-softer); border:none; border-radius:50%; width:17px; height:17px;
+    padding:0; cursor:pointer;}
+  .chipx button:hover{background:var(--accent-soft); color:var(--accent-hover);}
+  .chip-add{width:100%; font:inherit; font-size:.85rem; padding:6px 10px; margin-top:6px;
+    border:1px solid var(--border-light); border-radius:8px; background:#fff; color:var(--text);}
+  .modal textarea.notes{min-height:80px; font-family:inherit; font-size:.85rem;}
+  .modal .promptout{min-height:140px;}
+  .hdr-row{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;}
+  .hdr-row .date-field{flex:1 1 30%; min-width:96px;}
   @media (max-width: 430px){
     .hdr-add{top:17px; right:14px; padding:4px 9px; font-size:.7rem;}
   }
@@ -80,6 +98,8 @@
 </script>
 
 <!--CITYOPS_TEMPLATE-->
+
+<!--CITYOPS_PROMPT-->
 
 <script id="appshell">
 (function () {
@@ -179,6 +199,7 @@
 
   function has(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function trim(s) { return String(s === null || s === undefined ? '' : s).replace(/^\s+|\s+$/g, ''); }
 
   function loadStore() {
     var raw = null;
@@ -309,6 +330,10 @@
       exb.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); loadExampleCity(); };
       acts.appendChild(exb);
     }
+    var pf = el('button', null, 'Profile');
+    pf.type = 'button';
+    pf.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); openProfileModal(); };
+    acts.appendChild(pf);
     // Sync control: absent entirely when no project is configured, so an
     // unconfigured build shows no sign-in affordance it cannot honour.
     if (syncOn()) {
@@ -378,6 +403,306 @@
     h.appendChild(add);
   }
 
+  // ---- interest profile (app-only data; the engine owns its shape) ----
+  // A chip list: Enter adds, each chip's x removes. get() also returns whatever
+  // is still sitting unentered in the input, so a typed interest is never
+  // silently dropped by pressing Save instead of Enter.
+  function chipField(box, label, values, placeholder) {
+    box.appendChild(el('p', 'diff', label));
+    var items = values.slice();
+    var list = el('div', 'chip-list');
+    box.appendChild(list);
+    var inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'chip-add';
+    inp.placeholder = placeholder;
+    inp.setAttribute('aria-label', label);
+    box.appendChild(inp);
+
+    function draw() {
+      list.innerHTML = '';
+      items.forEach(function (v, i) {
+        var chip = el('span', 'chipx');
+        chip.appendChild(document.createTextNode(v));
+        var x = el('button', null, '×');
+        x.type = 'button';
+        x.setAttribute('aria-label', 'Remove ' + v);
+        x.onclick = function () { items.splice(i, 1); draw(); };
+        chip.appendChild(x);
+        list.appendChild(chip);
+      });
+    }
+    function add() {
+      var v = trim(inp.value);
+      inp.value = '';
+      if (!v) return;
+      items.push(v);
+      // normalize does the trimming, case-insensitive dedupe and the cap, so
+      // the chips on screen are exactly what a Save would store.
+      items = CityOps.profile.normalize({ interests: items }).interests;
+      draw();
+    }
+    inp.onkeydown = function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); add(); }
+    };
+    draw();
+    return { get: function () { return items.concat(trim(inp.value) ? [trim(inp.value)] : []); } };
+  }
+
+  function openProfileModal() {
+    var m = modalShell('Your interest profile');
+    m.box.appendChild(el('p', 'diff', 'What you seek out in a new city, and what you never want suggested. ' +
+      'Build my prompt hands this to your own AI so it finds places that match you. ' +
+      'Keep it short: 5 to 12 interests research better than 30.'));
+    var p = CityOps.profile.normalize(store.profile);
+    var interests = chipField(m.box, 'Interests, in priority order', p.interests, 'Add an interest, then press Enter');
+    var avoid = chipField(m.box, 'Avoid: never suggest these', p.avoid, 'Add something to avoid, then press Enter');
+    m.box.appendChild(el('p', 'diff', 'Notes: anything that changes what a good pick means (diet, mobility, budget, who is along).'));
+    var ta = document.createElement('textarea');
+    ta.className = 'notes';
+    ta.value = p.notes;
+    ta.setAttribute('aria-label', 'Profile notes');
+    m.box.appendChild(ta);
+    m.box.appendChild(el('p', 'diff', (session && session.access_token)
+      ? 'Saved to your account.'
+      : 'Saved in this browser. Sign in to sync (city menu) to carry your profile across devices.'));
+    var row = el('div', 'mrow');
+    var save = el('button', 'ctl to-done', 'Save');
+    save.type = 'button';
+    save.onclick = function () {
+      var next = CityOps.profile.normalize({
+        interests: interests.get(), avoid: avoid.get(), notes: ta.value
+      });
+      // No-op save: compare against the profile as loaded, `updated` removed
+      // from both sides, so a modal opened and closed unchanged never stamps
+      // a new timestamp or schedules a push.
+      var before = JSON.stringify(Object.assign({}, p, { updated: undefined }));
+      var after = JSON.stringify(Object.assign({}, next, { updated: undefined }));
+      if (before === after) { m.close(); return; }
+      next.updated = new Date().toISOString();
+      store.profile = next;
+      saveStore(store);
+      schedulePush('profile');
+      m.close();
+      showSyncNotice('Profile saved.');
+    };
+    var cancel = el('button', 'ctl', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = m.close;
+    row.appendChild(save);
+    row.appendChild(cancel);
+    if (!has(store.cities, SEED_ID)) {
+      var ex = el('button', 'ctl', 'Load example city');
+      ex.type = 'button';
+      ex.onclick = function () { m.close(); loadExampleCity(); };
+      row.appendChild(ex);
+    }
+    m.box.appendChild(row);
+  }
+
+  // PROMPT.md, embedded by the assembler as a text/plain block so the prompt
+  // builders work offline. Same escaping contract as the guide template: the
+  // assembler writes `<\/script`, this reverses exactly one layer.
+  function promptTemplateText() {
+    var node = document.getElementById('prompt-template');
+    if (!node) return null;
+    var raw = node.textContent;
+    if (raw.charAt(0) === '\n') raw = raw.slice(1);
+    if (raw.charAt(raw.length - 1) === '\n') raw = raw.slice(0, -1);
+    return raw.replace(/<\\\/script/g, '<' + '/script');
+  }
+
+  // ---- Enrich: re-run an existing city through the traveler's own AI ----
+  // Two prompt builders and one paste box. No network and no AI call from the
+  // app: the same zero-cost paste workflow Build my prompt uses.
+  //
+  // MERGE TARGET (the one decision worth spelling out): the delta is merged
+  // into the EFFECTIVE data (the city's canonical store copy with any in-app
+  // dataOverride applied), and the result is written back as the city's new
+  // canonical data with the override cleared. That mirrors the Replace path in
+  // Add city, and it is the only option that cannot lose work:
+  //   - merging into the canonical copy alone would leave a stale override
+  //     still masking it through effectiveData(), so the traveler would see no
+  //     new items at all;
+  //   - merging into the override alone would keep the additions out of the
+  //     synced data row, so they would never reach another device.
+  // Live planning state (done marks, renames, day arrangement) is keyed by item
+  // id in a separate store that neither mergeDelta nor this function touches,
+  // so it survives untouched by construction.
+  function enrichSummaryText(s) {
+    var parts = [];
+    if (s.added) parts.push(s.added + ' added');
+    if (s.skipped) parts.push(s.skipped + ' skipped');
+    if (s.sectionsAdded) parts.push(s.sectionsAdded + (s.sectionsAdded === 1 ? ' section' : ' sections'));
+    if (s.intelApplied) parts.push(s.intelApplied + ' intel applied');
+    if (s.intelSkipped) parts.push(s.intelSkipped + ' intel skipped');
+    return parts.length ? parts.join(', ') : 'nothing new';
+  }
+
+  function openEnrichModal() {
+    if (!activeId || !has(store.cities, activeId)) return;
+    var m = modalShell('Enrich ' + store.cities[activeId].city.name);
+    m.box.appendChild(el('p', 'diff', 'Build a prompt for a second pass over this city, run it in your AI, ' +
+      'and paste the result back. New items are added and nothing you have already planned is disturbed.'));
+
+    var msg = el('div', 'diff', '');
+    var fallbackTa = null;
+
+    // Same stub-friendly pattern as Build my prompt: try the async clipboard,
+    // fall back to a read-only textarea the traveler can copy from by hand.
+    function showFallback(text) {
+      if (!fallbackTa) {
+        fallbackTa = document.createElement('textarea');
+        fallbackTa.className = 'promptout';
+        fallbackTa.readOnly = true;
+        fallbackTa.setAttribute('aria-label', 'Generated prompt');
+        m.box.insertBefore(fallbackTa, msg);
+      }
+      fallbackTa.value = text;
+      msg.textContent = 'Could not reach the clipboard. The prompt is selected above: copy it, ' +
+        'paste it into Claude or ChatGPT, then paste the JSON it returns below.';
+      try { fallbackTa.focus(); fallbackTa.select(); } catch (e) {}
+    }
+    function copyOut(text) {
+      var wrote = null;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) wrote = navigator.clipboard.writeText(text);
+      } catch (e) { wrote = null; }
+      if (wrote && typeof wrote.then === 'function') {
+        wrote.then(function () {
+          msg.textContent = 'Copied. Paste it into Claude or ChatGPT, then paste the JSON it returns below.';
+        }, function () { showFallback(text); });
+      } else {
+        showFallback(text);
+      }
+    }
+    function downloadOut(text, filename) {
+      var blob = new Blob([text], { type: 'text/markdown' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      var freeUrl = a.href;
+      setTimeout(function () { URL.revokeObjectURL(freeUrl); }, 4000);
+      msg.textContent = 'Downloaded ' + filename + '. Paste it into Claude or ChatGPT, ' +
+        'then paste the JSON it returns below.';
+    }
+    // The prompts describe the city as it stands right now, override included,
+    // which is the same data the merge will run against.
+    function currentData() {
+      var st = CityOps.liveState() || CityOps.makeStore(activeId, LS).load();
+      return CityOps.effectiveData(store.cities[activeId], st);
+    }
+    function build(kind) {
+      var tpl = promptTemplateText();
+      if (!tpl) {
+        msg.textContent = 'This build has no prompt template embedded. Use PROMPT.md from the repo.';
+        return null;
+      }
+      try {
+        return (kind === 'intel')
+          ? CityOps.promptKit.buildIntelPassPrompt(tpl, currentData())
+          : CityOps.promptKit.buildInterestsDeltaPrompt(tpl, currentData(), store.profile);
+      } catch (e) {
+        msg.textContent = e.message;
+        return null;
+      }
+    }
+    function promptRow(kind, filename, disabledReason) {
+      var row = el('div', 'mrow');
+      var copy = el('button', 'ctl', 'Copy prompt');
+      copy.type = 'button';
+      var dl = el('button', 'ctl', 'Download .md');
+      dl.type = 'button';
+      if (disabledReason) {
+        // Never offer a control that cannot succeed: disable it and say why.
+        copy.disabled = dl.disabled = true;
+        copy.title = dl.title = disabledReason;
+      } else {
+        copy.onclick = function () { var t = build(kind); if (t !== null) copyOut(t); };
+        dl.onclick = function () { var t = build(kind); if (t !== null) downloadOut(t, filename); };
+      }
+      row.appendChild(copy);
+      row.appendChild(dl);
+      return row;
+    }
+
+    var profileEmpty = CityOps.profile.isEmpty(store.profile);
+    m.box.appendChild(el('p', 'diff', 'Interests delta: new places in this city that match your interest profile, ' +
+      'in their own section, on top of what is already here.'));
+    var irow = promptRow('interests', 'interests-delta.md',
+      profileEmpty ? 'Add interests in Profile first' : null);
+    if (profileEmpty) {
+      var goProfile = el('button', 'ctl', 'Open Profile');
+      goProfile.type = 'button';
+      goProfile.onclick = function () { m.close(); openProfileModal(); };
+      irow.appendChild(goProfile);
+    }
+    m.box.appendChild(irow);
+
+    m.box.appendChild(el('p', 'diff', 'Intel pass: what to actually order or do at the places this guide ' +
+      'already holds, from what reviewers say repeatedly.'));
+    m.box.appendChild(promptRow('intel', 'intel-pass.md', null));
+
+    m.box.appendChild(el('p', 'diff', 'Paste what your AI returns here. It is a partial payload: only new items ' +
+      'and intel, never a whole guide.'));
+    var ta = document.createElement('textarea');
+    ta.setAttribute('aria-label', 'Delta JSON from your AI');
+    m.box.appendChild(ta);
+    m.box.appendChild(msg);
+
+    var row = el('div', 'mrow');
+    var apply = el('button', 'ctl to-done', 'Apply');
+    apply.type = 'button';
+    apply.onclick = function () {
+      var parsed;
+      try { parsed = JSON.parse(ta.value); }
+      catch (e) { msg.textContent = 'That is not valid JSON: ' + e.message; return; }
+      var res = CityOps.mergeDelta(currentData(), parsed);
+      if (!res.data) {
+        msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n');
+        return;
+      }
+      var added = CityOps.appStore.add(store, res.data);   // stamps updatedAt now
+      store = added.store;
+      saveStore(store);
+      // The override's content is part of the canonical data now, so clearing
+      // it changes nothing on screen and stops it masking future merges.
+      var cs = CityOps.makeStore(added.cityId, LS);
+      var cst = cs.load();
+      if (cst.dataOverride) { cst.dataOverride = null; cs.save(cst); }
+      m.close();
+      schedulePush('data', added.cityId);
+      // Same scroll-preserve pattern as applyPull: activateCity reboots the
+      // city (CityOps.boot), which re-renders from the top.
+      var y = 0;
+      try { y = window.scrollY || window.pageYOffset || 0; } catch (e) {}
+      activateCity(added.cityId);   // reboots the city; rewrites #notice
+      try { window.scrollTo(0, y); } catch (e2) {}
+      showSyncNotice('Enriched: ' + enrichSummaryText(res.summary) + '.');
+    };
+    var cancel = el('button', 'ctl', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = m.close;
+    row.appendChild(apply);
+    row.appendChild(cancel);
+    m.box.appendChild(row);
+
+    m.box.appendChild(el('p', 'diff', 'This builds a prompt for your own AI (Claude, ChatGPT). ' +
+      'In-app research is planned for a future version.'));
+  }
+
+  // Appended to the engine's toolbar on every render (app context only).
+  function toolbarExtras(tb) {
+    var b = el('button', null, 'Enrich');
+    b.type = 'button';
+    b.id = 'btn-enrich';
+    b.onclick = openEnrichModal;
+    tb.appendChild(b);
+  }
+
   function openAddModal() {
     var host = document.getElementById('modal');
     host.innerHTML = '';
@@ -402,6 +727,20 @@
     drow.appendChild(el('span', 'diff', 'From')); drow.appendChild(bf);
     drow.appendChild(el('span', 'diff', 'To')); drow.appendChild(bt2);
     box.appendChild(drow);
+    // Optional header fields: they only exist to fill the prompt's Trip details
+    // block, so a blank city ignores them entirely.
+    function optField(ph) {
+      var i = document.createElement('input');
+      i.type = 'text'; i.className = 'date-field'; i.placeholder = ph;
+      i.setAttribute('aria-label', ph);
+      return i;
+    }
+    var hrow = el('div', 'hdr-row');
+    var bacc = optField('Accommodation');
+    var barr = optField('Arrival');
+    var bdep = optField('Departure');
+    hrow.appendChild(bacc); hrow.appendChild(barr); hrow.appendChild(bdep);
+    box.appendChild(hrow);
     var bmsg = el('div', 'diff', '');
     box.appendChild(bmsg);
     var brow2 = el('div', 'mrow');
@@ -409,6 +748,77 @@
     bcreate.type = 'button';
     box.appendChild(brow2);
     brow2.appendChild(bcreate);
+
+    // Build my prompt: PROMPT.md with this city's header and the interest
+    // profile filled in, copied out for the traveler's own AI. No network, no
+    // AI call from the app: the traveler pastes the JSON back into this modal.
+    var promptTa = null;
+    function showPromptFallback(text) {
+      if (!promptTa) {
+        promptTa = document.createElement('textarea');
+        promptTa.className = 'promptout';
+        promptTa.readOnly = true;
+        promptTa.setAttribute('aria-label', 'Generated prompt');
+        box.insertBefore(promptTa, bmsg);
+      }
+      promptTa.value = text;
+      bmsg.textContent = 'Could not reach the clipboard. The prompt is selected above: copy it, ' +
+        'paste it into Claude or ChatGPT, then paste the JSON it returns below.';
+      try { promptTa.focus(); promptTa.select(); } catch (e) {}
+    }
+    function buildPromptText() {
+      if (!trim(bn.value) || !bf.value || !bt2.value) {
+        bmsg.textContent = 'Fill city name and dates first';
+        return null;
+      }
+      var tpl = promptTemplateText();
+      if (!tpl) {
+        bmsg.textContent = 'This build has no prompt template embedded. Use PROMPT.md from the repo.';
+        return null;
+      }
+      return CityOps.promptKit.buildCityPrompt(tpl, {
+        name: trim(bn.value), country: trim(bc.value), from: bf.value, to: bt2.value,
+        accommodation: trim(bacc.value), arrival: trim(barr.value), departure: trim(bdep.value)
+      }, store.profile);
+    }
+    var bprompt = el('button', 'ctl', 'Build my prompt');
+    bprompt.type = 'button';
+    bprompt.onclick = function () {
+      var text = buildPromptText();
+      if (text === null) return;
+      var wrote = null;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) wrote = navigator.clipboard.writeText(text);
+      } catch (e) { wrote = null; }
+      if (wrote && typeof wrote.then === 'function') {
+        wrote.then(function () {
+          bmsg.textContent = 'Copied. Paste into Claude or ChatGPT, then paste the JSON it returns below.';
+        }, function () { showPromptFallback(text); });
+      } else {
+        showPromptFallback(text);
+      }
+    };
+    brow2.appendChild(bprompt);
+    var bdl = el('button', 'ctl', 'Download prompt.md');
+    bdl.type = 'button';
+    bdl.onclick = function () {
+      var text = buildPromptText();
+      if (text === null) return;
+      var blob = new Blob([text], { type: 'text/markdown' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'prompt.md';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      var freeUrl = a.href;
+      setTimeout(function () { URL.revokeObjectURL(freeUrl); }, 4000);
+      bmsg.textContent = 'Downloaded prompt.md. Paste it into Claude or ChatGPT, then paste the JSON it returns below.';
+    };
+    brow2.appendChild(bdl);
+    box.appendChild(el('p', 'diff', CityOps.profile.isEmpty(store.profile)
+      ? 'Build my prompt writes PROMPT.md with this header filled in. Add interests in Profile (city menu) and it will ask your AI for a matching ninth section too.'
+      : 'Build my prompt writes PROMPT.md with this header and your interest profile filled in.'));
 
     box.appendChild(el('p', 'diff', 'Or paste schema v1 city JSON (the output of PROMPT.md). ' + whereItGoes));
     var ta = document.createElement('textarea');
@@ -581,6 +991,8 @@
   var stateStamp = {};         // cityId -> state.updated already seen (push trigger baseline)
   var pushQueueData = {};      // cityId -> pending data push
   var pushQueueState = {};     // cityId -> pending state push
+  var pushQueueProfile = false; // the profile is a single row, so a flag not a map
+  var profileTableMissing = false; // set once if the table is not there yet (SQL unapplied)
   var pushTimer = null;
   var refreshInFlight = null;
   var pullInFlight = false;
@@ -664,6 +1076,7 @@
     stateStamp = {};
     pushQueueData = {};
     pushQueueState = {};
+    pushQueueProfile = false;
     if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
     if (msg) showSyncNotice(msg);
     renderPanel();
@@ -677,7 +1090,11 @@
     var n = document.getElementById('notice');
     if (!n || !text) return;
     var base = n.textContent || '';
-    n.textContent = base ? base + ' ' + text : text;
+    if (!base) { n.textContent = text; return; }
+    // Two sync notices in one round (e.g. cities then profile) read as one
+    // run-on sentence with a plain space; a middle dot keeps them distinct.
+    var sep = base.indexOf('Synced:') !== -1 ? ' · ' : ' ';
+    n.textContent = base + sep + text;
   }
 
   function cleanHash() {
@@ -832,12 +1249,46 @@
       .catch(function (e) { warn('push ' + kind + ' failed', e); });
   }
 
-  // 2s debounce per the spec, shared by both tables: a burst of taps produces
+  // The profile is one row per user, keyed by user_id alone, so it needs no
+  // city id and no buildRows: one payload, one stamp. A profile that was never
+  // edited on this device has a null stamp and is never pushed (that would
+  // overwrite a real profile on the server with this device's empty one).
+  function pushProfileNow() {
+    if (!syncOn() || !session || profileTableMissing) return;
+    var p = CityOps.profile.normalize(store.profile);
+    if (!p.updated) return;
+    api('/rest/v1/profile?on_conflict=user_id', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates,return=minimal'
+      },
+      body: JSON.stringify([{ data: p, updated_at: p.updated }])
+    }).then(function () { stampSync(); })
+      .catch(function (e) { noteProfileTable(e); warn('push profile failed', e); });
+  }
+
+  // The profile table is a Phase 3a addition: a build can be running against a
+  // project where the SQL has not been applied yet. PostgREST answers an
+  // unknown table with 404 (PGRST205). Warn once, mark it off, and let cities
+  // and state keep syncing exactly as before.
+  function noteProfileTable(e) {
+    if (profileTableMissing) return;
+    var msg = (e && e.message) || '';
+    if (msg.indexOf('404') === -1) return;
+    profileTableMissing = true;
+    warn('profile table not found; profile sync is off until the Phase 3a SQL is applied');
+  }
+
+  // 2s debounce per the spec, shared by every table: a burst of taps produces
   // one upsert. A failed flush is NOT retried on a timer; local stays newer
   // than the server, so the next pull's reconcile pushes it. Local is the queue.
   function schedulePush(kind, id) {
-    if (!syncOn() || !session || !id) return;
-    if (kind === 'state') pushQueueState[id] = 1; else pushQueueData[id] = 1;
+    if (!syncOn() || !session) return;
+    if (kind === 'profile') pushQueueProfile = true;
+    else if (!id) return;
+    else if (kind === 'state') pushQueueState[id] = 1;
+    else pushQueueData[id] = 1;
     if (pushTimer) clearTimeout(pushTimer);
     pushTimer = setTimeout(flushPush, 2000);
   }
@@ -859,6 +1310,7 @@
     pushQueueState = {};
     pushNow('data', dataEntries);
     pushNow('state', stateEntries);
+    if (pushQueueProfile) { pushQueueProfile = false; pushProfileNow(); }
   }
 
   // Fires the debounced push immediately instead of waiting out the 2s timer:
@@ -896,12 +1348,21 @@
     lastPullAt = now;
     return Promise.all([
       api('/rest/v1/cities?select=city_id,data,updated_at'),
-      api('/rest/v1/city_state?select=city_id,state,updated_at')
+      api('/rest/v1/city_state?select=city_id,state,updated_at'),
+      // The profile read is isolated: a missing table (the Phase 3a SQL not
+      // applied yet) must not fail the whole round and take cities down with
+      // it, so its rejection resolves to null and the reconcile skips it.
+      profileTableMissing ? Promise.resolve(null) :
+        api('/rest/v1/profile?select=data,updated_at').catch(function (e) {
+          noteProfileTable(e);
+          warn('profile pull failed', e);
+          return null;
+        })
     ]).then(function (res) {
       // A null half means "no usable token"; an empty table is []. Never treat
       // an unanswered read as an empty server, which would push everything up.
       if (!res || !Array.isArray(res[0]) || !Array.isArray(res[1])) return false;
-      applyPull(res[0], res[1]);
+      applyPull(res[0], res[1], res[2]);
       stampSync();
       return true;
     }).catch(function (e) {
@@ -920,7 +1381,31 @@
     return stamps;
   }
 
-  function applyPull(cityRows, stateRows) {
+  // Third row kind, same newer-wins reconcile as cities and state, decided by
+  // syncKit.decide(local profile.updated, remote updated_at). Returns true when
+  // the remote profile was taken, so the caller can say so in the notice.
+  // Non-array rows mean "no usable answer": leave both sides alone.
+  function applyProfilePull(rows) {
+    if (!Array.isArray(rows)) return false;
+    var row = rows.length ? rows[0] : null;
+    var localP = CityOps.profile.normalize(store.profile);
+    var remoteIso = (row && typeof row.updated_at === 'string') ? row.updated_at : null;
+    var d = CityOps.syncKit.decide(localP.updated, remoteIso);
+    if (d === 'pull') {
+      if (!row || !row.data || typeof row.data !== 'object') return false;
+      var p = CityOps.profile.normalize(row.data);
+      p.updated = remoteIso || p.updated;   // keep the REMOTE stamp: this is not a local edit
+      store.profile = p;
+      saveStore(store);
+      return true;
+    }
+    // 'push' can only happen when this device has a stamp, so the never-edited
+    // profile (null stamp) is never sent; decide() returns pull or noop there.
+    if (d === 'push') pushProfileNow();
+    return false;
+  }
+
+  function applyPull(cityRows, stateRows, profileRows) {
     var remoteData = {}, remoteState = {};
     var remoteDataStamps = stampMap(cityRows, remoteData);
     var remoteStateStamps = stampMap(stateRows, remoteState);
@@ -1005,6 +1490,9 @@
     if (pulledNames.length) {
       showSyncNotice('Synced: ' + pulledNames.join(', ') + ' updated from your other device');
     }
+    if (applyProfilePull(profileRows)) {
+      showSyncNotice('Synced: profile updated from your other device');
+    }
   }
 
   // ---- auth actions ----
@@ -1055,6 +1543,7 @@
     stateStamp = {};
     pushQueueData = {};
     pushQueueState = {};
+    pushQueueProfile = false;
     if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
     // The last-sync record is meaningless once signed out (and stale once
     // signed back in as someone else), so it goes with the session.
@@ -1227,7 +1716,7 @@
   }
 
   // Set before the first boot so the engine's toolbar picks up the app-only button.
-  window.CityOpsApp = { exportStandalone: exportStandalone };
+  window.CityOpsApp = { exportStandalone: exportStandalone, toolbarExtras: toolbarExtras };
 
   // Re-decorate the header and re-render the panel on every engine state
   // change (not just on city switch, which activateCity already triggers via

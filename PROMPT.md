@@ -34,13 +34,20 @@ scattering multiple center trips across it.
 known allergies, budget ceiling, anyone traveling along, anything else
 that changes what "a good pick" means this time.]
 
+If a "Traveler interests" block appears below this line, treat it as part of
+the profile: it lists what this traveler seeks out, what to avoid, and any
+notes that change what a good pick means. App users get that block filled in
+automatically by Build my prompt; if you are editing this file by hand and
+want the interests section, write the block yourself in the same shape.
+
 ---
 
 ## What I need
 
 Research this city and return a single guide covering eight sections:
 dinner, breakfast, lunch, coffee, coworking, activities, services, and
-practical notes.
+practical notes. Add a ninth section, interests, only when a Traveler
+interests block appears in the header above.
 Use real, current information: actual restaurants and cafes that exist
 right now, with real review counts and ratings where you can find them,
 not generic or made-up suggestions.
@@ -111,6 +118,33 @@ tricks, "the card machine is broken" cash-only pushes), which ride/transit
 apps actually work here, and any beach, terrain, or walkability notes
 worth knowing before the first day.
 
+### Interests
+
+Include this section ONLY if a "Traveler interests" block appears in the
+header above. If there is no such block, skip this section entirely and
+return the eight sections listed above.
+
+When the block is present, add a ninth section with `"id": "interests"`,
+`"label": "My interests"`, `"icon": "⭐"`, and fill it with 3 to 6 plan picks
+plus 3 to 5 backups that match the listed interests, weighted toward the ones
+listed first (the order is the traveler's priority order). Rules:
+
+- Real, specific places or events only, same standard as every other
+  section: a named climbing gym, a named jazz venue with the night it
+  actually has live music, not "the city has a climbing scene".
+- Never suggest anything that matches the Avoid list, and apply the Notes
+  the same way you apply the traveler profile.
+- No `day` assignments unless the pick only happens on a specific date
+  (a weekly jam night, a match, a market day). Then use the ISO date inside
+  the stay range and say why in `when`.
+- If an interest simply does not exist in this city, say so plainly in a
+  practical note ("no bouldering gym in the city; nearest is 90 minutes
+  away in X") rather than forcing a weak pick to fill the slot. A short,
+  honest section beats a padded one.
+- Do not duplicate a place that already appears in another section. If the
+  best match for an interest is already the coffee or dinner pick, say so
+  in that item's note instead of listing it twice.
+
 ## Quality rules
 
 These are lessons from a prior guide (Batumi) that produced bad or
@@ -152,6 +186,31 @@ unusable links and missed real risks. Follow them exactly.
   signal; include it in the `note` field when you have it. Don't
   round up or guess a count.
 
+### Intel
+
+`intel` is the optional block that tells the traveler what to actually order
+or do once they are there. It is worth more than another paragraph of
+description, and it is worth nothing at all if it is invented. Rules:
+
+<!-- RULES:INTEL -->
+- **Restaurants and cafes:** name 2 to 4 specific dishes or drinks with a
+  `must`, `good`, or `skip` verdict. Only include a dish that multiple
+  reviewers name specifically. One person's favourite is not a verdict, and
+  "the food is great" is not a dish. A `skip` needs the same support: say
+  what is wrong with it in the same short line ("seafood platter: frozen,
+  priced for tourists").
+- **Activities and services:** 1 to 3 verdicts on the specifics that change
+  the visit (which route, wing, seat, entrance, add-on, or time of day is
+  the one worth having, and which is the one people regret), plus 1 to 3
+  tips: queue timing, cash-only, where the real entrance is, what to book.
+- **Always a source line.** One line naming where the intel came from and
+  roughly when, e.g. `"Aggregated from Google and TripAdvisor reviews,
+  mid-2026"`. Unverifiable intel is then visibly labeled as such.
+- **Omit `intel` entirely rather than pad it.** An item with nothing
+  review-verified to say gets no `intel` field at all. A thin, invented or
+  generic intel block is worse than none: the traveler acts on these.
+<!-- /RULES:INTEL -->
+
 ## Output contract
 
 Respond with **only a JSON code block**. No prose before or after it, no
@@ -160,6 +219,16 @@ must be valid against schema v1 (below) with these rules:
 
 - Top level `"schema": 1`.
 - `city.dates.from` and `city.dates.to` match the trip dates given above.
+- `sections` covers the eight sections above, in this order: `dinner`,
+  `breakfast`, `lunch`, `coffee`, `cowork`, `activities`, `services`,
+  `practical`. Use exactly these `id` values so the guide renders
+  correctly. Breakfast and lunch items never carry a `day` field; they
+  repeat daily. When a Traveler interests block is present, `interests` is
+  the ninth and last section, so the full order is `dinner`, `breakfast`,
+  `lunch`, `coffee`, `cowork`, `activities`, `services`, `practical`,
+  `interests`.
+
+<!-- CONTRACT:ITEM -->
 - Every item has `"place_id": null` and `"verified": null`. Those fields
   are filled by a later phase, never by this prompt.
 - `status` on every generated item is either `"plan"` or `"backup"` only.
@@ -174,15 +243,18 @@ must be valid against schema v1 (below) with these rules:
     otherwise not suited to an evening visit).
   - `"eve"`: evening-suited but not necessarily late (a dinner spot that
     closes at 22:00, for example).
-- `sections` covers the eight sections above, in this order: `dinner`,
-  `breakfast`, `lunch`, `coffee`, `cowork`, `activities`, `services`,
-  `practical`. Use exactly these `id` values so the guide renders
-  correctly. Breakfast and lunch items never carry a `day` field; they
-  repeat daily.
+- `intel` is optional on any item. When present it is an object with any of
+  `verdicts`, `tips`, and `source`, and nothing else:
+  - `verdicts`: array of `{"tier": "must" | "good" | "skip", "text": "..."}`,
+    text non-empty and naming the specific dish, route, seat or add-on.
+  - `tips`: array of short non-empty strings.
+  - `source`: one line of provenance.
+  Include `intel` only where reviews support it; omit otherwise.
 - Every item's `section` matches one of the section ids you defined.
 - Every item has a unique `id` (a short slug, e.g. `"brasserie"`), a
   `name`, and a `links` array. Place items must have at least a `map`
   link. Practical-section note items may have an empty array.
+<!-- /CONTRACT:ITEM -->
 
 ### Schema v1 shape reference
 
@@ -244,6 +316,146 @@ Field notes:
 - `city.accommodation.lat`/`lng` should be your best estimate for the
   accommodation address given above, not left at 0. Approximate from the
   address is fine; this doesn't need to be survey-precise.
+- `intel`, when you have it, sits alongside `note` on the item:
+
+```json
+"intel": {
+  "verdicts": [
+    {"tier": "must", "text": "Adjarian khachapuri, the boat with the egg"},
+    {"tier": "good", "text": "Pkhali plate to share"},
+    {"tier": "skip", "text": "The seafood platter: frozen, priced for tourists"}
+  ],
+  "tips": [
+    "Go before 13:00 or after 15:00 to skip the queue",
+    "Cash only despite the sign; ATM two doors down"
+  ],
+  "source": "Aggregated from Google and TripAdvisor reviews, mid-2026"
+}
+```
 
 Fill in the header above, paste this whole file into the chat, and return
 only the JSON.
+
+## Re-run prompts
+
+These two prompts run against a city you already have. They return a PARTIAL
+payload (a delta) that gets merged into the existing guide, so the traveler's
+progress, renames and day arrangement all survive. The app builds them for
+you from the Enrich button; by hand, copy the block you want, paste the trip
+header and the current item list under it, and send that.
+
+A delta is never a whole guide. Never re-list an item that already exists,
+never restate `city` or `dates`, and never emit `"status": "done"` or
+`"archived"`.
+
+### Interests delta
+
+Adds new items matching the traveler's interests to a city that already
+exists. Requires a Traveler interests block.
+
+<!-- RERUN:INTERESTS -->
+A delta is never a whole guide. Never re-list an item that already exists,
+never restate `city` or `dates`, and never emit `"status": "done"` or
+`"archived"`.
+
+Research this city for the traveler interests listed above and return ONLY
+new items that match them. The city, its dates and the traveler profile are
+given above; the items the guide already holds are listed below, by id.
+
+Rules:
+
+- Return 3 to 6 new plan picks and up to 5 new backups, weighted toward the
+  interests listed first.
+- Never return an item whose id is already in the list below, and never
+  return the same place under a new id. New ids must be short slugs and
+  unique against that list.
+- Put them in the `interests` section (`{"id": "interests", "label": "My
+  interests", "icon": "⭐"}`). Include that section object in `sections`
+  ONLY if the list below shows the guide does not have it yet. If some picks
+  belong in an existing section (a restaurant that is genuinely a dinner
+  pick), use that existing section id instead.
+- Every item follows the same rules as a full guide: real place, real Maps
+  link, no invented URLs, prices in local currency and USD, `place_id` and
+  `verified` both null, `status` either `plan` or `backup`, `day` only when
+  the pick only works on a specific date inside the stay.
+- Skip anything on the Avoid list, and apply the Notes.
+- If an interest has no real match in this city, leave it out and say
+  nothing: do not pad the delta with weak picks.
+
+Respond with only a JSON code block in this shape, no prose:
+
+```json
+{
+  "schema": 1,
+  "delta": true,
+  "sections": [{"id": "interests", "label": "My interests", "icon": "⭐"}],
+  "items": [
+    {
+      "id": "new-slug",
+      "section": "interests",
+      "status": "plan",
+      "name": "Real Place Name",
+      "note": "Why it matches, with rating and review count if you have it.",
+      "price": {"text": "~2500 AMD / $6"},
+      "hours": {"text": "10:00-22:00 daily", "class": "late"},
+      "tags": [],
+      "links": [{"kind": "map", "label": "Open in Maps", "href": "https://maps.google.com/?cid=..."}],
+      "place_id": null,
+      "verified": null
+    }
+  ]
+}
+```
+
+`sections` is optional: omit it entirely when the section already exists.
+`items` is required and holds new items only.
+<!-- /RERUN:INTERESTS -->
+
+### Intel pass
+
+Adds the `intel` block (verdicts, tips, source) to items the guide already
+holds. It changes nothing else about them.
+
+<!-- RERUN:INTEL -->
+A delta is never a whole guide. Never re-list an item that already exists,
+never restate `city` or `dates`, and never emit `"status": "done"` or
+`"archived"`.
+
+Research the items listed below, by id, and return review-verified intel for
+as many of them as you can support. Do not return new items, do not rewrite
+names, notes, prices, hours or links, and do not return anything for an id
+that is not in the list.
+
+Follow the Intel quality rules above exactly:
+
+- Restaurants and cafes: 2 to 4 named dishes with `must`, `good` or `skip`
+  verdicts, only where multiple reviewers name the dish specifically.
+- Activities and services: 1 to 3 verdicts on the specifics that change the
+  visit, plus 1 to 3 practical tips.
+- Always a one-line `source`.
+- Leave an item out of the payload entirely rather than pad it. Covering
+  half the list with real intel is the correct outcome; covering all of it
+  with invented intel is not.
+
+Respond with only a JSON code block in this shape, no prose:
+
+```json
+{
+  "schema": 1,
+  "delta": true,
+  "intel": {
+    "item-id-from-the-list": {
+      "verdicts": [
+        {"tier": "must", "text": "Adjarian khachapuri, the boat with the egg"},
+        {"tier": "skip", "text": "The seafood platter: frozen, priced for tourists"}
+      ],
+      "tips": ["Go before 13:00 or after 15:00 to skip the queue"],
+      "source": "Aggregated from Google and TripAdvisor reviews, mid-2026"
+    }
+  }
+}
+```
+
+Keys of `intel` are existing item ids. Anything else in the payload is
+ignored.
+<!-- /RERUN:INTEL -->
