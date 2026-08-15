@@ -2897,7 +2897,10 @@ var CityOps = (function () {
       var v = srcStamps[id];
       updatedAt[id] = (typeof v === 'string' && v) ? v : EPOCH_ISO;
     });
-    return { cities: cities, order: order, active: active, updatedAt: updatedAt };
+    // The interest profile rides in the app store (one per user, not per city)
+    // and is normalized on every load. Nothing else in the engine reads it: it
+    // is handed to the prompt builders and pushed by the shell's sync layer.
+    return { cities: cities, order: order, active: active, updatedAt: updatedAt, profile: normalizeProfile(src.profile) };
   }
 
   // iso: pass the REMOTE stamp when applying a pulled city, so the pull does not
@@ -2971,6 +2974,165 @@ var CityOps = (function () {
     if (hashId && Object.prototype.hasOwnProperty.call(store.cities, hashId)) return hashId;
     if (store.active && Object.prototype.hasOwnProperty.call(store.cities, store.active)) return store.active;
     return store.order.length ? store.order[0] : null;
+  }
+
+  // ---- interest profile + prompt assembly (pure) ----
+  // The profile is app-only user data (it syncs as a third row kind), but its
+  // shape and the prompt string assembly live in the engine so both are unit
+  // testable in Node and so nothing about them depends on the DOM. The engine
+  // itself never reads the profile: it is carried in the app store, handed to
+  // the prompt builders, and pushed by the app shell's sync layer.
+  var PROFILE_CAP = 30;        // entries per list; more dilutes the research
+  var PROFILE_NOTES_CAP = 2000;
+
+  function trimStr(v) {
+    return (typeof v === 'string') ? v.replace(/^\s+|\s+$/g, '') : '';
+  }
+
+  // Trims, drops empties, dedupes case-insensitively keeping the FIRST spelling
+  // (order is priority, so the earlier entry is the one the traveler meant),
+  // and caps the list.
+  function normalizeProfileList(v) {
+    var out = [];
+    var seen = {};
+    (Array.isArray(v) ? v : []).forEach(function (x) {
+      var t = trimStr(x);
+      if (!t) return;
+      var k = t.toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(seen, k)) return;
+      seen[k] = 1;
+      if (out.length < PROFILE_CAP) out.push(t);
+    });
+    return out;
+  }
+
+  function normalizeProfile(raw) {
+    var src = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+    return {
+      schema: 1,
+      interests: normalizeProfileList(src.interests),
+      avoid: normalizeProfileList(src.avoid),
+      notes: trimStr(src.notes).slice(0, PROFILE_NOTES_CAP),
+      updated: (typeof src.updated === 'string' && src.updated) ? src.updated : null
+    };
+  }
+
+  // Empty means "nothing for the AI to work with": the stamp does not count.
+  function profileIsEmpty(p) {
+    var n = normalizeProfile(p);
+    return !n.interests.length && !n.avoid.length && !n.notes;
+  }
+
+  var INTERESTS_SECTION = { id: 'interests', label: 'My interests', icon: '⭐' };
+
+  // The landmark lines buildCityPrompt edits in PROMPT.md. Named here so the
+  // unit tests can build a small fake template carrying the same landmarks
+  // instead of the whole file.
+  var PROMPT_COPY_LINE = 'Copy this file per trip, fill in the header, delete this line, and go.';
+
+  // Trip-details bullets, matched by their label. `span` means the bullet has
+  // more placeholders than values (accommodation name plus address), so the
+  // whole bracket span is replaced by the single value rather than leaving a
+  // dangling placeholder behind.
+  var HEADER_BULLETS = [
+    { label: 'City', keys: ['name'] },
+    { label: 'Country', keys: ['country'] },
+    { label: 'Dates', keys: ['from', 'to'] },
+    { label: 'Accommodation', keys: ['accommodation'], span: true },
+    { label: 'Arrival transport', keys: ['arrival'] },
+    { label: 'Departure transport', keys: ['departure'] }
+  ];
+
+  function fillHeaderLine(line, rule, header) {
+    var vals = rule.keys.map(function (k) { return trimStr(header ? header[k] : ''); });
+    if (rule.span) {
+      if (!vals[0]) return line;
+      var first = line.indexOf('[');
+      var last = line.lastIndexOf(']');
+      if (first === -1 || last < first) return line;
+      return line.slice(0, first) + vals[0] + line.slice(last + 1);
+    }
+    var i = 0;
+    // An empty value leaves its placeholder in place, so a half-filled header
+    // still reads as a prompt the traveler can finish by hand.
+    return line.replace(/\[[^\][]*\]/g, function (m) {
+      var v = vals[i++];
+      return v ? v : m;
+    });
+  }
+
+  function interestsBlockLines(p) {
+    var b = ['## Traveler interests', '',
+      'Add a ninth section for these interests as described under Interests below.', ''];
+    if (p.interests.length) {
+      b.push('Interests, in priority order:', '');
+      p.interests.forEach(function (x) { b.push('- ' + x); });
+      b.push('');
+    }
+    if (p.avoid.length) {
+      b.push('Avoid, do not suggest any of these:', '');
+      p.avoid.forEach(function (x) { b.push('- ' + x); });
+      b.push('');
+    }
+    if (p.notes) b.push('Notes: ' + p.notes, '');
+    return b;
+  }
+
+  // The block belongs after the traveler-profile bracket paragraph and before
+  // the rule that closes the header, so it reads as part of who is travelling.
+  // Falls back to the "What I need" heading, then to the end of the text, so a
+  // reshaped template still gets the block rather than silently losing it.
+  function insertInterestsBlock(lines, block) {
+    var start = -1, i;
+    for (i = 0; i < lines.length; i++) {
+      if (/^##\s+Traveler profile\s*$/.test(lines[i])) { start = i; break; }
+    }
+    var at = -1;
+    if (start !== -1) {
+      for (i = start + 1; i < lines.length; i++) {
+        if (lines[i] === '---') { at = i; break; }
+        if (/^##\s/.test(lines[i])) break;
+      }
+    }
+    if (at === -1) {
+      for (i = 0; i < lines.length; i++) {
+        if (/^##\s+What I need\s*$/.test(lines[i])) { at = i; break; }
+      }
+    }
+    if (at === -1) return lines.concat([''], block);
+    return lines.slice(0, at).concat(block, lines.slice(at));
+  }
+
+  // Pure string assembly: fills PROMPT.md's Trip details bullets from `header`
+  // ({name, country, from, to, accommodation, arrival, departure}, all optional
+  // strings), drops the "copy this file" instruction line, and inserts the
+  // Traveler interests block when the profile has anything in it.
+  function buildCityPrompt(templateText, header, profile) {
+    var text = (templateText === null || templateText === undefined) ? '' : String(templateText);
+    var lines = text.split('\n');
+    var out = [];
+    var inTrip = false;
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (line === PROMPT_COPY_LINE) {
+        // Drop the instruction and the blank line under it, so no gap is left.
+        if (lines[i + 1] === '') i++;
+        continue;
+      }
+      if (/^##\s/.test(line)) inTrip = /^##\s+Trip details\s*$/.test(line);
+      if (inTrip && line.indexOf('- **') === 0) {
+        for (var r = 0; r < HEADER_BULLETS.length; r++) {
+          if (line.indexOf('- **' + HEADER_BULLETS[r].label + ':**') === 0) {
+            line = fillHeaderLine(line, HEADER_BULLETS[r], header);
+            break;
+          }
+        }
+      }
+      out.push(line);
+    }
+    var p = normalizeProfile(profile);
+    if (!profileIsEmpty(p)) out = insertInterestsBlock(out, interestsBlockLines(p));
+    return out.join('\n');
   }
 
   // ---- sync helpers (pure) ----
@@ -3957,6 +4119,11 @@ var CityOps = (function () {
       normalize: normalizeAppStore, add: appAddCity,
       remove: appRemoveCity, keepBothName: keepBothName,
       resolveStartCity: resolveStartCity, blankCity: blankCity
+    },
+    profile: { normalize: normalizeProfile, isEmpty: profileIsEmpty },
+    promptKit: {
+      buildCityPrompt: buildCityPrompt, INTERESTS_SECTION: INTERESTS_SECTION,
+      COPY_LINE: PROMPT_COPY_LINE
     },
     syncKit: {
       EPOCH: EPOCH_ISO, decide: decideSync, plan: planSync, buildRows: buildRows,

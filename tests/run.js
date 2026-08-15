@@ -422,7 +422,7 @@ CITY_Y.city.name = 'Yerevan';
 CITY_Y.city.dates = { from: '2026-08-15', to: '2026-08-22' };
 test('appStore.normalize fills missing keys and repairs order/active', () => {
   const empty = C.appStore.normalize(null);
-  assert.deepEqual(empty, { cities: {}, order: [], active: null, updatedAt: {} });
+  assert.deepEqual(empty, { cities: {}, order: [], active: null, updatedAt: {}, profile: C.profile.normalize(null) });
   const s = C.appStore.normalize({
     cities: {
       a: CITY_B, b: CITY_Y,
@@ -785,6 +785,180 @@ test('buildExport round trip with intel present deep-equals', () => {
   assert.deepEqual(out.items.find(i => i.id === 'brasserie').intel, data.items[0].intel);
   const again = C.buildExport(C.parse(JSON.stringify(out)).data, C.emptyState());
   assert.deepEqual(again, out);
+});
+
+// Task 2: interest profile + prompt assembly
+test('profile.normalize returns the empty shape for junk input', () => {
+  const empty = { schema: 1, interests: [], avoid: [], notes: '', updated: null };
+  assert.deepEqual(C.profile.normalize(null), empty);
+  assert.deepEqual(C.profile.normalize(undefined), empty);
+  assert.deepEqual(C.profile.normalize('nope'), empty);
+  assert.deepEqual(C.profile.normalize([1, 2]), empty);
+  assert.deepEqual(C.profile.normalize({ interests: 'climbing', avoid: 7, notes: 42 }), empty);
+});
+test('profile.normalize trims, drops empties, dedupes case-insensitively keeping the first', () => {
+  const p = C.profile.normalize({
+    interests: ['  climbing gyms ', 'Climbing Gyms', '', '   ', 'live jazz', 12, null, 'LIVE JAZZ'],
+    avoid: ['Nightclubs', 'nightclubs '],
+    notes: '   Vegetarian most days.   '
+  });
+  assert.deepEqual(p.interests, ['climbing gyms', 'live jazz']);
+  assert.deepEqual(p.avoid, ['Nightclubs']);
+  assert.equal(p.notes, 'Vegetarian most days.');
+  assert.equal(p.schema, 1);
+  assert.equal(p.updated, null);
+});
+test('profile.normalize caps each list at 30 and notes at 2000 chars', () => {
+  const many = [];
+  for (let i = 0; i < 45; i++) many.push('interest ' + i);
+  const p = C.profile.normalize({ interests: many, avoid: many, notes: 'x'.repeat(2500) });
+  assert.equal(p.interests.length, 30);
+  assert.equal(p.interests[29], 'interest 29');
+  assert.equal(p.avoid.length, 30);
+  assert.equal(p.notes.length, 2000);
+});
+test('profile.normalize keeps a string updated stamp and rejects anything else', () => {
+  assert.equal(C.profile.normalize({ updated: '2026-08-12T10:00:00Z' }).updated, '2026-08-12T10:00:00Z');
+  assert.equal(C.profile.normalize({ updated: 12345 }).updated, null);
+  assert.equal(C.profile.normalize({ updated: '' }).updated, null);
+});
+test('profile.isEmpty ignores the stamp and sees any real content', () => {
+  assert.equal(C.profile.isEmpty(null), true);
+  assert.equal(C.profile.isEmpty({ updated: '2026-08-12T10:00:00Z' }), true);
+  assert.equal(C.profile.isEmpty({ interests: ['   '] }), true);
+  assert.equal(C.profile.isEmpty({ interests: ['live jazz'] }), false);
+  assert.equal(C.profile.isEmpty({ avoid: ['nightclubs'] }), false);
+  assert.equal(C.profile.isEmpty({ notes: 'Vegetarian' }), false);
+});
+test('appStore.normalize carries a normalized profile and survives add/remove', () => {
+  const empty = C.appStore.normalize(null);
+  assert.deepEqual(empty.profile, { schema: 1, interests: [], avoid: [], notes: '', updated: null });
+  let s = C.appStore.normalize({ profile: { interests: ['live jazz', 'LIVE JAZZ'], notes: ' walks a lot ' } });
+  assert.deepEqual(s.profile.interests, ['live jazz']);
+  assert.equal(s.profile.notes, 'walks a lot');
+  s = C.appStore.add(s, CITY_B).store;
+  assert.deepEqual(s.profile.interests, ['live jazz']);
+  s = C.appStore.remove(s, 'batumi-2026-08-08');
+  assert.deepEqual(s.profile.interests, ['live jazz']);
+});
+test('promptKit.INTERESTS_SECTION is the ninth section descriptor', () => {
+  assert.deepEqual(C.promptKit.INTERESTS_SECTION, { id: 'interests', label: 'My interests', icon: '⭐' });
+});
+
+// A small stand-in for PROMPT.md carrying the same landmark lines the builder
+// edits, so these assertions test the assembly and not the wording of the file.
+const FAKE_PROMPT = [
+  '# CityOps generation prompt',
+  '',
+  C.promptKit.COPY_LINE,
+  '',
+  '---',
+  '',
+  '## Trip details',
+  '',
+  '- **City:** [city name]',
+  '- **Country:** [country, ISO 2-letter code if you know it, e.g. GE, AM]',
+  '- **Dates:** [arrival date] to [departure date], ISO format (YYYY-MM-DD)',
+  '- **Accommodation:** [name of hotel/apartment/building], [full address]',
+  '- **Arrival transport:** [flight/train/etc, arrival time if known]',
+  '- **Departure transport:** [flight/train/etc, departure time if known]',
+  '',
+  '## Traveler profile',
+  '',
+  'Solo traveler. Works mornings.',
+  '',
+  '[Add anything trip-specific here.]',
+  '',
+  '---',
+  '',
+  '## What I need',
+  '',
+  'Research this city.',
+  ''
+].join('\n');
+
+const HEADER = {
+  name: 'Tirana', country: 'AL', from: '2026-09-01', to: '2026-09-08',
+  accommodation: 'Rooms Tirana, Rruga Myslym Shyri 12',
+  arrival: 'W6 4351, lands 14:20', departure: 'W6 4352, 06:15'
+};
+
+test('buildCityPrompt fills every trip-details bullet and removes the copy-this-file line', () => {
+  const out = C.promptKit.buildCityPrompt(FAKE_PROMPT, HEADER, null);
+  assert.equal(out.indexOf(C.promptKit.COPY_LINE), -1);
+  assert.ok(out.includes('- **City:** Tirana'));
+  assert.ok(out.includes('- **Country:** AL'));
+  assert.ok(out.includes('- **Dates:** 2026-09-01 to 2026-09-08, ISO format (YYYY-MM-DD)'));
+  assert.ok(out.includes('- **Accommodation:** Rooms Tirana, Rruga Myslym Shyri 12'));
+  assert.ok(out.includes('- **Arrival transport:** W6 4351, lands 14:20'));
+  assert.ok(out.includes('- **Departure transport:** W6 4352, 06:15'));
+  // Untouched body text and the traveler-profile bracket both survive.
+  assert.ok(out.includes('[Add anything trip-specific here.]'));
+  assert.ok(out.includes('Research this city.'));
+});
+test('buildCityPrompt leaves a placeholder wherever the value is empty', () => {
+  const out = C.promptKit.buildCityPrompt(FAKE_PROMPT, { name: 'Tirana', from: '2026-09-01' }, null);
+  assert.ok(out.includes('- **City:** Tirana'));
+  assert.ok(out.includes('- **Country:** [country, ISO 2-letter code if you know it, e.g. GE, AM]'));
+  assert.ok(out.includes('- **Dates:** 2026-09-01 to [departure date], ISO format (YYYY-MM-DD)'));
+  assert.ok(out.includes('- **Accommodation:** [name of hotel/apartment/building], [full address]'));
+  assert.ok(out.includes('- **Arrival transport:** [flight/train/etc, arrival time if known]'));
+  const none = C.promptKit.buildCityPrompt(FAKE_PROMPT, null, null);
+  assert.ok(none.includes('- **City:** [city name]'));
+});
+test('buildCityPrompt inserts the interests block after the traveler profile', () => {
+  const out = C.promptKit.buildCityPrompt(FAKE_PROMPT, HEADER, {
+    interests: ['climbing gyms', 'live jazz'],
+    avoid: ['nightclubs'],
+    notes: 'Vegetarian most days.'
+  });
+  assert.ok(out.includes('## Traveler interests'));
+  assert.ok(out.includes('Add a ninth section for these interests as described under Interests below.'));
+  assert.ok(out.includes('- climbing gyms'));
+  assert.ok(out.includes('- live jazz'));
+  assert.ok(out.includes('- nightclubs'));
+  assert.ok(out.includes('Notes: Vegetarian most days.'));
+  // Placement: after the traveler-profile bracket, before the rule that closes
+  // the header, and therefore before "What I need".
+  assert.ok(out.indexOf('[Add anything trip-specific here.]') < out.indexOf('## Traveler interests'));
+  assert.ok(out.indexOf('## Traveler interests') < out.indexOf('## What I need'));
+  assert.ok(out.indexOf('## Traveler interests') < out.lastIndexOf('\n---'));
+});
+test('buildCityPrompt omits empty halves of the interests block', () => {
+  const only = C.promptKit.buildCityPrompt(FAKE_PROMPT, HEADER, { interests: ['live jazz'] });
+  assert.ok(only.includes('Interests, in priority order:'));
+  assert.equal(only.indexOf('Avoid, do not suggest any of these:'), -1);
+  assert.equal(only.indexOf('Notes:'), -1);
+});
+test('buildCityPrompt inserts nothing at all when the profile is empty', () => {
+  [null, undefined, {}, { interests: [], avoid: [], notes: '  ' }, { updated: '2026-08-12T10:00:00Z' }]
+    .forEach((p) => {
+      const out = C.promptKit.buildCityPrompt(FAKE_PROMPT, HEADER, p);
+      assert.equal(out.indexOf('## Traveler interests'), -1);
+      assert.equal(out.indexOf('Add a ninth section'), -1);
+    });
+});
+test('buildCityPrompt never mutates its inputs and tolerates a bare template', () => {
+  const before = FAKE_PROMPT;
+  const p = { interests: ['live jazz'] };
+  C.promptKit.buildCityPrompt(FAKE_PROMPT, HEADER, p);
+  assert.equal(FAKE_PROMPT, before);
+  assert.deepEqual(p, { interests: ['live jazz'] });
+  assert.equal(C.promptKit.buildCityPrompt('', HEADER, null), '');
+  // No traveler-profile landmark: the block still lands, ahead of What I need.
+  const bare = '## What I need\n\nResearch this city.\n';
+  const out = C.promptKit.buildCityPrompt(bare, HEADER, { interests: ['live jazz'] });
+  assert.ok(out.indexOf('## Traveler interests') < out.indexOf('## What I need'));
+});
+test('syncKit.decide drives the profile reconcile the same way it drives cities', () => {
+  // The app shell reconciles the profile with decide(local.updated, remote.updated_at).
+  const local = '2026-08-12T10:00:00.000Z';
+  const remote = '2026-08-12T11:00:00+00:00';
+  assert.equal(C.syncKit.decide(local, remote), 'pull');
+  assert.equal(C.syncKit.decide(remote, local), 'push');
+  assert.equal(C.syncKit.decide(local, null), 'push');   // never synced: send it up
+  assert.equal(C.syncKit.decide(null, remote), 'pull');  // never edited here: take theirs
+  assert.equal(C.syncKit.decide(null, null), 'noop');    // never edited anywhere: nothing to do
 });
 
 console.log(pass + ' passed, ' + fail + ' failed');
