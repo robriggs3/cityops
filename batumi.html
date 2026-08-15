@@ -1314,6 +1314,68 @@ var CityOps = (function () {
     return names[d.getDay()] + ' ' + d.getDate();
   }
 
+  // Intel validation lives in one place so validate() (whole guide) and
+  // mergeDelta() (intel pass payload) can never drift apart. `ref` is the
+  // caller's prefix, already ending in the separator it wants, e.g.
+  // "items[3] (nord) intel:" or 'intel["nord"]:'.
+  function validateIntel(intel, ref, errors) {
+    if (!intel || typeof intel !== 'object' || Array.isArray(intel)) {
+      errors.push(ref + ' must be an object');
+      return;
+    }
+    if (intel.verdicts !== undefined) {
+      if (!Array.isArray(intel.verdicts)) {
+        errors.push(ref + ' verdicts must be an array');
+      } else {
+        intel.verdicts.forEach(function (v, vi) {
+          if (!v || typeof v !== 'object' || ['must', 'good', 'skip'].indexOf(v.tier) === -1) {
+            errors.push(ref + ' verdicts[' + vi + '] tier must be must|good|skip');
+          }
+          if (!v || typeof v.text !== 'string' || !v.text.trim()) {
+            errors.push(ref + ' verdicts[' + vi + '] needs non-empty text');
+          }
+        });
+      }
+    }
+    if (intel.tips !== undefined) {
+      if (!Array.isArray(intel.tips)) {
+        errors.push(ref + ' tips must be an array');
+      } else {
+        intel.tips.forEach(function (t, ti) {
+          if (typeof t !== 'string' || !t.trim()) {
+            errors.push(ref + ' tips[' + ti + '] must be a non-empty string');
+          }
+        });
+      }
+    }
+    if (intel.source !== undefined && typeof intel.source !== 'string') {
+      errors.push(ref + ' source must be a string');
+    }
+  }
+
+  // The per-item rules, shared by validate() and mergeDelta() for exactly the
+  // same reason. `statuses` is the allowed status list (a whole guide allows
+  // all four; a delta may only introduce plan and backup, since done and
+  // archived are states the traveler sets later in the app) and `statusHint`
+  // is appended to that one error so the delta case explains itself. `seen`
+  // is the caller's duplicate-id map, mutated as ids are accepted.
+  function validateItem(it, ref, secIds, seen, errors, statuses, statusHint) {
+    if (!it || typeof it !== 'object' || Array.isArray(it)) {
+      errors.push(ref + ' is not an object');
+      return;
+    }
+    if (!it.id) errors.push(ref + ' needs id');
+    else if (seen[it.id]) errors.push('duplicate item id "' + it.id + '"');
+    else seen[it.id] = 1;
+    if (!it.name) errors.push(ref + ' needs name');
+    if (!secIds[it.section]) errors.push(ref + ' unknown section "' + it.section + '"');
+    if (statuses.indexOf(it.status) === -1) {
+      errors.push(ref + ' bad status "' + it.status + '"' + (statusHint || ''));
+    }
+    if (it.day && !/^\d{4}-\d{2}-\d{2}$/.test(it.day)) errors.push(ref + ' day must be YYYY-MM-DD');
+    if (it.intel !== undefined && it.intel !== null) validateIntel(it.intel, ref + ' intel:', errors);
+  }
+
   function validate(data) {
     var errors = [];
     if (!data || typeof data !== 'object') return ['Root is not an object'];
@@ -1337,47 +1399,7 @@ var CityOps = (function () {
       var seen = {};
       data.items.forEach(function (it, i) {
         var ref = 'items[' + i + ']' + (it && it.id ? ' (' + it.id + ')' : '');
-        if (!it.id) errors.push(ref + ' needs id');
-        else if (seen[it.id]) errors.push('duplicate item id "' + it.id + '"');
-        else seen[it.id] = 1;
-        if (!it.name) errors.push(ref + ' needs name');
-        if (!secIds[it.section]) errors.push(ref + ' unknown section "' + it.section + '"');
-        if (STATUSES.indexOf(it.status) === -1) errors.push(ref + ' bad status "' + it.status + '"');
-        if (it.day && !/^\d{4}-\d{2}-\d{2}$/.test(it.day)) errors.push(ref + ' day must be YYYY-MM-DD');
-        if (it.intel !== undefined && it.intel !== null) {
-          if (typeof it.intel !== 'object' || Array.isArray(it.intel)) {
-            errors.push(ref + ' intel: must be an object');
-          } else {
-            if (it.intel.verdicts !== undefined) {
-              if (!Array.isArray(it.intel.verdicts)) {
-                errors.push(ref + ' intel: verdicts must be an array');
-              } else {
-                it.intel.verdicts.forEach(function (v, vi) {
-                  if (!v || typeof v !== 'object' || ['must', 'good', 'skip'].indexOf(v.tier) === -1) {
-                    errors.push(ref + ' intel: verdicts[' + vi + '] tier must be must|good|skip');
-                  }
-                  if (!v || typeof v.text !== 'string' || !v.text.trim()) {
-                    errors.push(ref + ' intel: verdicts[' + vi + '] needs non-empty text');
-                  }
-                });
-              }
-            }
-            if (it.intel.tips !== undefined) {
-              if (!Array.isArray(it.intel.tips)) {
-                errors.push(ref + ' intel: tips must be an array');
-              } else {
-                it.intel.tips.forEach(function (t, ti) {
-                  if (typeof t !== 'string' || !t.trim()) {
-                    errors.push(ref + ' intel: tips[' + ti + '] must be a non-empty string');
-                  }
-                });
-              }
-            }
-            if (it.intel.source !== undefined && typeof it.intel.source !== 'string') {
-              errors.push(ref + ' intel: source must be a string');
-            }
-          }
-        }
+        validateItem(it, ref, secIds, seen, errors, STATUSES, null);
       });
     }
     return errors;
@@ -1389,6 +1411,152 @@ var CityOps = (function () {
     catch (e) { return { data: null, errors: ['JSON parse error: ' + e.message] }; }
     var errors = validate(data);
     return { data: errors.length ? null : data, errors: errors };
+  }
+
+  // ---- delta merge ----
+  // The core re-run mechanic: a PARTIAL payload from a second AI pass is folded
+  // into a city that already exists, without disturbing anything the traveler
+  // has done. Pure: it reads no state, touches no storage, mutates neither
+  // argument, and returns a fresh deep clone. Live planning state (done marks,
+  // reorders, renames) survives by construction, because it is keyed by item id
+  // in a separate store this function never sees.
+  //
+  // Rules, all of them deliberate:
+  // - errors non-empty means NO merge at all: data is null and the caller shows
+  //   the list. A half-applied delta would be impossible to reason about.
+  // - A delta may only introduce plan and backup items. done and archived are
+  //   traveler states, never generated ones.
+  // - An id that already exists is SKIPPED, never overwritten, and counted. That
+  //   is what makes a re-run safe to repeat: running the same delta twice is a
+  //   no-op, not a clobber. A duplicate id WITHIN one delta is an error, since
+  //   that is a malformed payload rather than an overlap with existing work.
+  // - delta.sections with an id that already exists is ignored, not overwritten
+  //   (the traveler may have renamed a section, and a re-run must not undo it).
+  // - delta.intel replaces the whole intel block on an item that exists after
+  //   the merge (existing or just added); an unknown id is counted in
+  //   intelSkipped, not treated as an error, because an AI naming an item the
+  //   traveler has since removed is expected, not broken.
+  // - city, city.dates and every other field of every existing item are never
+  //   touched. intel is the ONE field an existing item can gain here.
+  var DELTA_STATUSES = ['plan', 'backup'];
+  var DELTA_STATUS_HINT = ' (a delta may only add plan or backup items)';
+
+  function emptyDeltaSummary() {
+    return { added: 0, skipped: 0, sectionsAdded: 0, intelApplied: 0, intelSkipped: 0 };
+  }
+
+  function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
+
+  function mergeDelta(cityData, delta) {
+    var errors = [];
+    if (!cityData || typeof cityData !== 'object' || Array.isArray(cityData)) {
+      return { data: null, summary: emptyDeltaSummary(), errors: ['No city data to merge into'] };
+    }
+    if (!delta || typeof delta !== 'object' || Array.isArray(delta)) {
+      return { data: null, summary: emptyDeltaSummary(), errors: ['Delta is not an object'] };
+    }
+    if (delta.schema !== 1) errors.push('schema must be 1');
+    if (delta.delta !== true) {
+      errors.push('delta must be true: this is a partial payload, not a whole guide');
+    }
+
+    // Sections first: a new item may legitimately reference a section this same
+    // delta introduces, so the allowed-section set has to include them.
+    var newSections = [];
+    if (delta.sections !== undefined && delta.sections !== null) {
+      if (!Array.isArray(delta.sections)) {
+        errors.push('sections must be an array');
+      } else {
+        delta.sections.forEach(function (s, i) {
+          if (!s || typeof s !== 'object' || Array.isArray(s) || !s.id || !s.label) {
+            errors.push('sections[' + i + '] needs id and label');
+          } else {
+            newSections.push(s);
+          }
+        });
+      }
+    }
+
+    var secIds = {};
+    (Array.isArray(cityData.sections) ? cityData.sections : []).forEach(function (s) {
+      if (s && s.id) secIds[s.id] = 1;
+    });
+    newSections.forEach(function (s) { secIds[s.id] = 1; });
+
+    var existingIds = {};
+    (Array.isArray(cityData.items) ? cityData.items : []).forEach(function (it) {
+      if (it && it.id) existingIds[it.id] = 1;
+    });
+
+    var toAdd = [];
+    var skipped = 0;
+    if (delta.items !== undefined && delta.items !== null) {
+      if (!Array.isArray(delta.items)) {
+        errors.push('items must be an array');
+      } else {
+        var seen = {};
+        delta.items.forEach(function (it, i) {
+          var ref = 'items[' + i + ']' + (it && it.id ? ' (' + it.id + ')' : '');
+          var before = errors.length;
+          validateItem(it, ref, secIds, seen, errors, DELTA_STATUSES, DELTA_STATUS_HINT);
+          if (errors.length !== before) return;
+          if (existingIds[it.id]) { skipped++; return; }
+          toAdd.push(it);
+        });
+      }
+    }
+
+    var intelMap = null;
+    if (delta.intel !== undefined && delta.intel !== null) {
+      if (typeof delta.intel !== 'object' || Array.isArray(delta.intel)) {
+        errors.push('intel must be an object keyed by item id');
+      } else {
+        intelMap = delta.intel;
+        Object.keys(intelMap).forEach(function (id) {
+          validateIntel(intelMap[id], 'intel["' + id + '"]:', errors);
+        });
+      }
+    }
+
+    if (errors.length) return { data: null, summary: emptyDeltaSummary(), errors: errors };
+
+    var summary = emptyDeltaSummary();
+    summary.skipped = skipped;
+    var out = deepClone(cityData);
+    if (!Array.isArray(out.sections)) out.sections = [];
+    if (!Array.isArray(out.items)) out.items = [];
+
+    var haveSec = {};
+    out.sections.forEach(function (s) { if (s && s.id) haveSec[s.id] = 1; });
+    newSections.forEach(function (s) {
+      if (haveSec[s.id]) return;
+      haveSec[s.id] = 1;
+      out.sections.push(deepClone(s));
+      summary.sectionsAdded++;
+    });
+
+    toAdd.forEach(function (it) {
+      var copy = deepClone(it);
+      // Both fields belong to a later verification phase, never to a prompt.
+      // An absent one is normalized to null so every item in the merged guide
+      // has the same shape.
+      if (copy.place_id === undefined) copy.place_id = null;
+      if (copy.verified === undefined) copy.verified = null;
+      out.items.push(copy);
+      summary.added++;
+    });
+
+    if (intelMap) {
+      var byId = {};
+      out.items.forEach(function (it) { if (it && it.id) byId[it.id] = it; });
+      Object.keys(intelMap).forEach(function (id) {
+        if (!byId[id]) { summary.intelSkipped++; return; }
+        byId[id].intel = deepClone(intelMap[id]);
+        summary.intelApplied++;
+      });
+    }
+
+    return { data: out, summary: summary, errors: [] };
   }
 
   var TRANSITIONS = {
@@ -1856,9 +2024,13 @@ var CityOps = (function () {
     });
   }
 
-  function interestsBlockLines(p) {
-    var b = ['## Traveler interests', '',
-      'Add a ninth section for these interests as described under Interests below.', ''];
+  // `lead` is the one instruction line that only makes sense in a whole-guide
+  // prompt (where the Interests research section is part of the file). The
+  // delta builder shares this formatter and passes no lead, because its own
+  // re-run block already says where the new items go.
+  function interestsBlockLines(p, lead) {
+    var b = ['## Traveler interests', ''];
+    if (lead) b.push(lead, '');
     if (p.interests.length) {
       b.push('Interests, in priority order:', '');
       p.interests.forEach(function (x) { b.push('- ' + x); });
@@ -1926,7 +2098,120 @@ var CityOps = (function () {
       out.push(line);
     }
     var p = normalizeProfile(profile);
-    if (!profileIsEmpty(p)) out = insertInterestsBlock(out, interestsBlockLines(p));
+    if (!profileIsEmpty(p)) {
+      out = insertInterestsBlock(out, interestsBlockLines(p, INTERESTS_LEAD));
+    }
+    return out.join('\n');
+  }
+
+  // ---- re-run (delta) prompt builders ----
+  // Both build a self-contained prompt for the traveler's own AI out of three
+  // things: fixed instruction text sliced verbatim from PROMPT.md between HTML
+  // comment landmarks, the city they already have, and (for interests) their
+  // profile. Nothing is invented here and nothing is paraphrased: PROMPT.md
+  // stays the single source of prompt wording, and these functions only choose
+  // which parts of it to include and in what order.
+  //
+  // A missing landmark throws rather than silently building a prompt with a
+  // hole in it. The app shows the message inline; it means the build shipped an
+  // older PROMPT.md than the engine expects.
+  function sliceLandmark(templateText, name) {
+    var text = (templateText === null || templateText === undefined) ? '' : String(templateText);
+    // Built by concatenation on purpose: a literal HTML comment opener in
+    // engine source would put the tokenizer into script-data-escaped state
+    // inside the app's embedded copy of the guide template (the assembler
+    // rejects it outright).
+    var mark = '<' + '!--';
+    var open = mark + ' ' + name + ' -->';
+    var close = mark + ' /' + name + ' -->';
+    var a = text.indexOf(open);
+    var b = text.indexOf(close);
+    if (a === -1 || b === -1 || b < a) {
+      throw new Error('The prompt template in this build has no ' + name +
+        ' block. Update PROMPT.md from the repo and rebuild.');
+    }
+    return text.slice(a + open.length, b).replace(/^\n+/, '').replace(/\n+$/, '');
+  }
+
+  // The city, as the AI needs to see it in a re-run: enough to know where and
+  // when, and nothing else. Fields the city does not carry are left out rather
+  // than emitted empty.
+  function cityHeaderLines(data) {
+    var c = (data && data.city) ? data.city : {};
+    var d = c.dates || {};
+    var b = ['## The city', ''];
+    b.push('- **City:** ' + trimStr(c.name));
+    if (trimStr(c.country)) b.push('- **Country:** ' + trimStr(c.country));
+    if (trimStr(d.from) || trimStr(d.to)) {
+      b.push('- **Dates:** ' + trimStr(d.from) + ' to ' + trimStr(d.to));
+    }
+    var acc = (c.accommodation && trimStr(c.accommodation.name)) ? trimStr(c.accommodation.name) : '';
+    if (acc) b.push('- **Accommodation:** ' + acc);
+    b.push('');
+    return b;
+  }
+
+  // One line per item, in the compact form both re-run blocks refer to.
+  function itemListLines(items) {
+    var b = [];
+    (Array.isArray(items) ? items : []).forEach(function (it) {
+      if (!it || !it.id) return;
+      b.push('- ' + it.id + ' | ' + trimStr(it.section) + ' | ' + trimStr(it.name));
+    });
+    return b;
+  }
+
+  var INTERESTS_LEAD = 'Add a ninth section for these interests as described under Interests below.';
+
+  // Assembly order, top to bottom:
+  //   1. one header line saying what this run is
+  //   2. the city block (name, country, dates, accommodation name)
+  //   3. the Traveler interests block, same formatter buildCityPrompt uses
+  //   4. the RERUN:INTERESTS instructions, verbatim from PROMPT.md
+  //   5. the existing-item list the re-run block refers to as "below"
+  //   6. the CONTRACT:ITEM rules, verbatim, so the AI has the item shape
+  // Step 6 is the item-level half of PROMPT.md's output contract only: the
+  // whole-guide half (city, dates, the eight-section list) would tell the AI to
+  // emit exactly what a delta must never contain.
+  function buildInterestsDeltaPrompt(templateText, cityData, profile) {
+    var rerun = sliceLandmark(templateText, 'RERUN:INTERESTS');
+    var contract = sliceLandmark(templateText, 'CONTRACT:ITEM');
+    var p = normalizeProfile(profile);
+    var out = ['You are extending an existing CityOps city guide.', ''];
+    out = out.concat(cityHeaderLines(cityData));
+    out = out.concat(interestsBlockLines(p, null));
+    out.push('## What I need', '', rerun, '');
+    out.push('## Existing items (do not re-suggest these)', '');
+    out = out.concat(itemListLines(cityData && cityData.items));
+    out.push('');
+    out.push('## Item shape', '', contract, '');
+    return out.join('\n');
+  }
+
+  // Assembly order, top to bottom:
+  //   1. one header line saying what this run is
+  //   2. the city block
+  //   3. the Intel quality rules, verbatim, BEFORE the instructions that say
+  //      "follow the Intel quality rules above"
+  //   4. the RERUN:INTEL instructions, verbatim
+  //   5. the item list the re-run block refers to as "below", archived items
+  //      omitted (nobody needs intel on something already put away)
+  //   6. the coverage instruction
+  function buildIntelPassPrompt(templateText, cityData) {
+    var rules = sliceLandmark(templateText, 'RULES:INTEL');
+    var rerun = sliceLandmark(templateText, 'RERUN:INTEL');
+    var items = (cityData && Array.isArray(cityData.items) ? cityData.items : [])
+      .filter(function (it) { return it && it.status !== 'archived'; });
+    var out = ['You are adding review-verified intel to an existing CityOps city guide.', ''];
+    out = out.concat(cityHeaderLines(cityData));
+    out.push('## Intel quality rules', '', rules, '');
+    out.push('## What I need', '', rerun, '');
+    out.push('## Items', '');
+    out = out.concat(itemListLines(items));
+    out.push('');
+    out.push('Cover as many of these as you can verify from real reviews. ' +
+      'Leave out the ones you cannot: a partial payload of real intel is the ' +
+      'correct answer, a complete one of invented intel is not.', '');
     return out.join('\n');
   }
 
@@ -2910,6 +3195,7 @@ var CityOps = (function () {
   return {
     STATUSES: STATUSES, slug: slug, cityId: cityId, dayLabel: dayLabel,
     validate: validate, parse: parse, init: init, boot: boot,
+    mergeDelta: mergeDelta,
     appStore: {
       normalize: normalizeAppStore, add: appAddCity,
       remove: appRemoveCity, keepBothName: keepBothName,
@@ -2918,7 +3204,9 @@ var CityOps = (function () {
     profile: { normalize: normalizeProfile, isEmpty: profileIsEmpty },
     promptKit: {
       buildCityPrompt: buildCityPrompt, INTERESTS_SECTION: INTERESTS_SECTION,
-      COPY_LINE: PROMPT_COPY_LINE
+      COPY_LINE: PROMPT_COPY_LINE,
+      buildInterestsDeltaPrompt: buildInterestsDeltaPrompt,
+      buildIntelPassPrompt: buildIntelPassPrompt
     },
     syncKit: {
       EPOCH: EPOCH_ISO, decide: decideSync, plan: planSync, buildRows: buildRows,

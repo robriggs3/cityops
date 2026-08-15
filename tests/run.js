@@ -976,5 +976,328 @@ test('syncKit.decide drives the profile reconcile the same way it drives cities'
   assert.equal(C.syncKit.decide(null, null), 'noop');    // never edited anywhere: nothing to do
 });
 
+// ---- Task 3: mergeDelta ----
+
+const DELTA = {
+  schema: 1,
+  delta: true,
+  sections: [{ id: 'interests', label: 'My interests', icon: '⭐' }],
+  items: [
+    { id: 'boulder', section: 'interests', status: 'plan', name: 'Boulder Hall',
+      links: [], place_id: null, verified: null },
+    { id: 'jazzve', section: 'coffee', status: 'backup', name: 'Jazzve', links: [] }
+  ],
+  intel: {
+    brasserie: {
+      verdicts: [{ tier: 'must', text: 'Adjarian khachapuri' }],
+      tips: ['Go before 13:00'],
+      source: 'Aggregated from Google reviews, mid-2026'
+    }
+  }
+};
+
+test('mergeDelta adds new items and new sections and counts them', () => {
+  const r = C.mergeDelta(GOOD, clone(DELTA));
+  assert.deepEqual(r.errors, []);
+  assert.deepEqual(r.summary, { added: 2, skipped: 0, sectionsAdded: 1, intelApplied: 1, intelSkipped: 0 });
+  assert.equal(r.data.sections.length, 3);
+  assert.equal(r.data.sections[2].id, 'interests');   // appended, never reordered
+  assert.equal(r.data.items.length, GOOD.items.length + 2);
+  const added = r.data.items.filter((it) => it.id === 'boulder' || it.id === 'jazzve');
+  assert.equal(added.length, 2);
+  // place_id/verified are normalized to null when the payload omits them.
+  const jazzve = r.data.items.find((it) => it.id === 'jazzve');
+  assert.equal(jazzve.place_id, null);
+  assert.equal(jazzve.verified, null);
+});
+
+test('mergeDelta skips an id that already exists instead of overwriting it', () => {
+  const d = clone(DELTA);
+  d.items.push({ id: 'brasserie', section: 'dinner', status: 'plan', name: 'Impostor', links: [] });
+  const r = C.mergeDelta(GOOD, d);
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.summary.added, 2);
+  assert.equal(r.summary.skipped, 1);
+  const kept = r.data.items.filter((it) => it.id === 'brasserie');
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0].name, 'Brasserie 1900');       // the traveler's copy wins
+  assert.equal(kept[0].note, '4.8 stars, reserve.');  // and nothing else moved
+});
+
+test('mergeDelta applied twice is a no-op: everything is already there', () => {
+  const first = C.mergeDelta(GOOD, clone(DELTA));
+  const second = C.mergeDelta(first.data, clone(DELTA));
+  assert.deepEqual(second.errors, []);
+  assert.deepEqual(second.summary,
+    { added: 0, skipped: 2, sectionsAdded: 0, intelApplied: 1, intelSkipped: 0 });
+  assert.deepEqual(second.data, first.data);
+});
+
+test('mergeDelta ignores an existing section id rather than overwriting its label', () => {
+  const d = { schema: 1, delta: true, sections: [{ id: 'dinner', label: 'Renamed by the AI' }] };
+  const r = C.mergeDelta(GOOD, d);
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.summary.sectionsAdded, 0);
+  assert.equal(r.data.sections.length, 2);
+  assert.equal(r.data.sections[0].label, 'Dinner');
+});
+
+test('mergeDelta rejects duplicate ids within one delta', () => {
+  const d = clone(DELTA);
+  d.items.push({ id: 'boulder', section: 'interests', status: 'plan', name: 'Twin', links: [] });
+  const r = C.mergeDelta(GOOD, d);
+  assert.equal(r.data, null);
+  assert.ok(r.errors.some((e) => /duplicate item id "boulder"/.test(e)));
+});
+
+test('mergeDelta rejects a bad envelope, unknown section, done status and bad intel', () => {
+  const bad = (patch) => C.mergeDelta(GOOD, Object.assign(clone(DELTA), patch));
+  assert.ok(bad({ schema: 2 }).errors.some((e) => /schema must be 1/.test(e)));
+  assert.ok(bad({ delta: false }).errors.some((e) => /delta must be true/.test(e)));
+  assert.ok(bad({ delta: undefined }).errors.some((e) => /delta must be true/.test(e)));
+  assert.equal(C.mergeDelta(GOOD, null).data, null);
+  assert.equal(C.mergeDelta(null, clone(DELTA)).data, null);
+  assert.equal(C.mergeDelta(GOOD, 'nope').data, null);
+
+  const unknown = bad({ sections: undefined });   // boulder's section no longer exists
+  assert.equal(unknown.data, null);
+  assert.ok(unknown.errors.some((e) => /unknown section "interests"/.test(e)));
+
+  ['done', 'archived'].forEach((status) => {
+    const r = C.mergeDelta(GOOD, {
+      schema: 1, delta: true,
+      items: [{ id: 'x', section: 'dinner', status: status, name: 'X', links: [] }]
+    });
+    assert.equal(r.data, null);
+    assert.ok(r.errors.some((e) =>
+      e.includes('bad status "' + status + '" (a delta may only add plan or backup items)')),
+      r.errors.join(' | '));
+  });
+
+  const badIntel = bad({ intel: { brasserie: { verdicts: [{ tier: 'nope', text: 'x' }] } } });
+  assert.equal(badIntel.data, null);
+  assert.ok(badIntel.errors.some((e) => /intel\["brasserie"\]: verdicts\[0\] tier must be must\|good\|skip/.test(e)));
+  assert.equal(bad({ intel: [] }).data, null);
+  assert.equal(bad({ items: 'nope' }).data, null);
+  assert.equal(bad({ sections: 'nope' }).data, null);
+  // A rejected delta reports a zeroed summary: nothing partial ever happened.
+  assert.deepEqual(bad({ schema: 2 }).summary,
+    { added: 0, skipped: 0, sectionsAdded: 0, intelApplied: 0, intelSkipped: 0 });
+});
+
+test('mergeDelta applies intel to existing ids and counts unknown ids as skipped', () => {
+  const d = {
+    schema: 1, delta: true,
+    intel: {
+      brasserie: { verdicts: [{ tier: 'must', text: 'The khachapuri' }], source: 'Reviews' },
+      nord: { tips: ['Order at the bar'] },
+      ghost: { tips: ['Nobody lives here'] }
+    }
+  };
+  const r = C.mergeDelta(GOOD, d);
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.summary.intelApplied, 2);
+  assert.equal(r.summary.intelSkipped, 1);
+  const br = r.data.items.find((it) => it.id === 'brasserie');
+  assert.deepEqual(br.intel, { verdicts: [{ tier: 'must', text: 'The khachapuri' }], source: 'Reviews' });
+  assert.equal(r.data.items.some((it) => it.id === 'ghost'), false);
+});
+
+test('mergeDelta replaces an existing intel block whole rather than merging into it', () => {
+  const base = clone(GOOD);
+  base.items[0].intel = { verdicts: [{ tier: 'good', text: 'Old verdict' }], tips: ['Old tip'] };
+  const r = C.mergeDelta(base, {
+    schema: 1, delta: true, intel: { brasserie: { tips: ['New tip'] } }
+  });
+  assert.deepEqual(r.data.items[0].intel, { tips: ['New tip'] });
+});
+
+test('mergeDelta reaches items the same delta just added', () => {
+  const r = C.mergeDelta(GOOD, {
+    schema: 1, delta: true,
+    items: [{ id: 'fresh', section: 'dinner', status: 'plan', name: 'Fresh', links: [] }],
+    intel: { fresh: { tips: ['Book ahead'] } }
+  });
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.summary.intelApplied, 1);
+  assert.deepEqual(r.data.items.find((it) => it.id === 'fresh').intel, { tips: ['Book ahead'] });
+});
+
+test('mergeDelta never mutates either input', () => {
+  const city = clone(GOOD);
+  const delta = clone(DELTA);
+  const citySnap = JSON.stringify(city);
+  const deltaSnap = JSON.stringify(delta);
+  const r = C.mergeDelta(city, delta);
+  assert.equal(JSON.stringify(city), citySnap);
+  assert.equal(JSON.stringify(delta), deltaSnap);
+  // And the result is a deep clone, not a view onto either input.
+  r.data.items[0].name = 'Mutated';
+  r.data.sections[2].label = 'Mutated';
+  assert.equal(JSON.stringify(city), citySnap);
+  assert.equal(JSON.stringify(delta), deltaSnap);
+});
+
+test('mergeDelta never touches city, dates or any other field of an existing item', () => {
+  const d = clone(DELTA);
+  d.city = { name: 'Hijack', dates: { from: '1999-01-01', to: '1999-01-02' } };
+  d.items[0].day = '2026-08-11';
+  const r = C.mergeDelta(GOOD, d);
+  assert.deepEqual(r.data.city, GOOD.city);
+  assert.deepEqual(r.data.city.dates, { from: '2026-08-08', to: '2026-08-15' });
+  GOOD.items.forEach((before, i) => {
+    const after = clone(r.data.items[i]);
+    if (before.id === 'brasserie') delete after.intel;   // the one permitted change
+    assert.deepEqual(after, before);
+  });
+});
+
+test('mergeDelta output passes validate() and round trips through buildExport', () => {
+  const r = C.mergeDelta(GOOD, clone(DELTA));
+  assert.deepEqual(C.validate(r.data), []);
+  const st = C.emptyState();
+  const out = C.buildExport(r.data, st);
+  assert.deepEqual(C.validate(out), []);
+  assert.deepEqual(JSON.parse(JSON.stringify(out)), out);
+  const brasserie = out.items.find((it) => it.id === 'brasserie');
+  assert.deepEqual(brasserie.intel, DELTA.intel.brasserie);
+  assert.ok(out.items.find((it) => it.id === 'boulder'));
+  assert.ok(out.sections.find((s) => s.id === 'interests'));
+});
+
+test('mergeDelta reads no state: the same call answers identically with no storage at all', () => {
+  const src = C.mergeDelta.toString();
+  assert.equal(/localStorage|makeStore|liveState|ctx\./.test(src), false);
+  const a = C.mergeDelta(GOOD, clone(DELTA));
+  const b = C.mergeDelta(GOOD, clone(DELTA));
+  assert.deepEqual(a.data, b.data);
+  assert.deepEqual(a.summary, b.summary);
+});
+
+// ---- Task 3: delta prompt builders ----
+
+const FAKE_RERUN = [
+  '# CityOps generation prompt',
+  '',
+  '### Intel',
+  '',
+  '<' + '!-- RULES:INTEL -->',
+  '- **Restaurants and cafes:** name 2 to 4 specific dishes.',
+  '- **Always a source line.**',
+  '<' + '!-- /RULES:INTEL -->',
+  '',
+  '## Output contract',
+  '',
+  '- `city.dates.from` and `city.dates.to` match the trip dates given above.',
+  '',
+  '<' + '!-- CONTRACT:ITEM -->',
+  '- Every item has `"place_id": null` and `"verified": null`.',
+  '- Every item has a unique `id`, a `name`, and a `links` array.',
+  '<' + '!-- /CONTRACT:ITEM -->',
+  '',
+  '## Re-run prompts',
+  '',
+  '<' + '!-- RERUN:INTERESTS -->',
+  'Research this city for the traveler interests listed above.',
+  '<' + '!-- /RERUN:INTERESTS -->',
+  '',
+  '<' + '!-- RERUN:INTEL -->',
+  'Research the items listed below, by id.',
+  '<' + '!-- /RERUN:INTEL -->'
+].join('\n');
+
+const PROFILE = { interests: ['climbing gyms', 'live jazz'], avoid: ['nightclubs'], notes: 'Vegetarian most days.' };
+
+test('buildInterestsDeltaPrompt carries the header, city, profile, re-run block, item list and item shape', () => {
+  const out = C.promptKit.buildInterestsDeltaPrompt(FAKE_RERUN, GOOD, PROFILE);
+  assert.ok(out.startsWith('You are extending an existing CityOps city guide.'));
+  assert.ok(out.includes('- **City:** Batumi'));
+  assert.ok(out.includes('- **Country:** GE'));
+  assert.ok(out.includes('- **Dates:** 2026-08-08 to 2026-08-15'));
+  assert.ok(out.includes('- **Accommodation:** Example Stay D2'));
+  // Profile block, same formatter as buildCityPrompt, minus the whole-guide lead.
+  assert.ok(out.includes('## Traveler interests'));
+  assert.ok(out.includes('- climbing gyms'));
+  assert.ok(out.includes('- nightclubs'));
+  assert.ok(out.includes('Notes: Vegetarian most days.'));
+  assert.equal(out.indexOf('Add a ninth section for these interests'), -1);
+  // The landmark block, verbatim and without its landmarks.
+  assert.ok(out.includes('Research this city for the traveler interests listed above.'));
+  assert.equal(out.indexOf('RERUN:INTERESTS'), -1);
+  // Item list, one line per item, after the re-run block that calls it "below".
+  assert.ok(out.includes('## Existing items (do not re-suggest these)'));
+  assert.ok(out.includes('- brasserie | dinner | Brasserie 1900'));
+  assert.ok(out.includes('- nord | coffee | Nord Specialty Coffee'));
+  assert.ok(out.indexOf('Research this city for the traveler interests') < out.indexOf('- brasserie | dinner'));
+  // Item shape, and NOT the whole-guide contract a delta must never satisfy.
+  assert.ok(out.includes('- Every item has a unique `id`, a `name`, and a `links` array.'));
+  assert.equal(out.indexOf('match the trip dates given above'), -1);
+});
+
+test('buildIntelPassPrompt carries the rules above the instructions and lists every unarchived item', () => {
+  const city = clone(GOOD);
+  city.items.push({ id: 'gone', section: 'dinner', status: 'archived', name: 'Closed Place', links: [] });
+  const out = C.promptKit.buildIntelPassPrompt(FAKE_RERUN, city);
+  assert.ok(out.startsWith('You are adding review-verified intel to an existing CityOps city guide.'));
+  assert.ok(out.includes('- **City:** Batumi'));
+  assert.ok(out.includes('## Intel quality rules'));
+  assert.ok(out.includes('- **Restaurants and cafes:** name 2 to 4 specific dishes.'));
+  assert.ok(out.includes('Research the items listed below, by id.'));
+  // "Follow the Intel quality rules above" only reads correctly in this order.
+  assert.ok(out.indexOf('- **Always a source line.**') < out.indexOf('Research the items listed below'));
+  assert.ok(out.includes('## Items'));
+  assert.ok(out.includes('- brasserie | dinner | Brasserie 1900'));
+  assert.ok(out.includes('- sisters | dinner | At the Sisters'));
+  assert.equal(out.indexOf('- gone | dinner | Closed Place'), -1);
+  assert.ok(out.includes('Cover as many of these as you can verify from real reviews.'));
+  assert.equal(out.indexOf('RULES:INTEL'), -1);
+  // No profile anywhere: an intel pass is about what is already in the guide.
+  assert.equal(out.indexOf('## Traveler interests'), -1);
+});
+
+test('the delta builders throw a clear error when a landmark is missing', () => {
+  assert.throws(() => C.promptKit.buildInterestsDeltaPrompt('# nothing here', GOOD, PROFILE),
+    /no RERUN:INTERESTS block/);
+  assert.throws(() => C.promptKit.buildIntelPassPrompt('# nothing here', GOOD),
+    /no RULES:INTEL block/);
+  const noContract = FAKE_RERUN.split('\n').filter((l) => l.indexOf('CONTRACT:ITEM') === -1).join('\n');
+  assert.throws(() => C.promptKit.buildInterestsDeltaPrompt(noContract, GOOD, PROFILE),
+    /no CONTRACT:ITEM block/);
+  assert.throws(() => C.promptKit.buildIntelPassPrompt(null, GOOD), /no RULES:INTEL block/);
+});
+
+test('the delta builders never mutate their inputs and tolerate a bare city', () => {
+  const city = clone(GOOD);
+  const snap = JSON.stringify(city);
+  const p = clone(PROFILE);
+  C.promptKit.buildInterestsDeltaPrompt(FAKE_RERUN, city, p);
+  C.promptKit.buildIntelPassPrompt(FAKE_RERUN, city);
+  assert.equal(JSON.stringify(city), snap);
+  assert.deepEqual(p, PROFILE);
+  // A city with no items and no optional header fields still builds.
+  const bare = { schema: 1, city: { name: 'Tirana', dates: { from: '2026-09-01', to: '2026-09-08' } }, sections: [], items: [] };
+  const out = C.promptKit.buildIntelPassPrompt(FAKE_RERUN, bare);
+  assert.ok(out.includes('- **City:** Tirana'));
+  assert.equal(out.indexOf('- **Country:**'), -1);
+  assert.equal(out.indexOf('- **Accommodation:**'), -1);
+});
+
+test('the real PROMPT.md carries every landmark the builders slice', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const prompt = fs.readFileSync(path.join(__dirname, '..', 'PROMPT.md'), 'utf8');
+  ['RULES:INTEL', 'CONTRACT:ITEM', 'RERUN:INTERESTS', 'RERUN:INTEL'].forEach((name) => {
+    assert.ok(prompt.indexOf('<' + '!-- ' + name + ' -->') !== -1, 'missing open ' + name);
+    assert.ok(prompt.indexOf('<' + '!-- /' + name + ' -->') !== -1, 'missing close ' + name);
+  });
+  const interests = C.promptKit.buildInterestsDeltaPrompt(prompt, GOOD, PROFILE);
+  assert.ok(interests.includes('Never return an item whose id is already in the list below'));
+  assert.ok(interests.includes('- brasserie | dinner | Brasserie 1900'));
+  const intel = C.promptKit.buildIntelPassPrompt(prompt, GOOD);
+  assert.ok(intel.includes('Follow the Intel quality rules above exactly'));
+  assert.ok(intel.includes('**Omit `intel` entirely rather than pad it.**'));
+  assert.ok(intel.includes('- nord | coffee | Nord Specialty Coffee'));
+});
+
 console.log(pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);
