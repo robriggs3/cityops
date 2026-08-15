@@ -1103,6 +1103,33 @@ test('mergeDelta applies intel to existing ids and counts unknown ids as skipped
   assert.equal(r.data.items.some((it) => it.id === 'ghost'), false);
 });
 
+test('mergeDelta treats a __proto__ intel key as an unknown id, never as a prototype write', () => {
+  const d = clone(DELTA);
+  // Parsed, not a literal: an object literal's `__proto__` key sets the
+  // prototype instead of creating an own property, which would hide the bug
+  // this test exists to catch. JSON.parse is also how a real delta arrives.
+  d.intel = JSON.parse('{"__proto__": {"verdicts":[{"tier":"must","text":"x"}]}}');
+  const r = C.mergeDelta(GOOD, d);
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.summary.intelSkipped, 1);
+  assert.equal(r.summary.intelApplied, 0);
+  assert.equal(({}).intel, undefined);
+});
+
+test('mergeDelta rejects a delta item whose section is "toString", a prototype method name', () => {
+  const d = { schema: 1, delta: true,
+    items: [{ id: 'x', section: 'toString', status: 'plan', name: 'X', links: [] }] };
+  const r = C.mergeDelta(GOOD, d);
+  assert.equal(r.data, null);
+  assert.ok(r.errors.some((e) => /unknown section "toString"/.test(e)));
+});
+
+test('validate accepts an item id of "valueOf" without a spurious duplicate error', () => {
+  const g = clone(GOOD);
+  g.items[0].id = 'valueOf';
+  assert.deepEqual(C.validate(g), []);
+});
+
 test('mergeDelta replaces an existing intel block whole rather than merging into it', () => {
   const base = clone(GOOD);
   base.items[0].intel = { verdicts: [{ tier: 'good', text: 'Old verdict' }], tips: ['Old tip'] };

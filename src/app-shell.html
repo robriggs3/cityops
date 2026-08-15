@@ -473,6 +473,12 @@
       var next = CityOps.profile.normalize({
         interests: interests.get(), avoid: avoid.get(), notes: ta.value
       });
+      // No-op save: compare against the profile as loaded, `updated` removed
+      // from both sides, so a modal opened and closed unchanged never stamps
+      // a new timestamp or schedules a push.
+      var before = JSON.stringify(Object.assign({}, p, { updated: undefined }));
+      var after = JSON.stringify(Object.assign({}, next, { updated: undefined }));
+      if (before === after) { m.close(); return; }
       next.updated = new Date().toISOString();
       store.profile = next;
       saveStore(store);
@@ -669,7 +675,12 @@
       if (cst.dataOverride) { cst.dataOverride = null; cs.save(cst); }
       m.close();
       schedulePush('data', added.cityId);
+      // Same scroll-preserve pattern as applyPull: activateCity reboots the
+      // city (CityOps.boot), which re-renders from the top.
+      var y = 0;
+      try { y = window.scrollY || window.pageYOffset || 0; } catch (e) {}
       activateCity(added.cityId);   // reboots the city; rewrites #notice
+      try { window.scrollTo(0, y); } catch (e2) {}
       showSyncNotice('Enriched: ' + enrichSummaryText(res.summary) + '.');
     };
     var cancel = el('button', 'ctl', 'Cancel');
@@ -1079,7 +1090,11 @@
     var n = document.getElementById('notice');
     if (!n || !text) return;
     var base = n.textContent || '';
-    n.textContent = base ? base + ' ' + text : text;
+    if (!base) { n.textContent = text; return; }
+    // Two sync notices in one round (e.g. cities then profile) read as one
+    // run-on sentence with a plain space; a middle dot keeps them distinct.
+    var sep = base.indexOf('Synced:') !== -1 ? ' · ' : ' ';
+    n.textContent = base + sep + text;
   }
 
   function cleanHash() {
