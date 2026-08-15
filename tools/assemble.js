@@ -61,9 +61,33 @@ function guideTemplateBlock() {
   return '<script type="text/plain" id="guide-template">\n' + escaped + '\n</script>';
 }
 
+// PROMPT.md rides in the app the same way: a text/plain block the prompt
+// builders read at runtime, so Build my prompt works offline and with no fetch.
+// Standalone guides never get it (the marker lives in app-shell.html only).
+function promptTemplateBlock() {
+  const prompt = fs.readFileSync(path.join(root, 'PROMPT.md'), 'utf8');
+  if (prompt.indexOf('<\\/script') !== -1) {
+    throw new Error('PROMPT.md already contains an escaped <\\/script sequence; embedding would not reverse cleanly');
+  }
+  const escaped = prompt.replace(/<\/script/g, '<\\/script');
+  if (escaped.indexOf('</script') !== -1) throw new Error('unescaped </script survived in PROMPT.md');
+  // PROMPT.md deliberately carries `<!--` landmarks. That alone is safe (a
+  // closing script tag still ends the block from script-data-escaped state),
+  // but `<!--` followed by a literal `<script` would put the tokenizer into
+  // double-escaped state where the real closing tag goes inert. Fail loudly
+  // rather than ship a truncated app.
+  if (escaped.indexOf('<!--') !== -1 && /<script[\s>]/.test(escaped)) {
+    throw new Error('PROMPT.md mixes <!-- with a literal <script tag; that would break the text/plain block');
+  }
+  return '<script type="text/plain" id="prompt-template">\n' + escaped + '\n</script>';
+}
+
 if (fs.existsSync(path.join(root, 'src', 'app-shell.html'))) {
   build('app-shell.html', 'index.html', function (out, shellName) {
     if (out.indexOf('<!--CITYOPS_TEMPLATE-->') === -1) throw new Error('template marker missing in ' + shellName);
-    return out.replace('<!--CITYOPS_TEMPLATE-->', () => guideTemplateBlock());
+    if (out.indexOf('<!--CITYOPS_PROMPT-->') === -1) throw new Error('prompt marker missing in ' + shellName);
+    return out
+      .replace('<!--CITYOPS_TEMPLATE-->', () => guideTemplateBlock())
+      .replace('<!--CITYOPS_PROMPT-->', () => promptTemplateBlock());
   });
 }
