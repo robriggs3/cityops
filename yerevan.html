@@ -3096,10 +3096,10 @@ var CityOps = (function () {
       return;
     }
     if (!it.id) errors.push(ref + ' needs id');
-    else if (seen[it.id]) errors.push('duplicate item id "' + it.id + '"');
+    else if (Object.prototype.hasOwnProperty.call(seen, it.id)) errors.push('duplicate item id "' + it.id + '"');
     else seen[it.id] = 1;
     if (!it.name) errors.push(ref + ' needs name');
-    if (!secIds[it.section]) errors.push(ref + ' unknown section "' + it.section + '"');
+    if (!Object.prototype.hasOwnProperty.call(secIds, it.section)) errors.push(ref + ' unknown section "' + it.section + '"');
     if (statuses.indexOf(it.status) === -1) {
       errors.push(ref + ' bad status "' + it.status + '"' + (statusHint || ''));
     }
@@ -3125,9 +3125,9 @@ var CityOps = (function () {
     if (!Array.isArray(data.items)) {
       errors.push('items[] required');
     } else {
-      var secIds = {};
+      var secIds = Object.create(null);
       (data.sections || []).forEach(function (s) { secIds[s.id] = 1; });
-      var seen = {};
+      var seen = Object.create(null);
       data.items.forEach(function (it, i) {
         var ref = 'items[' + i + ']' + (it && it.id ? ' (' + it.id + ')' : '');
         validateItem(it, ref, secIds, seen, errors, STATUSES, null);
@@ -3208,7 +3208,7 @@ var CityOps = (function () {
       }
     }
 
-    var secIds = {};
+    var secIds = Object.create(null);
     (Array.isArray(cityData.sections) ? cityData.sections : []).forEach(function (s) {
       if (s && s.id) secIds[s.id] = 1;
     });
@@ -3225,7 +3225,7 @@ var CityOps = (function () {
       if (!Array.isArray(delta.items)) {
         errors.push('items must be an array');
       } else {
-        var seen = {};
+        var seen = Object.create(null);
         delta.items.forEach(function (it, i) {
           var ref = 'items[' + i + ']' + (it && it.id ? ' (' + it.id + ')' : '');
           var before = errors.length;
@@ -3278,10 +3278,10 @@ var CityOps = (function () {
     });
 
     if (intelMap) {
-      var byId = {};
+      var byId = Object.create(null);
       out.items.forEach(function (it) { if (it && it.id) byId[it.id] = it; });
       Object.keys(intelMap).forEach(function (id) {
-        if (!byId[id]) { summary.intelSkipped++; return; }
+        if (!Object.prototype.hasOwnProperty.call(byId, id)) { summary.intelSkipped++; return; }
         byId[id].intel = deepClone(intelMap[id]);
         summary.intelApplied++;
       });
@@ -3910,7 +3910,7 @@ var CityOps = (function () {
     var p = normalizeProfile(profile);
     var out = ['You are extending an existing CityOps city guide.', ''];
     out = out.concat(cityHeaderLines(cityData));
-    out = out.concat(interestsBlockLines(p, null));
+    if (!profileIsEmpty(p)) out = out.concat(interestsBlockLines(p, null));
     out.push('## What I need', '', rerun, '');
     out.push('## Existing items (do not re-suggest these)', '');
     out = out.concat(itemListLines(cityData && cityData.items));
