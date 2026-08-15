@@ -355,10 +355,10 @@ var CityOps = (function () {
       return;
     }
     if (!it.id) errors.push(ref + ' needs id');
-    else if (seen[it.id]) errors.push('duplicate item id "' + it.id + '"');
+    else if (Object.prototype.hasOwnProperty.call(seen, it.id)) errors.push('duplicate item id "' + it.id + '"');
     else seen[it.id] = 1;
     if (!it.name) errors.push(ref + ' needs name');
-    if (!secIds[it.section]) errors.push(ref + ' unknown section "' + it.section + '"');
+    if (!Object.prototype.hasOwnProperty.call(secIds, it.section)) errors.push(ref + ' unknown section "' + it.section + '"');
     if (statuses.indexOf(it.status) === -1) {
       errors.push(ref + ' bad status "' + it.status + '"' + (statusHint || ''));
     }
@@ -384,9 +384,9 @@ var CityOps = (function () {
     if (!Array.isArray(data.items)) {
       errors.push('items[] required');
     } else {
-      var secIds = {};
+      var secIds = Object.create(null);
       (data.sections || []).forEach(function (s) { secIds[s.id] = 1; });
-      var seen = {};
+      var seen = Object.create(null);
       data.items.forEach(function (it, i) {
         var ref = 'items[' + i + ']' + (it && it.id ? ' (' + it.id + ')' : '');
         validateItem(it, ref, secIds, seen, errors, STATUSES, null);
@@ -467,7 +467,7 @@ var CityOps = (function () {
       }
     }
 
-    var secIds = {};
+    var secIds = Object.create(null);
     (Array.isArray(cityData.sections) ? cityData.sections : []).forEach(function (s) {
       if (s && s.id) secIds[s.id] = 1;
     });
@@ -484,7 +484,7 @@ var CityOps = (function () {
       if (!Array.isArray(delta.items)) {
         errors.push('items must be an array');
       } else {
-        var seen = {};
+        var seen = Object.create(null);
         delta.items.forEach(function (it, i) {
           var ref = 'items[' + i + ']' + (it && it.id ? ' (' + it.id + ')' : '');
           var before = errors.length;
@@ -537,10 +537,10 @@ var CityOps = (function () {
     });
 
     if (intelMap) {
-      var byId = {};
+      var byId = Object.create(null);
       out.items.forEach(function (it) { if (it && it.id) byId[it.id] = it; });
       Object.keys(intelMap).forEach(function (id) {
-        if (!byId[id]) { summary.intelSkipped++; return; }
+        if (!Object.prototype.hasOwnProperty.call(byId, id)) { summary.intelSkipped++; return; }
         byId[id].intel = deepClone(intelMap[id]);
         summary.intelApplied++;
       });
@@ -1169,7 +1169,7 @@ var CityOps = (function () {
     var p = normalizeProfile(profile);
     var out = ['You are extending an existing CityOps city guide.', ''];
     out = out.concat(cityHeaderLines(cityData));
-    out = out.concat(interestsBlockLines(p, null));
+    if (!profileIsEmpty(p)) out = out.concat(interestsBlockLines(p, null));
     out.push('## What I need', '', rerun, '');
     out.push('## Existing items (do not re-suggest these)', '');
     out = out.concat(itemListLines(cityData && cityData.items));
@@ -2512,10 +2512,10 @@ var CityOps = (function () {
       return;
     }
     if (!it.id) errors.push(ref + ' needs id');
-    else if (seen[it.id]) errors.push('duplicate item id "' + it.id + '"');
+    else if (Object.prototype.hasOwnProperty.call(seen, it.id)) errors.push('duplicate item id "' + it.id + '"');
     else seen[it.id] = 1;
     if (!it.name) errors.push(ref + ' needs name');
-    if (!secIds[it.section]) errors.push(ref + ' unknown section "' + it.section + '"');
+    if (!Object.prototype.hasOwnProperty.call(secIds, it.section)) errors.push(ref + ' unknown section "' + it.section + '"');
     if (statuses.indexOf(it.status) === -1) {
       errors.push(ref + ' bad status "' + it.status + '"' + (statusHint || ''));
     }
@@ -2541,9 +2541,9 @@ var CityOps = (function () {
     if (!Array.isArray(data.items)) {
       errors.push('items[] required');
     } else {
-      var secIds = {};
+      var secIds = Object.create(null);
       (data.sections || []).forEach(function (s) { secIds[s.id] = 1; });
-      var seen = {};
+      var seen = Object.create(null);
       data.items.forEach(function (it, i) {
         var ref = 'items[' + i + ']' + (it && it.id ? ' (' + it.id + ')' : '');
         validateItem(it, ref, secIds, seen, errors, STATUSES, null);
@@ -2624,7 +2624,7 @@ var CityOps = (function () {
       }
     }
 
-    var secIds = {};
+    var secIds = Object.create(null);
     (Array.isArray(cityData.sections) ? cityData.sections : []).forEach(function (s) {
       if (s && s.id) secIds[s.id] = 1;
     });
@@ -2641,7 +2641,7 @@ var CityOps = (function () {
       if (!Array.isArray(delta.items)) {
         errors.push('items must be an array');
       } else {
-        var seen = {};
+        var seen = Object.create(null);
         delta.items.forEach(function (it, i) {
           var ref = 'items[' + i + ']' + (it && it.id ? ' (' + it.id + ')' : '');
           var before = errors.length;
@@ -2694,10 +2694,10 @@ var CityOps = (function () {
     });
 
     if (intelMap) {
-      var byId = {};
+      var byId = Object.create(null);
       out.items.forEach(function (it) { if (it && it.id) byId[it.id] = it; });
       Object.keys(intelMap).forEach(function (id) {
-        if (!byId[id]) { summary.intelSkipped++; return; }
+        if (!Object.prototype.hasOwnProperty.call(byId, id)) { summary.intelSkipped++; return; }
         byId[id].intel = deepClone(intelMap[id]);
         summary.intelApplied++;
       });
@@ -3326,7 +3326,7 @@ var CityOps = (function () {
     var p = normalizeProfile(profile);
     var out = ['You are extending an existing CityOps city guide.', ''];
     out = out.concat(cityHeaderLines(cityData));
-    out = out.concat(interestsBlockLines(p, null));
+    if (!profileIsEmpty(p)) out = out.concat(interestsBlockLines(p, null));
     out.push('## What I need', '', rerun, '');
     out.push('## Existing items (do not re-suggest these)', '');
     out = out.concat(itemListLines(cityData && cityData.items));
@@ -4638,8 +4638,7 @@ must be valid against schema v1 (below) with these rules:
     text non-empty and naming the specific dish, route, seat or add-on.
   - `tips`: array of short non-empty strings.
   - `source`: one line of provenance.
-  See the Intel quality rules above for when to fill it and when to leave
-  it out.
+  Include `intel` only where reviews support it; omit otherwise.
 - Every item's `section` matches one of the section ids you defined.
 - Every item has a unique `id` (a short slug, e.g. `"brasserie"`), a
   `name`, and a `links` array. Place items must have at least a `map`
@@ -4744,6 +4743,10 @@ Adds new items matching the traveler's interests to a city that already
 exists. Requires a Traveler interests block.
 
 <!-- RERUN:INTERESTS -->
+A delta is never a whole guide. Never re-list an item that already exists,
+never restate `city` or `dates`, and never emit `"status": "done"` or
+`"archived"`.
+
 Research this city for the traveler interests listed above and return ONLY
 new items that match them. The city, its dates and the traveler profile are
 given above; the items the guide already holds are listed below, by id.
@@ -4803,6 +4806,10 @@ Adds the `intel` block (verdicts, tips, source) to items the guide already
 holds. It changes nothing else about them.
 
 <!-- RERUN:INTEL -->
+A delta is never a whole guide. Never re-list an item that already exists,
+never restate `city` or `dates`, and never emit `"status": "done"` or
+`"archived"`.
+
 Research the items listed below, by id, and return review-verified intel for
 as many of them as you can support. Do not return new items, do not rewrite
 names, notes, prices, hours or links, and do not return anything for an id
@@ -5216,6 +5223,12 @@ ignored.
       var next = CityOps.profile.normalize({
         interests: interests.get(), avoid: avoid.get(), notes: ta.value
       });
+      // No-op save: compare against the profile as loaded, `updated` removed
+      // from both sides, so a modal opened and closed unchanged never stamps
+      // a new timestamp or schedules a push.
+      var before = JSON.stringify(Object.assign({}, p, { updated: undefined }));
+      var after = JSON.stringify(Object.assign({}, next, { updated: undefined }));
+      if (before === after) { m.close(); return; }
       next.updated = new Date().toISOString();
       store.profile = next;
       saveStore(store);
@@ -5412,7 +5425,12 @@ ignored.
       if (cst.dataOverride) { cst.dataOverride = null; cs.save(cst); }
       m.close();
       schedulePush('data', added.cityId);
+      // Same scroll-preserve pattern as applyPull: activateCity reboots the
+      // city (CityOps.boot), which re-renders from the top.
+      var y = 0;
+      try { y = window.scrollY || window.pageYOffset || 0; } catch (e) {}
       activateCity(added.cityId);   // reboots the city; rewrites #notice
+      try { window.scrollTo(0, y); } catch (e2) {}
       showSyncNotice('Enriched: ' + enrichSummaryText(res.summary) + '.');
     };
     var cancel = el('button', 'ctl', 'Cancel');
@@ -5822,7 +5840,11 @@ ignored.
     var n = document.getElementById('notice');
     if (!n || !text) return;
     var base = n.textContent || '';
-    n.textContent = base ? base + ' ' + text : text;
+    if (!base) { n.textContent = text; return; }
+    // Two sync notices in one round (e.g. cities then profile) read as one
+    // run-on sentence with a plain space; a middle dot keeps them distinct.
+    var sep = base.indexOf('Synced:') !== -1 ? ' · ' : ' ';
+    n.textContent = base + sep + text;
   }
 
   function cleanHash() {

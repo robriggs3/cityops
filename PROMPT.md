@@ -249,8 +249,7 @@ must be valid against schema v1 (below) with these rules:
     text non-empty and naming the specific dish, route, seat or add-on.
   - `tips`: array of short non-empty strings.
   - `source`: one line of provenance.
-  See the Intel quality rules above for when to fill it and when to leave
-  it out.
+  Include `intel` only where reviews support it; omit otherwise.
 - Every item's `section` matches one of the section ids you defined.
 - Every item has a unique `id` (a short slug, e.g. `"brasserie"`), a
   `name`, and a `links` array. Place items must have at least a `map`
@@ -355,6 +354,10 @@ Adds new items matching the traveler's interests to a city that already
 exists. Requires a Traveler interests block.
 
 <!-- RERUN:INTERESTS -->
+A delta is never a whole guide. Never re-list an item that already exists,
+never restate `city` or `dates`, and never emit `"status": "done"` or
+`"archived"`.
+
 Research this city for the traveler interests listed above and return ONLY
 new items that match them. The city, its dates and the traveler profile are
 given above; the items the guide already holds are listed below, by id.
@@ -414,6 +417,10 @@ Adds the `intel` block (verdicts, tips, source) to items the guide already
 holds. It changes nothing else about them.
 
 <!-- RERUN:INTEL -->
+A delta is never a whole guide. Never re-list an item that already exists,
+never restate `city` or `dates`, and never emit `"status": "done"` or
+`"archived"`.
+
 Research the items listed below, by id, and return review-verified intel for
 as many of them as you can support. Do not return new items, do not rewrite
 names, notes, prices, hours or links, and do not return anything for an id
