@@ -192,6 +192,7 @@ unusable links and missed real risks. Follow them exactly.
 or do once they are there. It is worth more than another paragraph of
 description, and it is worth nothing at all if it is invented. Rules:
 
+<!-- RULES:INTEL -->
 - **Restaurants and cafes:** name 2 to 4 specific dishes or drinks with a
   `must`, `good`, or `skip` verdict. Only include a dish that multiple
   reviewers name specifically. One person's favourite is not a verdict, and
@@ -208,6 +209,7 @@ description, and it is worth nothing at all if it is invented. Rules:
 - **Omit `intel` entirely rather than pad it.** An item with nothing
   review-verified to say gets no `intel` field at all. A thin, invented or
   generic intel block is worse than none: the traveler acts on these.
+<!-- /RULES:INTEL -->
 
 ## Output contract
 
@@ -217,6 +219,16 @@ must be valid against schema v1 (below) with these rules:
 
 - Top level `"schema": 1`.
 - `city.dates.from` and `city.dates.to` match the trip dates given above.
+- `sections` covers the eight sections above, in this order: `dinner`,
+  `breakfast`, `lunch`, `coffee`, `cowork`, `activities`, `services`,
+  `practical`. Use exactly these `id` values so the guide renders
+  correctly. Breakfast and lunch items never carry a `day` field; they
+  repeat daily. When a Traveler interests block is present, `interests` is
+  the ninth and last section, so the full order is `dinner`, `breakfast`,
+  `lunch`, `coffee`, `cowork`, `activities`, `services`, `practical`,
+  `interests`.
+
+<!-- CONTRACT:ITEM -->
 - Every item has `"place_id": null` and `"verified": null`. Those fields
   are filled by a later phase, never by this prompt.
 - `status` on every generated item is either `"plan"` or `"backup"` only.
@@ -231,14 +243,6 @@ must be valid against schema v1 (below) with these rules:
     otherwise not suited to an evening visit).
   - `"eve"`: evening-suited but not necessarily late (a dinner spot that
     closes at 22:00, for example).
-- `sections` covers the eight sections above, in this order: `dinner`,
-  `breakfast`, `lunch`, `coffee`, `cowork`, `activities`, `services`,
-  `practical`. Use exactly these `id` values so the guide renders
-  correctly. Breakfast and lunch items never carry a `day` field; they
-  repeat daily. When a Traveler interests block is present, `interests` is
-  the ninth and last section, so the full order is `dinner`, `breakfast`,
-  `lunch`, `coffee`, `cowork`, `activities`, `services`, `practical`,
-  `interests`.
 - `intel` is optional on any item. When present it is an object with any of
   `verdicts`, `tips`, and `source`, and nothing else:
   - `verdicts`: array of `{"tier": "must" | "good" | "skip", "text": "..."}`,
@@ -251,6 +255,7 @@ must be valid against schema v1 (below) with these rules:
 - Every item has a unique `id` (a short slug, e.g. `"brasserie"`), a
   `name`, and a `links` array. Place items must have at least a `map`
   link. Practical-section note items may have an empty array.
+<!-- /CONTRACT:ITEM -->
 
 ### Schema v1 shape reference
 
