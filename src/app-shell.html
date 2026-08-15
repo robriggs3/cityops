@@ -131,6 +131,42 @@
     }]
   };
 
+  var SEED_ID = 'example-city-2026-01-01';
+
+  function loadExampleCity() {
+    if (!has(store.cities, SEED_ID)) {
+      var res = CityOps.appStore.add(store, clone(SEED_CITY), CityOps.syncKit.EPOCH);
+      store = res.store;
+      saveStore(store);
+    }
+    activateCity(SEED_ID);
+  }
+
+  function renderEmptyState() {
+    var hdr = document.getElementById('hdr');
+    hdr.innerHTML = '';
+    hdr.appendChild(el('h1', null, 'CityOps'));
+    hdr.appendChild(el('div', 'sub', 'No cities yet'));
+    document.getElementById('toolbar').innerHTML = '';
+    var main = document.getElementById('main');
+    main.innerHTML = '';
+    var card = el('div', 'card');
+    card.appendChild(el('h3', null, 'Add your first city'));
+    card.appendChild(el('p', null, 'Start blank, paste generated city JSON, or load the example to see how a guide works.'));
+    var row = el('div', 'ctl-row');
+    var add = el('button', 'ctl to-done', '+ Add city');
+    add.type = 'button';
+    add.onclick = openAddModal;
+    var ex = el('button', 'ctl', 'Load example city');
+    ex.type = 'button';
+    ex.onclick = loadExampleCity;
+    row.appendChild(add); row.appendChild(ex);
+    card.appendChild(row);
+    main.appendChild(card);
+    document.getElementById('foot').textContent = 'cityops';
+    if (CityOps.onStateChange) CityOps.onStateChange();
+  }
+
   var LS = null;
   try { LS = (typeof localStorage !== 'undefined') ? localStorage : null; }
   catch (e) { LS = null; }
@@ -185,6 +221,16 @@
   // a fresh copy of that city's data. The engine reloads that city's own
   // cityops.<cityId>.v1 state, so progress per city is preserved untouched.
   function activateCity(id) {
+    if (!id || !store.cities[id]) {
+      // Empty store: render a minimal empty state instead of inventing a city.
+      store.active = null;
+      saveStore(store);
+      activeId = null;
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+      renderEmptyState();
+      return;
+    }
+    if (id !== SEED_ID) { try { if (LS) LS.setItem('cityops.app.hadcities', '1'); } catch (e) {} }
     store.active = id;
     saveStore(store);
     activeId = id;
@@ -257,6 +303,12 @@
     rm.type = 'button';
     rm.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); openRemoveModal(); };
     acts.appendChild(rm);
+    if (!has(store.cities, SEED_ID)) {
+      var exb = el('button', null, 'Load example');
+      exb.type = 'button';
+      exb.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); loadExampleCity(); };
+      acts.appendChild(exb);
+    }
     // Sync control: absent entirely when no project is configured, so an
     // unconfigured build shows no sign-in affordance it cannot honour.
     if (syncOn()) {
@@ -492,16 +544,13 @@
       // back for the rest of the session.
       removedIds[gone] = 1;
       delete stateStamp[gone];
-      if (!store.order.length) {
-        // Stamp EPOCH, not now: a pristine reseed must always lose the
-        // reconcile to any real server row (see the M2 client report).
-        var res = CityOps.appStore.add(store, clone(SEED_CITY), CityOps.syncKit.EPOCH);
-        store = res.store;
-        store.active = res.cityId;
-      }
+      // An explicit removal means the user owns this device's city list now:
+      // never auto-seed the example again here (Load example stays available).
+      try { if (LS) LS.setItem('cityops.app.hadcities', '1'); } catch (e) {}
       saveStore(store);
       wrap.remove();
-      activateCity(store.active);
+      if (store.order.length) { activateCity(store.active); }
+      else { activateCity(null); }
     };
     var cancel = el('button', 'ctl', 'Cancel');
     cancel.type = 'button';
@@ -948,6 +997,10 @@
       try { y = window.scrollY || window.pageYOffset || 0; } catch (e) {}
       CityOps.boot(clone(store.cities[activeId]));
       try { window.scrollTo(0, y); } catch (e2) {}
+    } else if (!activeId && store.order.length) {
+      // The device was showing the empty state and the pull just delivered
+      // cities: activate the first one.
+      activateCity(store.order[0]);
     }
     if (pulledNames.length) {
       showSyncNotice('Synced: ' + pulledNames.join(', ') + ' updated from your other device');
@@ -1216,9 +1269,13 @@
     readDevConfig();
     var authNotice = consumeAuthHash();
     store = loadStore();
-    if (!store.order.length) {
-      // Stamp EPOCH, not now: a pristine first-run seed must always lose the
-      // reconcile to any real server row (see the M2 client report).
+    // Seed the example ONLY on a genuine first run: no cities AND no stored
+    // session AND never had real cities on this device. A signed-in device
+    // with an empty store is mid-pull, not new, and must not invent a city
+    // that then syncs into the account (Rob's recurring-example bug).
+    var everHadCities = false;
+    try { everHadCities = !!(LS && LS.getItem('cityops.app.hadcities')); } catch (e) {}
+    if (!store.order.length && !loadSession() && !everHadCities) {
       var seeded = CityOps.appStore.add(store, clone(SEED_CITY), CityOps.syncKit.EPOCH);
       store = seeded.store;
       store.active = seeded.cityId;
