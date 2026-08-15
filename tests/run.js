@@ -950,6 +950,21 @@ test('buildCityPrompt never mutates its inputs and tolerates a bare template', (
   const out = C.promptKit.buildCityPrompt(bare, HEADER, { interests: ['live jazz'] });
   assert.ok(out.indexOf('## Traveler interests') < out.indexOf('## What I need'));
 });
+test('index.html embeds PROMPT.md verbatim, escaped and reversible; template.html carries none of it', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const root = path.join(__dirname, '..');
+  const idx = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const m = idx.match(/<script type="text\/plain" id="prompt-template">\n([\s\S]*?)\n<\/script>/);
+  assert.ok(m, 'prompt-template block missing or closed early');
+  assert.equal(m[1].indexOf('</script'), -1);   // a raw close tag would end the block
+  // Exactly the unescape the app performs when it reads the block.
+  const un = m[1].replace(/<\\\/script/g, '</script');
+  assert.equal(un, fs.readFileSync(path.join(root, 'PROMPT.md'), 'utf8'));
+  // Standalone guides are app-free: no prompt template, no builders.
+  const tpl = fs.readFileSync(path.join(root, 'template.html'), 'utf8');
+  assert.equal(tpl.indexOf('prompt-template'), -1);
+});
 test('syncKit.decide drives the profile reconcile the same way it drives cities', () => {
   // The app shell reconciles the profile with decide(local.updated, remote.updated_at).
   const local = '2026-08-12T10:00:00.000Z';

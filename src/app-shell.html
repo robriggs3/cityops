@@ -59,6 +59,24 @@
     border:1px solid var(--border-light); border-radius:8px; background:#fff; color:var(--text);}
   .modal .ctl[disabled]{opacity:.45; cursor:not-allowed; border-color:var(--border-light);}
   .modal .ctl[disabled]:hover{border-color:var(--border-light);}
+
+  /* Profile modal: chip lists reuse the pill vocabulary (rounded, bordered,
+     accent ink) at tag scale, so a chip reads as an editable tag. */
+  .chip-list{display:flex; gap:6px; flex-wrap:wrap; margin:6px 0 0;}
+  .chip-list:empty{margin:0;}
+  .chipx{display:inline-flex; align-items:center; gap:6px; font-size:.78rem; font-weight:600;
+    color:var(--accent-hover); background:#fff; border:1.5px solid var(--border-light);
+    border-radius:20px; padding:3px 6px 3px 11px;}
+  .chipx button{font:inherit; font-size:.9rem; line-height:1; font-weight:700; color:var(--text-3);
+    background:var(--bg-softer); border:none; border-radius:50%; width:17px; height:17px;
+    padding:0; cursor:pointer;}
+  .chipx button:hover{background:var(--accent-soft); color:var(--accent-hover);}
+  .chip-add{width:100%; font:inherit; font-size:.85rem; padding:6px 10px; margin-top:6px;
+    border:1px solid var(--border-light); border-radius:8px; background:#fff; color:var(--text);}
+  .modal textarea.notes{min-height:80px; font-family:inherit; font-size:.85rem;}
+  .modal .promptout{min-height:140px;}
+  .hdr-row{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;}
+  .hdr-row .date-field{flex:1 1 30%; min-width:96px;}
   @media (max-width: 430px){
     .hdr-add{top:17px; right:14px; padding:4px 9px; font-size:.7rem;}
   }
@@ -80,6 +98,8 @@
 </script>
 
 <!--CITYOPS_TEMPLATE-->
+
+<!--CITYOPS_PROMPT-->
 
 <script id="appshell">
 (function () {
@@ -179,6 +199,7 @@
 
   function has(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function trim(s) { return String(s === null || s === undefined ? '' : s).replace(/^\s+|\s+$/g, ''); }
 
   function loadStore() {
     var raw = null;
@@ -309,6 +330,10 @@
       exb.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); loadExampleCity(); };
       acts.appendChild(exb);
     }
+    var pf = el('button', null, 'Profile');
+    pf.type = 'button';
+    pf.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); openProfileModal(); };
+    acts.appendChild(pf);
     // Sync control: absent entirely when no project is configured, so an
     // unconfigured build shows no sign-in affordance it cannot honour.
     if (syncOn()) {
@@ -378,6 +403,109 @@
     h.appendChild(add);
   }
 
+  // ---- interest profile (app-only data; the engine owns its shape) ----
+  // A chip list: Enter adds, each chip's x removes. get() also returns whatever
+  // is still sitting unentered in the input, so a typed interest is never
+  // silently dropped by pressing Save instead of Enter.
+  function chipField(box, label, values, placeholder) {
+    box.appendChild(el('p', 'diff', label));
+    var items = values.slice();
+    var list = el('div', 'chip-list');
+    box.appendChild(list);
+    var inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'chip-add';
+    inp.placeholder = placeholder;
+    inp.setAttribute('aria-label', label);
+    box.appendChild(inp);
+
+    function draw() {
+      list.innerHTML = '';
+      items.forEach(function (v, i) {
+        var chip = el('span', 'chipx');
+        chip.appendChild(document.createTextNode(v));
+        var x = el('button', null, '×');
+        x.type = 'button';
+        x.setAttribute('aria-label', 'Remove ' + v);
+        x.onclick = function () { items.splice(i, 1); draw(); };
+        chip.appendChild(x);
+        list.appendChild(chip);
+      });
+    }
+    function add() {
+      var v = trim(inp.value);
+      inp.value = '';
+      if (!v) return;
+      items.push(v);
+      // normalize does the trimming, case-insensitive dedupe and the cap, so
+      // the chips on screen are exactly what a Save would store.
+      items = CityOps.profile.normalize({ interests: items }).interests;
+      draw();
+    }
+    inp.onkeydown = function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); add(); }
+    };
+    draw();
+    return { get: function () { return items.concat(trim(inp.value) ? [trim(inp.value)] : []); } };
+  }
+
+  function openProfileModal() {
+    var m = modalShell('Your interest profile');
+    m.box.appendChild(el('p', 'diff', 'What you seek out in a new city, and what you never want suggested. ' +
+      'Build my prompt hands this to your own AI so it finds places that match you. ' +
+      'Keep it short: 5 to 12 interests research better than 30.'));
+    var p = CityOps.profile.normalize(store.profile);
+    var interests = chipField(m.box, 'Interests, in priority order', p.interests, 'Add an interest, then press Enter');
+    var avoid = chipField(m.box, 'Avoid: never suggest these', p.avoid, 'Add something to avoid, then press Enter');
+    m.box.appendChild(el('p', 'diff', 'Notes: anything that changes what a good pick means (diet, mobility, budget, who is along).'));
+    var ta = document.createElement('textarea');
+    ta.className = 'notes';
+    ta.value = p.notes;
+    ta.setAttribute('aria-label', 'Profile notes');
+    m.box.appendChild(ta);
+    m.box.appendChild(el('p', 'diff', (session && session.access_token)
+      ? 'Saved to your account.'
+      : 'Saved in this browser. Sign in to sync (city menu) to carry your profile across devices.'));
+    var row = el('div', 'mrow');
+    var save = el('button', 'ctl to-done', 'Save');
+    save.type = 'button';
+    save.onclick = function () {
+      var next = CityOps.profile.normalize({
+        interests: interests.get(), avoid: avoid.get(), notes: ta.value
+      });
+      next.updated = new Date().toISOString();
+      store.profile = next;
+      saveStore(store);
+      schedulePush('profile');
+      m.close();
+      showSyncNotice('Profile saved.');
+    };
+    var cancel = el('button', 'ctl', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = m.close;
+    row.appendChild(save);
+    row.appendChild(cancel);
+    if (!has(store.cities, SEED_ID)) {
+      var ex = el('button', 'ctl', 'Load example city');
+      ex.type = 'button';
+      ex.onclick = function () { m.close(); loadExampleCity(); };
+      row.appendChild(ex);
+    }
+    m.box.appendChild(row);
+  }
+
+  // PROMPT.md, embedded by the assembler as a text/plain block so the prompt
+  // builders work offline. Same escaping contract as the guide template: the
+  // assembler writes `<\/script`, this reverses exactly one layer.
+  function promptTemplateText() {
+    var node = document.getElementById('prompt-template');
+    if (!node) return null;
+    var raw = node.textContent;
+    if (raw.charAt(0) === '\n') raw = raw.slice(1);
+    if (raw.charAt(raw.length - 1) === '\n') raw = raw.slice(0, -1);
+    return raw.replace(/<\\\/script/g, '<' + '/script');
+  }
+
   function openAddModal() {
     var host = document.getElementById('modal');
     host.innerHTML = '';
@@ -402,6 +530,20 @@
     drow.appendChild(el('span', 'diff', 'From')); drow.appendChild(bf);
     drow.appendChild(el('span', 'diff', 'To')); drow.appendChild(bt2);
     box.appendChild(drow);
+    // Optional header fields: they only exist to fill the prompt's Trip details
+    // block, so a blank city ignores them entirely.
+    function optField(ph) {
+      var i = document.createElement('input');
+      i.type = 'text'; i.className = 'date-field'; i.placeholder = ph;
+      i.setAttribute('aria-label', ph);
+      return i;
+    }
+    var hrow = el('div', 'hdr-row');
+    var bacc = optField('Accommodation');
+    var barr = optField('Arrival');
+    var bdep = optField('Departure');
+    hrow.appendChild(bacc); hrow.appendChild(barr); hrow.appendChild(bdep);
+    box.appendChild(hrow);
     var bmsg = el('div', 'diff', '');
     box.appendChild(bmsg);
     var brow2 = el('div', 'mrow');
@@ -409,6 +551,77 @@
     bcreate.type = 'button';
     box.appendChild(brow2);
     brow2.appendChild(bcreate);
+
+    // Build my prompt: PROMPT.md with this city's header and the interest
+    // profile filled in, copied out for the traveler's own AI. No network, no
+    // AI call from the app: the traveler pastes the JSON back into this modal.
+    var promptTa = null;
+    function showPromptFallback(text) {
+      if (!promptTa) {
+        promptTa = document.createElement('textarea');
+        promptTa.className = 'promptout';
+        promptTa.readOnly = true;
+        promptTa.setAttribute('aria-label', 'Generated prompt');
+        box.insertBefore(promptTa, bmsg);
+      }
+      promptTa.value = text;
+      bmsg.textContent = 'Could not reach the clipboard. The prompt is selected above: copy it, ' +
+        'paste it into Claude or ChatGPT, then paste the JSON it returns below.';
+      try { promptTa.focus(); promptTa.select(); } catch (e) {}
+    }
+    function buildPromptText() {
+      if (!trim(bn.value) || !bf.value || !bt2.value) {
+        bmsg.textContent = 'Fill city name and dates first';
+        return null;
+      }
+      var tpl = promptTemplateText();
+      if (!tpl) {
+        bmsg.textContent = 'This build has no prompt template embedded. Use PROMPT.md from the repo.';
+        return null;
+      }
+      return CityOps.promptKit.buildCityPrompt(tpl, {
+        name: trim(bn.value), country: trim(bc.value), from: bf.value, to: bt2.value,
+        accommodation: trim(bacc.value), arrival: trim(barr.value), departure: trim(bdep.value)
+      }, store.profile);
+    }
+    var bprompt = el('button', 'ctl', 'Build my prompt');
+    bprompt.type = 'button';
+    bprompt.onclick = function () {
+      var text = buildPromptText();
+      if (text === null) return;
+      var wrote = null;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) wrote = navigator.clipboard.writeText(text);
+      } catch (e) { wrote = null; }
+      if (wrote && typeof wrote.then === 'function') {
+        wrote.then(function () {
+          bmsg.textContent = 'Copied. Paste into Claude or ChatGPT, then paste the JSON it returns below.';
+        }, function () { showPromptFallback(text); });
+      } else {
+        showPromptFallback(text);
+      }
+    };
+    brow2.appendChild(bprompt);
+    var bdl = el('button', 'ctl', 'Download prompt.md');
+    bdl.type = 'button';
+    bdl.onclick = function () {
+      var text = buildPromptText();
+      if (text === null) return;
+      var blob = new Blob([text], { type: 'text/markdown' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'prompt.md';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      var freeUrl = a.href;
+      setTimeout(function () { URL.revokeObjectURL(freeUrl); }, 4000);
+      bmsg.textContent = 'Downloaded prompt.md. Paste it into Claude or ChatGPT, then paste the JSON it returns below.';
+    };
+    brow2.appendChild(bdl);
+    box.appendChild(el('p', 'diff', CityOps.profile.isEmpty(store.profile)
+      ? 'Build my prompt writes PROMPT.md with this header filled in. Add interests in Profile (city menu) and it will ask your AI for a matching ninth section too.'
+      : 'Build my prompt writes PROMPT.md with this header and your interest profile filled in.'));
 
     box.appendChild(el('p', 'diff', 'Or paste schema v1 city JSON (the output of PROMPT.md). ' + whereItGoes));
     var ta = document.createElement('textarea');
