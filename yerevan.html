@@ -4335,6 +4335,14 @@ var CityOps = (function () {
       dts.type = 'button';
       dts.onclick = openDatesModal;
       tb.appendChild(dts);
+      // App-only toolbar buttons whose LABEL must not ship inside standalone
+      // guides either. The re-run button is the case in point: it builds
+      // prompts out of PROMPT.md, which guide files do not carry at all. The
+      // shell appends those buttons here; guide files have no CityOpsApp, so
+      // nothing is added and no trace of them exists in template.html.
+      if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.toolbarExtras) {
+        window.CityOpsApp.toolbarExtras(tb);
+      }
       // App context only: standalone guide files have no CityOpsApp, so this
       // button never appears in them.
       if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.exportStandalone) {
