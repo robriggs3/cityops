@@ -115,6 +115,23 @@ in daily use on the road right now). Open one on a phone to see what the
 tool actually feels like: lifecycle buttons, day reordering, the calendar
 view, section collapse.
 
+## Profile, Enrich, and intel (Phase 3a)
+
+- **Profile** (city menu): your interests, things to avoid, and notes. Synced
+  to your account when signed in.
+- **Build my prompt** (Add city): assembles PROMPT.md with the city header
+  and your profile filled in, copies it to your clipboard. Paste into your
+  own AI, paste the JSON back. Zero cost by design: the app never calls an
+  AI itself.
+- **Enrich** (toolbar): for an existing city, builds two re-run prompts, an
+  interests delta (new items matching your profile) and an intel pass
+  (review-verified must / good / skip verdicts on dishes and specifics, plus
+  tips). Paste the result back and it merges without ever touching your
+  progress: existing items are never overwritten, done marks and reorders
+  survive by construction.
+- **Intel** renders on cards as tier badges and tips; the Yerevan example
+  ships with a real review-verified pass.
+
 ## Status
 
 Schema v1, MIT licensed, actively dogfooded on a live multi-city trip.
