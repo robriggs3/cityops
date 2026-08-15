@@ -794,6 +794,8 @@
   var stateStamp = {};         // cityId -> state.updated already seen (push trigger baseline)
   var pushQueueData = {};      // cityId -> pending data push
   var pushQueueState = {};     // cityId -> pending state push
+  var pushQueueProfile = false; // the profile is a single row, so a flag not a map
+  var profileTableMissing = false; // set once if the table is not there yet (SQL unapplied)
   var pushTimer = null;
   var refreshInFlight = null;
   var pullInFlight = false;
@@ -877,6 +879,7 @@
     stateStamp = {};
     pushQueueData = {};
     pushQueueState = {};
+    pushQueueProfile = false;
     if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
     if (msg) showSyncNotice(msg);
     renderPanel();
@@ -1045,12 +1048,46 @@
       .catch(function (e) { warn('push ' + kind + ' failed', e); });
   }
 
-  // 2s debounce per the spec, shared by both tables: a burst of taps produces
+  // The profile is one row per user, keyed by user_id alone, so it needs no
+  // city id and no buildRows: one payload, one stamp. A profile that was never
+  // edited on this device has a null stamp and is never pushed (that would
+  // overwrite a real profile on the server with this device's empty one).
+  function pushProfileNow() {
+    if (!syncOn() || !session || profileTableMissing) return;
+    var p = CityOps.profile.normalize(store.profile);
+    if (!p.updated) return;
+    api('/rest/v1/profile?on_conflict=user_id', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates,return=minimal'
+      },
+      body: JSON.stringify([{ data: p, updated_at: p.updated }])
+    }).then(function () { stampSync(); })
+      .catch(function (e) { noteProfileTable(e); warn('push profile failed', e); });
+  }
+
+  // The profile table is a Phase 3a addition: a build can be running against a
+  // project where the SQL has not been applied yet. PostgREST answers an
+  // unknown table with 404 (PGRST205). Warn once, mark it off, and let cities
+  // and state keep syncing exactly as before.
+  function noteProfileTable(e) {
+    if (profileTableMissing) return;
+    var msg = (e && e.message) || '';
+    if (msg.indexOf('404') === -1) return;
+    profileTableMissing = true;
+    warn('profile table not found; profile sync is off until the Phase 3a SQL is applied');
+  }
+
+  // 2s debounce per the spec, shared by every table: a burst of taps produces
   // one upsert. A failed flush is NOT retried on a timer; local stays newer
   // than the server, so the next pull's reconcile pushes it. Local is the queue.
   function schedulePush(kind, id) {
-    if (!syncOn() || !session || !id) return;
-    if (kind === 'state') pushQueueState[id] = 1; else pushQueueData[id] = 1;
+    if (!syncOn() || !session) return;
+    if (kind === 'profile') pushQueueProfile = true;
+    else if (!id) return;
+    else if (kind === 'state') pushQueueState[id] = 1;
+    else pushQueueData[id] = 1;
     if (pushTimer) clearTimeout(pushTimer);
     pushTimer = setTimeout(flushPush, 2000);
   }
@@ -1072,6 +1109,7 @@
     pushQueueState = {};
     pushNow('data', dataEntries);
     pushNow('state', stateEntries);
+    if (pushQueueProfile) { pushQueueProfile = false; pushProfileNow(); }
   }
 
   // Fires the debounced push immediately instead of waiting out the 2s timer:
@@ -1109,12 +1147,21 @@
     lastPullAt = now;
     return Promise.all([
       api('/rest/v1/cities?select=city_id,data,updated_at'),
-      api('/rest/v1/city_state?select=city_id,state,updated_at')
+      api('/rest/v1/city_state?select=city_id,state,updated_at'),
+      // The profile read is isolated: a missing table (the Phase 3a SQL not
+      // applied yet) must not fail the whole round and take cities down with
+      // it, so its rejection resolves to null and the reconcile skips it.
+      profileTableMissing ? Promise.resolve(null) :
+        api('/rest/v1/profile?select=data,updated_at').catch(function (e) {
+          noteProfileTable(e);
+          warn('profile pull failed', e);
+          return null;
+        })
     ]).then(function (res) {
       // A null half means "no usable token"; an empty table is []. Never treat
       // an unanswered read as an empty server, which would push everything up.
       if (!res || !Array.isArray(res[0]) || !Array.isArray(res[1])) return false;
-      applyPull(res[0], res[1]);
+      applyPull(res[0], res[1], res[2]);
       stampSync();
       return true;
     }).catch(function (e) {
@@ -1133,7 +1180,31 @@
     return stamps;
   }
 
-  function applyPull(cityRows, stateRows) {
+  // Third row kind, same newer-wins reconcile as cities and state, decided by
+  // syncKit.decide(local profile.updated, remote updated_at). Returns true when
+  // the remote profile was taken, so the caller can say so in the notice.
+  // Non-array rows mean "no usable answer": leave both sides alone.
+  function applyProfilePull(rows) {
+    if (!Array.isArray(rows)) return false;
+    var row = rows.length ? rows[0] : null;
+    var localP = CityOps.profile.normalize(store.profile);
+    var remoteIso = (row && typeof row.updated_at === 'string') ? row.updated_at : null;
+    var d = CityOps.syncKit.decide(localP.updated, remoteIso);
+    if (d === 'pull') {
+      if (!row || !row.data || typeof row.data !== 'object') return false;
+      var p = CityOps.profile.normalize(row.data);
+      p.updated = remoteIso || p.updated;   // keep the REMOTE stamp: this is not a local edit
+      store.profile = p;
+      saveStore(store);
+      return true;
+    }
+    // 'push' can only happen when this device has a stamp, so the never-edited
+    // profile (null stamp) is never sent; decide() returns pull or noop there.
+    if (d === 'push') pushProfileNow();
+    return false;
+  }
+
+  function applyPull(cityRows, stateRows, profileRows) {
     var remoteData = {}, remoteState = {};
     var remoteDataStamps = stampMap(cityRows, remoteData);
     var remoteStateStamps = stampMap(stateRows, remoteState);
@@ -1218,6 +1289,9 @@
     if (pulledNames.length) {
       showSyncNotice('Synced: ' + pulledNames.join(', ') + ' updated from your other device');
     }
+    if (applyProfilePull(profileRows)) {
+      showSyncNotice('Synced: profile updated from your other device');
+    }
   }
 
   // ---- auth actions ----
@@ -1268,6 +1342,7 @@
     stateStamp = {};
     pushQueueData = {};
     pushQueueState = {};
+    pushQueueProfile = false;
     if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
     // The last-sync record is meaningless once signed out (and stale once
     // signed back in as someone else), so it goes with the session.
