@@ -45,6 +45,40 @@ var CityOps = (function () {
         if (!secIds[it.section]) errors.push(ref + ' unknown section "' + it.section + '"');
         if (STATUSES.indexOf(it.status) === -1) errors.push(ref + ' bad status "' + it.status + '"');
         if (it.day && !/^\d{4}-\d{2}-\d{2}$/.test(it.day)) errors.push(ref + ' day must be YYYY-MM-DD');
+        if (it.intel !== undefined && it.intel !== null) {
+          if (typeof it.intel !== 'object' || Array.isArray(it.intel)) {
+            errors.push(ref + ' intel: must be an object');
+          } else {
+            if (it.intel.verdicts !== undefined) {
+              if (!Array.isArray(it.intel.verdicts)) {
+                errors.push(ref + ' intel: verdicts must be an array');
+              } else {
+                it.intel.verdicts.forEach(function (v, vi) {
+                  if (!v || typeof v !== 'object' || ['must', 'good', 'skip'].indexOf(v.tier) === -1) {
+                    errors.push(ref + ' intel: verdicts[' + vi + '] tier must be must|good|skip');
+                  }
+                  if (!v || typeof v.text !== 'string' || !v.text.trim()) {
+                    errors.push(ref + ' intel: verdicts[' + vi + '] needs non-empty text');
+                  }
+                });
+              }
+            }
+            if (it.intel.tips !== undefined) {
+              if (!Array.isArray(it.intel.tips)) {
+                errors.push(ref + ' intel: tips must be an array');
+              } else {
+                it.intel.tips.forEach(function (t, ti) {
+                  if (typeof t !== 'string' || !t.trim()) {
+                    errors.push(ref + ' intel: tips[' + ti + '] must be a non-empty string');
+                  }
+                });
+              }
+            }
+            if (it.intel.source !== undefined && typeof it.intel.source !== 'string') {
+              errors.push(ref + ' intel: source must be a string');
+            }
+          }
+        }
       });
     }
     return errors;
@@ -576,6 +610,57 @@ var CityOps = (function () {
     return n;
   }
 
+  function tierLabel(tier) {
+    return tier === 'must' ? 'Must' : (tier === 'skip' ? 'Skip' : 'Good');
+  }
+
+  function verdictRow(v) {
+    var p = el('p', 'verdict');
+    p.appendChild(el('span', 'tier tier-' + v.tier, tierLabel(v.tier)));
+    p.appendChild(document.createTextNode(v.text));
+    return p;
+  }
+
+  function intelBody(intel, verdictsOnly) {
+    var frag = document.createDocumentFragment();
+    (intel.verdicts || []).forEach(function (v) { frag.appendChild(verdictRow(v)); });
+    if (!verdictsOnly) {
+      if (intel.tips && intel.tips.length) {
+        var ul = el('ul', 'tips');
+        intel.tips.forEach(function (t) { ul.appendChild(el('li', null, t)); });
+        frag.appendChild(ul);
+      }
+      if (intel.source) frag.appendChild(el('p', 'intel-src', intel.source));
+    }
+    return frag;
+  }
+
+  // Full render (planner/calendar): inline when small, collapsed behind a
+  // <details> toggle once there is enough content to be worth hiding.
+  function intelStrip(intel) {
+    var verdicts = intel.verdicts || [];
+    var tips = intel.tips || [];
+    var total = verdicts.length + tips.length;
+    if (!total) return null;
+    if (total <= 2) {
+      var div = el('div', 'intel');
+      div.appendChild(intelBody(intel, false));
+      return div;
+    }
+    var det = el('details', 'intel');
+    det.appendChild(el('summary', null, 'Intel: ' + verdicts.length + ' verdicts, ' + tips.length + ' tips'));
+    det.appendChild(intelBody(intel, false));
+    return det;
+  }
+
+  // Share view: verdicts only, always inline, no tips/source/details.
+  function intelShareStrip(intel) {
+    if (!intel.verdicts || !intel.verdicts.length) return null;
+    var div = el('div', 'intel');
+    div.appendChild(intelBody(intel, true));
+    return div;
+  }
+
   function linkPill(l) {
     var a = document.createElement('a');
     a.href = l.href;
@@ -692,6 +777,10 @@ var CityOps = (function () {
       frag.appendChild(tp);
     }
     if (it.note) frag.appendChild(el('p', null, it.note));
+    if (it.intel) {
+      var strip = intelStrip(it.intel);
+      if (strip) frag.appendChild(strip);
+    }
     var row = el('div', 'row');
     if (it.hours) row.appendChild(el('span', 'hours' + (it.hours.class ? ' ' + it.hours.class : ''), it.hours.text));
     (it.links || []).forEach(function (l) { row.appendChild(linkPill(l)); });
@@ -976,6 +1065,10 @@ var CityOps = (function () {
           row.appendChild(el('span', 'hours' + (e.it.hours.class ? ' ' + e.it.hours.class : ''), e.it.hours.text));
           bd.appendChild(row);
         }
+        if (e.it.intel) {
+          var shareStrip = intelShareStrip(e.it.intel);
+          if (shareStrip) bd.appendChild(shareStrip);
+        }
         dc.appendChild(bd);
       });
       main.appendChild(dc);
@@ -993,6 +1086,10 @@ var CityOps = (function () {
         if (e.it.price) h3.appendChild(el('span', 'price', e.it.price.text));
         card.appendChild(h3);
         card.appendChild(el('p', 'when-line', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
+        if (e.it.intel) {
+          var undatedStrip = intelShareStrip(e.it.intel);
+          if (undatedStrip) card.appendChild(undatedStrip);
+        }
         main.appendChild(card);
       });
     }
