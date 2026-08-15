@@ -711,5 +711,81 @@ test('syncKit.sessionExpiringSoon guards the 60s window and every unreadable cas
   assert.equal(C.syncKit.sessionExpiringSoon(null, now), true);
 });
 
+// Task 1: intel schema validation + export round trip
+test('validate accepts a full intel block', () => {
+  const data = clone(GOOD);
+  data.items[0].intel = {
+    verdicts: [
+      { tier: 'must', text: 'Adjarian khachapuri, the boat with the egg' },
+      { tier: 'good', text: 'Pkhali plate to share' },
+      { tier: 'skip', text: 'The seafood platter: frozen, priced for tourists' }
+    ],
+    tips: [
+      'Go before 13:00 or after 15:00 to skip the queue',
+      'Cash only despite the sign; ATM two doors down'
+    ],
+    source: 'Aggregated from Google and TripAdvisor reviews, mid-2026'
+  };
+  assert.deepEqual(C.validate(data), []);
+});
+test('validate accepts an item with no intel at all', () => {
+  assert.deepEqual(C.validate(GOOD), []);
+});
+test('validate rejects a bad intel tier', () => {
+  const data = clone(GOOD);
+  data.items[0].intel = { verdicts: [{ tier: 'meh', text: 'Something' }] };
+  const errs = C.validate(data);
+  assert.ok(errs.some(e => /items\[0\] \(brasserie\) intel: verdicts\[0\] tier/.test(e)));
+});
+test('validate rejects an empty verdict text', () => {
+  const data = clone(GOOD);
+  data.items[0].intel = { verdicts: [{ tier: 'must', text: '  ' }] };
+  const errs = C.validate(data);
+  assert.ok(errs.some(e => /intel: verdicts\[0\] needs non-empty text/.test(e)));
+});
+test('validate rejects non-array verdicts and non-array tips', () => {
+  const data = clone(GOOD);
+  data.items[0].intel = { verdicts: 'must: khachapuri', tips: 'go early' };
+  const errs = C.validate(data);
+  assert.ok(errs.some(e => /intel: verdicts must be an array/.test(e)));
+  assert.ok(errs.some(e => /intel: tips must be an array/.test(e)));
+});
+test('validate rejects a non-empty-string tip and a non-string source', () => {
+  const data = clone(GOOD);
+  data.items[0].intel = { tips: ['', 'fine'], source: 42 };
+  const errs = C.validate(data);
+  assert.ok(errs.some(e => /intel: tips\[0\] must be a non-empty string/.test(e)));
+  assert.ok(errs.some(e => /intel: source must be a string/.test(e)));
+});
+test('validate rejects a non-object intel', () => {
+  const data = clone(GOOD);
+  data.items[0].intel = 'must: khachapuri';
+  let errs = C.validate(data);
+  assert.ok(errs.some(e => /items\[0\] \(brasserie\) intel: must be an object/.test(e)));
+  data.items[0].intel = ['must: khachapuri'];
+  errs = C.validate(data);
+  assert.ok(errs.some(e => /intel: must be an object/.test(e)));
+  data.items[0].intel = null;
+  errs = C.validate(data);
+  assert.deepEqual(errs, []); // null/undefined intel is treated as absent
+});
+test('buildExport round trip with intel present deep-equals', () => {
+  const data = clone(GOOD);
+  data.items[0].intel = {
+    verdicts: [
+      { tier: 'must', text: 'Adjarian khachapuri' },
+      { tier: 'skip', text: 'Seafood platter' }
+    ],
+    tips: ['Go before 13:00'],
+    source: 'Reviews, mid-2026'
+  };
+  assert.deepEqual(C.validate(data), []);
+  const st = C.emptyState();
+  const out = C.buildExport(data, st);
+  assert.deepEqual(out.items.find(i => i.id === 'brasserie').intel, data.items[0].intel);
+  const again = C.buildExport(C.parse(JSON.stringify(out)).data, C.emptyState());
+  assert.deepEqual(again, out);
+});
+
 console.log(pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);
