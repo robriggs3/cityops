@@ -1,141 +1,153 @@
 # CityOps
 
-## What this is
+**A living city guide you operate, not just read.**
 
-CityOps is a living city guide you operate, not just read. Each city is a
-single HTML file: paste research data in once, then use the guide day to
-day to plan, promote backups when a plan falls through, mark things done,
-and archive what you're not using. No app to install, no server, no
-account. One file per city that opens in any browser, works offline once
-loaded, and installs to a phone home screen like a native app.
+[![tests](https://github.com/robriggs3/cityops/actions/workflows/test.yml/badge.svg)](https://github.com/robriggs3/cityops/actions/workflows/test.yml)
+![zero dependencies](https://img.shields.io/badge/dependencies-0-2d7d34)
+![no build step](https://img.shields.io/badge/build%20step-none-2d7d34)
+[![license](https://img.shields.io/badge/license-MIT-2c5d8a)](LICENSE)
 
-It grew out of a hand-built Batumi guide that worked well in the field.
-This repo turns that into a reusable tool: any city becomes an operable
-guide from AI-researched data, and every guide reads and writes the same
-schema, so a future synced app can import any city's data losslessly.
+AI engines produce good city research in minutes, but the output is a wall
+of text you re-scroll all week while the real trip mutates around it:
+plans reorder, options die ("full tonight"), backups get promoted, and
+half the value is discovered on the ground. CityOps owns the layer between
+AI research and the actual week: a guide with a working memory.
 
-## Quick start
+**Live app:** [cityops.robriggs.com](https://cityops.robriggs.com) ·
+**Example guides:** [Yerevan](https://cityops.robriggs.com/yerevan.html)
+(currently being lived in) and
+[Batumi](https://cityops.robriggs.com/batumi.html) (the field-tested
+original) · **Deep dive:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
-1. Copy `template.html` to `<city>.html` (e.g. `yerevan.html`).
-2. Fill in the header of `PROMPT.md` with the city, dates, accommodation,
-   and traveler profile, then paste the whole prompt into Claude, ChatGPT,
-   or any capable AI engine. It returns a single JSON code block.
+| Planner | Review-verified intel | Calendar view |
+|---|---|---|
+| ![Planner at phone width: day cards with lifecycle controls](docs/media/planner.png) | ![A restaurant card with must/good/skip dish verdicts and tips](docs/media/intel.png) | ![All sections merged into one chronological day view](docs/media/calendar.png) |
+
+## What it does
+
+- **One file per city, or one app for all of them.** A guide is a single
+  self-contained HTML file: opens from a bookmark, works offline, installs
+  to a phone home screen. The hosted app wraps the same engine with a city
+  switcher, profiles, and cross-device sync, and can export any city back
+  to a standalone file: your data always has an exit.
+- **A lifecycle, not a list.** Every place is `plan`, `backup`, `done`, or
+  `archived`, with one-tap moves and undos. Days are chronological slots;
+  drag a day's content elsewhere and the dates stay put while the plan
+  reorders. Rename items, collapse sections, flip to a merged calendar
+  view; everything persists.
+- **AI-native, at zero marginal cost.** The app assembles complete
+  research prompts (city, dates, your interest profile, an output
+  contract) for your own Claude/ChatGPT session, then merges the returned
+  JSON with hard guarantees: existing items and your progress are never
+  overwritten. The app itself makes no AI calls and has no API bill.
+- **Review-verified intel.** Cards carry `must / good / skip` verdicts on
+  specific dishes and specifics-of-the-thing (which route, which seats,
+  which add-on), plus tips and a source line. The shipped Yerevan guide
+  includes a real pass: 25 items, 73 verdicts, built from per-dish review
+  data, which corrected the guide's own prose in four places.
+- **Local-first sync.** Optional magic-link login puts cities, progress,
+  and your profile behind your account with row-level security. Offline
+  and logged-out modes are fully functional; sync reconciles newest-wins
+  when you reconnect.
+
+## Quick start (no account, no install)
+
+1. Copy `template.html` to `<city>.html` (e.g. `lisbon.html`).
+2. Fill in the header of [`PROMPT.md`](PROMPT.md) with the city, dates,
+   accommodation, and traveler profile, then paste the whole prompt into
+   Claude, ChatGPT, or any capable AI engine. It returns a single JSON
+   code block.
 3. Get that JSON into the file, either way:
-   - Paste it directly into the `<script type="application/json"
-     id="city-data">` block in `<city>.html`, or
+   - Paste it into the `<script type="application/json" id="city-data">`
+     block in `<city>.html`, or
    - Save it as `cities/<city>.json` and run
-     `node tools/embed.js cities/<city>.json <city>.html`, which does the
-     same paste for you.
-4. Open `<city>.html` in a browser. That's the whole guide: no build
-   step, no server. It works offline once loaded and is phone-friendly,
-   so add it to your home screen for the trip.
+     `node tools/embed.js cities/<city>.json <city>.html`.
+4. Open the file. That's the whole guide: no build step, no server,
+   offline once loaded, phone-friendly.
+
+Or skip the file entirely: open the
+[app](https://cityops.robriggs.com), tap the city name, **+ Add city**,
+and either paste generated JSON or start a blank city from a name and
+dates. **Build my prompt** assembles step 2 for you, with your saved
+interest profile included.
 
 ## The workflow
 
-Each place in the guide has a lifecycle: `plan` (the current pick),
-`backup` (an alternative if the plan pick falls through), `done` (visited,
-recedes but stays visible), and `archived` (out of the way, recoverable).
-One-tap controls move items between these states, and every move is
-undoable.
+Each place has a lifecycle: `plan` (the current pick), `backup` (the
+alternative when plan A falls through), `done` (visited; recedes but
+stays visible as the trip record), and `archived` (out of the way,
+recoverable). One-tap controls move items between states; every move is
+undoable, and controls only render where the action is valid.
 
-Days with dated items render as day cards, and you can drag to reorder
-items within a day (keyboard reordering works too) if you want to change
-the order you'd try things.
+Days render as chronological slot cards, including empty days, so
+anything can be dragged or moved onto any date of the stay. **Share**
+flips to a clean read-only view (prints as a one-pager). **Export**
+downloads schema-valid JSON with your live changes baked in; the round
+trip back through paste is lossless by test. **Update data** and
+**Enrich** accept pasted JSON on the go: Update data replaces a city's
+research wholesale, Enrich merges a delta (new interest matches, or an
+intel pass) without touching anything you've done.
 
-The **Share** toggle switches to a read-only view: plan and done items
-only, grouped by day then section, backups and archived hidden, controls
-hidden. It's meant for showing someone else your plan, and it prints
-cleanly (`Cmd+P`) as a one-pager from that view.
+## Engineering notes, briefly
 
-**Export** downloads `<cityId>.cityops.json`: the canonical city data with
-your live status changes and day order baked in. This file is the CityOps
-app's import format: the future synced app is meant to read exactly this
-export, so exporting now is forward-compatible even though nothing
-consumes it yet. Round-tripping export back through the paste workflow is
-lossless.
+The short version of [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md):
 
-There's also an **Update data** box in the app for pasting corrected or
-updated JSON on the go. It validates the paste, shows what changed, and
-stores it as a local override rather than rewriting the file, so it flags
-itself as "data updated in-app, paste into the file to make permanent."
-The file on disk stays the source of truth.
+- ~2,000-line dependency-free engine + app shell, assembled into
+  committed artifacts by a one-command assembler; CI fails if artifacts
+  drift from source.
+- Canonical data and live state never mix, which makes re-imports, AI
+  deltas, and sync structurally unable to destroy user progress.
+- Sync is Supabase over raw `fetch` (no SDK): magic-link auth, epoch-ms
+  newer-wins reconcile, flush-on-hide, RLS-only security with anonymous
+  access revoked and verified.
+- The AI integration is a prompt contract: `PROMPT.md` doubles as
+  documentation and machine-readable source, sliced by landmark into
+  generated prompts; the merge path is validation-gated and
+  prototype-safe.
+- 107 tests on Node built-ins; the harness tests the exact bytes that
+  ship. Every feature landed through a written spec, plan, and
+  independent review (committed under `docs/superpowers/`), a workflow
+  run with AI agents doing implementation and adversarial review under
+  human product direction.
 
-## Schema reference
+## Schema
 
-Full schema and design rationale: `docs/superpowers/specs/2026-08-10-cityops-phase1-design.md`
-(section "Schema (v1)"). The generation prompt in `PROMPT.md` also carries
-a copy of the example as a shape reference for whatever AI engine
-generates a city's data.
+Schema v1 is the contract across standalone guides, the app, exports, and
+the generation prompt. The full reference lives in
+[PROMPT.md](PROMPT.md)'s output contract and the specs; the shape in one
+glance:
 
 ```json
 {
   "schema": 1,
-  "city": {
-    "name": "Batumi", "country": "GE",
-    "dates": {"from": "2026-08-08", "to": "2026-08-15"},
-    "accommodation": {"name": "Example Stay D2", "lat": 41.64, "lng": 41.61},
-    "currency": {"code": "GEL", "usd": 0.37},
-    "notes": ["Bolt works well", "~2.2km south of Old Town"]
-  },
-  "sections": [
-    {"id": "dinner", "label": "Dinner", "icon": "🍽️"}
-  ],
+  "city": {"name": "Yerevan", "country": "AM",
+           "dates": {"from": "2026-08-15", "to": "2026-08-22"}},
+  "sections": [{"id": "dinner", "label": "Dinner", "icon": "🍽️"}],
   "items": [{
-    "id": "brasserie",
-    "section": "dinner",
-    "status": "plan",
-    "day": "2026-08-13",
-    "when": "Old Town office day",
-    "name": "Brasserie 1900",
-    "price": {"text": "~80-120 GEL / $30-44"},
-    "note": "4.8 stars ... reserve.",
-    "hours": {"text": "12:00-23:00 daily", "class": "late"},
-    "tags": ["Book ahead"],
-    "links": [
-      {"kind": "map", "label": "Open in Maps", "href": "https://maps.google.com/?cid=..."},
-      {"kind": "web", "label": "brasserie1900.ge", "href": "https://brasserie1900.ge"},
-      {"kind": "tel", "label": "Book", "href": "tel:+995511222252"}
-    ],
-    "place_id": null,
-    "verified": null
+    "id": "buzand-cafe", "section": "dinner", "status": "plan",
+    "day": "2026-08-16", "name": "Buzand Cafe Restaurant",
+    "price": {"text": "~4,000-12,000 AMD / $11-33"},
+    "note": "4.8 stars across 442 reviews ...",
+    "hours": {"text": "10:00-23:00 daily", "class": "late"},
+    "links": [{"kind": "map", "label": "Open in Maps", "href": "https://maps.google.com/?cid=..."}],
+    "intel": {"verdicts": [{"tier": "must", "text": "The Italian side of the menu"}],
+              "tips": ["Ask for the outdoor patio"],
+              "source": "Yandex per-dish review data, Aug 2026"},
+    "place_id": null, "verified": null
   }]
 }
 ```
 
-`cities/batumi.json` is the reference dataset: 58 real items across six
-sections (dinner, coffee, cowork, activities, services, practical),
-extracted from the original Batumi guide. Read it alongside the schema
-example if you want to see the shape at full scale.
+## Roadmap
 
-## Live guides
+Built and shipped in phases, each gated on evidence from real use:
+single-file guides (phase 1), the multi-city app with sync and a custom
+domain (phase 2), profiles + intel + delta enrichment (phase 3a). Next:
+a bridge from the companion itinerary tracker (one tap scaffolds a city
+from a trip stop), server-side enrichment when usage justifies the cost,
+and Places-API verification. Full history in `docs/superpowers/`.
 
-The example guides run at https://cityops.robriggs.com/ : Batumi
-(the original field-tested city) and Yerevan (generated with PROMPT.md,
-in daily use on the road right now). Open one on a phone to see what the
-tool actually feels like: lifecycle buttons, day reordering, the calendar
-view, section collapse.
+## License
 
-## Profile, Enrich, and intel (Phase 3a)
-
-- **Profile** (city menu): your interests, things to avoid, and notes. Synced
-  to your account when signed in.
-- **Build my prompt** (Add city): assembles PROMPT.md with the city header
-  and your profile filled in, copies it to your clipboard. Paste into your
-  own AI, paste the JSON back. Zero cost by design: the app never calls an
-  AI itself.
-- **Enrich** (toolbar): for an existing city, builds two re-run prompts, an
-  interests delta (new items matching your profile) and an intel pass
-  (review-verified must / good / skip verdicts on dishes and specifics, plus
-  tips). Paste the result back and it merges without ever touching your
-  progress: existing items are never overwritten, done marks and reorders
-  survive by construction.
-- **Intel** renders on cards as tier badges and tips; the Yerevan example
-  ships with a real review-verified pass.
-
-## Status
-
-Schema v1, MIT licensed, actively dogfooded on a live multi-city trip.
-State (done marks, reorders, renames, preferences) saves per device via
-localStorage; a synced multi-device app that imports this same schema is
-the planned next phase. Issues and city files from other travelers are
-welcome.
+MIT. The example city data is real, field-checked research; treat prices
+and hours as snapshots of when they were verified.

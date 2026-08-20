@@ -1,0 +1,22 @@
+name: tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Assembled artifacts match src (drift guard)
+        run: node tools/assemble.js && git diff --exit-code
+      - name: Unit tests
+        run: node tests/run.js
+      - name: City datasets validate
+        run: |
+          node tests/validate-city.js cities/batumi.json
+          node tests/validate-city.js cities/yerevan.json
