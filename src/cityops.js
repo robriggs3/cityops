@@ -640,6 +640,17 @@ var CityOps = (function () {
     return store.order.length ? store.order[0] : null;
   }
 
+  // Feature 3: whether the bundled example city should be visible. Rule: it
+  // shows by default when there are no real (non-seed) cities yet; once a
+  // real city exists it hides everywhere unless the traveler's "Show example
+  // city" profile toggle is on. `ids` is the app store's order (or any list
+  // of city ids); `seedId` names the one id that counts as "the example", so
+  // this stays pure and app-shell decides what its seed id actually is.
+  function exampleCityVisible(ids, seedId, showExampleToggle) {
+    var hasReal = (Array.isArray(ids) ? ids : []).some(function (id) { return id !== seedId; });
+    return !hasReal || !!showExampleToggle;
+  }
+
   // ---- interest profile + prompt assembly (pure) ----
   // The profile is app-only user data (it syncs as a third row kind), but its
   // shape and the prompt string assembly live in the engine so both are unit
@@ -2059,15 +2070,21 @@ var CityOps = (function () {
     appStore: {
       normalize: normalizeAppStore, add: appAddCity,
       remove: appRemoveCity, keepBothName: keepBothName,
-      resolveStartCity: resolveStartCity, blankCity: blankCity
+      resolveStartCity: resolveStartCity, blankCity: blankCity,
+      exampleVisible: exampleCityVisible
     },
-    profile: { normalize: normalizeProfile, isEmpty: profileIsEmpty },
+    profile: {
+      normalize: normalizeProfile, isEmpty: profileIsEmpty,
+      FACTOR_LEVELS: FACTOR_LEVELS, defaultFactors: defaultFactors,
+      normalizeFactors: normalizeFactors
+    },
     promptKit: {
       buildCityPrompt: buildCityPrompt, INTERESTS_SECTION: INTERESTS_SECTION,
       COPY_LINE: PROMPT_COPY_LINE,
       buildInterestsDeltaPrompt: buildInterestsDeltaPrompt,
       buildIntelPassPrompt: buildIntelPassPrompt
     },
+    extractJsonBlock: extractJsonBlock, RETRY_INSTRUCTION: RETRY_INSTRUCTION,
     syncKit: {
       EPOCH: EPOCH_ISO, decide: decideSync, plan: planSync, buildRows: buildRows,
       parseAuthHash: parseAuthHash, sessionExpiringSoon: sessionExpiringSoon
