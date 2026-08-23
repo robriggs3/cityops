@@ -113,9 +113,20 @@ The short version of [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md):
 ## Schema
 
 Schema v1 is the contract across standalone guides, the app, exports, and
-the generation prompt. The full reference lives in
-[PROMPT.md](PROMPT.md)'s output contract and the specs; the shape in one
-glance:
+the generation prompt. Three forms, by audience:
+
+- **[schema/cityops.schema.json](schema/cityops.schema.json)**: formal JSON
+  Schema (draft 2020-12) for machine validation, including the Enrich delta
+  payload shape. Both shipped city datasets validate against it.
+- **Runtime validator**: `validate()` / `validateItem()` / `validateIntel()`
+  at the top of [src/cityops.js](src/cityops.js), the enforcement boundary
+  for every entry path (paste, delta merge, sync pull). Deliberately a
+  permissive subset of the JSON Schema; the schema file's description
+  documents exactly which constraints are advisory.
+- **[PROMPT.md](PROMPT.md)'s output contract**: the same rules phrased for
+  an AI engine generating data.
+
+The shape in one glance:
 
 ```json
 {
