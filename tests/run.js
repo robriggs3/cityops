@@ -1326,5 +1326,77 @@ test('the real PROMPT.md carries every landmark the builders slice', () => {
   assert.ok(intel.includes('- nord | coffee | Nord Specialty Coffee'));
 });
 
+// md ingestion: tools/city-input.js is what embed.js uses to accept either
+// cities/<city>.json or a .md handoff from an AI chat (chats often wrap the
+// same JSON in a fenced code block instead of returning raw .json).
+test('readCityInput: .md with a fenced json block extracts and validates', () => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const { readCityInput } = require('../tools/city-input');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cityops-test-'));
+  const mdPath = path.join(dir, 'batumi.md');
+  fs.writeFileSync(mdPath,
+    'Here is the guide:\n\n```json\n' + JSON.stringify(GOOD) + '\n```\n');
+  const res = readCityInput(mdPath);
+  assert.equal(res.data.city.name, 'Batumi');
+  assert.equal(res.mdSourcePath, mdPath);
+  assert.deepEqual(JSON.parse(res.json), GOOD);
+  fs.rmSync(dir, { recursive: true });
+});
+test('readCityInput: .md with no fenced block fails with a retry instruction', () => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const { readCityInput } = require('../tools/city-input');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cityops-test-'));
+  const mdPath = path.join(dir, 'batumi.md');
+  fs.writeFileSync(mdPath, '# Batumi guide\n\nSorry, ran out of room, ask me for the JSON separately.\n');
+  assert.throws(() => readCityInput(mdPath), /json code block/);
+  assert.throws(() => readCityInput(mdPath), /reply with the full city guide as a single/);
+  fs.rmSync(dir, { recursive: true });
+});
+test('readCityInput: plain .json is unchanged (no md extraction, no file written)', () => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const { readCityInput } = require('../tools/city-input');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cityops-test-'));
+  const jsonPath = path.join(dir, 'batumi.json');
+  fs.writeFileSync(jsonPath, JSON.stringify(GOOD));
+  const res = readCityInput(jsonPath);
+  assert.equal(res.mdSourcePath, null);
+  assert.deepEqual(res.data, GOOD);
+  assert.deepEqual(fs.readdirSync(dir), ['batumi.json']); // no extra file for a .json input
+  fs.rmSync(dir, { recursive: true });
+});
+test('readCityInput: schema violations fail with the same errors validate() reports', () => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const { readCityInput } = require('../tools/city-input');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cityops-test-'));
+  const mdPath = path.join(dir, 'batumi.md');
+  const bad = clone(GOOD);
+  bad.schema = 2;
+  fs.writeFileSync(mdPath, '```json\n' + JSON.stringify(bad) + '\n```\n');
+  assert.throws(() => readCityInput(mdPath), /schema must be 1/);
+  fs.rmSync(dir, { recursive: true });
+});
+test('writeCanonicalJson writes cities/<city>.json next to the .md source', () => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const { readCityInput, writeCanonicalJson } = require('../tools/city-input');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cityops-test-'));
+  const mdPath = path.join(dir, 'batumi.md');
+  fs.writeFileSync(mdPath, '```json\n' + JSON.stringify(GOOD) + '\n```\n');
+  const res = readCityInput(mdPath);
+  const written = writeCanonicalJson(res.mdSourcePath, res.json);
+  assert.equal(written, path.join(dir, 'batumi.json'));
+  assert.deepEqual(JSON.parse(fs.readFileSync(written, 'utf8')), GOOD);
+  fs.rmSync(dir, { recursive: true });
+});
+
 console.log(pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);

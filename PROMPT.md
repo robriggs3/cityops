@@ -213,9 +213,10 @@ description, and it is worth nothing at all if it is invented. Rules:
 
 ## Output contract
 
-Respond with **only a JSON code block**. No prose before or after it, no
-explanation, no markdown headers, nothing outside the code block. The JSON
-must be valid against schema v1 (below) with these rules:
+Respond with **a single ```json fenced code block, and nothing else**. No
+prose before or after it, no explanation, no markdown headers, no second code
+block, nothing outside the fence. The JSON must be valid against schema v1
+(below) with these rules:
 
 - Top level `"schema": 1`.
 - `city.dates.from` and `city.dates.to` match the trip dates given above.
