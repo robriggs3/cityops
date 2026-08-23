@@ -887,6 +887,27 @@ test('profile.normalize carries factors through and profile.isEmpty counts them'
   assert.equal(C.profile.isEmpty({ factors: [] }), true);
 });
 
+// ---- Phase 2, Feature 2: shared JSON-fence extraction ----
+test('extractJsonBlock finds a ```json fence and returns its trimmed, parseable body', () => {
+  const md = 'Here is the guide:\n\n```json\n' + JSON.stringify(GOOD) + '\n```\n';
+  assert.deepEqual(JSON.parse(C.extractJsonBlock(md)), GOOD);
+});
+test('extractJsonBlock accepts a bare fence with no json language tag', () => {
+  const md = '```\n' + JSON.stringify(GOOD) + '\n```\n';
+  assert.deepEqual(JSON.parse(C.extractJsonBlock(md)), GOOD);
+});
+test('extractJsonBlock skips a non-JSON fence and finds a later one that parses', () => {
+  const md = '```bash\nnpm install\n```\n\n```json\n' + JSON.stringify(GOOD) + '\n```\n';
+  assert.deepEqual(JSON.parse(C.extractJsonBlock(md)), GOOD);
+});
+test('extractJsonBlock returns null when nothing in the text parses as JSON', () => {
+  assert.equal(C.extractJsonBlock('Sorry, ran out of room, ask me for the JSON separately.'), null);
+  assert.equal(C.extractJsonBlock(''), null);
+});
+test('RETRY_INSTRUCTION is the shared re-ask message the CLI and the app both show', () => {
+  assert.ok(/reply with the full city guide as a single/.test(C.RETRY_INSTRUCTION));
+});
+
 test('promptKit.INTERESTS_SECTION is the ninth section descriptor', () => {
   assert.deepEqual(C.promptKit.INTERESTS_SECTION, { id: 'interests', label: 'My interests', icon: '⭐' });
 });
@@ -1024,6 +1045,15 @@ test('buildCityPrompt with only planning factors still inserts the Traveler inte
     factors: [{ label: 'Safety', level: 'blocker' }]
   });
   assert.ok(out.includes('## Traveler interests'));
+});
+test('buildCityPrompt fills the trip-specific bracket paragraph from header.notes', () => {
+  const out = C.promptKit.buildCityPrompt(FAKE_PROMPT, { name: 'Tirana', notes: 'Vegetarian, traveling with a toddler.' }, null);
+  assert.ok(out.includes('Vegetarian, traveling with a toddler.'));
+  assert.equal(out.indexOf('[Add anything trip-specific here'), -1);
+});
+test('buildCityPrompt leaves the trip-specific bracket alone when notes is empty', () => {
+  const out = C.promptKit.buildCityPrompt(FAKE_PROMPT, { name: 'Tirana' }, null);
+  assert.ok(out.includes('[Add anything trip-specific here.]'));
 });
 
 test('index.html embeds PROMPT.md verbatim, escaped and reversible; template.html carries none of it', () => {
