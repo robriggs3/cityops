@@ -908,6 +908,19 @@ test('RETRY_INSTRUCTION is the shared re-ask message the CLI and the app both sh
   assert.ok(/reply with the full city guide as a single/.test(C.RETRY_INSTRUCTION));
 });
 
+// ---- Phase 2, Feature 3: example-city visibility ----
+test('appStore.exampleVisible shows the example when there are no real cities yet', () => {
+  assert.equal(C.appStore.exampleVisible([], 'example-seed', false), true);
+  assert.equal(C.appStore.exampleVisible(['example-seed'], 'example-seed', false), true);
+});
+test('appStore.exampleVisible hides the example once a real city exists, unless the toggle is on', () => {
+  assert.equal(C.appStore.exampleVisible(['example-seed', 'batumi-2026-08-08'], 'example-seed', false), false);
+  assert.equal(C.appStore.exampleVisible(['example-seed', 'batumi-2026-08-08'], 'example-seed', true), true);
+});
+test('appStore.exampleVisible treats a missing/undefined id list as no real cities', () => {
+  assert.equal(C.appStore.exampleVisible(undefined, 'example-seed', false), true);
+});
+
 test('promptKit.INTERESTS_SECTION is the ninth section descriptor', () => {
   assert.deepEqual(C.promptKit.INTERESTS_SECTION, { id: 'interests', label: 'My interests', icon: '⭐' });
 });

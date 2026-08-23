@@ -270,6 +270,21 @@
   .modal .promptout{min-height:140px;}
   .hdr-row{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;}
   .hdr-row .date-field{flex:1 1 30%; min-width:96px;}
+
+  /* Planning-factor rows (Phase 2): label left, level select right, remove
+     button last. Stacks are already mobile-first (narrow rows, no fixed
+     widths), so no extra @media rule is needed for phones. */
+  .factor-list{margin-top:6px;}
+  .factor-row{display:flex; align-items:center; gap:8px; padding:6px 0;
+    border-bottom:1px solid var(--border-light);}
+  .factor-row:last-child{border-bottom:none;}
+  .factor-label{flex:1 1 auto; font-size:.85rem; font-weight:600; color:var(--text);}
+  .factor-row select.factor-level{flex:0 0 auto; font-size:.78rem; padding:5px 6px;}
+  .factor-row button{font:inherit; font-size:.9rem; line-height:1; font-weight:700; color:var(--text-3);
+    background:var(--bg-softer); border:none; border-radius:50%; width:22px; height:22px;
+    padding:0; cursor:pointer; flex:0 0 auto;}
+  .factor-row button:hover{background:var(--accent-soft); color:var(--accent-hover);}
+  .key-field{flex:1 1 100%; min-width:0;}
   @media (max-width: 430px){
     .hdr-add{top:17px; right:14px; padding:4px 9px; font-size:.7rem;}
   }
@@ -929,6 +944,17 @@ var CityOps = (function () {
     return store.order.length ? store.order[0] : null;
   }
 
+  // Feature 3: whether the bundled example city should be visible. Rule: it
+  // shows by default when there are no real (non-seed) cities yet; once a
+  // real city exists it hides everywhere unless the traveler's "Show example
+  // city" profile toggle is on. `ids` is the app store's order (or any list
+  // of city ids); `seedId` names the one id that counts as "the example", so
+  // this stays pure and app-shell decides what its seed id actually is.
+  function exampleCityVisible(ids, seedId, showExampleToggle) {
+    var hasReal = (Array.isArray(ids) ? ids : []).some(function (id) { return id !== seedId; });
+    return !hasReal || !!showExampleToggle;
+  }
+
   // ---- interest profile + prompt assembly (pure) ----
   // The profile is app-only user data (it syncs as a third row kind), but its
   // shape and the prompt string assembly live in the engine so both are unit
@@ -940,6 +966,59 @@ var CityOps = (function () {
 
   function trimStr(v) {
     return (typeof v === 'string') ? v.replace(/^\s+|\s+$/g, '') : '';
+  }
+
+  // ---- planning factors (Phase 2) ----
+  // A factor is a named travel dimension (walkability, nightlife, ...) with an
+  // importance level on a fixed five-point scale. Seeded factors and
+  // user-added custom ones share the same shape; nothing here distinguishes
+  // them at read time (the `custom` flag is informational only, for the UI to
+  // label "your own" entries, never checked by validation or the prompt).
+  var FACTOR_LEVELS = ['blocker', 'very important', 'medium', 'low', 'not important'];
+
+  // Seeded on first use of the profile editor (app-shell decides "first use";
+  // the engine just describes what a sensible starting set looks like). Level
+  // defaults to 'medium' so a traveler who never touches a seeded factor is
+  // not silently telling the AI it's a blocker or a non-issue.
+  var DEFAULT_FACTOR_LABELS = [
+    'Food scene', 'Walkability', 'Safety', 'Work-friendly cafes',
+    'Nature access', 'Nightlife', 'Transit quality'
+  ];
+
+  // A fresh array of fresh objects every call: callers mutate factor objects
+  // in place (editing a level), so handing out one shared array would let one
+  // user's edit corrupt every future "first open" default.
+  function defaultFactors() {
+    return DEFAULT_FACTOR_LABELS.map(function (label) {
+      return { label: label, level: 'medium', custom: false };
+    });
+  }
+
+  // Trims, drops anything without a real label or a level on the fixed scale,
+  // dedupes by label (case-insensitive, first spelling wins, same rule as
+  // normalizeProfileList), assigns a slug id (deduped against itself), and
+  // caps the list. A dropped/invalid entry is simply absent, not corrected:
+  // this is normalize-on-read, not a validator with error messages.
+  function normalizeFactors(v) {
+    var out = [];
+    var seenLabel = {};
+    var seenId = {};
+    (Array.isArray(v) ? v : []).forEach(function (f) {
+      if (!f || typeof f !== 'object') return;
+      var label = trimStr(f.label);
+      if (!label) return;
+      var key = label.toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(seenLabel, key)) return;
+      if (FACTOR_LEVELS.indexOf(f.level) === -1) return;
+      if (out.length >= PROFILE_CAP) return;
+      seenLabel[key] = 1;
+      var id = slug(label) || 'factor';
+      var base = id, n = 2;
+      while (Object.prototype.hasOwnProperty.call(seenId, id)) { id = base + '-' + n; n++; }
+      seenId[id] = 1;
+      out.push({ id: id, label: label, level: f.level, custom: !!f.custom });
+    });
+    return out;
   }
 
   // Trims, drops empties, dedupes case-insensitively keeping the FIRST spelling
@@ -965,15 +1044,22 @@ var CityOps = (function () {
       schema: 1,
       interests: normalizeProfileList(src.interests),
       avoid: normalizeProfileList(src.avoid),
+      factors: normalizeFactors(src.factors),
       notes: trimStr(src.notes).slice(0, PROFILE_NOTES_CAP),
+      // Feature 3 (example-city visibility): explicit user override, off by
+      // default. Lives on the profile so it persists and syncs the same way
+      // everything else here does; the app shell is the only reader.
+      showExample: src.showExample === true,
       updated: (typeof src.updated === 'string' && src.updated) ? src.updated : null
     };
   }
 
   // Empty means "nothing for the AI to work with": the stamp does not count.
+  // showExample is a display preference, not research input, so it never
+  // counts toward "empty" either.
   function profileIsEmpty(p) {
     var n = normalizeProfile(p);
-    return !n.interests.length && !n.avoid.length && !n.notes;
+    return !n.interests.length && !n.avoid.length && !n.notes && !n.factors.length;
   }
 
   var INTERESTS_SECTION = { id: 'interests', label: 'My interests', icon: '⭐' };
@@ -1014,6 +1100,35 @@ var CityOps = (function () {
     });
   }
 
+  // Planning-factor lines for the Traveler interests block. `blocker` factors
+  // read as hard exclusions (the AI must not offer a weak pick on that
+  // dimension); the rest read as weighted preferences, strongest first.
+  // 'not important' factors are left out entirely: the traveler said this
+  // dimension does not matter, and a "no preference" line would only be
+  // noise the AI has to read past.
+  var FACTOR_WEIGHT_ORDER = ['very important', 'medium', 'low'];
+
+  function factorsBlockLines(factors) {
+    var b = [];
+    var blockers = factors.filter(function (f) { return f.level === 'blocker'; });
+    var weighted = FACTOR_WEIGHT_ORDER.reduce(function (acc, level) {
+      return acc.concat(factors.filter(function (f) { return f.level === level; }));
+    }, []);
+    if (blockers.length) {
+      b.push('Hard exclusions: treat these as non-negotiable. If a pick is ' +
+        'weak on one of these, do not suggest it at all, even as a backup:', '');
+      blockers.forEach(function (f) { b.push('- ' + f.label); });
+      b.push('');
+    }
+    if (weighted.length) {
+      b.push('Weighted preferences, strongest first (favor picks that score ' +
+        'well here over ones that do not, but these are not disqualifying):', '');
+      weighted.forEach(function (f) { b.push('- ' + f.label + ' (' + f.level + ')'); });
+      b.push('');
+    }
+    return b;
+  }
+
   // `lead` is the one instruction line that only makes sense in a whole-guide
   // prompt (where the Interests research section is part of the file). The
   // delta builder shares this formatter and passes no lead, because its own
@@ -1031,6 +1146,7 @@ var CityOps = (function () {
       p.avoid.forEach(function (x) { b.push('- ' + x); });
       b.push('');
     }
+    if (p.factors && p.factors.length) b = b.concat(factorsBlockLines(p.factors));
     if (p.notes) b.push('Notes: ' + p.notes, '');
     return b;
   }
@@ -1060,9 +1176,28 @@ var CityOps = (function () {
     return lines.slice(0, at).concat(block, lines.slice(at));
   }
 
+  // The trip-specific paragraph is a bracket span that wraps across several
+  // lines in PROMPT.md ("[Add anything trip-specific here: ... this time.]"),
+  // so it cannot be filled line-by-line like HEADER_BULLETS: this operates on
+  // the whole joined text and replaces from the opening marker through the
+  // next "]". An empty note leaves the placeholder in place, same convention
+  // as every other optional header field.
+  var TRIP_NOTES_MARK = '[Add anything trip-specific here';
+
+  function fillTripNotes(text, notes) {
+    var n = trimStr(notes);
+    if (!n) return text;
+    var start = text.indexOf(TRIP_NOTES_MARK);
+    if (start === -1) return text;
+    var end = text.indexOf(']', start);
+    if (end === -1) return text;
+    return text.slice(0, start) + n + text.slice(end + 1);
+  }
+
   // Pure string assembly: fills PROMPT.md's Trip details bullets from `header`
-  // ({name, country, from, to, accommodation, arrival, departure}, all optional
-  // strings), drops the "copy this file" instruction line, and inserts the
+  // ({name, country, from, to, accommodation, arrival, departure, notes}, all
+  // optional strings), drops the "copy this file" instruction line, fills the
+  // trip-specific bracket paragraph from header.notes, and inserts the
   // Traveler interests block when the profile has anything in it.
   function buildCityPrompt(templateText, header, profile) {
     var text = (templateText === null || templateText === undefined) ? '' : String(templateText);
@@ -1087,6 +1222,8 @@ var CityOps = (function () {
       }
       out.push(line);
     }
+    var joined = fillTripNotes(out.join('\n'), header && header.notes);
+    out = joined.split('\n');
     var p = normalizeProfile(profile);
     if (!profileIsEmpty(p)) {
       out = insertInterestsBlock(out, interestsBlockLines(p, INTERESTS_LEAD));
@@ -1204,6 +1341,46 @@ var CityOps = (function () {
       'correct answer, a complete one of invented intel is not.', '');
     return out.join('\n');
   }
+
+  // ---- AI response parsing (pure) ----
+  // Ported from tools/city-input.js so the CLI's .md-ingest path and the
+  // in-app "generate with Claude" path (Phase 2) share one rule for finding
+  // the city JSON in a chat response, rather than keeping two copies that can
+  // drift. tools/city-input.js now calls this via the same loadCityOps()
+  // harness it already used for parse()/validate().
+  //
+  // Matches a markdown fence: an opening line of ``` plus an optional
+  // language tag and nothing else, then the body, then a closing line of
+  // ``` and nothing else. Both delimiters are anchored to their own line
+  // (multiline ^/$) so a closing ``` is never confused with the next fence's
+  // OPENING ``` when a response contains more than one fenced block (e.g. a
+  // ```bash setup snippet before the ```json guide): a naive "``` ... ```"
+  // regex with no line anchor matches leftmost-first and would swallow the
+  // second fence's own opening marker as if it were the first fence's close.
+  var FENCE_RE = /^```[ \t]*(\w*)[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*$/gm;
+
+  // Returns the trimmed text of the first fenced block that parses as JSON,
+  // or null if the text has no fenced block that does. Never throws: an
+  // unparseable candidate fence is skipped, not reported, since a later fence
+  // (or none at all) is just as valid an outcome.
+  function extractJsonBlock(md) {
+    FENCE_RE.lastIndex = 0;
+    var m;
+    var text = String(md === null || md === undefined ? '' : md);
+    while ((m = FENCE_RE.exec(text)) !== null) {
+      var body = m[2].replace(/^\s+|\s+$/g, '');
+      try { JSON.parse(body); return body; }
+      catch (e) { /* not this fence (e.g. a ```bash block before the JSON one) */ }
+    }
+    return null;
+  }
+
+  // Shared wording for "the response had no parseable JSON block": the CLI
+  // shows it verbatim, the app shows it verbatim too (with its own Retry
+  // button alongside, since the app can re-ask automatically).
+  var RETRY_INSTRUCTION =
+    'Ask the chat to reply again with: "reply with the full city guide as a ' +
+    'single ```json code block and nothing else after it."';
 
   // ---- sync helpers (pure) ----
   // Every network call, session store and piece of sync UI lives in the app
@@ -2197,15 +2374,21 @@ var CityOps = (function () {
     appStore: {
       normalize: normalizeAppStore, add: appAddCity,
       remove: appRemoveCity, keepBothName: keepBothName,
-      resolveStartCity: resolveStartCity, blankCity: blankCity
+      resolveStartCity: resolveStartCity, blankCity: blankCity,
+      exampleVisible: exampleCityVisible
     },
-    profile: { normalize: normalizeProfile, isEmpty: profileIsEmpty },
+    profile: {
+      normalize: normalizeProfile, isEmpty: profileIsEmpty,
+      FACTOR_LEVELS: FACTOR_LEVELS, defaultFactors: defaultFactors,
+      normalizeFactors: normalizeFactors
+    },
     promptKit: {
       buildCityPrompt: buildCityPrompt, INTERESTS_SECTION: INTERESTS_SECTION,
       COPY_LINE: PROMPT_COPY_LINE,
       buildInterestsDeltaPrompt: buildInterestsDeltaPrompt,
       buildIntelPassPrompt: buildIntelPassPrompt
     },
+    extractJsonBlock: extractJsonBlock, RETRY_INSTRUCTION: RETRY_INSTRUCTION,
     syncKit: {
       EPOCH: EPOCH_ISO, decide: decideSync, plan: planSync, buildRows: buildRows,
       parseAuthHash: parseAuthHash, sessionExpiringSoon: sessionExpiringSoon
@@ -3086,6 +3269,17 @@ var CityOps = (function () {
     return store.order.length ? store.order[0] : null;
   }
 
+  // Feature 3: whether the bundled example city should be visible. Rule: it
+  // shows by default when there are no real (non-seed) cities yet; once a
+  // real city exists it hides everywhere unless the traveler's "Show example
+  // city" profile toggle is on. `ids` is the app store's order (or any list
+  // of city ids); `seedId` names the one id that counts as "the example", so
+  // this stays pure and app-shell decides what its seed id actually is.
+  function exampleCityVisible(ids, seedId, showExampleToggle) {
+    var hasReal = (Array.isArray(ids) ? ids : []).some(function (id) { return id !== seedId; });
+    return !hasReal || !!showExampleToggle;
+  }
+
   // ---- interest profile + prompt assembly (pure) ----
   // The profile is app-only user data (it syncs as a third row kind), but its
   // shape and the prompt string assembly live in the engine so both are unit
@@ -3097,6 +3291,59 @@ var CityOps = (function () {
 
   function trimStr(v) {
     return (typeof v === 'string') ? v.replace(/^\s+|\s+$/g, '') : '';
+  }
+
+  // ---- planning factors (Phase 2) ----
+  // A factor is a named travel dimension (walkability, nightlife, ...) with an
+  // importance level on a fixed five-point scale. Seeded factors and
+  // user-added custom ones share the same shape; nothing here distinguishes
+  // them at read time (the `custom` flag is informational only, for the UI to
+  // label "your own" entries, never checked by validation or the prompt).
+  var FACTOR_LEVELS = ['blocker', 'very important', 'medium', 'low', 'not important'];
+
+  // Seeded on first use of the profile editor (app-shell decides "first use";
+  // the engine just describes what a sensible starting set looks like). Level
+  // defaults to 'medium' so a traveler who never touches a seeded factor is
+  // not silently telling the AI it's a blocker or a non-issue.
+  var DEFAULT_FACTOR_LABELS = [
+    'Food scene', 'Walkability', 'Safety', 'Work-friendly cafes',
+    'Nature access', 'Nightlife', 'Transit quality'
+  ];
+
+  // A fresh array of fresh objects every call: callers mutate factor objects
+  // in place (editing a level), so handing out one shared array would let one
+  // user's edit corrupt every future "first open" default.
+  function defaultFactors() {
+    return DEFAULT_FACTOR_LABELS.map(function (label) {
+      return { label: label, level: 'medium', custom: false };
+    });
+  }
+
+  // Trims, drops anything without a real label or a level on the fixed scale,
+  // dedupes by label (case-insensitive, first spelling wins, same rule as
+  // normalizeProfileList), assigns a slug id (deduped against itself), and
+  // caps the list. A dropped/invalid entry is simply absent, not corrected:
+  // this is normalize-on-read, not a validator with error messages.
+  function normalizeFactors(v) {
+    var out = [];
+    var seenLabel = {};
+    var seenId = {};
+    (Array.isArray(v) ? v : []).forEach(function (f) {
+      if (!f || typeof f !== 'object') return;
+      var label = trimStr(f.label);
+      if (!label) return;
+      var key = label.toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(seenLabel, key)) return;
+      if (FACTOR_LEVELS.indexOf(f.level) === -1) return;
+      if (out.length >= PROFILE_CAP) return;
+      seenLabel[key] = 1;
+      var id = slug(label) || 'factor';
+      var base = id, n = 2;
+      while (Object.prototype.hasOwnProperty.call(seenId, id)) { id = base + '-' + n; n++; }
+      seenId[id] = 1;
+      out.push({ id: id, label: label, level: f.level, custom: !!f.custom });
+    });
+    return out;
   }
 
   // Trims, drops empties, dedupes case-insensitively keeping the FIRST spelling
@@ -3122,15 +3369,22 @@ var CityOps = (function () {
       schema: 1,
       interests: normalizeProfileList(src.interests),
       avoid: normalizeProfileList(src.avoid),
+      factors: normalizeFactors(src.factors),
       notes: trimStr(src.notes).slice(0, PROFILE_NOTES_CAP),
+      // Feature 3 (example-city visibility): explicit user override, off by
+      // default. Lives on the profile so it persists and syncs the same way
+      // everything else here does; the app shell is the only reader.
+      showExample: src.showExample === true,
       updated: (typeof src.updated === 'string' && src.updated) ? src.updated : null
     };
   }
 
   // Empty means "nothing for the AI to work with": the stamp does not count.
+  // showExample is a display preference, not research input, so it never
+  // counts toward "empty" either.
   function profileIsEmpty(p) {
     var n = normalizeProfile(p);
-    return !n.interests.length && !n.avoid.length && !n.notes;
+    return !n.interests.length && !n.avoid.length && !n.notes && !n.factors.length;
   }
 
   var INTERESTS_SECTION = { id: 'interests', label: 'My interests', icon: '⭐' };
@@ -3171,6 +3425,35 @@ var CityOps = (function () {
     });
   }
 
+  // Planning-factor lines for the Traveler interests block. `blocker` factors
+  // read as hard exclusions (the AI must not offer a weak pick on that
+  // dimension); the rest read as weighted preferences, strongest first.
+  // 'not important' factors are left out entirely: the traveler said this
+  // dimension does not matter, and a "no preference" line would only be
+  // noise the AI has to read past.
+  var FACTOR_WEIGHT_ORDER = ['very important', 'medium', 'low'];
+
+  function factorsBlockLines(factors) {
+    var b = [];
+    var blockers = factors.filter(function (f) { return f.level === 'blocker'; });
+    var weighted = FACTOR_WEIGHT_ORDER.reduce(function (acc, level) {
+      return acc.concat(factors.filter(function (f) { return f.level === level; }));
+    }, []);
+    if (blockers.length) {
+      b.push('Hard exclusions: treat these as non-negotiable. If a pick is ' +
+        'weak on one of these, do not suggest it at all, even as a backup:', '');
+      blockers.forEach(function (f) { b.push('- ' + f.label); });
+      b.push('');
+    }
+    if (weighted.length) {
+      b.push('Weighted preferences, strongest first (favor picks that score ' +
+        'well here over ones that do not, but these are not disqualifying):', '');
+      weighted.forEach(function (f) { b.push('- ' + f.label + ' (' + f.level + ')'); });
+      b.push('');
+    }
+    return b;
+  }
+
   // `lead` is the one instruction line that only makes sense in a whole-guide
   // prompt (where the Interests research section is part of the file). The
   // delta builder shares this formatter and passes no lead, because its own
@@ -3188,6 +3471,7 @@ var CityOps = (function () {
       p.avoid.forEach(function (x) { b.push('- ' + x); });
       b.push('');
     }
+    if (p.factors && p.factors.length) b = b.concat(factorsBlockLines(p.factors));
     if (p.notes) b.push('Notes: ' + p.notes, '');
     return b;
   }
@@ -3217,9 +3501,28 @@ var CityOps = (function () {
     return lines.slice(0, at).concat(block, lines.slice(at));
   }
 
+  // The trip-specific paragraph is a bracket span that wraps across several
+  // lines in PROMPT.md ("[Add anything trip-specific here: ... this time.]"),
+  // so it cannot be filled line-by-line like HEADER_BULLETS: this operates on
+  // the whole joined text and replaces from the opening marker through the
+  // next "]". An empty note leaves the placeholder in place, same convention
+  // as every other optional header field.
+  var TRIP_NOTES_MARK = '[Add anything trip-specific here';
+
+  function fillTripNotes(text, notes) {
+    var n = trimStr(notes);
+    if (!n) return text;
+    var start = text.indexOf(TRIP_NOTES_MARK);
+    if (start === -1) return text;
+    var end = text.indexOf(']', start);
+    if (end === -1) return text;
+    return text.slice(0, start) + n + text.slice(end + 1);
+  }
+
   // Pure string assembly: fills PROMPT.md's Trip details bullets from `header`
-  // ({name, country, from, to, accommodation, arrival, departure}, all optional
-  // strings), drops the "copy this file" instruction line, and inserts the
+  // ({name, country, from, to, accommodation, arrival, departure, notes}, all
+  // optional strings), drops the "copy this file" instruction line, fills the
+  // trip-specific bracket paragraph from header.notes, and inserts the
   // Traveler interests block when the profile has anything in it.
   function buildCityPrompt(templateText, header, profile) {
     var text = (templateText === null || templateText === undefined) ? '' : String(templateText);
@@ -3244,6 +3547,8 @@ var CityOps = (function () {
       }
       out.push(line);
     }
+    var joined = fillTripNotes(out.join('\n'), header && header.notes);
+    out = joined.split('\n');
     var p = normalizeProfile(profile);
     if (!profileIsEmpty(p)) {
       out = insertInterestsBlock(out, interestsBlockLines(p, INTERESTS_LEAD));
@@ -3361,6 +3666,46 @@ var CityOps = (function () {
       'correct answer, a complete one of invented intel is not.', '');
     return out.join('\n');
   }
+
+  // ---- AI response parsing (pure) ----
+  // Ported from tools/city-input.js so the CLI's .md-ingest path and the
+  // in-app "generate with Claude" path (Phase 2) share one rule for finding
+  // the city JSON in a chat response, rather than keeping two copies that can
+  // drift. tools/city-input.js now calls this via the same loadCityOps()
+  // harness it already used for parse()/validate().
+  //
+  // Matches a markdown fence: an opening line of ``` plus an optional
+  // language tag and nothing else, then the body, then a closing line of
+  // ``` and nothing else. Both delimiters are anchored to their own line
+  // (multiline ^/$) so a closing ``` is never confused with the next fence's
+  // OPENING ``` when a response contains more than one fenced block (e.g. a
+  // ```bash setup snippet before the ```json guide): a naive "``` ... ```"
+  // regex with no line anchor matches leftmost-first and would swallow the
+  // second fence's own opening marker as if it were the first fence's close.
+  var FENCE_RE = /^```[ \t]*(\w*)[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*$/gm;
+
+  // Returns the trimmed text of the first fenced block that parses as JSON,
+  // or null if the text has no fenced block that does. Never throws: an
+  // unparseable candidate fence is skipped, not reported, since a later fence
+  // (or none at all) is just as valid an outcome.
+  function extractJsonBlock(md) {
+    FENCE_RE.lastIndex = 0;
+    var m;
+    var text = String(md === null || md === undefined ? '' : md);
+    while ((m = FENCE_RE.exec(text)) !== null) {
+      var body = m[2].replace(/^\s+|\s+$/g, '');
+      try { JSON.parse(body); return body; }
+      catch (e) { /* not this fence (e.g. a ```bash block before the JSON one) */ }
+    }
+    return null;
+  }
+
+  // Shared wording for "the response had no parseable JSON block": the CLI
+  // shows it verbatim, the app shows it verbatim too (with its own Retry
+  // button alongside, since the app can re-ask automatically).
+  var RETRY_INSTRUCTION =
+    'Ask the chat to reply again with: "reply with the full city guide as a ' +
+    'single ```json code block and nothing else after it."';
 
   // ---- sync helpers (pure) ----
   // Every network call, session store and piece of sync UI lives in the app
@@ -4354,15 +4699,21 @@ var CityOps = (function () {
     appStore: {
       normalize: normalizeAppStore, add: appAddCity,
       remove: appRemoveCity, keepBothName: keepBothName,
-      resolveStartCity: resolveStartCity, blankCity: blankCity
+      resolveStartCity: resolveStartCity, blankCity: blankCity,
+      exampleVisible: exampleCityVisible
     },
-    profile: { normalize: normalizeProfile, isEmpty: profileIsEmpty },
+    profile: {
+      normalize: normalizeProfile, isEmpty: profileIsEmpty,
+      FACTOR_LEVELS: FACTOR_LEVELS, defaultFactors: defaultFactors,
+      normalizeFactors: normalizeFactors
+    },
     promptKit: {
       buildCityPrompt: buildCityPrompt, INTERESTS_SECTION: INTERESTS_SECTION,
       COPY_LINE: PROMPT_COPY_LINE,
       buildInterestsDeltaPrompt: buildInterestsDeltaPrompt,
       buildIntelPassPrompt: buildIntelPassPrompt
     },
+    extractJsonBlock: extractJsonBlock, RETRY_INSTRUCTION: RETRY_INSTRUCTION,
     syncKit: {
       EPOCH: EPOCH_ISO, decide: decideSync, plan: planSync, buildRows: buildRows,
       parseAuthHash: parseAuthHash, sessionExpiringSoon: sessionExpiringSoon
@@ -4871,6 +5222,21 @@ ignored.
   var SYNC_KEY = 'cityops.sync.v1';   // {lastSync}
   var DEV_KEY = 'cityops.supa.dev';   // testing override: {"url":"...","anon":"..."}
 
+  // Phase 2: Claude API key for the in-app generator. Deliberately its OWN
+  // localStorage key, never folded into `store` or `profile`: those two sync
+  // to Supabase (see pushProfileNow/pushNow below), and this key must never
+  // ride along in that traffic. It stays on this device, read only at the
+  // moment a generation request is made.
+  var CLAUDE_KEY = 'cityops.claude.apikey.v1';
+
+  // Phase 2: the Add/Edit city form fields that are NOT part of schema v1
+  // (accommodation address, transport, free-text trip notes) exist only to
+  // build a prompt; the city JSON itself never carries them. They are saved
+  // here, keyed by cityId, purely so Edit can reopen the form pre-filled.
+  // Local-only by design (no sync table for this): losing it just means a
+  // re-edit starts from the city's own data instead of the original form.
+  var GENMETA_KEY = 'cityops.genmeta.v1';
+
   // Bundled first-run city: the same example block standalone template.html ships
   // with, so a stranger opening the app sees a working guide immediately.
   var SEED_CITY = {
@@ -4904,12 +5270,30 @@ ignored.
 
   var SEED_ID = 'example-city-2026-01-01';
 
+  // Feature 3: whether the example city should be visible right now, given
+  // the current store and the traveler's "Show example city" profile toggle.
+  // Pure decision lives in the engine (CityOps.appStore.exampleVisible); this
+  // just supplies this device's live inputs.
+  function exampleVisible() {
+    return CityOps.appStore.exampleVisible(store.order, SEED_ID, !!(store.profile && store.profile.showExample));
+  }
+
   function loadExampleCity() {
     if (!has(store.cities, SEED_ID)) {
       var res = CityOps.appStore.add(store, clone(SEED_CITY), CityOps.syncKit.EPOCH);
       store = res.store;
-      saveStore(store);
     }
+    // An explicit "load the example" only actually shows anything if the
+    // toggle agrees; flip it on so this action does what it says even after
+    // a real city has made the example hide by default.
+    if (!store.profile.showExample) {
+      var p = CityOps.profile.normalize(store.profile);
+      p.showExample = true;
+      p.updated = new Date().toISOString();
+      store.profile = p;
+      schedulePush('profile');
+    }
+    saveStore(store);
     activateCity(SEED_ID);
   }
 
@@ -4964,6 +5348,35 @@ ignored.
   function saveStore(s) {
     memStore = s;
     if (LS) { try { LS.setItem(APP_KEY, JSON.stringify(s)); } catch (e) {} }
+  }
+
+  // ---- Claude API key (Phase 2, own storage, never synced) ----
+  function loadApiKey() {
+    if (!LS) return '';
+    try { return LS.getItem(CLAUDE_KEY) || ''; } catch (e) { return ''; }
+  }
+  function saveApiKey(k) {
+    if (!LS) return;
+    try {
+      if (k) LS.setItem(CLAUDE_KEY, k);
+      else LS.removeItem(CLAUDE_KEY);
+    } catch (e) {}
+  }
+
+  // ---- generation-form metadata (Phase 2, own storage, local only) ----
+  function loadGenMeta() {
+    if (!LS) return {};
+    var raw = null;
+    try { raw = LS.getItem(GENMETA_KEY); } catch (e) { return {}; }
+    if (!raw) return {};
+    try { var m = JSON.parse(raw); return (m && typeof m === 'object') ? m : {}; }
+    catch (e2) { return {}; }
+  }
+  function saveGenMetaFor(cityId, meta) {
+    if (!LS) return;
+    var all = loadGenMeta();
+    all[cityId] = meta;
+    try { LS.setItem(GENMETA_KEY, JSON.stringify(all)); } catch (e) {}
   }
 
   function el(tag, cls, text) {
@@ -5047,7 +5460,11 @@ ignored.
     scrim.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); };
     bar.appendChild(scrim);
     var panel = el('div', 'citypanel');
+    var exVisible = exampleVisible();
     store.order.forEach(function (id) {
+      // Feature 3: the example city never appears in the switcher once a real
+      // city exists, unless the traveler turned "Show example city" on.
+      if (id === SEED_ID && !exVisible) return;
       var d = store.cities[id];
       var isCurrent = id === activeId;
       var prow = el('button', 'cityrow' + (isCurrent ? ' current' : ''));
@@ -5075,7 +5492,7 @@ ignored.
     rm.type = 'button';
     rm.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); openRemoveModal(); };
     acts.appendChild(rm);
-    if (!has(store.cities, SEED_ID)) {
+    if (!exVisible) {
       var exb = el('button', null, 'Load example');
       exb.type = 'button';
       exb.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); loadExampleCity(); };
@@ -5200,6 +5617,77 @@ ignored.
     return { get: function () { return items.concat(trim(inp.value) ? [trim(inp.value)] : []); } };
   }
 
+  // One row per planning factor: its label and a level <select> on the fixed
+  // five-point scale, plus a remove button. A trailing row adds a custom
+  // factor at 'medium' (the neutral default: a fresh factor should not read
+  // as already a blocker or already dismissed). Levels are always one of
+  // CityOps.profile.FACTOR_LEVELS by construction (a <select> of exactly
+  // those options), so nothing here can produce an invalid level; normalize
+  // still runs on Save for the label trim/dedupe/cap every other list gets.
+  function factorsField(box, factors) {
+    box.appendChild(el('p', 'diff', 'Planning factors: how much each should shape picks. ' +
+      'Blocker means never suggest something weak here, even as a backup. ' +
+      'Not important means ignore this dimension entirely.'));
+    var list = el('div', 'factor-list');
+    box.appendChild(list);
+    var items = factors.map(function (f) { return { label: f.label, level: f.level }; });
+
+    function levelSelect(current, label) {
+      var sel = document.createElement('select');
+      sel.className = 'date-field factor-level';
+      sel.setAttribute('aria-label', label + ' importance');
+      CityOps.profile.FACTOR_LEVELS.forEach(function (lvl) {
+        var opt = document.createElement('option');
+        opt.value = lvl;
+        opt.textContent = lvl;
+        if (lvl === current) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      return sel;
+    }
+
+    function draw() {
+      list.innerHTML = '';
+      items.forEach(function (f, i) {
+        var row = el('div', 'factor-row');
+        row.appendChild(el('span', 'factor-label', f.label));
+        var sel = levelSelect(f.level, f.label);
+        sel.onchange = function () { items[i].level = sel.value; };
+        row.appendChild(sel);
+        var x = el('button', null, '×');
+        x.type = 'button';
+        x.setAttribute('aria-label', 'Remove ' + f.label);
+        x.onclick = function () { items.splice(i, 1); draw(); };
+        row.appendChild(x);
+        list.appendChild(row);
+      });
+    }
+    draw();
+
+    var addRow = el('div', 'mrow');
+    var inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'chip-add';
+    inp.placeholder = 'Add a custom factor';
+    inp.setAttribute('aria-label', 'Custom factor name');
+    var addBtn = el('button', 'ctl', 'Add');
+    addBtn.type = 'button';
+    function addCustom() {
+      var v = trim(inp.value);
+      inp.value = '';
+      if (!v) return;
+      items.push({ label: v, level: 'medium' });
+      draw();
+    }
+    addBtn.onclick = addCustom;
+    inp.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); addCustom(); } };
+    addRow.appendChild(inp);
+    addRow.appendChild(addBtn);
+    box.appendChild(addRow);
+
+    return { get: function () { return items; } };
+  }
+
   function openProfileModal() {
     var m = modalShell('Your interest profile');
     m.box.appendChild(el('p', 'diff', 'What you seek out in a new city, and what you never want suggested. ' +
@@ -5208,21 +5696,74 @@ ignored.
     var p = CityOps.profile.normalize(store.profile);
     var interests = chipField(m.box, 'Interests, in priority order', p.interests, 'Add an interest, then press Enter');
     var avoid = chipField(m.box, 'Avoid: never suggest these', p.avoid, 'Add something to avoid, then press Enter');
+    // Seed sensible defaults the first time this device has no factors at
+    // all, so a first-time visitor sees a working starting set rather than a
+    // blank list; nothing is written until Save.
+    var startingFactors = p.factors.length ? p.factors : CityOps.profile.defaultFactors();
+    var factors = factorsField(m.box, startingFactors);
     m.box.appendChild(el('p', 'diff', 'Notes: anything that changes what a good pick means (diet, mobility, budget, who is along).'));
     var ta = document.createElement('textarea');
     ta.className = 'notes';
     ta.value = p.notes;
     ta.setAttribute('aria-label', 'Profile notes');
     m.box.appendChild(ta);
+
+    // Feature 3: the example-city visibility override.
+    m.box.appendChild(el('p', 'diff', 'The bundled example city hides automatically once you add a real city. ' +
+      'Turn this on to keep it visible anyway.'));
+    var exRow = el('div', 'mrow');
+    var exLabel = document.createElement('label');
+    var exCheck = document.createElement('input');
+    exCheck.type = 'checkbox';
+    exCheck.checked = p.showExample;
+    exLabel.appendChild(exCheck);
+    exLabel.appendChild(document.createTextNode(' Show example city'));
+    exRow.appendChild(exLabel);
+    m.box.appendChild(exRow);
+
     m.box.appendChild(el('p', 'diff', (session && session.access_token)
       ? 'Saved to your account.'
       : 'Saved in this browser. Sign in to sync (city menu) to carry your profile across devices.'));
+
+    // Phase 2: the Claude API key. Its own storage (never store.profile, never
+    // synced) and saved immediately on blur, independent of the profile Save
+    // button below, so leaving the modal by any path never loses it and it
+    // never rides along in a profile push.
+    m.box.appendChild(el('p', 'diff', 'Claude API key: used only by "Generate with Claude" when adding or ' +
+      'editing a city. This key stays in this browser. It is never synced and never sent anywhere except ' +
+      'Anthropic\'s API, directly from your device.'));
+    var keyRow = el('div', 'mrow');
+    var keyInp = document.createElement('input');
+    keyInp.type = 'password';
+    keyInp.className = 'date-field key-field';
+    keyInp.placeholder = 'sk-ant-...';
+    keyInp.autocomplete = 'off';
+    keyInp.value = loadApiKey();
+    keyInp.setAttribute('aria-label', 'Claude API key');
+    keyRow.appendChild(keyInp);
+    var keyMsg = el('span', 'diff', loadApiKey() ? 'Key saved on this device.' : 'No key saved yet.');
+    keyInp.onblur = function () {
+      saveApiKey(trim(keyInp.value));
+      keyMsg.textContent = trim(keyInp.value) ? 'Key saved on this device.' : 'No key saved yet.';
+    };
+    var keyClear = el('button', 'ctl', 'Clear key');
+    keyClear.type = 'button';
+    keyClear.onclick = function () {
+      keyInp.value = '';
+      saveApiKey('');
+      keyMsg.textContent = 'No key saved yet.';
+    };
+    keyRow.appendChild(keyClear);
+    m.box.appendChild(keyRow);
+    m.box.appendChild(keyMsg);
+
     var row = el('div', 'mrow');
     var save = el('button', 'ctl to-done', 'Save');
     save.type = 'button';
     save.onclick = function () {
       var next = CityOps.profile.normalize({
-        interests: interests.get(), avoid: avoid.get(), notes: ta.value
+        interests: interests.get(), avoid: avoid.get(), factors: factors.get(),
+        notes: ta.value, showExample: exCheck.checked
       });
       // No-op save: compare against the profile as loaded, `updated` removed
       // from both sides, so a modal opened and closed unchanged never stamps
@@ -5235,6 +5776,11 @@ ignored.
       saveStore(store);
       schedulePush('profile');
       m.close();
+      // The example's visibility can change as a direct result of this save
+      // (the toggle flipped, or factors/interests changed nothing there but
+      // cost nothing to refresh): re-render so the switcher panel reflects it
+      // immediately rather than on the next unrelated render.
+      renderPanel();
       showSyncNotice('Profile saved.');
     };
     var cancel = el('button', 'ctl', 'Cancel');
@@ -5242,7 +5788,7 @@ ignored.
     cancel.onclick = m.close;
     row.appendChild(save);
     row.appendChild(cancel);
-    if (!has(store.cities, SEED_ID)) {
+    if (!exampleVisible()) {
       var ex = el('button', 'ctl', 'Load example city');
       ex.type = 'button';
       ex.onclick = function () { m.close(); loadExampleCity(); };
@@ -5452,15 +5998,131 @@ ignored.
     b.id = 'btn-enrich';
     b.onclick = openEnrichModal;
     tb.appendChild(b);
+    // Phase 2: Edit reopens the Add/Edit city form for the ACTIVE city,
+    // pre-filled with its saved form values (see openAddModal's editCityId
+    // param), so a traveler can tweak the header and regenerate.
+    if (activeId && has(store.cities, activeId)) {
+      var ed = el('button', null, 'Edit city');
+      ed.type = 'button';
+      ed.id = 'btn-edit-city';
+      ed.onclick = function () { openAddModal(activeId); };
+      tb.appendChild(ed);
+    }
   }
 
-  function openAddModal() {
+  // ---- Phase 2: in-app Claude generation (transport only; no SDK) ----
+  // A single non-streaming-looking call that is actually stream:true under
+  // the hood: the guides PROMPT.md asks for are long, and a non-streaming
+  // request this size risks a proxy timeout with nothing to show for the
+  // wait. Parsed by hand since this is a no-build static page.
+  var CLAUDE_MODEL = 'claude-opus-4-8';
+  var CLAUDE_MAX_TOKENS = 32000;
+
+  // Resolves to the full assistant text (the `text` content block only; a
+  // `thinking` block never contributes to this, since that block is
+  // reasoning scratch space, not the fenced JSON the caller parses next).
+  // `onProgress({kind: 'thinking'|'text', totalChars})` fires on every delta
+  // so the caller can show live progress. Rejects with a plain Error whose
+  // message is safe to show as-is.
+  function callClaudeStream(prompt, apiKey, onProgress) {
+    return fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: CLAUDE_MODEL,
+        max_tokens: CLAUDE_MAX_TOKENS,
+        thinking: { type: 'adaptive' },
+        stream: true,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    }).then(function (resp) {
+      if (!resp.ok || !resp.body) {
+        return resp.text().catch(function () { return ''; }).then(function (bodyText) {
+          var detail = bodyText;
+          try {
+            var j = JSON.parse(bodyText);
+            if (j && j.error && j.error.message) detail = j.error.message;
+          } catch (e) { /* body was not JSON; show it raw, trimmed */ }
+          throw new Error('Claude API returned ' + resp.status +
+            (detail ? ': ' + String(detail).slice(0, 300) : ''));
+        });
+      }
+      var reader = resp.body.getReader();
+      var decoder = new TextDecoder();
+      var buf = '';
+      var finalText = '';
+      var thinkingChars = 0;
+
+      // One SSE event is "event: ...\ndata: {...}" (possibly several data:
+      // lines, though Anthropic's stream sends one); only the JSON payload on
+      // the data: line matters here.
+      function handleEvent(rawEvent) {
+        var data = null;
+        rawEvent.split('\n').forEach(function (l) {
+          if (l.indexOf('data:') === 0) data = l.slice(5).replace(/^\s+/, '');
+        });
+        if (!data) return;
+        var payload;
+        try { payload = JSON.parse(data); } catch (e) { return; }
+        if (payload.type === 'error') {
+          throw new Error((payload.error && payload.error.message) || 'Claude API stream error');
+        }
+        if (payload.type === 'content_block_delta' && payload.delta) {
+          if (payload.delta.type === 'text_delta') {
+            finalText += payload.delta.text;
+            if (onProgress) onProgress({ kind: 'text', totalChars: finalText.length });
+          } else if (payload.delta.type === 'thinking_delta') {
+            thinkingChars += (payload.delta.thinking || '').length;
+            if (onProgress) onProgress({ kind: 'thinking', totalChars: thinkingChars });
+          }
+        }
+      }
+
+      function pump() {
+        return reader.read().then(function (r) {
+          if (r.done) {
+            if (buf.trim()) handleEvent(buf); // a final event with no trailing blank line
+            return finalText;
+          }
+          buf += decoder.decode(r.value, { stream: true });
+          var idx;
+          while ((idx = buf.indexOf('\n\n')) !== -1) {
+            var rawEvent = buf.slice(0, idx);
+            buf = buf.slice(idx + 2);
+            if (rawEvent.trim()) handleEvent(rawEvent);
+          }
+          return pump();
+        });
+      }
+      return pump();
+    });
+  }
+
+  // editCityId: when set to a known city id, the form pre-fills from that
+  // city's data plus its saved generation metadata (see GENMETA_KEY above),
+  // and generating/pasting/blanking with the SAME id silently replaces it
+  // instead of asking Replace/Keep both (that prompt is for a genuine
+  // collision with an unrelated city, not for the edit you just opened). If
+  // the name/dates change enough to derive a different id, it falls back to
+  // the normal add flow and the original city is left alone.
+  function openAddModal(editCityId) {
+    var isEdit = !!(editCityId && has(store.cities, editCityId));
+    var editCity = isEdit ? store.cities[editCityId] : null;
+    var meta = isEdit ? (loadGenMeta()[editCityId] || {}) : {};
+
     var host = document.getElementById('modal');
     host.innerHTML = '';
     var wrap = el('div', 'modal-wrap');
     var box = el('div', 'modal');
-    box.appendChild(el('h3', null, 'Add a city'));
-    box.appendChild(el('p', 'diff', 'Start blank now and fill it with generated data later, or paste ready-made city JSON below.'));
+    box.appendChild(el('h3', null, isEdit ? ('Edit ' + editCity.city.name) : 'Add a city'));
+    box.appendChild(el('p', 'diff', isEdit
+      ? 'Change anything below, then regenerate, or paste replacement city JSON.'
+      : 'Start blank now and fill it with generated data later, generate it here with Claude, or paste ready-made city JSON below.'));
     var whereItGoes = (session && session.access_token)
       ? 'New cities save to your account and sync to your other devices.'
       : 'Saved in this browser. Sign in to sync (city menu) to carry cities across devices.';
@@ -5487,22 +6149,41 @@ ignored.
       return i;
     }
     var hrow = el('div', 'hdr-row');
-    var bacc = optField('Accommodation');
-    var barr = optField('Arrival');
-    var bdep = optField('Departure');
+    var bacc = optField('Accommodation name and address');
+    var barr = optField('Arrival transport');
+    var bdep = optField('Departure transport');
     hrow.appendChild(bacc); hrow.appendChild(barr); hrow.appendChild(bdep);
     box.appendChild(hrow);
+    box.appendChild(el('p', 'diff', 'Trip notes: diet, mobility, budget, who is along, anything else that changes what a good pick means this time.'));
+    var bnotes = document.createElement('textarea');
+    bnotes.className = 'notes';
+    bnotes.setAttribute('aria-label', 'Trip notes');
+    box.appendChild(bnotes);
+
+    if (isEdit) {
+      bn.value = editCity.city.name;
+      bc.value = meta.country || editCity.city.country || '';
+      bf.value = editCity.city.dates.from;
+      bt2.value = editCity.city.dates.to;
+      bacc.value = meta.accommodation || (editCity.city.accommodation && editCity.city.accommodation.name) || '';
+      barr.value = meta.arrival || '';
+      bdep.value = meta.departure || '';
+      bnotes.value = meta.notes || '';
+    }
+
     var bmsg = el('div', 'diff', '');
     box.appendChild(bmsg);
     var brow2 = el('div', 'mrow');
-    var bcreate = el('button', 'ctl to-done', 'Create blank city');
+    var bcreate = el('button', 'ctl to-done', isEdit ? 'Reset to blank' : 'Create blank city');
     bcreate.type = 'button';
     box.appendChild(brow2);
     brow2.appendChild(bcreate);
 
-    // Build my prompt: PROMPT.md with this city's header and the interest
-    // profile filled in, copied out for the traveler's own AI. No network, no
-    // AI call from the app: the traveler pastes the JSON back into this modal.
+    // Build my prompt: PROMPT.md with this city's header, trip notes and the
+    // interest profile filled in, copied out for the traveler's own AI. No
+    // network, no AI call from the app: the traveler pastes the JSON back
+    // into this modal. (Generate with Claude, below, is the in-app version of
+    // this same prompt.)
     var promptTa = null;
     function showPromptFallback(text) {
       if (!promptTa) {
@@ -5517,6 +6198,13 @@ ignored.
         'paste it into Claude or ChatGPT, then paste the JSON it returns below.';
       try { promptTa.focus(); promptTa.select(); } catch (e) {}
     }
+    function formHeader() {
+      return {
+        name: trim(bn.value), country: trim(bc.value), from: bf.value, to: bt2.value,
+        accommodation: trim(bacc.value), arrival: trim(barr.value), departure: trim(bdep.value),
+        notes: trim(bnotes.value)
+      };
+    }
     function buildPromptText() {
       if (!trim(bn.value) || !bf.value || !bt2.value) {
         bmsg.textContent = 'Fill city name and dates first';
@@ -5527,10 +6215,7 @@ ignored.
         bmsg.textContent = 'This build has no prompt template embedded. Use PROMPT.md from the repo.';
         return null;
       }
-      return CityOps.promptKit.buildCityPrompt(tpl, {
-        name: trim(bn.value), country: trim(bc.value), from: bf.value, to: bt2.value,
-        accommodation: trim(bacc.value), arrival: trim(barr.value), departure: trim(bdep.value)
-      }, store.profile);
+      return CityOps.promptKit.buildCityPrompt(tpl, formHeader(), store.profile);
     }
     var bprompt = el('button', 'ctl', 'Build my prompt');
     bprompt.type = 'button';
@@ -5571,6 +6256,103 @@ ignored.
       ? 'Build my prompt writes PROMPT.md with this header filled in. Add interests in Profile (city menu) and it will ask your AI for a matching ninth section too.'
       : 'Build my prompt writes PROMPT.md with this header and your interest profile filled in.'));
 
+    // ---- Generate with Claude (Phase 2): the same prompt, called in-app ----
+    var apiKey = loadApiKey();
+    box.appendChild(el('p', 'diff', apiKey
+      ? 'Generate with Claude runs the same prompt against your own Claude API key, right here, and adds the result to your cities when it finishes.'
+      : 'Generate with Claude needs an API key first. Add one in Profile (city menu): it stays in your browser only.'));
+    var genRow = el('div', 'mrow');
+    var genBtn = el('button', 'ctl to-done', 'Generate with Claude');
+    genBtn.type = 'button';
+    if (!apiKey) {
+      genBtn.disabled = true;
+      genBtn.title = 'Add a Claude API key in Profile first';
+    }
+    genRow.appendChild(genBtn);
+    if (!apiKey) {
+      var goProfile = el('button', 'ctl', 'Open Profile');
+      goProfile.type = 'button';
+      goProfile.onclick = function () { close(); openProfileModal(); };
+      genRow.appendChild(goProfile);
+    }
+    box.appendChild(genRow);
+    var genMsg = el('div', 'diff', '');
+    box.appendChild(genMsg);
+
+    function setGenerateRow(extraButtons) {
+      genRow.innerHTML = '';
+      genRow.appendChild(genBtn);
+      (extraButtons || []).forEach(function (b) { genRow.appendChild(b); });
+    }
+    function setGenerating(on) {
+      genBtn.disabled = on || !loadApiKey();
+      genBtn.textContent = on ? 'Generating...' : 'Generate with Claude';
+    }
+    function showRetry(afterMsg) {
+      genMsg.textContent = afterMsg;
+      var retry = el('button', 'ctl', 'Retry');
+      retry.type = 'button';
+      retry.onclick = runGenerate;
+      setGenerateRow([retry]);
+    }
+    function offerDownload(data) {
+      var dl = el('button', 'ctl', 'Download cities/' + CityOps.slug(data.city.name) + '.json');
+      dl.type = 'button';
+      dl.onclick = function () {
+        var canonical = JSON.stringify(data, null, 2) + '\n';
+        var blob = new Blob([canonical], { type: 'application/json' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = CityOps.slug(data.city.name) + '.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        var freeUrl = a.href;
+        setTimeout(function () { URL.revokeObjectURL(freeUrl); }, 4000);
+      };
+      var doneBtn = el('button', 'ctl', 'Close');
+      doneBtn.type = 'button';
+      doneBtn.onclick = close;
+      setGenerateRow([dl, doneBtn]);
+    }
+    function runGenerate() {
+      if (!trim(bn.value) || !bf.value || !bt2.value) {
+        genMsg.textContent = 'Fill city name and dates first.';
+        return;
+      }
+      var key = loadApiKey();
+      if (!key) { genMsg.textContent = 'No Claude API key saved. Add one in Profile first.'; return; }
+      var tpl = promptTemplateText();
+      if (!tpl) {
+        genMsg.textContent = 'This build has no prompt template embedded. Use PROMPT.md from the repo.';
+        return;
+      }
+      var prompt = CityOps.promptKit.buildCityPrompt(tpl, formHeader(), store.profile);
+      setGenerateRow([]);
+      setGenerating(true);
+      genMsg.textContent = 'Starting...';
+      callClaudeStream(prompt, key, function (p) {
+        genMsg.textContent = (p.kind === 'thinking' ? 'Thinking... ' : 'Writing the guide... ') +
+          p.totalChars + ' characters so far.';
+      }).then(function (text) {
+        setGenerating(false);
+        var block = CityOps.extractJsonBlock(text);
+        if (block === null) { showRetry(CityOps.RETRY_INSTRUCTION); return; }
+        var res = CityOps.parse(block);
+        if (!res.data) {
+          showRetry('Claude\'s response did not match the city guide format:\n- ' + res.errors.join('\n- '));
+          return;
+        }
+        genMsg.textContent = 'Generated ' + res.data.city.name + '. Added to your cities.';
+        offerDownload(res.data);
+        commitFromForm(res.data, true);
+      }).catch(function (e) {
+        setGenerating(false);
+        showRetry('Claude API error: ' + e.message);
+      });
+    }
+    genBtn.onclick = runGenerate;
+
     box.appendChild(el('p', 'diff', 'Or paste schema v1 city JSON (the output of PROMPT.md). ' + whereItGoes));
     var ta = document.createElement('textarea');
     box.appendChild(ta);
@@ -5579,26 +6361,21 @@ ignored.
     var row = el('div', 'mrow');
     box.appendChild(row);
 
-    bcreate.onclick = function () {
-      var data;
-      try { data = CityOps.appStore.blankCity(bn.value, bc.value, bf.value, bt2.value); }
-      catch (e) { bmsg.textContent = 'Invalid: ' + e.message; return; }
-      handleParsed(data);
-    };
-
     function close() { wrap.remove(); }
 
-    // `clearOverride`: only the Replace path passes this. Replacing a city with
-    // freshly pasted file data must win outright; a stale in-app dataOverride
-    // from before the replace would otherwise keep masking the new data via
-    // effectiveData(), so the city's own store is cleared right after the
-    // replace commits (Keep-both never needs this: it derives a brand-new id
-    // with no prior state to clear).
-    function commit(data, clearOverride) {
+    // `clearOverride`: only the Replace path (and a same-id Edit commit) pass
+    // this. Replacing a city with freshly generated/pasted data must win
+    // outright; a stale in-app dataOverride from before the replace would
+    // otherwise keep masking the new data via effectiveData(), so the city's
+    // own store is cleared right after the replace commits (Keep-both never
+    // needs this: it derives a brand-new id with no prior state to clear).
+    // `keepOpen` skips the auto-close: the Generate path stays open so its
+    // own success message and Download button remain visible.
+    function commit(data, clearOverride, keepOpen, afterCommitFn) {
       var res = CityOps.appStore.add(store, data);
       store = res.store;
       saveStore(store);
-      close();
+      if (!keepOpen) close();
       if (clearOverride) {
         var s = CityOps.makeStore(res.cityId, LS);
         var st = s.load();
@@ -5606,17 +6383,19 @@ ignored.
         s.save(st);
       }
       activateCity(res.cityId);
-      // A pasted, replaced or blank city is a local data edit: queue the upsert.
+      // A pasted, replaced, blank or generated city is a local data edit:
+      // queue the upsert.
       schedulePush('data', res.cityId);
+      if (afterCommitFn) afterCommitFn(res.cityId);
     }
 
-    function askDuplicate(data, id) {
+    function askDuplicate(data, id, keepOpen, afterCommitFn) {
       msg.textContent = '"' + store.cities[id].city.name + '" is already saved under the id ' +
-        id + '. Replace it with the pasted data, or keep both?';
+        id + '. Replace it with this data, or keep both?';
       row.innerHTML = '';
       var rep = el('button', 'ctl', 'Replace');
       rep.type = 'button';
-      rep.onclick = function () { commit(data, true); };
+      rep.onclick = function () { commit(data, true, keepOpen, afterCommitFn); };
       var both = el('button', 'ctl', 'Keep both');
       both.type = 'button';
       both.onclick = function () {
@@ -5633,7 +6412,7 @@ ignored.
             '" after 20 tries. Rename the city in the pasted JSON and try again.';
           return;
         }
-        commit(copy);
+        commit(copy, false, keepOpen, afterCommitFn);
       };
       var cancel = el('button', 'ctl', 'Cancel');
       cancel.type = 'button';
@@ -5643,18 +6422,45 @@ ignored.
       row.appendChild(cancel);
     }
 
-    function handleParsed(data) {
+    function handleParsed(data, keepOpen, afterCommitFn) {
       var id = CityOps.cityId(data);
-      if (has(store.cities, id)) { askDuplicate(data, id); return; }
-      commit(data);
+      if (has(store.cities, id)) { askDuplicate(data, id, keepOpen, afterCommitFn); return; }
+      commit(data, false, keepOpen, afterCommitFn);
     }
+
+    // The single funnel every success path (blank, generated, pasted) uses.
+    // Editing the SAME city (name/dates unchanged, so the id is unchanged)
+    // replaces it directly with no Replace/Keep-both prompt, since that
+    // prompt exists for an unrelated collision, not for the edit the
+    // traveler just opened. Also stashes the form's non-schema fields
+    // (address, transport, trip notes) so a later Edit reopens with them.
+    function commitFromForm(data, keepOpen) {
+      function afterCommit(id) {
+        saveGenMetaFor(id, {
+          country: trim(bc.value), accommodation: trim(bacc.value),
+          arrival: trim(barr.value), departure: trim(bdep.value), notes: trim(bnotes.value)
+        });
+      }
+      if (isEdit && CityOps.cityId(data) === editCityId) {
+        commit(data, true, keepOpen, afterCommit);
+      } else {
+        handleParsed(data, keepOpen, afterCommit);
+      }
+    }
+
+    bcreate.onclick = function () {
+      var data;
+      try { data = CityOps.appStore.blankCity(bn.value, bc.value, bf.value, bt2.value); }
+      catch (e) { bmsg.textContent = 'Invalid: ' + e.message; return; }
+      commitFromForm(data);
+    };
 
     var apply = el('button', 'ctl', 'Apply');
     apply.type = 'button';
     apply.onclick = function () {
       var res = CityOps.parse(ta.value);
       if (!res.data) { msg.textContent = 'Invalid:\n' + res.errors.join('\n'); return; }
-      handleParsed(res.data);
+      commitFromForm(res.data);
     };
     var cancel = el('button', 'ctl', 'Cancel');
     cancel.type = 'button';
@@ -6523,9 +7329,17 @@ ignored.
     }
     var wanted = hashCity();
     var target = CityOps.appStore.resolveStartCity(store, wanted);
+    // Feature 3: never boot straight into a hidden example. If it hides
+    // (a real city exists and the toggle is off) there is always at least
+    // one non-seed city to fall back to, by the same rule that hides it.
+    if (target === SEED_ID && !exampleVisible()) {
+      var fallback = store.order.filter(function (id) { return id !== SEED_ID; });
+      target = fallback.length ? fallback[0] : target;
+    }
     activateCity(target);
     window.addEventListener('hashchange', function () {
       var id = hashCity();
+      if (id === SEED_ID && !exampleVisible()) return;
       if (id && has(store.cities, id) && id !== activeId) activateCity(id);
     });
     // After the first render: the engine rewrote #notice during boot, so a
