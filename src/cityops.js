@@ -653,6 +653,59 @@ var CityOps = (function () {
     return (typeof v === 'string') ? v.replace(/^\s+|\s+$/g, '') : '';
   }
 
+  // ---- planning factors (Phase 2) ----
+  // A factor is a named travel dimension (walkability, nightlife, ...) with an
+  // importance level on a fixed five-point scale. Seeded factors and
+  // user-added custom ones share the same shape; nothing here distinguishes
+  // them at read time (the `custom` flag is informational only, for the UI to
+  // label "your own" entries, never checked by validation or the prompt).
+  var FACTOR_LEVELS = ['blocker', 'very important', 'medium', 'low', 'not important'];
+
+  // Seeded on first use of the profile editor (app-shell decides "first use";
+  // the engine just describes what a sensible starting set looks like). Level
+  // defaults to 'medium' so a traveler who never touches a seeded factor is
+  // not silently telling the AI it's a blocker or a non-issue.
+  var DEFAULT_FACTOR_LABELS = [
+    'Food scene', 'Walkability', 'Safety', 'Work-friendly cafes',
+    'Nature access', 'Nightlife', 'Transit quality'
+  ];
+
+  // A fresh array of fresh objects every call: callers mutate factor objects
+  // in place (editing a level), so handing out one shared array would let one
+  // user's edit corrupt every future "first open" default.
+  function defaultFactors() {
+    return DEFAULT_FACTOR_LABELS.map(function (label) {
+      return { label: label, level: 'medium', custom: false };
+    });
+  }
+
+  // Trims, drops anything without a real label or a level on the fixed scale,
+  // dedupes by label (case-insensitive, first spelling wins, same rule as
+  // normalizeProfileList), assigns a slug id (deduped against itself), and
+  // caps the list. A dropped/invalid entry is simply absent, not corrected:
+  // this is normalize-on-read, not a validator with error messages.
+  function normalizeFactors(v) {
+    var out = [];
+    var seenLabel = {};
+    var seenId = {};
+    (Array.isArray(v) ? v : []).forEach(function (f) {
+      if (!f || typeof f !== 'object') return;
+      var label = trimStr(f.label);
+      if (!label) return;
+      var key = label.toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(seenLabel, key)) return;
+      if (FACTOR_LEVELS.indexOf(f.level) === -1) return;
+      if (out.length >= PROFILE_CAP) return;
+      seenLabel[key] = 1;
+      var id = slug(label) || 'factor';
+      var base = id, n = 2;
+      while (Object.prototype.hasOwnProperty.call(seenId, id)) { id = base + '-' + n; n++; }
+      seenId[id] = 1;
+      out.push({ id: id, label: label, level: f.level, custom: !!f.custom });
+    });
+    return out;
+  }
+
   // Trims, drops empties, dedupes case-insensitively keeping the FIRST spelling
   // (order is priority, so the earlier entry is the one the traveler meant),
   // and caps the list.
@@ -676,15 +729,22 @@ var CityOps = (function () {
       schema: 1,
       interests: normalizeProfileList(src.interests),
       avoid: normalizeProfileList(src.avoid),
+      factors: normalizeFactors(src.factors),
       notes: trimStr(src.notes).slice(0, PROFILE_NOTES_CAP),
+      // Feature 3 (example-city visibility): explicit user override, off by
+      // default. Lives on the profile so it persists and syncs the same way
+      // everything else here does; the app shell is the only reader.
+      showExample: src.showExample === true,
       updated: (typeof src.updated === 'string' && src.updated) ? src.updated : null
     };
   }
 
   // Empty means "nothing for the AI to work with": the stamp does not count.
+  // showExample is a display preference, not research input, so it never
+  // counts toward "empty" either.
   function profileIsEmpty(p) {
     var n = normalizeProfile(p);
-    return !n.interests.length && !n.avoid.length && !n.notes;
+    return !n.interests.length && !n.avoid.length && !n.notes && !n.factors.length;
   }
 
   var INTERESTS_SECTION = { id: 'interests', label: 'My interests', icon: '⭐' };
@@ -725,6 +785,35 @@ var CityOps = (function () {
     });
   }
 
+  // Planning-factor lines for the Traveler interests block. `blocker` factors
+  // read as hard exclusions (the AI must not offer a weak pick on that
+  // dimension); the rest read as weighted preferences, strongest first.
+  // 'not important' factors are left out entirely: the traveler said this
+  // dimension does not matter, and a "no preference" line would only be
+  // noise the AI has to read past.
+  var FACTOR_WEIGHT_ORDER = ['very important', 'medium', 'low'];
+
+  function factorsBlockLines(factors) {
+    var b = [];
+    var blockers = factors.filter(function (f) { return f.level === 'blocker'; });
+    var weighted = FACTOR_WEIGHT_ORDER.reduce(function (acc, level) {
+      return acc.concat(factors.filter(function (f) { return f.level === level; }));
+    }, []);
+    if (blockers.length) {
+      b.push('Hard exclusions: treat these as non-negotiable. If a pick is ' +
+        'weak on one of these, do not suggest it at all, even as a backup:', '');
+      blockers.forEach(function (f) { b.push('- ' + f.label); });
+      b.push('');
+    }
+    if (weighted.length) {
+      b.push('Weighted preferences, strongest first (favor picks that score ' +
+        'well here over ones that do not, but these are not disqualifying):', '');
+      weighted.forEach(function (f) { b.push('- ' + f.label + ' (' + f.level + ')'); });
+      b.push('');
+    }
+    return b;
+  }
+
   // `lead` is the one instruction line that only makes sense in a whole-guide
   // prompt (where the Interests research section is part of the file). The
   // delta builder shares this formatter and passes no lead, because its own
@@ -742,6 +831,7 @@ var CityOps = (function () {
       p.avoid.forEach(function (x) { b.push('- ' + x); });
       b.push('');
     }
+    if (p.factors && p.factors.length) b = b.concat(factorsBlockLines(p.factors));
     if (p.notes) b.push('Notes: ' + p.notes, '');
     return b;
   }
