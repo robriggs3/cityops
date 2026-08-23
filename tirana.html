@@ -1,0 +1,4035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CityOps Guide</title>
+<style>
+  :root{
+    --bg:#cccccc; --bg-card:#ffffff; --bg-soft:#bdbdbd; --bg-softer:#e8e8e8;
+    --border:#a8a8a8; --border-light:#d0d0d0;
+    --text:#242424; --text-2:#4a4a4a; --text-3:#666666;
+    --accent:#c72027; --accent-hover:#9c181d; --accent-soft:#f3d1d3;
+    --green:#2d7d34; --green-soft:#d4e8d5;
+    --blue:#2c5d8a; --blue-soft:#d3e0ee;
+    --amber:#8a6d00; --amber-soft:#ede1be;
+    --amber-ink:#6b5400; --green-ink:#226428;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--text); line-height:1.5; -webkit-text-size-adjust:100%;}
+  .wrap{max-width:760px; margin:0 auto; padding:0 16px 60px;}
+  header{background:linear-gradient(160deg,var(--accent) 0%,var(--accent-hover) 100%); color:#fff;
+    padding:26px 20px 22px;}
+  .wrap>header{margin:0 -16px 20px; border-radius:0;}
+  header h1{font-size:1.55rem; letter-spacing:.2px;}
+  header .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
+  .facts{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;}
+  .chip{background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25);
+    padding:5px 10px; border-radius:20px; font-size:.8rem;}
+  h2{font-size:1.15rem; margin:26px 0 12px; color:var(--text);
+    display:flex; align-items:center; gap:8px;}
+  h2 .ic{font-size:1.1rem}
+  .card{background:var(--bg-card); border:1px solid var(--border-light); border-radius:14px;
+    padding:14px 16px; margin-bottom:12px; box-shadow:0 1px 2px rgba(0,0,0,.03);}
+  .card h3{font-size:1.02rem; display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap;}
+  .card h3 .price{font-size:.82rem; color:var(--text-3); font-weight:600; white-space:nowrap;}
+  .card p{font-size:.9rem; color:var(--text-3); margin-top:5px;}
+  .row{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:10px;}
+  .hours{display:inline-block; font-size:.78rem; font-weight:600;
+    padding:3px 9px; border-radius:6px;}
+  .late{background:var(--green-soft); color:var(--green-ink);}
+  .day{background:var(--amber-soft); color:var(--amber-ink);}
+  .eve{background:var(--blue-soft); color:var(--blue);}
+  .maplink{display:inline-flex; align-items:center; gap:5px; font-size:.78rem; font-weight:700;
+    color:#fff; background:var(--accent); padding:5px 11px; border-radius:20px; text-decoration:none;}
+  .maplink:active{background:var(--accent-hover);}
+  .weblink{display:inline-flex; align-items:center; gap:5px; font-size:.78rem; font-weight:700;
+    color:var(--accent-hover); background:#fff; border:1.5px solid var(--accent);
+    padding:4px 11px; border-radius:20px; text-decoration:none;}
+  .weblink:active{background:var(--accent-soft);}
+  .phonelink{display:inline-flex; align-items:center; gap:5px; font-size:.78rem; font-weight:700;
+    color:var(--text-3); background:#fff; border:1.5px solid var(--border-light);
+    padding:4px 11px; border-radius:20px; text-decoration:none;}
+  .phonelink:active{background:var(--bg-softer);}
+  .nosite{font-size:.74rem; color:var(--text-3); font-style:italic;}
+  .callout{background:var(--amber-soft); border:1px solid var(--amber); border-left:4px solid var(--amber);
+    border-radius:10px; padding:14px 16px; margin:4px 0 20px; font-size:.9rem;}
+  .callout b{color:var(--amber-ink);}
+  .lead{font-size:.92rem; color:var(--text-3); margin-bottom:6px;}
+  .tag{display:inline-block; font-size:.72rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.4px; color:var(--accent-hover); background:var(--accent-soft); padding:2px 7px; border-radius:5px; margin-right:6px;}
+  .foot{font-size:.78rem; color:var(--text-3); margin-top:24px; text-align:center; line-height:1.6;}
+  a{color:var(--accent);}
+
+
+  /* --- v5: drag to reorder --- */
+  .days .daycard{position:relative; touch-action:pan-y;}
+  .days .daycard .hd{padding-left:40px;}
+  .grip{position:absolute; left:8px; top:7px; width:26px; height:30px;
+    display:flex; align-items:center; justify-content:center; cursor:grab;
+    touch-action:none; border-radius:7px; color:var(--accent-hover); opacity:.45;}
+  .grip:active{cursor:grabbing; opacity:1; background:rgba(199,32,39,.10);}
+  .grip svg{width:15px; height:15px; pointer-events:none;}
+  .daycard.dragging{opacity:.9; box-shadow:0 10px 24px rgba(157,24,29,.22);
+    transform:scale(1.015); z-index:50; position:relative;}
+  .daycard.shifting{transition:transform .18s ease;}
+  .dropline{height:3px; background:var(--accent); border-radius:2px; margin:6px 0;}
+  .reorderbar{display:flex; align-items:center; justify-content:space-between;
+    gap:10px; flex-wrap:wrap; margin:0 0 12px; font-size:.8rem; color:var(--text-3);}
+  .reorderbar button{font:inherit; font-weight:700; color:var(--accent-hover);
+    background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
+    padding:5px 13px; cursor:pointer;}
+  .reorderbar button:hover{border-color:var(--accent);}
+  .reorderbar .saved{color:var(--green); font-weight:700;}
+  @media (prefers-reduced-motion: reduce){ .daycard.shifting{transition:none} }
+
+  /* --- v3 additions --- */
+  .daycard{background:var(--bg-card); border:1px solid var(--border-light); border-radius:14px;
+    padding:0; margin-bottom:12px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.03);}
+  .daycard .hd{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+    background:var(--bg-softer); padding:9px 16px; border-bottom:1px solid var(--border-light);}
+  .daycard .hd .d{font-weight:800; font-size:.8rem; letter-spacing:.6px;
+    text-transform:uppercase; color:var(--text);}
+  .daycard .hd .t{font-size:.82rem; color:var(--text-3);}
+  .daycard .bd{padding:12px 16px 14px;}
+  .daycard .bd h3{font-size:1.02rem; display:flex; justify-content:space-between;
+    align-items:baseline; gap:10px; flex-wrap:wrap;}
+  .daycard .bd h3 .price{font-size:.82rem; color:var(--text-3); font-weight:600; white-space:nowrap;}
+  .daycard .bd p{font-size:.9rem; color:var(--text-3); margin-top:5px;}
+  .backup{background:var(--amber-soft); border:1px dashed var(--amber); border-radius:12px;
+    padding:12px 16px; margin:2px 0 22px;}
+  .backup .bt{font-size:.72rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+    color:var(--amber-ink); margin-bottom:7px;}
+  .backup ul{margin:0; padding-left:18px;}
+  .backup li{font-size:.86rem; color:var(--text-3); margin-bottom:5px;}
+  .backup li b{color:var(--text);}
+  .warn{background:var(--accent-soft); border-left:4px solid var(--accent); border-radius:10px;
+    padding:12px 16px; margin:4px 0 20px; font-size:.88rem; color:var(--text);}
+  .warn b{color:var(--accent-hover);}
+  .links{margin-top:9px; font-size:.82rem;}
+  .links a{font-weight:600; text-decoration:none;}
+  .links span{color:var(--border-light); margin:0 5px;}
+
+  /* --- cityops additions --- */
+  /* neutral badge when no class given */
+  .hours:not(.late):not(.day):not(.eve){background:var(--bg-softer); color:var(--text-3);}
+  .ctl-row{display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;}
+  .ctl{font:inherit; font-size:.74rem; font-weight:700; color:var(--accent-hover);
+    background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
+    padding:4px 11px; cursor:pointer;}
+  .ctl:hover{border-color:var(--accent);}
+  .ctl.to-done:hover{border-color:var(--green); color:var(--green);}
+  .ctl.to-archived:hover{border-color:var(--accent); color:var(--accent);}
+  .item-done{opacity:.55;}
+  .donemark{color:var(--green); font-weight:800; margin-right:6px;}
+  .arch-details{margin:2px 0 22px;}
+  .arch-details summary{font-size:.72rem; font-weight:800; letter-spacing:.6px;
+    text-transform:uppercase; color:var(--text-3); cursor:pointer; padding:6px 0;}
+  .arch-details .card, .arch-details .daycard{opacity:.7;}
+  .toolbar{display:flex; gap:8px; flex-wrap:wrap; margin:0 0 16px; align-items:center;}
+  .toolbar button{font:inherit; font-weight:700; color:var(--accent-hover); background:#fff;
+    border:1.5px solid var(--border-light); border-radius:20px; padding:5px 13px;
+    cursor:pointer; font-size:.8rem;}
+  .toolbar button:hover{border-color:var(--accent);}
+  .toolbar .flag{font-size:.74rem; color:var(--amber); font-weight:700;}
+  .errcard{background:var(--accent-soft); border-left:4px solid var(--accent); border-radius:10px;
+    padding:14px 16px; margin:20px 0; font-size:.9rem;}
+  .errcard b{color:var(--accent-hover);}
+  #notice{font-size:.78rem; color:var(--text-3); margin:8px 0;}
+  .when-line{font-size:.8rem; color:var(--text-3); font-style:italic; margin-top:2px;}
+  .modal-wrap{position:fixed; inset:0; background:rgba(36,36,36,.5); display:flex;
+    align-items:center; justify-content:center; padding:16px; z-index:100;}
+  .modal{background:#fff; border-radius:14px; padding:18px; max-width:640px;
+    width:100%; max-height:85vh; overflow:auto;}
+  .modal textarea{width:100%; min-height:200px; font-family:ui-monospace,Menlo,monospace;
+    font-size:.78rem; border:1px solid var(--border-light); border-radius:8px; padding:10px;}
+  .modal .mrow{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
+  .modal .diff{font-size:.8rem; color:var(--text-3); margin-top:8px; white-space:pre-line;}
+  body.share .ctl-row, body.share .grip, body.share .reorderbar{display:none;}
+  .sec-toggle{font:inherit; color:inherit; background:none; border:none; padding:0;
+    display:flex; align-items:center; gap:8px; cursor:pointer; text-align:left;}
+  .sec-toggle .chev{font-size:.8rem; color:var(--text-3); width:14px; flex:0 0 auto;}
+  .sec-count{font-size:.78rem; color:var(--text-3); font-weight:600; margin-left:6px;}
+  h2.collapsed{opacity:.85; margin-bottom:8px;}
+  body.share .sec-toggle{pointer-events:none;}
+  body.share .sec-toggle .chev{display:none;}
+  .daycard .bd + .bd{border-top:1px dashed var(--border-light);}
+  .sec-meta{font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.4px;
+    color:var(--accent); margin-bottom:2px;}
+  .title-edit{width:100%; font:inherit; font-size:1rem; font-weight:600; padding:8px 10px;
+    border:1.5px solid var(--accent); border-radius:8px; margin-top:4px;}
+  .empty-day .hd{border-bottom:none;}
+  .empty-day .free-day{padding:6px 16px 10px; font-size:.8rem; color:var(--text-3); font-style:italic;}
+  .date-field{font:inherit; font-size:.85rem; padding:6px 10px; border:1px solid var(--border-light);
+    border-radius:8px; background:#fff; color:var(--text);}
+  .intel{margin-top:8px;}
+  .intel summary{font-size:.72rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+    color:var(--text-3); cursor:pointer; padding:4px 0;}
+  .verdict{font-size:.86rem; margin-top:4px;}
+  .tier{display:inline-block; font-size:.68rem; font-weight:800; text-transform:uppercase;
+    letter-spacing:.4px; padding:1px 6px; border-radius:5px; margin-right:6px; vertical-align:middle;}
+  .tier-must{background:var(--green-soft); color:var(--green);}
+  .tier-good{background:var(--bg-softer); color:var(--text-3);}
+  .tier-skip{background:var(--amber-soft); color:var(--amber);}
+  .tips{margin:6px 0 0 18px; font-size:.84rem; color:var(--text-3);}
+  .tips li{margin-bottom:3px;}
+  .intel-src{font-size:.72rem; color:var(--text-3); font-style:italic; margin-top:4px;}
+  /* narrow phones: trim horizontal chrome so cards get the width */
+  @media (max-width: 430px){
+    .wrap{padding:0 10px 48px;}
+    .wrap>header{margin:0 -10px 16px; padding:20px 14px 16px; border-radius:0;}
+    header h1{font-size:1.35rem;}
+    .facts{gap:6px; margin-top:10px;}
+    .chip{padding:4px 9px; font-size:.75rem;}
+    .card{padding:12px 12px; border-radius:12px;}
+    .daycard{border-radius:12px;}
+    .daycard .hd{padding:8px 12px;}
+    .days .daycard .hd{padding-left:38px;}
+    .daycard .bd{padding:10px 12px 12px;}
+    .backup{padding:10px 12px;}
+    .callout, .warn, .errcard{padding:12px 12px;}
+    .toolbar{gap:6px;}
+    .toolbar button{padding:5px 10px; font-size:.75rem;}
+    h2{margin:20px 0 10px;}
+  }
+  @media print{
+    .toolbar, .ctl-row, .grip, .reorderbar, #notice{display:none !important;}
+    body{background:#fff;}
+    .daycard, .card{box-shadow:none; break-inside:avoid;}
+    header{background:var(--accent-hover) !important; -webkit-print-color-adjust:exact;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="notice"></div>
+  <header id="hdr"></header>
+  <div class="toolbar" id="toolbar"></div>
+  <main id="main"></main>
+  <div class="foot" id="foot"></div>
+</div>
+<div id="modal"></div>
+
+<script type="application/json" id="city-data">
+{
+  "schema": 1,
+  "generated": "2026-08-23",
+  "city": {
+    "name": "Tiranë",
+    "country": "Albania",
+    "country_code": "AL",
+    "dates": {
+      "from": "2026-08-22",
+      "to": "2026-08-29"
+    },
+    "nights": 7,
+    "sequence": "7 of 13",
+    "next_stop": {
+      "city": "Ksamil",
+      "arrive": "2026-08-29",
+      "depart": "2026-09-05",
+      "lodging": "Prestige Home Ksamil",
+      "note": "Start a separate CityOps thread."
+    }
+  },
+  "sections": [
+    {
+      "id": "base",
+      "order": 1,
+      "label": "Base"
+    },
+    {
+      "id": "money",
+      "order": 2,
+      "label": "Cash & currency"
+    },
+    {
+      "id": "transport",
+      "order": 3,
+      "label": "Transport"
+    },
+    {
+      "id": "itinerary",
+      "order": 4,
+      "label": "Daily plan"
+    },
+    {
+      "id": "restaurants",
+      "order": 5,
+      "label": "Restaurants"
+    },
+    {
+      "id": "coffee",
+      "order": 6,
+      "label": "Coffee"
+    },
+    {
+      "id": "bars",
+      "order": 7,
+      "label": "Bars"
+    },
+    {
+      "id": "activities",
+      "order": 8,
+      "label": "Activities"
+    },
+    {
+      "id": "services",
+      "order": 9,
+      "label": "Services"
+    },
+    {
+      "id": "laundry",
+      "order": 10,
+      "label": "Laundry"
+    },
+    {
+      "id": "safety",
+      "order": 11,
+      "label": "Health & safety"
+    },
+    {
+      "id": "logistics",
+      "order": 12,
+      "label": "Logistics"
+    },
+    {
+      "id": "context",
+      "order": 13,
+      "label": "Context"
+    },
+    {
+      "id": "corrections",
+      "order": 14,
+      "label": "Corrections"
+    },
+    {
+      "id": "tasks",
+      "order": 15,
+      "label": "Open items"
+    }
+  ],
+  "items": [
+    {
+      "id": "base-01",
+      "section": "base",
+      "name": "Heart of Tirana Apartments",
+      "status": "plan",
+      "body": "Rruga e Bogdanëve 25, Tiranë 1001 · +355 68 333 7362 · 4.9★ (38). Building exterior is unassuming and under partial reconstruction. Look for the P25 sign, enter on the left, first floor.",
+      "meta": {
+        "coords": {
+          "lat": 41.33,
+          "lng": 19.8101
+        },
+        "place_id": "ChIJt106p2cxUBMR_s0BenjOEaw",
+        "url": "https://www.google.com/maps/search/?api=1&query=Heart+Of+Tirana+Apartments&query_place_id=ChIJt106p2cxUBMR_s0BenjOEaw",
+        "neighborhood": "Rruga e Durrësit / Zogu i Zi corridor",
+        "quirks": [
+          "Occasional street and dog noise",
+          "Washing machine in entrance hall — 6 kg, WASHER ONLY, no dryer function",
+          "Building under partial reconstruction (relevant to tap-water pipe risk)"
+        ]
+      }
+    },
+    {
+      "id": "base-02",
+      "section": "base",
+      "name": "Walking distances",
+      "status": "plan",
+      "body": "Minutes on foot from the apartment.",
+      "meta": {
+        "distances_min": {
+          "Ira Shehaj Nails & Podology": 3,
+          "Raiffeisen ATM (Rr. e Kavajës)": 3,
+          "Capital Exchange": 4,
+          "OSL Exchange": 5,
+          "Streha Coffee": 6,
+          "BLEND Coffee": 6,
+          "Union Bank ATM (Ring Center)": 8,
+          "Skanderbeg Square": 9,
+          "Thai Massage Tirana": 10,
+          "Oda restaurant": 12,
+          "Coolab coworking": 12,
+          "Blloku core / barbers": 13,
+          "Pyramid of Tirana": 14,
+          "Pazari i Ri": 15,
+          "Bliss Spa & Fizioterapi": 20,
+          "Grand Park / lake": 25
+        }
+      }
+    },
+    {
+      "id": "base-03",
+      "section": "base",
+      "name": "Payment",
+      "status": "plan",
+      "body": "May be cash to on-site cleaning staff rather than the host — confirm handoff in advance.",
+      "meta": {}
+    },
+    {
+      "id": "money-01",
+      "section": "money",
+      "name": "Mental math",
+      "status": "plan",
+      "body": "Drop two zeros, add 20%. (1,800 L → 18 → ~$22) · Multiply by 8, add a zero. ($25 → 200 → 2,000 L) · Just drop two zeros. (1,500 L ≈ €15)",
+      "meta": {
+        "rates": {
+          "usd_to_all": 82,
+          "eur_to_all": 97
+        },
+        "trend": "Lek strengthened ~6% vs USD over the past year."
+      }
+    },
+    {
+      "id": "money-02",
+      "section": "money",
+      "name": "Price anchors",
+      "status": "plan",
+      "body": "A 10,000 L note feels like a fortune and is only ~$122. Inverse trap: a 200 L coffee feels expensive and is $2.45.",
+      "meta": {
+        "anchors": [
+          {
+            "lek": 100,
+            "usd": 1.2,
+            "eur": 1,
+            "buys": "Tip; a byrek"
+          },
+          {
+            "lek": 200,
+            "usd": 2.45,
+            "eur": 2,
+            "buys": "Espresso; local beer"
+          },
+          {
+            "lek": 350,
+            "usd": 4.25,
+            "eur": 3.6,
+            "buys": "Cappuccino; short taxi hop"
+          },
+          {
+            "lek": 500,
+            "usd": 6.1,
+            "eur": 5.15,
+            "buys": "One ATM fee (Union Bank)"
+          },
+          {
+            "lek": 800,
+            "usd": 9.75,
+            "eur": 8.25,
+            "buys": "Taxi across town; glass of house wine"
+          },
+          {
+            "lek": 1000,
+            "usd": 12.2,
+            "eur": 10.3,
+            "buys": "Casual lunch"
+          },
+          {
+            "lek": 1500,
+            "usd": 18.3,
+            "eur": 15.45,
+            "buys": "Barber (cut + beard); Dajti cable car"
+          },
+          {
+            "lek": 1800,
+            "usd": 22,
+            "eur": 18.55,
+            "buys": "Solid dinner, no drinks"
+          },
+          {
+            "lek": 2000,
+            "usd": 24.4,
+            "eur": 20.6,
+            "buys": "Airport taxi (app rate)"
+          },
+          {
+            "lek": 2500,
+            "usd": 30.5,
+            "eur": 25.75,
+            "buys": "Dinner at Era, one person"
+          },
+          {
+            "lek": 3000,
+            "usd": 36.6,
+            "eur": 30.9,
+            "buys": "Dinner with wine"
+          },
+          {
+            "lek": 5000,
+            "usd": 61,
+            "eur": 51.55,
+            "buys": "Big seafood dinner for two"
+          },
+          {
+            "lek": 10000,
+            "usd": 122,
+            "eur": 103,
+            "buys": "Largest banknote"
+          }
+        ]
+      }
+    },
+    {
+      "id": "money-03",
+      "section": "money",
+      "name": "1. ATM withdrawal",
+      "status": "plan",
+      "body": "Do this. Best rate available.",
+      "meta": {
+        "strategy": "Albanian ATMs charge a FLAT fee per withdrawal — so few, large pulls.",
+        "fees": [
+          {
+            "bank": "Union Bank",
+            "fee_all": 500,
+            "note": "Cheapest. Use this one."
+          },
+          {
+            "bank": "Credins / Intesa",
+            "fee_all": 600
+          },
+          {
+            "bank": "Raiffeisen",
+            "fee_all": 800
+          },
+          {
+            "bank": "Euronet",
+            "fee_all": null,
+            "note": "Avoid entirely."
+          }
+        ],
+        "per_transaction_cap_all": "30,000–50,000",
+        "rules": [
+          "Always decline conversion / choose 'charge in ALL' — DCC markups run 4–13%.",
+          "Use bank-branch ATMs, not freestanding units (skimming risk).",
+          "Never let anyone 'help' you at an ATM."
+        ]
+      }
+    },
+    {
+      "id": "money-04",
+      "section": "money",
+      "name": "2. EUR cash",
+      "status": "plan",
+      "body": "Backup only. Carry €200–300 reserve. Coastal Albania accepts euros informally but change returns in lek at a poor internal rate — always ask the lek price first.",
+      "meta": {}
+    },
+    {
+      "id": "money-05",
+      "section": "money",
+      "name": "3. USD cash",
+      "status": "plan",
+      "body": "Last resort. Harder to place than EUR, worse spread.",
+      "meta": {}
+    },
+    {
+      "id": "money-06",
+      "section": "money",
+      "name": "Withdrawal plan",
+      "status": "plan",
+      "body": "Target 80,000 ALL (~$975) across two pulls.",
+      "meta": {
+        "target_all": 80000,
+        "target_usd": 975,
+        "pulls": [
+          {
+            "n": 1,
+            "amount_all": 40000,
+            "when": "Arrival, Sat Aug 22",
+            "where": "Union Bank ATM, Ring Center"
+          },
+          {
+            "n": 2,
+            "amount_all": 40000,
+            "when": "Before Aug 29 departure",
+            "why": "Ksamil ATMs are few, busy, and run dry in peak August."
+          }
+        ],
+        "denominations": "Ask for a mix. Keep 100/200/500 L notes for tips, taxis, market vendors."
+      }
+    },
+    {
+      "id": "money-07",
+      "section": "money",
+      "name": "Budget",
+      "status": "plan",
+      "body": "Total exposure ~108,000 ALL (~$1,320); cash share 65–75%.",
+      "meta": {
+        "tirana_7n": {
+          "taxis": 8000,
+          "coffee_breakfast": 3000,
+          "lunches": 6000,
+          "dinners": 19000,
+          "groceries": 4000,
+          "grooming": 7500,
+          "laundry": 700,
+          "museums_cablecar": 4000,
+          "tips_buffer": 4000,
+          "subtotal": 56000
+        },
+        "ksamil_7n": {
+          "taxis": 4000,
+          "coffee_breakfast": 3000,
+          "lunches": 8000,
+          "dinners": 16000,
+          "groceries": 4000,
+          "laundry": 700,
+          "excursions": 2500,
+          "beach_clubs": 10000,
+          "tips_buffer": 4000,
+          "subtotal": 52000
+        },
+        "total_exposure_all": 108000,
+        "total_exposure_usd": 1320,
+        "cash_share_pct": "65–75"
+      }
+    },
+    {
+      "id": "money-08",
+      "section": "money",
+      "name": "Union Bank ATM — Ring Center",
+      "status": "plan",
+      "body": "Recommended.",
+      "meta": {
+        "name": "Union Bank ATM — Ring Center",
+        "walk_min": 8,
+        "hours": "24h",
+        "fee_all": 500,
+        "recommended": true,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Union+Bank+ATM+Tirana+Ring+Center&query_place_id=ChIJuRefVS4xUBMRxGQTjuqWDbc"
+      }
+    },
+    {
+      "id": "money-09",
+      "section": "money",
+      "name": "Raiffeisen — Rr. e Kavajës",
+      "status": "plan",
+      "body": "Convenience option, ~300 ALL more per pull.",
+      "meta": {
+        "name": "Raiffeisen — Rr. e Kavajës",
+        "walk_min": 3,
+        "fee_all": 800,
+        "recommended": false,
+        "note": "Convenience option, ~300 ALL more per pull.",
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Raiffeisen+Bank+Rruga+e+Kavajes&query_place_id=ChIJ_0iUSgYxUBMR3mcyvnVNZrk"
+      }
+    },
+    {
+      "id": "money-10",
+      "section": "money",
+      "name": "OSL Exchange (Ria Money Transfer / Easy Pay)",
+      "status": "plan",
+      "body": "Best-rate reputation in town. Staff speak English and Turkish.",
+      "meta": {
+        "name": "OSL Exchange (Ria Money Transfer / Easy Pay)",
+        "address": "Rruga e Kavajës",
+        "walk_min": 5,
+        "rating": 5,
+        "rating_count": 77,
+        "phone": "+355 69 207 1964",
+        "hours": {
+          "mon_sat": "08:00–23:00",
+          "sun": "10:00–14:00, 15:00–22:00"
+        },
+        "open_sunday": true,
+        "note": "Best-rate reputation in town. Staff speak English and Turkish.",
+        "place_id": "ChIJZRDaAb4xUBMRvAUUrq7MSR0",
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=OSL+EXCHANGE&query_place_id=ChIJZRDaAb4xUBMRvAUUrq7MSR0"
+      }
+    },
+    {
+      "id": "money-11",
+      "section": "money",
+      "name": "Capital Exchange",
+      "status": "plan",
+      "body": "Only 2 reviews — unproven.",
+      "meta": {
+        "name": "Capital Exchange",
+        "address": "Rruga e Durrësit, near Hotel Colosseo",
+        "walk_min": 4,
+        "rating": 5,
+        "rating_count": 2,
+        "hours": {
+          "daily": "08:00–21:00"
+        },
+        "open_sunday": true,
+        "spread_pct": 0.4,
+        "note": "Only 2 reviews — unproven.",
+        "place_id": "ChIJJ5lxJtUxUBMRTI_aOsEK8xg",
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Capital+Exchange+Tirana&query_place_id=ChIJJ5lxJtUxUBMRTI_aOsEK8xg"
+      }
+    },
+    {
+      "id": "money-12",
+      "section": "money",
+      "name": "Iliria'98 Currency Exchange (4 branches)",
+      "status": "plan",
+      "body": "Multiple reviews report shortchanging — one customer out CAD $200, another out €20. Count at the window before leaving.",
+      "meta": {
+        "name": "Iliria'98 Currency Exchange (4 branches)",
+        "hours": {
+          "mon_sat": "08:00–20:00 (Skytower branch to 21:00)",
+          "sun": "Closed"
+        },
+        "open_sunday": false,
+        "warning": "Multiple reviews report shortchanging — one customer out CAD $200, another out €20. Count at the window before leaving.",
+        "branches": [
+          "Rr. Ibrahim Rugova",
+          "Rr. e Dibrës",
+          "Rr. Myslym Shyri",
+          "Opposite Skytower"
+        ]
+      }
+    },
+    {
+      "id": "transport-01",
+      "section": "transport",
+      "name": "Bolt and Uber do not exist here",
+      "status": "plan",
+      "body": "Bolt does NOT operate anywhere in Albania. Neither does Uber. A 2024 Bolt launch was rumored and never happened. Opening either app returns 'no rides available' — permanent, not a glitch. Many published safety guides still tell you to use Bolt here; ignore them.",
+      "meta": {}
+    },
+    {
+      "id": "transport-02",
+      "section": "transport",
+      "name": "Apps to install",
+      "status": "plan",
+      "body": "Install Patoko + Clust minimum and register a card in each on wifi before landing.",
+      "meta": {
+        "apps": [
+          {
+            "name": "Patoko",
+            "priority": 1,
+            "why": "Typically cheapest (~15–20% under street taxis). English/Italian/Albanian. Any international number, foreign cards."
+          },
+          {
+            "name": "Clust",
+            "priority": 2,
+            "why": "Best nationwide coverage — also works in Sarandë, which matters for Aug 29."
+          },
+          {
+            "name": "Vrapon",
+            "priority": 3,
+            "why": "Largest fleet (~1,500 cars), advance booking, all Albanian cities."
+          },
+          {
+            "name": "Speed Taxi / Taxi.al",
+            "priority": 4,
+            "why": "Dispatch-style backup. Closer to calling a cab than true ride-hailing."
+          }
+        ]
+      }
+    },
+    {
+      "id": "transport-03",
+      "section": "transport",
+      "name": "Fares",
+      "status": "plan",
+      "body": "Fares rise ~5% after 22:00. Tirana is the cheapest taxi market in Albania. Sarandë is the most expensive — brace for next week.",
+      "meta": {
+        "fares_all": [
+          {
+            "route": "Airport (TIA) → center",
+            "app": "1,200–1,800",
+            "street": "2,000–2,500"
+          },
+          {
+            "route": "Short hop in center",
+            "app": "300–500",
+            "street": "500–800"
+          },
+          {
+            "route": "Base → Bunk'Art 1 / Dajti",
+            "app": "700–1,000",
+            "street": "~1,200"
+          },
+          {
+            "route": "Base → bus terminal (Aug 29)",
+            "app": "600–900",
+            "street": "1,000–1,200"
+          }
+        ]
+      }
+    },
+    {
+      "id": "transport-04",
+      "section": "transport",
+      "name": "Pay in lek",
+      "status": "plan",
+      "body": "Pay in lek. Drivers who accept euros invent the rate — you lose 10–20%. Ask the lek price first, every time. Keep small notes; handing over a 2,000 L note for a 400 L ride reliably produces 'no change'.",
+      "meta": {}
+    },
+    {
+      "id": "transport-05",
+      "section": "transport",
+      "name": "Card acceptance",
+      "status": "plan",
+      "body": "Where cards work and where they don't.",
+      "meta": {
+        "contexts": [
+          {
+            "context": "Ride-hail apps",
+            "card": true,
+            "note": "Main card workaround for transport."
+          },
+          {
+            "context": "Street taxis",
+            "card": false,
+            "note": "Cash only. Readers are rare and mysteriously broken when present."
+          },
+          {
+            "context": "Airport taxi rank",
+            "card": false,
+            "note": "Negotiate before getting in."
+          },
+          {
+            "context": "Restaurants (mid/upscale)",
+            "card": true
+          },
+          {
+            "context": "Cafés, byrek stalls, markets",
+            "card": false,
+            "note": "Pazari i Ri is cash throughout."
+          },
+          {
+            "context": "Museums / cable car",
+            "card": "mixed",
+            "note": "Carry lek."
+          },
+          {
+            "context": "Barbers",
+            "card": false,
+            "note": "Bring ~2,000 L."
+          },
+          {
+            "context": "Apple / Google Pay",
+            "card": "limited",
+            "note": "Exists in Tirana, don't rely on it. Useless in Ksamil."
+          },
+          {
+            "context": "Amex / Discover",
+            "card": false,
+            "note": "Effectively useless nationwide. Visa/Mastercard only."
+          }
+        ]
+      }
+    },
+    {
+      "id": "itinerary-01",
+      "section": "itinerary",
+      "name": "Sat 2026-08-22",
+      "status": "plan",
+      "body": "AM: Arrive TIA 14:30 → taxi app to base · PM: ATM pull #1 · groceries · settle in · Eve: Jarna Traditional Restaurant (4 min walk) or Oda",
+      "meta": {
+        "date": "2026-08-22"
+      }
+    },
+    {
+      "id": "itinerary-02",
+      "section": "itinerary",
+      "name": "Sun 2026-08-23",
+      "status": "plan",
+      "body": "AM: Coffee at Streha · OSL Exchange open 10:00 if needed · PM: Skanderbeg Sq → National History Museum mosaic → Bunk'Art 2 · Eve: Pyramid at sunset, then Komiteti for raki",
+      "meta": {
+        "date": "2026-08-23",
+        "note": "Ira Shehaj and most exchange offices closed Sundays. Barber 919 IS open."
+      }
+    },
+    {
+      "id": "itinerary-03",
+      "section": "itinerary",
+      "name": "Mon 2026-08-24",
+      "status": "plan",
+      "body": "AM: Coolab day pass · PM: Ira Shehaj podology pedicure · Barber 919 · Eve: Era Blloku — arrive 18:00 sharp or queue",
+      "meta": {
+        "date": "2026-08-24"
+      }
+    },
+    {
+      "id": "itinerary-04",
+      "section": "itinerary",
+      "name": "Tue 2026-08-25",
+      "status": "plan",
+      "body": "AM: Pazari i Ri market run · PM: Work block · laundry (in-unit washer, air dry) · Eve: The Kitchen Blloku (tapas)",
+      "meta": {
+        "date": "2026-08-25"
+      }
+    },
+    {
+      "id": "itinerary-05",
+      "section": "itinerary",
+      "name": "Wed 2026-08-26",
+      "status": "plan",
+      "body": "AM: Ride to Bunk'Art 1 (2 hrs, 16°C inside) · PM: Dajti Ekspres cable car — 200 m away, same trip · Eve: Mullixhiu — reserve in advance",
+      "meta": {
+        "date": "2026-08-26",
+        "constraint": "Dajti Ekspres is CLOSED TUESDAYS. Wed is the slot."
+      }
+    },
+    {
+      "id": "itinerary-06",
+      "section": "itinerary",
+      "name": "Thu 2026-08-27",
+      "status": "plan",
+      "body": "AM: Coffee crawl: The Back Room → Frut'za · PM: Work block · House of Leaves · Eve: Taverna Peshkatari (seafood)",
+      "meta": {
+        "date": "2026-08-27"
+      }
+    },
+    {
+      "id": "itinerary-07",
+      "section": "itinerary",
+      "name": "Fri 2026-08-28",
+      "status": "plan",
+      "body": "AM: Grand Park / lake loop walk · PM: ATM pull #2 · deep tissue massage (Thai or Bliss) · pack · Eve: Sky Club rotating bar at sunset, or repeat a favorite",
+      "meta": {
+        "date": "2026-08-28"
+      }
+    },
+    {
+      "id": "itinerary-08",
+      "section": "itinerary",
+      "name": "Sat 2026-08-29",
+      "status": "plan",
+      "body": "AM: Ride booked, leave 08:45 → bus terminal · PM: 09:45 Tisa Travel → Sarandë, arrive 14:00 · Eve: 15:00 Trans Butrinti → Ksamil",
+      "meta": {
+        "date": "2026-08-29"
+      }
+    },
+    {
+      "id": "restaurants-01",
+      "section": "restaurants",
+      "name": "Jarna Traditional Restaurant",
+      "status": "plan",
+      "body": "Multiple reviews are specifically first-night-in-Tirana reviews. Order fërgesë, fresh oven bread, kërnacka, pllaqi.",
+      "meta": {
+        "category": "restaurant",
+        "subcategory": "traditional",
+        "rating": 4.9,
+        "rating_count": 961,
+        "walk_min": 4,
+        "address": "Rruga Fortuzi",
+        "phone": "+355 69 548 7543",
+        "hours": "to 23:00",
+        "cash_only": true,
+        "budget_all": "1,500–2,000"
+      }
+    },
+    {
+      "id": "restaurants-02",
+      "section": "restaurants",
+      "name": "KOPE",
+      "status": "plan",
+      "body": "Alternative to Jarna on the same street if you want steak.",
+      "meta": {
+        "category": "restaurant",
+        "subcategory": "steak",
+        "rating": 4.9,
+        "rating_count": 1634,
+        "walk_min": 2,
+        "address": "Rruga Fortuzi"
+      }
+    },
+    {
+      "id": "restaurants-03",
+      "section": "restaurants",
+      "name": "Mullixhiu",
+      "status": "plan",
+      "body": "Chef Bledar Kola. Modern Albanian tasting menu, lakeside cabin at the Grand Park entrance. Reviewers call the price-to-quality ratio a bargain. Wood fire makes the room very warm — an August consideration. ~2 km, taxi.",
+      "meta": {
+        "category": "restaurant",
+        "subcategory": "splurge",
+        "rating": 4.2,
+        "rating_count": 2310,
+        "phone": "+355 69 666 0444",
+        "reservation_required": true,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Mullixhiu&query_place_id=ChIJtU6qmvwwUBMRmQMszz1aCac"
+      }
+    },
+    {
+      "id": "restaurants-04",
+      "section": "restaurants",
+      "name": "Taverna Peshkatari",
+      "status": "plan",
+      "body": "Best seafood in the city per reviews. Pick your fish from the display. Grilled octopus is the standout. Hidden on a side street.",
+      "meta": {
+        "category": "restaurant",
+        "subcategory": "splurge",
+        "rating": 4.9,
+        "rating_count": 1875,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Taverna+Peshkatari&query_place_id=ChIJ8W6QhWkxUBMRcwGiAs5K5-I"
+      }
+    },
+    {
+      "id": "restaurants-05",
+      "section": "restaurants",
+      "name": "Padam Boutique",
+      "status": "plan",
+      "body": "Upscale, live music, velvet booths. Priciest of the set; reviews more mixed on value.",
+      "meta": {
+        "category": "restaurant",
+        "subcategory": "splurge",
+        "rating": 4.5,
+        "rating_count": 329,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Padam+Boutique+Hotel&query_place_id=ChIJiRaRiRsxUBMRjp9MKTJTl2c"
+      }
+    },
+    {
+      "id": "restaurants-06",
+      "section": "restaurants",
+      "name": "Era Blloku",
+      "status": "plan",
+      "body": "The institution. Pistachio meatballs with yogurt and the beef casserole are the repeat orders. Arrive 18:00 or queue out the door.",
+      "meta": {
+        "category": "restaurant",
+        "subcategory": "traditional",
+        "rating": 4.6,
+        "rating_count": 4416,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Era+Blloku&query_place_id=ChIJIxwHRAIxUBMRVC_DEyTXYgA"
+      }
+    },
+    {
+      "id": "restaurants-07",
+      "section": "restaurants",
+      "name": "Oda",
+      "status": "plan",
+      "body": "Closest good dinner to base. Fërgesë, stuffed peppers, courtyard seating, Albanian music. Menu leans heavily into offal. Reserve or go early.",
+      "meta": {
+        "category": "restaurant",
+        "subcategory": "traditional",
+        "rating": 4.3,
+        "rating_count": 5713,
+        "walk_min": 12,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Oda+Restaurant&query_place_id=ChIJ4WtZ4BAxUBMRHZQho580f80"
+      }
+    },
+    {
+      "id": "restaurants-08",
+      "section": "restaurants",
+      "name": "The Kitchen Blloku",
+      "status": "plan",
+      "body": "Tapas, full bar, beer on tap.",
+      "meta": {
+        "category": "restaurant",
+        "subcategory": "casual",
+        "rating": 4.9,
+        "rating_count": 225,
+        "closed_sunday": true,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=The+Kitchen+blloku&query_place_id=ChIJ7ar4lpExUBMRyVK8Jzank-U"
+      }
+    },
+    {
+      "id": "restaurants-09",
+      "section": "restaurants",
+      "name": "In's Blloku",
+      "status": "plan",
+      "body": "All-day brunch, healthy bowls, strong AC (relevant in August), big menu, low prices.",
+      "meta": {
+        "category": "restaurant",
+        "subcategory": "casual",
+        "rating": 5,
+        "rating_count": 668,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Ins+Blloku&query_place_id=ChIJoww0BbExUBMRBjZvYA1boIU"
+      }
+    },
+    {
+      "id": "restaurants-10",
+      "section": "restaurants",
+      "name": "Luna Mare",
+      "status": "plan",
+      "body": "Seafood + Italian, outdoor dining, west of center.",
+      "meta": {
+        "category": "restaurant",
+        "subcategory": "casual",
+        "rating": 4.9,
+        "rating_count": 389,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Luna+Mare+Tirana&query_place_id=ChIJ-ZanTa8xUBMRlUEXawyUwOI"
+      }
+    },
+    {
+      "id": "restaurants-11",
+      "section": "restaurants",
+      "name": "Galeone",
+      "status": "plan",
+      "body": "Seafood priced by the kilo. Business-lunch friendly.",
+      "meta": {
+        "category": "restaurant",
+        "subcategory": "casual",
+        "rating": 4.8,
+        "rating_count": 448,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Galeone+Seafood+Restaurant&query_place_id=ChIJSWZLHoIxUBMRXc5n7tg7lWM"
+      }
+    },
+    {
+      "id": "coffee-01",
+      "section": "coffee",
+      "name": "Streha Coffee & Community",
+      "status": "plan",
+      "body": "Best work spot near base. Fast wifi, non-smoking indoor rooms, neighborhood feel, reasonable prices. Hosts events.",
+      "meta": {
+        "category": "coffee",
+        "rating": 4.9,
+        "rating_count": 170,
+        "walk_min": 6,
+        "address": "Rruga Mihal Ciko 15",
+        "hours": "07:00–23:00 daily",
+        "open_sunday": true,
+        "work_friendly": true,
+        "place_id": "ChIJJ110YQAxUBMRT--Ia1i_dBs",
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Streha+Coffee+Community&query_place_id=ChIJJ110YQAxUBMRT--Ia1i_dBs"
+      }
+    },
+    {
+      "id": "coffee-02",
+      "section": "coffee",
+      "name": "BLEND Coffee & Eatery",
+      "status": "plan",
+      "body": "The breakfast option near base. Eggs Benedict and pancakes both called out repeatedly.",
+      "meta": {
+        "category": "coffee",
+        "rating": 4.7,
+        "rating_count": 185,
+        "walk_min": 6,
+        "address": "Dedë Gjo Luli 24",
+        "hours": "07:00–23:30 daily",
+        "open_sunday": true,
+        "phone": "+355 69 209 9622",
+        "place_id": "ChIJa3_toLQxUBMRB7WcXmfWFcM"
+      }
+    },
+    {
+      "id": "coffee-03",
+      "section": "coffee",
+      "name": "SECA Coffee",
+      "status": "plan",
+      "body": "Repeatedly named best freddo espresso in Tirana — the August drink. Earliest opening in the city.",
+      "meta": {
+        "category": "coffee",
+        "rating": 5,
+        "rating_count": 258,
+        "walk_min": 17,
+        "hours": "06:30–20:30 (Sun from 07:30)",
+        "open_sunday": true,
+        "phone": "+355 68 665 0505",
+        "place_id": "ChIJq7VhEWkxUBMRcHZi6RzXZAU"
+      }
+    },
+    {
+      "id": "coffee-04",
+      "section": "coffee",
+      "name": "The Back Room",
+      "status": "plan",
+      "body": "The coffee-nerd pick. Small, Sheshi Wilson. Laptop-tolerant.",
+      "meta": {
+        "category": "coffee",
+        "rating": 4.9,
+        "rating_count": 183,
+        "hours": "09:00–19:00 daily",
+        "open_sunday": true,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=The+Back+Room+Specialty+Coffee&query_place_id=ChIJ9anxYJIxUBMRwSKQChSnYf0"
+      }
+    },
+    {
+      "id": "coffee-05",
+      "section": "coffee",
+      "name": "Frut'za Blloku",
+      "status": "plan",
+      "body": "Laptop-friendly, misting fans outside, all-day brunch.",
+      "meta": {
+        "category": "coffee",
+        "rating": 4.8,
+        "rating_count": 351,
+        "hours": "07:00–23:00 daily",
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Frutza+Blloku&query_place_id=ChIJq7VMVlQxUBMRfLuE4G-K2-o"
+      }
+    },
+    {
+      "id": "coffee-06",
+      "section": "coffee",
+      "name": "Frut'za Vogel",
+      "status": "plan",
+      "body": "Sister location. ModBar setup, in-house roastery.",
+      "meta": {
+        "category": "coffee",
+        "rating": 4.9,
+        "rating_count": 204,
+        "hours": "07:00–23:00 daily",
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Frutza+Vogel+Specialty+Coffee&query_place_id=ChIJQ0otrwMxUBMRonQ2Ffsfkek"
+      }
+    },
+    {
+      "id": "coffee-07",
+      "section": "coffee",
+      "name": "RUBI Cakes & Specialty Coffee",
+      "status": "plan",
+      "body": "Quiet, good for remote work. Strong matcha.",
+      "meta": {
+        "category": "coffee",
+        "rating": 4.9,
+        "rating_count": 107,
+        "hours": "09:00–22:00 (Sun to 15:00)",
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=RUBI+Cakes+Specialty+Coffee+Wilson&query_place_id=ChIJiSqPYw0xUBMR9C1hY5g8LVQ"
+      }
+    },
+    {
+      "id": "coffee-08",
+      "section": "coffee",
+      "name": "Mulliri (Rr. e Barrikadave)",
+      "status": "plan",
+      "body": "The local chain, done well. Most drinks under 200 L. Closest branch to base.",
+      "meta": {
+        "category": "coffee",
+        "rating": 4.4,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Mulliri+Rruga+e+Barrikadave&query_place_id=ChIJD2n7vRExUBMR44er4GbSEFE"
+      }
+    },
+    {
+      "id": "coffee-09",
+      "section": "coffee",
+      "name": "505 Café",
+      "status": "plan",
+      "body": "",
+      "meta": {
+        "category": "coffee",
+        "rating": 4.9,
+        "rating_count": 279,
+        "closed_sunday": true
+      }
+    },
+    {
+      "id": "coffee-10",
+      "section": "coffee",
+      "name": "Matchai Store",
+      "status": "plan",
+      "body": "Japanese matcha bar. Very limited days.",
+      "meta": {
+        "category": "coffee",
+        "rating": 4.9,
+        "rating_count": 185,
+        "hours": "Fri–Sat only, 08:00–21:30"
+      }
+    },
+    {
+      "id": "coffee-11",
+      "section": "coffee",
+      "name": "The Backyard at Coolab",
+      "status": "plan",
+      "body": "",
+      "meta": {
+        "category": "coffee",
+        "rating": 4.9,
+        "rating_count": 34,
+        "closed_sunday": true
+      }
+    },
+    {
+      "id": "bars-01",
+      "section": "bars",
+      "name": "Komiteti Kafe-Muzeum",
+      "status": "plan",
+      "body": "Raki flight ~1,700 L for 8. Communist-kitsch rooms. Best late option that isn't a nightclub.",
+      "meta": {
+        "category": "bar",
+        "rating": 4.4,
+        "rating_count": 1556,
+        "hours": "07:00–00:00",
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Komiteti+Kafe+Muzeum&query_place_id=ChIJOYWBuxsxUBMRCpjsacARfuY"
+      }
+    },
+    {
+      "id": "bars-02",
+      "section": "bars",
+      "name": "Sky Club",
+      "status": "plan",
+      "body": "Largest rotating bar in the Balkans, full turn takes an hour. Go for sunset. Drinks yes, dinner no — the restaurant is at the base with no view and weak reviews.",
+      "meta": {
+        "category": "bar",
+        "rating": 4.4,
+        "rating_count": 2233,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Sky+Club+Tirana&query_place_id=ChIJK1CMo_sxUBMRAPyHhSO2xmg"
+      }
+    },
+    {
+      "id": "bars-03",
+      "section": "bars",
+      "name": "The View Lounge",
+      "status": "plan",
+      "body": "23rd floor, cheaper than Sky Club, good coffee, quieter.",
+      "meta": {
+        "category": "bar",
+        "rating": 4.5,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=The+View+Lounge+Plaza+Tirana&query_place_id=ChIJe-1LG00xUBMReT06jVj9zHs"
+      }
+    },
+    {
+      "id": "activities-01",
+      "section": "activities",
+      "name": "Bunk'Art 1",
+      "status": "plan",
+      "body": "Cold War nuclear bunker, the big one. 16°C inside — welcome relief in August. 200 m from Dajti Ekspres, do both same trip.",
+      "meta": {
+        "category": "activity",
+        "tier": "core",
+        "rating": 4.6,
+        "rating_count": 4818,
+        "hours": "09:30–17:30",
+        "duration_hrs": 2,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=BunkArt+1&query_place_id=ChIJWefPqAE0UBMRe5lBduTNzf4"
+      }
+    },
+    {
+      "id": "activities-02",
+      "section": "activities",
+      "name": "Dajti Ekspres",
+      "status": "plan",
+      "body": "Cable car up Mt. Dajti, panoramic views. Go early to ride alone. CLOSED TUESDAYS — hard constraint.",
+      "meta": {
+        "category": "activity",
+        "tier": "core",
+        "rating": 4.4,
+        "price": "~€15 return",
+        "closed_days": [
+          "Tuesday"
+        ],
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Dajti+Ekspres&query_place_id=ChIJ-0qSJQI0UBMRxurnvQkJw_E"
+      }
+    },
+    {
+      "id": "activities-03",
+      "section": "activities",
+      "name": "House of Leaves",
+      "status": "plan",
+      "body": "Former Sigurimi wiretapping HQ. 31 rooms of surveillance equipment and informant files. Reviewers rate presentation ABOVE Bunk'Art 2. If you only do one, do this.",
+      "meta": {
+        "category": "activity",
+        "tier": "core",
+        "rating": 4.3,
+        "rating_count": 2623,
+        "hours": "09:00–19:00 daily",
+        "price_all": 700,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=House+of+Leaves+Museum&query_place_id=ChIJS-JbDQUxUBMRJpTxxW-ELEU"
+      }
+    },
+    {
+      "id": "activities-04",
+      "section": "activities",
+      "name": "Bunk'Art 2",
+      "status": "plan",
+      "body": "Central, secret-police focus. Text-heavy and crowded. Overlaps significantly with House of Leaves.",
+      "meta": {
+        "category": "activity",
+        "tier": "optional",
+        "rating": 4.2,
+        "rating_count": 9425,
+        "price_all": 900,
+        "duration_hrs": 1,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=BunkArt+2&query_place_id=ChIJ9UMspBoxUBMRfwKKAxuMsQg"
+      }
+    },
+    {
+      "id": "activities-05",
+      "section": "activities",
+      "name": "Pyramid of Tirana",
+      "status": "plan",
+      "body": "Climbable. Sunset is the move — midday stairs in August sun are punishing.",
+      "meta": {
+        "category": "activity",
+        "tier": "core",
+        "price": "Free",
+        "hours": "24h",
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Pyramid+of+Tirana&query_place_id=ChIJ13HJcBsxUBMRg0s9vq3gwuA"
+      }
+    },
+    {
+      "id": "activities-06",
+      "section": "activities",
+      "name": "Skanderbeg Square",
+      "status": "plan",
+      "body": "Free wifi. Et'hem Bey Mosque, clock tower, and the socialist-realist 'The Albanians' mosaic on the museum façade.",
+      "meta": {
+        "category": "activity",
+        "tier": "core",
+        "rating": 4.5,
+        "rating_count": 14397,
+        "price": "Free",
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Skanderbeg+Square&query_place_id=ChIJObkn_A8xUBMRFY95E3CdgpE",
+        "caution": "Fake-police scam reported around the square perimeter — see safety."
+      }
+    },
+    {
+      "id": "activities-07",
+      "section": "activities",
+      "name": "Grand Park / Tirana Lake Park",
+      "status": "plan",
+      "body": "Artificial lake, shaded paths, lakeside cafés. Best exercise option in the city. Mullixhiu sits at the entrance — pair them.",
+      "meta": {
+        "category": "activity",
+        "tier": "recommended",
+        "rating": 4.7,
+        "rating_count": 5878,
+        "walk_min": 25,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Tirana+Lake+Park&query_place_id=ChIJz-mqoOYwUBMRl40WII0892I"
+      }
+    },
+    {
+      "id": "activities-08",
+      "section": "activities",
+      "name": "Pazari i Ri (New Bazaar)",
+      "status": "plan",
+      "body": "Produce, cheese, byrek stalls, surrounding restaurants. Morning is best.",
+      "meta": {
+        "category": "activity",
+        "tier": "recommended",
+        "walk_min": 15,
+        "cash_only": true,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Pazari+i+Ri&query_place_id=ChIJw_xRNRExUBMRf68YulV8sPo"
+      }
+    },
+    {
+      "id": "activities-09",
+      "section": "activities",
+      "name": "National History Museum",
+      "status": "plan",
+      "body": "Bronze Age through WWII. Comprehensive but dense walls of text; the exterior mosaic is arguably the main event.",
+      "meta": {
+        "category": "activity",
+        "tier": "optional",
+        "rating": 4,
+        "rating_count": 2262,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=National+Historical+Museum+Tirana&query_place_id=ChIJ8UCauA8xUBMRnbaL_o6uAXc"
+      }
+    },
+    {
+      "id": "activities-10",
+      "section": "activities",
+      "name": "Kruja Old Bazaar",
+      "status": "plan",
+      "body": "Ottoman cobblestone bazaar climbing to Skanderbeg's castle. Multiple reviewers rate the bazaar above the castle. Downside: much stock is repetitive mass-produced souvenirs — and you're carry-on only, so buy nothing bulky.",
+      "meta": {
+        "category": "day_trip",
+        "rating": 4.4,
+        "travel_time": "~45 min north by taxi",
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Kruja+Bazaar&query_place_id=ChIJVVGyC9rNURMRVsblvrqgVXs",
+        "verdict": "Better inland day trip than Berat or Gjirokastër given it's a half-day, not a full one."
+      }
+    },
+    {
+      "id": "services-01",
+      "section": "services",
+      "name": "Thai Massage Tirana",
+      "status": "plan",
+      "body": "Strong pressure plus stretching; therapists adjust mid-session. Rule of thumb: Thai = worked over and stretched out.",
+      "meta": {
+        "category": "service",
+        "subcategory": "massage",
+        "rating": 4.8,
+        "rating_count": 255,
+        "walk_min": 10,
+        "address": "Rruga Myslym Shyri",
+        "hours": "10:00–22:00 daily",
+        "phone": "+355 69 407 5888",
+        "open_sunday": true,
+        "caveat": "Curtain-separated rooms, lobby noise carries.",
+        "price_status": "unverified — WhatsApp for 90-min deep tissue rate"
+      }
+    },
+    {
+      "id": "services-02",
+      "section": "services",
+      "name": "Bliss Spa & Fizioterapi",
+      "status": "plan",
+      "body": "Physiotherapist-led, targets specific muscles. 5.0 at 320 reviews is rare. Rule of thumb: Bliss = actual problem area diagnosed.",
+      "meta": {
+        "category": "service",
+        "subcategory": "massage",
+        "rating": 5,
+        "rating_count": 320,
+        "walk_min": 20,
+        "phone": "+355 68 843 4720",
+        "hours": "Sun opens 11:00",
+        "open_sunday": true,
+        "price_status": "unverified — WhatsApp for 90-min deep tissue rate"
+      }
+    },
+    {
+      "id": "services-03",
+      "section": "services",
+      "name": "Ira Shehaj Nails & Podology",
+      "status": "plan",
+      "body": "Podology = medical foot care, not polish. Better fit than a spa pedicure given heavy walking and two coastal weeks ahead. Book Mon or Tue.",
+      "meta": {
+        "category": "service",
+        "subcategory": "pedicure",
+        "rating": 5,
+        "rating_count": 115,
+        "walk_min": 3,
+        "address": "Rruga Mine Peza",
+        "phone": "+355 69 620 6545",
+        "closed_sunday": true
+      }
+    },
+    {
+      "id": "services-04",
+      "section": "services",
+      "name": "Barber 919",
+      "status": "plan",
+      "body": "Turkish-style: cut, beard, wax, hot-towel facial. English spoken.",
+      "meta": {
+        "category": "service",
+        "subcategory": "barber",
+        "rating": 5,
+        "rating_count": 435,
+        "hours": "09:00–21:00 daily incl. Sun",
+        "open_sunday": true,
+        "phone": "+355 67 643 4334",
+        "price_all": "1,000–1,500",
+        "cash_only": true,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Barber+919&query_place_id=ChIJybwFAFgxUBMRCYEHiR2f2dk"
+      }
+    },
+    {
+      "id": "services-05",
+      "section": "services",
+      "name": "Ers Men Salon",
+      "status": "plan",
+      "body": "Next door to Barber 919. Reviewers note they handle thinning hair well.",
+      "meta": {
+        "category": "service",
+        "subcategory": "barber",
+        "tier": "backup",
+        "rating": 4.9,
+        "rating_count": 285,
+        "closed_sunday": true,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Ers+Men+Salon&query_place_id=ChIJhR0jrVgxUBMR1TwZ_pEv9AQ"
+      }
+    },
+    {
+      "id": "services-06",
+      "section": "services",
+      "name": "Golden Spa Relax",
+      "status": "plan",
+      "body": "Compromise option if you want sauna/steam under one roof rather than splitting services.",
+      "meta": {
+        "category": "service",
+        "subcategory": "spa",
+        "tier": "middle_path",
+        "rating": 4.9,
+        "rating_count": 357
+      }
+    },
+    {
+      "id": "services-07",
+      "section": "services",
+      "name": "Coolab",
+      "status": "plan",
+      "body": "Real nomad community, cheap day passes, free coffee, private meeting space, regular events (cooking nights, burek workshops). Best networking value of the stop.",
+      "meta": {
+        "category": "service",
+        "subcategory": "coworking",
+        "rating": 4.9,
+        "rating_count": 72,
+        "hours": "07:00–22:00 daily",
+        "walk_min": 12,
+        "url": "https://coolab.al/",
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Coolab&query_place_id=ChIJRe8mejwxUBMRTkpvKxqZJYQ"
+      }
+    },
+    {
+      "id": "services-08",
+      "section": "services",
+      "name": "Wash2go 24h",
+      "status": "plan",
+      "body": "Coins only; coin changer unreliable. No detergent on site. WhatsApp +355 69 785 1381 if a machine stalls.",
+      "meta": {
+        "category": "service",
+        "subcategory": "laundry",
+        "tier": "superseded",
+        "rating": 4.8,
+        "walk_min": 5,
+        "price_all": "300 wash / 200 dry",
+        "cash_only": true,
+        "maps_url": "https://www.google.com/maps/search/?api=1&query=Wash2go+laundry&query_place_id=ChIJDUmPRAcxUBMRTLLLRMdK2hk"
+      }
+    },
+    {
+      "id": "laundry-01",
+      "section": "laundry",
+      "name": "MFGV60612, 6 kg",
+      "status": "plan",
+      "body": "washer only — no dryer function. No dry programs on the dial; single capacity rating (combos list two, e.g. 6/4 kg). Hang immediately. Late-August Tirana dries shirts in 3–4 hours on a balcony or window rack; merino and synthetics faster, cotton overnight.",
+      "meta": {
+        "cycles": {
+          "Rapid 15'": "Refreshing lightly-worn shirts",
+          "MIX": "Default full load, safe across fabrics",
+          "SPORT": "Technical / athleisure fabrics",
+          "SPIN": "Run a second time after any cycle — extra water extraction is the whole ballgame when air-drying"
+        },
+        "action": "Run a load before Ksamil — you'll be dealing with salt and sand there."
+      }
+    },
+    {
+      "id": "safety-01",
+      "section": "safety",
+      "name": "Tap water",
+      "status": "plan",
+      "body": "Meaningfully better than Morocco. Brush teeth, shower, and wash produce freely; drink bottled.",
+      "meta": {
+        "verdict": "Meaningfully better than Morocco. Brush teeth, shower, and wash produce freely; drink bottled.",
+        "why": "Tirana water is treated to standard from the Bovilla Reservoir, but aging distribution pipes are the last-kilometer variable — and this building is under partial reconstruction.",
+        "ice": "Fine at real restaurants. Skip at street stalls.",
+        "bottled_price_all": "30–80 per 1.5L",
+        "ksamil_note": "Bottled for everything. Be more careful with ice — peak-August demand strains coastal systems."
+      }
+    },
+    {
+      "id": "safety-02",
+      "section": "safety",
+      "name": "Crime overview",
+      "status": "plan",
+      "body": "One of the easier stops on the route. Violent crime against tourists is extremely rare; the profile resembles Italy or Spain. Albania's violent crime rate sits below Italy's and France's.",
+      "meta": {
+        "verdict": "One of the easier stops on the route. Violent crime against tourists is extremely rare; the profile resembles Italy or Spain. Albania's violent crime rate sits below Italy's and France's.",
+        "advisory_status": "Sources disagree — some list Level 1, others Level 2 (same as France, UK, Germany). Either way, unremarkable.",
+        "hospitality": "Besa is a real cultural institution, not brochure copy. Expect people to walk you to a place rather than point. Staring from older men is curiosity about a foreigner, not hostility.",
+        "top_risk": "Traffic, by a wide margin — aggressive drivers, poor sidewalks, scooters on pavements. Crosswalks are advisory.",
+        "emergency_number": "112 (English-speaking operators in Tirana)"
+      }
+    },
+    {
+      "id": "safety-03",
+      "section": "safety",
+      "name": "Shortchanging",
+      "status": "plan",
+      "body": "Count change before leaving any vendor, shop, or exchange window. A known and specific issue here.",
+      "meta": {}
+    },
+    {
+      "id": "safety-04",
+      "section": "safety",
+      "name": "Fake police near Skanderbeg Square",
+      "status": "plan",
+      "body": "Plainclothes person asks to inspect wallet or passport. Never hand it over; insist on walking to an actual station.",
+      "meta": {}
+    },
+    {
+      "id": "safety-05",
+      "section": "safety",
+      "name": "Bar tab inflation / inflated Blloku menus",
+      "status": "plan",
+      "body": "Check prices before ordering. Choose your own bar rather than accepting an invitation.",
+      "meta": {}
+    },
+    {
+      "id": "safety-06",
+      "section": "safety",
+      "name": "ATM 'help'",
+      "status": "plan",
+      "body": "Never let anyone assist you at an ATM. Related: the 'help me change money' street approach.",
+      "meta": {}
+    },
+    {
+      "id": "safety-07",
+      "section": "safety",
+      "name": "Taxi broken meter",
+      "status": "plan",
+      "body": "Agree the lek price first, or use an app.",
+      "meta": {}
+    },
+    {
+      "id": "safety-08",
+      "section": "safety",
+      "name": "Unlicensed currency exchange",
+      "status": "plan",
+      "body": "Use licensed offices only. Never airport counters or 'no commission' booths — they bury 5–10% in the rate.",
+      "meta": {}
+    },
+    {
+      "id": "logistics-01",
+      "section": "logistics",
+      "name": "Arrival",
+      "status": "plan",
+      "body": "Pegasus from Yerevan via Istanbul, lands ~14:30 at TIA. Book via Patoko or Clust from arrivals, 1,200–2,000 ALL, 25–30 min.",
+      "meta": {
+        "date": "2026-08-22"
+      }
+    },
+    {
+      "id": "logistics-02",
+      "section": "logistics",
+      "name": "Departure",
+      "status": "plan",
+      "body": "Leave base by 08:45 for Tirana North & South Bus Terminal (Kashar), 6 km west, ~20 min. Chaotic open parking lot: no toilets, no food stalls, basic signage. Buses post destinations in the windshield. Staff are helpful if asked.",
+      "meta": {
+        "date": "2026-08-29",
+        "terminal": "Tirana North & South Bus Terminal (Kashar), 6 km west, ~20 min",
+        "leave_base_by": "08:45",
+        "terminal_note": "Chaotic open parking lot: no toilets, no food stalls, basic signage. Buses post destinations in the windshield. Staff are helpful if asked.",
+        "legs": [
+          {
+            "time": "09:45",
+            "operator": "Tisa Travel",
+            "route": "Tirana → Sarandë",
+            "arrive": "14:00"
+          },
+          {
+            "time": "15:00",
+            "operator": "Trans Butrinti",
+            "route": "Sarandë → Ksamil"
+          }
+        ]
+      }
+    },
+    {
+      "id": "logistics-03",
+      "section": "logistics",
+      "name": "Tisa Travel warning",
+      "status": "plan",
+      "body": "Arrive early, hold your ticket and seat number, do not pay anything twice onboard, photograph the ticket.",
+      "meta": {
+        "operator": "Tisa Travel",
+        "rating": 1.6,
+        "rating_count": 9,
+        "complaints": [
+          "Counter price 2,000 L vs ~1,500–1,700 L posted online",
+          "Pre-assigned seats not honored",
+          "Buses departing early",
+          "One report of passengers made to pay twice after a breakdown"
+        ],
+        "defense": "Arrive early, hold your ticket and seat number, do not pay anything twice onboard, photograph the ticket."
+      }
+    },
+    {
+      "id": "logistics-04",
+      "section": "logistics",
+      "name": "Money apps",
+      "status": "plan",
+      "body": "Wise and Revolut both work well here at near-mid-market rates.",
+      "meta": {}
+    },
+    {
+      "id": "context-01",
+      "section": "context",
+      "name": "Visa",
+      "status": "plan",
+      "body": "Americans visa-free 365 days. Passport valid to 2035, 4+ blank pages. No ETIAS concern (launches Q4 2026).",
+      "meta": {}
+    },
+    {
+      "id": "context-02",
+      "section": "context",
+      "name": "Time Zone",
+      "status": "plan",
+      "body": "6 hrs ahead of Atlanta (drops 2 hrs from the Caucasus leg).",
+      "meta": {}
+    },
+    {
+      "id": "context-03",
+      "section": "context",
+      "name": "Climate",
+      "status": "plan",
+      "body": "Warm but manageable. Tirana proper is meaningfully less humid than the coast. Ksamil next week will not be.",
+      "meta": {}
+    },
+    {
+      "id": "context-04",
+      "section": "context",
+      "name": "Tipping",
+      "status": "plan",
+      "body": "Cash, in lek. Round up taxis, leave 100–200 L notes at restaurants.",
+      "meta": {}
+    },
+    {
+      "id": "context-05",
+      "section": "context",
+      "name": "Casinos",
+      "status": "plan",
+      "body": "Banned nationally since 2019.",
+      "meta": {}
+    },
+    {
+      "id": "context-06",
+      "section": "context",
+      "name": "Lgbt",
+      "status": "plan",
+      "body": "Tirana center is LGBT-friendly by regional standards.",
+      "meta": {}
+    },
+    {
+      "id": "context-07",
+      "section": "context",
+      "name": "Cafe Density",
+      "status": "plan",
+      "body": "Tirana has the most cafés per capita in Europe — this is a real scene, not a novelty.",
+      "meta": {}
+    },
+    {
+      "id": "corrections-01",
+      "section": "corrections",
+      "name": "Apartment is in Blloku",
+      "status": "plan",
+      "body": "It is ~1.2 km north, in the Rruga e Durrësit / Zogu i Zi corridor. Net trade is favorable — closer to the square, the cheap ATM, and the laundromat; Blloku is 13 min when you want it.",
+      "meta": {
+        "source": "trip handoff doc"
+      }
+    },
+    {
+      "id": "corrections-02",
+      "section": "corrections",
+      "name": "Bolt is the primary rideshare",
+      "status": "plan",
+      "body": "Bolt does not operate anywhere in Albania. Neither does Uber. Use Patoko or Clust.",
+      "meta": {
+        "source": "trip handoff doc, repeated in first draft of this file"
+      }
+    },
+    {
+      "id": "corrections-03",
+      "section": "corrections",
+      "name": "Luna Piena Spa",
+      "status": "plan",
+      "body": "Dropped — 3.6★ on only 7 reviews, recent non-functional-sauna report and management turnover.",
+      "meta": {
+        "source": "first draft"
+      }
+    },
+    {
+      "id": "corrections-04",
+      "section": "corrections",
+      "name": "My Spa Tirana for massage + pedicure",
+      "status": "plan",
+      "body": "Superseded by splitting services: Thai Massage or Bliss for deep tissue, Ira Shehaj for podology pedicure. My Spa is relaxation-focused; the split trades away sauna/steam access for better per-service quality.",
+      "meta": {
+        "source": "first draft"
+      }
+    },
+    {
+      "id": "corrections-05",
+      "section": "corrections",
+      "name": "Dajti Ekspres available any day",
+      "status": "plan",
+      "body": "Closed Tuesdays. It is 200 m from Bunk'Art 1, so both are one trip — slotted Wednesday.",
+      "meta": {
+        "source": "first draft"
+      }
+    },
+    {
+      "id": "corrections-06",
+      "section": "corrections",
+      "name": "Need the laundromat",
+      "status": "plan",
+      "body": "Apartment has an in-unit 6 kg washer. No dryer — air-dry. Wash2go now backup only.",
+      "meta": {
+        "source": "first draft"
+      }
+    },
+    {
+      "id": "tasks-01",
+      "section": "tasks",
+      "name": "Install Patoko + Clust, register a card in each",
+      "status": "plan",
+      "body": "",
+      "meta": {
+        "priority": "high",
+        "done": false
+      }
+    },
+    {
+      "id": "tasks-02",
+      "section": "tasks",
+      "name": "WhatsApp Thai Massage (+355 69 407 5888) and Bliss (+355 68 843 4720) for 90-min deep tissue rate and availability",
+      "status": "plan",
+      "body": "",
+      "meta": {
+        "priority": "high",
+        "done": false
+      }
+    },
+    {
+      "id": "tasks-03",
+      "section": "tasks",
+      "name": "Book Ira Shehaj podology pedicure — Mon or Tue (closed Sundays)",
+      "status": "plan",
+      "body": "",
+      "meta": {
+        "priority": "medium",
+        "done": false
+      }
+    },
+    {
+      "id": "tasks-04",
+      "section": "tasks",
+      "name": "Reserve Mullixhiu — +355 69 666 0444",
+      "status": "plan",
+      "body": "",
+      "meta": {
+        "priority": "high",
+        "done": false
+      }
+    },
+    {
+      "id": "tasks-05",
+      "section": "tasks",
+      "name": "ATM pull #1 — 40,000 ALL, Union Bank / Ring Center",
+      "status": "plan",
+      "body": "",
+      "meta": {
+        "priority": "high",
+        "done": false
+      }
+    },
+    {
+      "id": "tasks-06",
+      "section": "tasks",
+      "name": "ATM pull #2 before Aug 29 — Ksamil ATMs run dry in peak August",
+      "status": "plan",
+      "body": "",
+      "meta": {
+        "priority": "high",
+        "done": false
+      }
+    },
+    {
+      "id": "tasks-07",
+      "section": "tasks",
+      "name": "Verify Tisa Travel Aug 29 09:45 departure still holds",
+      "status": "plan",
+      "body": "",
+      "meta": {
+        "priority": "high",
+        "done": false
+      }
+    },
+    {
+      "id": "tasks-08",
+      "section": "tasks",
+      "name": "Decide Kruja day trip by Thursday",
+      "status": "plan",
+      "body": "",
+      "meta": {
+        "priority": "low",
+        "done": false
+      }
+    },
+    {
+      "id": "tasks-09",
+      "section": "tasks",
+      "name": "Run a laundry load before Ksamil",
+      "status": "plan",
+      "body": "",
+      "meta": {
+        "priority": "medium",
+        "done": false
+      }
+    }
+  ]
+}
+</script>
+
+<script id="app">
+var CityOps = (function () {
+  'use strict';
+
+  var STATUSES = ['plan', 'backup', 'archived', 'done'];
+
+  function slug(s) {
+    return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  }
+  function cityId(data) {
+    return slug(data.city.name) + '-' + data.city.dates.from;
+  }
+  function dayLabel(iso) {
+    var d = new Date(iso + 'T12:00:00');
+    var names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return names[d.getDay()] + ' ' + d.getDate();
+  }
+
+  // Intel validation lives in one place so validate() (whole guide) and
+  // mergeDelta() (intel pass payload) can never drift apart. `ref` is the
+  // caller's prefix, already ending in the separator it wants, e.g.
+  // "items[3] (nord) intel:" or 'intel["nord"]:'.
+  function validateIntel(intel, ref, errors) {
+    if (!intel || typeof intel !== 'object' || Array.isArray(intel)) {
+      errors.push(ref + ' must be an object');
+      return;
+    }
+    if (intel.verdicts !== undefined) {
+      if (!Array.isArray(intel.verdicts)) {
+        errors.push(ref + ' verdicts must be an array');
+      } else {
+        intel.verdicts.forEach(function (v, vi) {
+          if (!v || typeof v !== 'object' || ['must', 'good', 'skip'].indexOf(v.tier) === -1) {
+            errors.push(ref + ' verdicts[' + vi + '] tier must be must|good|skip');
+          }
+          if (!v || typeof v.text !== 'string' || !v.text.trim()) {
+            errors.push(ref + ' verdicts[' + vi + '] needs non-empty text');
+          }
+        });
+      }
+    }
+    if (intel.tips !== undefined) {
+      if (!Array.isArray(intel.tips)) {
+        errors.push(ref + ' tips must be an array');
+      } else {
+        intel.tips.forEach(function (t, ti) {
+          if (typeof t !== 'string' || !t.trim()) {
+            errors.push(ref + ' tips[' + ti + '] must be a non-empty string');
+          }
+        });
+      }
+    }
+    if (intel.source !== undefined && typeof intel.source !== 'string') {
+      errors.push(ref + ' source must be a string');
+    }
+  }
+
+  // The per-item rules, shared by validate() and mergeDelta() for exactly the
+  // same reason. `statuses` is the allowed status list (a whole guide allows
+  // all four; a delta may only introduce plan and backup, since done and
+  // archived are states the traveler sets later in the app) and `statusHint`
+  // is appended to that one error so the delta case explains itself. `seen`
+  // is the caller's duplicate-id map, mutated as ids are accepted.
+  function validateItem(it, ref, secIds, seen, errors, statuses, statusHint) {
+    if (!it || typeof it !== 'object' || Array.isArray(it)) {
+      errors.push(ref + ' is not an object');
+      return;
+    }
+    if (!it.id) errors.push(ref + ' needs id');
+    else if (Object.prototype.hasOwnProperty.call(seen, it.id)) errors.push('duplicate item id "' + it.id + '"');
+    else seen[it.id] = 1;
+    if (!it.name) errors.push(ref + ' needs name');
+    if (!Object.prototype.hasOwnProperty.call(secIds, it.section)) errors.push(ref + ' unknown section "' + it.section + '"');
+    if (statuses.indexOf(it.status) === -1) {
+      errors.push(ref + ' bad status "' + it.status + '"' + (statusHint || ''));
+    }
+    if (it.day && !/^\d{4}-\d{2}-\d{2}$/.test(it.day)) errors.push(ref + ' day must be YYYY-MM-DD');
+    if (it.intel !== undefined && it.intel !== null) validateIntel(it.intel, ref + ' intel:', errors);
+  }
+
+  function validate(data) {
+    var errors = [];
+    if (!data || typeof data !== 'object') return ['Root is not an object'];
+    if (data.schema !== 1) errors.push('schema must be 1');
+    if (!data.city || !data.city.name) errors.push('city.name required');
+    if (!data.city || !data.city.dates || !data.city.dates.from || !data.city.dates.to) {
+      errors.push('city.dates.from and city.dates.to required');
+    }
+    if (!Array.isArray(data.sections) || !data.sections.length) {
+      errors.push('sections[] required');
+    } else {
+      data.sections.forEach(function (s, i) {
+        if (!s.id || !s.label) errors.push('sections[' + i + '] needs id and label');
+      });
+    }
+    if (!Array.isArray(data.items)) {
+      errors.push('items[] required');
+    } else {
+      var secIds = Object.create(null);
+      (data.sections || []).forEach(function (s) { secIds[s.id] = 1; });
+      var seen = Object.create(null);
+      data.items.forEach(function (it, i) {
+        var ref = 'items[' + i + ']' + (it && it.id ? ' (' + it.id + ')' : '');
+        validateItem(it, ref, secIds, seen, errors, STATUSES, null);
+      });
+    }
+    return errors;
+  }
+
+  function parse(text) {
+    var data;
+    try { data = JSON.parse(text); }
+    catch (e) { return { data: null, errors: ['JSON parse error: ' + e.message] }; }
+    var errors = validate(data);
+    return { data: errors.length ? null : data, errors: errors };
+  }
+
+  // ---- delta merge ----
+  // The core re-run mechanic: a PARTIAL payload from a second AI pass is folded
+  // into a city that already exists, without disturbing anything the traveler
+  // has done. Pure: it reads no state, touches no storage, mutates neither
+  // argument, and returns a fresh deep clone. Live planning state (done marks,
+  // reorders, renames) survives by construction, because it is keyed by item id
+  // in a separate store this function never sees.
+  //
+  // Rules, all of them deliberate:
+  // - errors non-empty means NO merge at all: data is null and the caller shows
+  //   the list. A half-applied delta would be impossible to reason about.
+  // - A delta may only introduce plan and backup items. done and archived are
+  //   traveler states, never generated ones.
+  // - An id that already exists is SKIPPED, never overwritten, and counted. That
+  //   is what makes a re-run safe to repeat: running the same delta twice is a
+  //   no-op, not a clobber. A duplicate id WITHIN one delta is an error, since
+  //   that is a malformed payload rather than an overlap with existing work.
+  // - delta.sections with an id that already exists is ignored, not overwritten
+  //   (the traveler may have renamed a section, and a re-run must not undo it).
+  // - delta.intel replaces the whole intel block on an item that exists after
+  //   the merge (existing or just added); an unknown id is counted in
+  //   intelSkipped, not treated as an error, because an AI naming an item the
+  //   traveler has since removed is expected, not broken.
+  // - city, city.dates and every other field of every existing item are never
+  //   touched. intel is the ONE field an existing item can gain here.
+  var DELTA_STATUSES = ['plan', 'backup'];
+  var DELTA_STATUS_HINT = ' (a delta may only add plan or backup items)';
+
+  function emptyDeltaSummary() {
+    return { added: 0, skipped: 0, sectionsAdded: 0, intelApplied: 0, intelSkipped: 0 };
+  }
+
+  function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
+
+  function mergeDelta(cityData, delta) {
+    var errors = [];
+    if (!cityData || typeof cityData !== 'object' || Array.isArray(cityData)) {
+      return { data: null, summary: emptyDeltaSummary(), errors: ['No city data to merge into'] };
+    }
+    if (!delta || typeof delta !== 'object' || Array.isArray(delta)) {
+      return { data: null, summary: emptyDeltaSummary(), errors: ['Delta is not an object'] };
+    }
+    if (delta.schema !== 1) errors.push('schema must be 1');
+    if (delta.delta !== true) {
+      errors.push('delta must be true: this is a partial payload, not a whole guide');
+    }
+
+    // Sections first: a new item may legitimately reference a section this same
+    // delta introduces, so the allowed-section set has to include them.
+    var newSections = [];
+    if (delta.sections !== undefined && delta.sections !== null) {
+      if (!Array.isArray(delta.sections)) {
+        errors.push('sections must be an array');
+      } else {
+        delta.sections.forEach(function (s, i) {
+          if (!s || typeof s !== 'object' || Array.isArray(s) || !s.id || !s.label) {
+            errors.push('sections[' + i + '] needs id and label');
+          } else {
+            newSections.push(s);
+          }
+        });
+      }
+    }
+
+    var secIds = Object.create(null);
+    (Array.isArray(cityData.sections) ? cityData.sections : []).forEach(function (s) {
+      if (s && s.id) secIds[s.id] = 1;
+    });
+    newSections.forEach(function (s) { secIds[s.id] = 1; });
+
+    var existingIds = {};
+    (Array.isArray(cityData.items) ? cityData.items : []).forEach(function (it) {
+      if (it && it.id) existingIds[it.id] = 1;
+    });
+
+    var toAdd = [];
+    var skipped = 0;
+    if (delta.items !== undefined && delta.items !== null) {
+      if (!Array.isArray(delta.items)) {
+        errors.push('items must be an array');
+      } else {
+        var seen = Object.create(null);
+        delta.items.forEach(function (it, i) {
+          var ref = 'items[' + i + ']' + (it && it.id ? ' (' + it.id + ')' : '');
+          var before = errors.length;
+          validateItem(it, ref, secIds, seen, errors, DELTA_STATUSES, DELTA_STATUS_HINT);
+          if (errors.length !== before) return;
+          if (existingIds[it.id]) { skipped++; return; }
+          toAdd.push(it);
+        });
+      }
+    }
+
+    var intelMap = null;
+    if (delta.intel !== undefined && delta.intel !== null) {
+      if (typeof delta.intel !== 'object' || Array.isArray(delta.intel)) {
+        errors.push('intel must be an object keyed by item id');
+      } else {
+        intelMap = delta.intel;
+        Object.keys(intelMap).forEach(function (id) {
+          validateIntel(intelMap[id], 'intel["' + id + '"]:', errors);
+        });
+      }
+    }
+
+    if (errors.length) return { data: null, summary: emptyDeltaSummary(), errors: errors };
+
+    var summary = emptyDeltaSummary();
+    summary.skipped = skipped;
+    var out = deepClone(cityData);
+    if (!Array.isArray(out.sections)) out.sections = [];
+    if (!Array.isArray(out.items)) out.items = [];
+
+    var haveSec = {};
+    out.sections.forEach(function (s) { if (s && s.id) haveSec[s.id] = 1; });
+    newSections.forEach(function (s) {
+      if (haveSec[s.id]) return;
+      haveSec[s.id] = 1;
+      out.sections.push(deepClone(s));
+      summary.sectionsAdded++;
+    });
+
+    toAdd.forEach(function (it) {
+      var copy = deepClone(it);
+      // Both fields belong to a later verification phase, never to a prompt.
+      // An absent one is normalized to null so every item in the merged guide
+      // has the same shape.
+      if (copy.place_id === undefined) copy.place_id = null;
+      if (copy.verified === undefined) copy.verified = null;
+      out.items.push(copy);
+      summary.added++;
+    });
+
+    if (intelMap) {
+      var byId = Object.create(null);
+      out.items.forEach(function (it) { if (it && it.id) byId[it.id] = it; });
+      Object.keys(intelMap).forEach(function (id) {
+        if (!Object.prototype.hasOwnProperty.call(byId, id)) { summary.intelSkipped++; return; }
+        byId[id].intel = deepClone(intelMap[id]);
+        summary.intelApplied++;
+      });
+    }
+
+    return { data: out, summary: summary, errors: [] };
+  }
+
+  var TRANSITIONS = {
+    plan:     [{ to: 'done', label: '✓ Done' }, { to: 'backup', label: '↓ Backup' }, { to: 'archived', label: '✕ Archive' }],
+    backup:   [{ to: 'plan', label: '↑ Promote' }, { to: 'archived', label: '✕ Archive' }],
+    done:     [{ to: 'plan', label: '↩ Undo' }],
+    archived: [{ to: 'backup', label: '↩ Restore' }]
+  };
+
+  function emptyState() {
+    return { itemStatus: {}, itemDay: {}, itemTitle: {}, dayOrder: {}, collapsedSections: {}, viewMode: 'type', dataOverride: null, stayOverride: null, updated: null };
+  }
+
+  function normalizeState(st) {
+    if (!st || typeof st !== 'object') return emptyState();
+    st.itemStatus = st.itemStatus || {};
+    st.itemDay = st.itemDay || {};
+    st.dayOrder = st.dayOrder || {};
+    st.collapsedSections = st.collapsedSections || {};
+    st.itemTitle = st.itemTitle || {};
+    if (st.viewMode !== 'type' && st.viewMode !== 'day') st.viewMode = 'type';
+    if (!('dataOverride' in st)) st.dataOverride = null;
+    if (!('stayOverride' in st)) st.stayOverride = null;
+    return st;
+  }
+
+  function makeStore(id, storage) {
+    var key = 'cityops.' + id + '.v1';
+    var mem = null;
+    var ok = true;
+    if (!storage) ok = false;
+    try {
+      storage.setItem(key + '.t', '1');
+      storage.removeItem(key + '.t');
+    } catch (e) { ok = false; }
+    return {
+      persistent: ok,
+      load: function () {
+        if (mem) return normalizeState(JSON.parse(JSON.stringify(mem)));
+        if (!ok) return emptyState();
+        try {
+          var raw = storage.getItem(key);
+          return raw ? normalizeState(JSON.parse(raw)) : emptyState();
+        } catch (e) { return emptyState(); }
+      },
+      save: function (st) {
+        st.updated = new Date().toISOString();
+        mem = JSON.parse(JSON.stringify(st));
+        if (ok) {
+          try { storage.setItem(key, JSON.stringify(st)); } catch (e) { ok = false; }
+        }
+      }
+    };
+  }
+
+  function setStatus(state, id, to) {
+    if (STATUSES.indexOf(to) === -1) throw new Error('bad status "' + to + '"');
+    state.itemStatus[id] = to;
+    return state;
+  }
+
+  function effectiveStatus(it, state) {
+    return state.itemStatus[it.id] || it.status;
+  }
+
+  function effectiveDay(it, state) {
+    if (state.itemDay && Object.prototype.hasOwnProperty.call(state.itemDay, it.id)) {
+      return state.itemDay[it.id] || null;
+    }
+    return it.day || null;
+  }
+
+  function setDay(state, id, iso) {
+    if (iso !== null && !/^\d{4}-\d{2}-\d{2}$/.test(iso)) throw new Error('bad day "' + iso + '"');
+    state.itemDay[id] = iso;
+    return state;
+  }
+
+  function isIso(s) { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s); }
+
+  function stayDates(dates) {
+    var out = [];
+    var d = new Date(dates.from + 'T12:00:00');
+    var end = new Date(dates.to + 'T12:00:00');
+    while (d <= end && out.length < 60) {
+      var m = d.getMonth() + 1;
+      var day = d.getDate();
+      out.push(d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day);
+      d.setDate(d.getDate() + 1);
+    }
+    return out;
+  }
+
+  function effectiveData(base, state) {
+    if (state.dataOverride && !validate(state.dataOverride).length) return state.dataOverride;
+    return base;
+  }
+
+  function effectiveDates(data, state) {
+    var o = state.stayOverride;
+    if (o && isIso(o.from) && isIso(o.to) && o.from <= o.to) return o;
+    return data.city.dates;
+  }
+
+  function effectiveName(it, state) {
+    return (state.itemTitle && state.itemTitle[it.id]) || it.name;
+  }
+
+  function setTitle(state, id, title) {
+    state.itemTitle = state.itemTitle || {};
+    var t = (title === null || title === undefined) ? '' : String(title).replace(/^\s+|\s+$/g, '');
+    if (t) state.itemTitle[id] = t;
+    else delete state.itemTitle[id];
+    return state;
+  }
+
+  function setViewMode(state, mode) {
+    if (mode !== 'type' && mode !== 'day') throw new Error('bad view mode "' + mode + '"');
+    state.viewMode = mode;
+    return state;
+  }
+
+  function keyForDisplayedDate(data, state, secId, iso) {
+    // Pickers speak in DISPLAYED dates. After reorders, the group occupying
+    // the slot for a date may be keyed by a different date; joining a day
+    // means joining whatever group the user SEES on that date.
+    var sv = null;
+    viewModel(data, state).forEach(function (v) { if (v.section.id === secId) sv = v; });
+    if (sv) {
+      for (var i = 0; i < sv.days.length; i++) {
+        if (sv.days[i].iso === iso) return sv.days[i].key;
+      }
+    }
+    return iso;
+  }
+
+  function calendarModel(data, state) {
+    var byIso = {};
+    var undated = [];
+    var vms = viewModel(data, state);
+    vms.forEach(function (sv) {
+      sv.days.forEach(function (d) {
+        if (!byIso[d.iso]) byIso[d.iso] = [];
+        d.items.forEach(function (it) {
+          byIso[d.iso].push({ sec: sv.section, it: it, status: effectiveStatus(it, state) });
+        });
+      });
+      sv.undated.forEach(function (it) {
+        undated.push({ sec: sv.section, it: it, status: effectiveStatus(it, state) });
+      });
+    });
+    var isos = Object.keys(byIso).sort();
+    return {
+      days: isos.map(function (iso) { return { iso: iso, label: dayLabel(iso), entries: byIso[iso] }; }),
+      undated: undated,
+      sections: vms
+    };
+  }
+
+  function toggleSection(state, secId) {
+    state.collapsedSections = state.collapsedSections || {};
+    if (state.collapsedSections[secId]) delete state.collapsedSections[secId];
+    else state.collapsedSections[secId] = true;
+    return state;
+  }
+
+  function setStayDates(state, from, to) {
+    if (!isIso(from) || !isIso(to)) throw new Error('dates must be YYYY-MM-DD');
+    if (from > to) throw new Error('from must not be after to');
+    state.stayOverride = { from: from, to: to };
+    return state;
+  }
+
+  function viewModel(data, state) {
+    return data.sections.map(function (sec) {
+      var items = data.items.filter(function (it) { return it.section === sec.id; });
+      var active = items.filter(function (it) {
+        var s = effectiveStatus(it, state);
+        return s === 'plan' || s === 'done';
+      });
+      var dayed = active.filter(function (it) { return effectiveDay(it, state); });
+      var undated = active.filter(function (it) { return !effectiveDay(it, state); });
+      // Day cards are SLOTS: the dates always render in chronological order, and
+      // reordering moves a card's CONTENT into a different date slot. A card's
+      // stable identity (key) is its group's effective day in the data; the date
+      // it renders under (iso) is the chronological slot it currently occupies.
+      // Sections with any dayed item get a slot for EVERY date in the stay, so
+      // empty days are visible and are valid drag targets.
+      var keys = [];
+      dayed.forEach(function (it) {
+        var d = effectiveDay(it, state);
+        if (keys.indexOf(d) === -1) keys.push(d);
+      });
+      var range = null;
+      if (keys.length) {
+        range = effectiveDates(data, state);
+        stayDates(range).forEach(function (d) { if (keys.indexOf(d) === -1) keys.push(d); });
+      }
+      var slots = keys.slice().sort();
+      // Keys absent from the saved arrangement sit on their own date's slot;
+      // arranged keys fill the remaining slots in saved order. Default (no
+      // arrangement) is therefore content-on-its-own-date, and saved orders
+      // from before empty slots existed keep content where the user left it.
+      var stated = [];
+      (state.dayOrder[sec.id] || []).forEach(function (k) {
+        if (keys.indexOf(k) !== -1 && stated.indexOf(k) === -1) stated.push(k);
+      });
+      var slotKey = {};
+      keys.forEach(function (k) {
+        if (stated.indexOf(k) === -1) slotKey[k] = k;
+      });
+      var si = 0;
+      stated.forEach(function (k) {
+        while (slotKey[slots[si]] !== undefined) si++;
+        slotKey[slots[si]] = k;
+      });
+      return {
+        section: sec,
+        days: slots.map(function (iso) {
+          var key = slotKey[iso];
+          return {
+            key: key, iso: iso, label: dayLabel(iso),
+            outside: range ? (iso < range.from || iso > range.to) : false,
+            items: dayed.filter(function (it) { return effectiveDay(it, state) === key; })
+          };
+        }),
+        undated: undated,
+        backups: items.filter(function (it) { return effectiveStatus(it, state) === 'backup'; }),
+        archived: items.filter(function (it) { return effectiveStatus(it, state) === 'archived'; })
+      };
+    });
+  }
+
+  function shareModel(data, state) {
+    // Share view uses the same slot-assigned dates the planner shows.
+    var byDay = {};
+    var undated = [];
+    viewModel(data, state).forEach(function (sv) {
+      sv.days.forEach(function (d) {
+        d.items.forEach(function (it) {
+          if (!byDay[d.iso]) byDay[d.iso] = [];
+          byDay[d.iso].push({ sec: sv.section, it: it, status: effectiveStatus(it, state) });
+        });
+      });
+      sv.undated.forEach(function (it) {
+        undated.push({ sec: sv.section, it: it, status: effectiveStatus(it, state) });
+      });
+    });
+    var isos = Object.keys(byDay).sort();
+    return {
+      days: isos.map(function (iso) { return { iso: iso, label: dayLabel(iso), entries: byDay[iso] }; }),
+      undated: undated
+    };
+  }
+
+  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  function fmtRange(d) {
+    var a = new Date(d.from + 'T12:00:00');
+    var b = new Date(d.to + 'T12:00:00');
+    if (a.getMonth() === b.getMonth()) {
+      return MONTHS[a.getMonth()] + ' ' + a.getDate() + '-' + b.getDate() + ', ' + b.getFullYear();
+    }
+    return MONTHS[a.getMonth()] + ' ' + a.getDate() + ' - ' + MONTHS[b.getMonth()] + ' ' + b.getDate() + ', ' + b.getFullYear();
+  }
+
+  // ---- multi-city app store (used by the app shell, not by standalone files) ----
+  // Shape: { cities: {cityId: cityJson}, order: [cityId], active: cityId|null,
+  //          updatedAt: {cityId: iso} }.
+  // Pure helpers only: reading and writing localStorage stays in the app shell.
+  //
+  // updatedAt is the per-city stamp for city DATA (the pasted/blank JSON). Live
+  // planning state has its own stamp inside the per-city state object (updated),
+  // written by makeStore().save. Cities carried over from before M2 have no
+  // stamp: they are backfilled with EPOCH so that a device with a real server
+  // copy wins the reconcile, while a city that exists nowhere else still pushes
+  // (EPOCH beats "no row at all"). See docs in .superpowers/sdd/m2-client-report.md.
+  var EPOCH_ISO = '1970-01-01T00:00:00.000Z';
+
+  function normalizeAppStore(raw) {
+    var src = (raw && typeof raw === 'object') ? raw : {};
+    var srcCities = (src.cities && typeof src.cities === 'object') ? src.cities : {};
+    var cities = {};
+    Object.keys(srcCities).forEach(function (id) {
+      var d = srcCities[id];
+      if (d && d.city && d.city.name && d.city.dates) cities[id] = d;
+    });
+    var order = [];
+    var seen = {};
+    (Array.isArray(src.order) ? src.order : []).forEach(function (id) {
+      if (!seen[id] && Object.prototype.hasOwnProperty.call(cities, id)) { seen[id] = 1; order.push(id); }
+    });
+    Object.keys(cities).forEach(function (id) {
+      if (!seen[id]) { seen[id] = 1; order.push(id); }
+    });
+    var active = (typeof src.active === 'string' && order.indexOf(src.active) !== -1)
+      ? src.active : (order.length ? order[0] : null);
+    var srcStamps = (src.updatedAt && typeof src.updatedAt === 'object') ? src.updatedAt : {};
+    var updatedAt = {};
+    order.forEach(function (id) {
+      var v = srcStamps[id];
+      updatedAt[id] = (typeof v === 'string' && v) ? v : EPOCH_ISO;
+    });
+    // The interest profile rides in the app store (one per user, not per city)
+    // and is normalized on every load. Nothing else in the engine reads it: it
+    // is handed to the prompt builders and pushed by the shell's sync layer.
+    return { cities: cities, order: order, active: active, updatedAt: updatedAt, profile: normalizeProfile(src.profile) };
+  }
+
+  // iso: pass the REMOTE stamp when applying a pulled city, so the pull does not
+  // look like a fresh local edit and immediately push back. Omit it for genuine
+  // local edits (add/paste/replace/blank), which stamp now.
+  function appAddCity(store, data, iso) {
+    var s = normalizeAppStore(store);
+    var id = cityId(data);
+    var replaced = Object.prototype.hasOwnProperty.call(s.cities, id);
+    s.cities[id] = data;
+    if (s.order.indexOf(id) === -1) s.order.push(id);
+    s.updatedAt[id] = (typeof iso === 'string' && iso) ? iso : new Date().toISOString();
+    return { store: s, cityId: id, replaced: replaced };
+  }
+
+  function appRemoveCity(store, id) {
+    var s = normalizeAppStore(store);
+    delete s.cities[id];
+    delete s.updatedAt[id];
+    s.order = s.order.filter(function (x) { return x !== id; });
+    if (s.order.indexOf(s.active) === -1) s.active = s.order.length ? s.order[0] : null;
+    return s;
+  }
+
+  // Keep-both renames the incoming city so cityId() derives a fresh id.
+  function keepBothName(name) {
+    return String(name) + ' 2';
+  }
+
+  // Pure start-city resolution: hash (if it names a known city) wins, else the
+  // stored active city (if still present), else the first city in order, else
+  // null when the store is empty. Extracted so the app shell's boot-target
+  // logic is unit-testable without a DOM.
+  function blankCity(name, country, from, to) {
+    if (!name || !String(name).replace(/^\s+|\s+$/g, '')) throw new Error('city name required');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new Error('dates must be YYYY-MM-DD');
+    if (from > to) throw new Error('start date must not be after end date');
+    return {
+      schema: 1,
+      city: {
+        name: String(name).replace(/^\s+|\s+$/g, ''),
+        country: (country || '').toUpperCase().slice(0, 3),
+        dates: { from: from, to: to },
+        notes: []
+      },
+      sections: [
+        { id: 'dinner', label: 'Dinner', icon: '🍽️' },
+        { id: 'breakfast', label: 'Breakfast', icon: '🍳' },
+        { id: 'lunch', label: 'Lunch', icon: '🥙' },
+        { id: 'coffee', label: 'Coffee', icon: '☕' },
+        { id: 'cowork', label: 'Coworking', icon: '💻' },
+        { id: 'activities', label: 'Activities', icon: '🏛️' },
+        { id: 'services', label: 'Services', icon: '🧺' },
+        { id: 'practical', label: 'Practical', icon: '💡' }
+      ],
+      items: [{
+        id: 'getting-started',
+        section: 'practical',
+        status: 'plan',
+        name: 'Fill this city with real data',
+        note: 'This is a blank scaffold. Run PROMPT.md for this city (see the README), then paste the generated JSON via the Update data button to fill every section. Until then you can adjust dates and plan the shape of the stay.',
+        tags: [],
+        links: [],
+        place_id: null,
+        verified: null
+      }]
+    };
+  }
+
+  function resolveStartCity(store, hashId) {
+    if (hashId && Object.prototype.hasOwnProperty.call(store.cities, hashId)) return hashId;
+    if (store.active && Object.prototype.hasOwnProperty.call(store.cities, store.active)) return store.active;
+    return store.order.length ? store.order[0] : null;
+  }
+
+  // Feature 3: whether the bundled example city should be visible. Rule: it
+  // shows by default when there are no real (non-seed) cities yet; once a
+  // real city exists it hides everywhere unless the traveler's "Show example
+  // city" profile toggle is on. `ids` is the app store's order (or any list
+  // of city ids); `seedId` names the one id that counts as "the example", so
+  // this stays pure and app-shell decides what its seed id actually is.
+  function exampleCityVisible(ids, seedId, showExampleToggle) {
+    var hasReal = (Array.isArray(ids) ? ids : []).some(function (id) { return id !== seedId; });
+    return !hasReal || !!showExampleToggle;
+  }
+
+  // ---- interest profile + prompt assembly (pure) ----
+  // The profile is app-only user data (it syncs as a third row kind), but its
+  // shape and the prompt string assembly live in the engine so both are unit
+  // testable in Node and so nothing about them depends on the DOM. The engine
+  // itself never reads the profile: it is carried in the app store, handed to
+  // the prompt builders, and pushed by the app shell's sync layer.
+  var PROFILE_CAP = 30;        // entries per list; more dilutes the research
+  var PROFILE_NOTES_CAP = 2000;
+
+  function trimStr(v) {
+    return (typeof v === 'string') ? v.replace(/^\s+|\s+$/g, '') : '';
+  }
+
+  // ---- planning factors (Phase 2) ----
+  // A factor is a named travel dimension (walkability, nightlife, ...) with an
+  // importance level on a fixed five-point scale. Seeded factors and
+  // user-added custom ones share the same shape; nothing here distinguishes
+  // them at read time (the `custom` flag is informational only, for the UI to
+  // label "your own" entries, never checked by validation or the prompt).
+  var FACTOR_LEVELS = ['blocker', 'very important', 'medium', 'low', 'not important'];
+
+  // Seeded on first use of the profile editor (app-shell decides "first use";
+  // the engine just describes what a sensible starting set looks like). Level
+  // defaults to 'medium' so a traveler who never touches a seeded factor is
+  // not silently telling the AI it's a blocker or a non-issue.
+  var DEFAULT_FACTOR_LABELS = [
+    'Food scene', 'Walkability', 'Safety', 'Work-friendly cafes',
+    'Nature access', 'Nightlife', 'Transit quality'
+  ];
+
+  // A fresh array of fresh objects every call: callers mutate factor objects
+  // in place (editing a level), so handing out one shared array would let one
+  // user's edit corrupt every future "first open" default.
+  function defaultFactors() {
+    return DEFAULT_FACTOR_LABELS.map(function (label) {
+      return { label: label, level: 'medium', custom: false };
+    });
+  }
+
+  // Trims, drops anything without a real label or a level on the fixed scale,
+  // dedupes by label (case-insensitive, first spelling wins, same rule as
+  // normalizeProfileList), assigns a slug id (deduped against itself), and
+  // caps the list. A dropped/invalid entry is simply absent, not corrected:
+  // this is normalize-on-read, not a validator with error messages.
+  function normalizeFactors(v) {
+    var out = [];
+    var seenLabel = {};
+    var seenId = {};
+    (Array.isArray(v) ? v : []).forEach(function (f) {
+      if (!f || typeof f !== 'object') return;
+      var label = trimStr(f.label);
+      if (!label) return;
+      var key = label.toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(seenLabel, key)) return;
+      if (FACTOR_LEVELS.indexOf(f.level) === -1) return;
+      if (out.length >= PROFILE_CAP) return;
+      seenLabel[key] = 1;
+      var id = slug(label) || 'factor';
+      var base = id, n = 2;
+      while (Object.prototype.hasOwnProperty.call(seenId, id)) { id = base + '-' + n; n++; }
+      seenId[id] = 1;
+      out.push({ id: id, label: label, level: f.level, custom: !!f.custom });
+    });
+    return out;
+  }
+
+  // Trims, drops empties, dedupes case-insensitively keeping the FIRST spelling
+  // (order is priority, so the earlier entry is the one the traveler meant),
+  // and caps the list.
+  function normalizeProfileList(v) {
+    var out = [];
+    var seen = {};
+    (Array.isArray(v) ? v : []).forEach(function (x) {
+      var t = trimStr(x);
+      if (!t) return;
+      var k = t.toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(seen, k)) return;
+      seen[k] = 1;
+      if (out.length < PROFILE_CAP) out.push(t);
+    });
+    return out;
+  }
+
+  function normalizeProfile(raw) {
+    var src = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+    return {
+      schema: 1,
+      interests: normalizeProfileList(src.interests),
+      avoid: normalizeProfileList(src.avoid),
+      factors: normalizeFactors(src.factors),
+      notes: trimStr(src.notes).slice(0, PROFILE_NOTES_CAP),
+      // Feature 3 (example-city visibility): explicit user override, off by
+      // default. Lives on the profile so it persists and syncs the same way
+      // everything else here does; the app shell is the only reader.
+      showExample: src.showExample === true,
+      updated: (typeof src.updated === 'string' && src.updated) ? src.updated : null
+    };
+  }
+
+  // Empty means "nothing for the AI to work with": the stamp does not count.
+  // showExample is a display preference, not research input, so it never
+  // counts toward "empty" either.
+  function profileIsEmpty(p) {
+    var n = normalizeProfile(p);
+    return !n.interests.length && !n.avoid.length && !n.notes && !n.factors.length;
+  }
+
+  var INTERESTS_SECTION = { id: 'interests', label: 'My interests', icon: '⭐' };
+
+  // The landmark lines buildCityPrompt edits in PROMPT.md. Named here so the
+  // unit tests can build a small fake template carrying the same landmarks
+  // instead of the whole file.
+  var PROMPT_COPY_LINE = 'Copy this file per trip, fill in the header, delete this line, and go.';
+
+  // Trip-details bullets, matched by their label. `span` means the bullet has
+  // more placeholders than values (accommodation name plus address), so the
+  // whole bracket span is replaced by the single value rather than leaving a
+  // dangling placeholder behind.
+  var HEADER_BULLETS = [
+    { label: 'City', keys: ['name'] },
+    { label: 'Country', keys: ['country'] },
+    { label: 'Dates', keys: ['from', 'to'] },
+    { label: 'Accommodation', keys: ['accommodation'], span: true },
+    { label: 'Arrival transport', keys: ['arrival'] },
+    { label: 'Departure transport', keys: ['departure'] }
+  ];
+
+  function fillHeaderLine(line, rule, header) {
+    var vals = rule.keys.map(function (k) { return trimStr(header ? header[k] : ''); });
+    if (rule.span) {
+      if (!vals[0]) return line;
+      var first = line.indexOf('[');
+      var last = line.lastIndexOf(']');
+      if (first === -1 || last < first) return line;
+      return line.slice(0, first) + vals[0] + line.slice(last + 1);
+    }
+    var i = 0;
+    // An empty value leaves its placeholder in place, so a half-filled header
+    // still reads as a prompt the traveler can finish by hand.
+    return line.replace(/\[[^\][]*\]/g, function (m) {
+      var v = vals[i++];
+      return v ? v : m;
+    });
+  }
+
+  // Planning-factor lines for the Traveler interests block. `blocker` factors
+  // read as hard exclusions (the AI must not offer a weak pick on that
+  // dimension); the rest read as weighted preferences, strongest first.
+  // 'not important' factors are left out entirely: the traveler said this
+  // dimension does not matter, and a "no preference" line would only be
+  // noise the AI has to read past.
+  var FACTOR_WEIGHT_ORDER = ['very important', 'medium', 'low'];
+
+  function factorsBlockLines(factors) {
+    var b = [];
+    var blockers = factors.filter(function (f) { return f.level === 'blocker'; });
+    var weighted = FACTOR_WEIGHT_ORDER.reduce(function (acc, level) {
+      return acc.concat(factors.filter(function (f) { return f.level === level; }));
+    }, []);
+    if (blockers.length) {
+      b.push('Hard exclusions: treat these as non-negotiable. If a pick is ' +
+        'weak on one of these, do not suggest it at all, even as a backup:', '');
+      blockers.forEach(function (f) { b.push('- ' + f.label); });
+      b.push('');
+    }
+    if (weighted.length) {
+      b.push('Weighted preferences, strongest first (favor picks that score ' +
+        'well here over ones that do not, but these are not disqualifying):', '');
+      weighted.forEach(function (f) { b.push('- ' + f.label + ' (' + f.level + ')'); });
+      b.push('');
+    }
+    return b;
+  }
+
+  // `lead` is the one instruction line that only makes sense in a whole-guide
+  // prompt (where the Interests research section is part of the file). The
+  // delta builder shares this formatter and passes no lead, because its own
+  // re-run block already says where the new items go.
+  function interestsBlockLines(p, lead) {
+    var b = ['## Traveler interests', ''];
+    if (lead) b.push(lead, '');
+    if (p.interests.length) {
+      b.push('Interests, in priority order:', '');
+      p.interests.forEach(function (x) { b.push('- ' + x); });
+      b.push('');
+    }
+    if (p.avoid.length) {
+      b.push('Avoid, do not suggest any of these:', '');
+      p.avoid.forEach(function (x) { b.push('- ' + x); });
+      b.push('');
+    }
+    if (p.factors && p.factors.length) b = b.concat(factorsBlockLines(p.factors));
+    if (p.notes) b.push('Notes: ' + p.notes, '');
+    return b;
+  }
+
+  // The block belongs after the traveler-profile bracket paragraph and before
+  // the rule that closes the header, so it reads as part of who is travelling.
+  // Falls back to the "What I need" heading, then to the end of the text, so a
+  // reshaped template still gets the block rather than silently losing it.
+  function insertInterestsBlock(lines, block) {
+    var start = -1, i;
+    for (i = 0; i < lines.length; i++) {
+      if (/^##\s+Traveler profile\s*$/.test(lines[i])) { start = i; break; }
+    }
+    var at = -1;
+    if (start !== -1) {
+      for (i = start + 1; i < lines.length; i++) {
+        if (lines[i] === '---') { at = i; break; }
+        if (/^##\s/.test(lines[i])) break;
+      }
+    }
+    if (at === -1) {
+      for (i = 0; i < lines.length; i++) {
+        if (/^##\s+What I need\s*$/.test(lines[i])) { at = i; break; }
+      }
+    }
+    if (at === -1) return lines.concat([''], block);
+    return lines.slice(0, at).concat(block, lines.slice(at));
+  }
+
+  // The trip-specific paragraph is a bracket span that wraps across several
+  // lines in PROMPT.md ("[Add anything trip-specific here: ... this time.]"),
+  // so it cannot be filled line-by-line like HEADER_BULLETS: this operates on
+  // the whole joined text and replaces from the opening marker through the
+  // next "]". An empty note leaves the placeholder in place, same convention
+  // as every other optional header field.
+  var TRIP_NOTES_MARK = '[Add anything trip-specific here';
+
+  function fillTripNotes(text, notes) {
+    var n = trimStr(notes);
+    if (!n) return text;
+    var start = text.indexOf(TRIP_NOTES_MARK);
+    if (start === -1) return text;
+    var end = text.indexOf(']', start);
+    if (end === -1) return text;
+    return text.slice(0, start) + n + text.slice(end + 1);
+  }
+
+  // Pure string assembly: fills PROMPT.md's Trip details bullets from `header`
+  // ({name, country, from, to, accommodation, arrival, departure, notes}, all
+  // optional strings), drops the "copy this file" instruction line, fills the
+  // trip-specific bracket paragraph from header.notes, and inserts the
+  // Traveler interests block when the profile has anything in it.
+  function buildCityPrompt(templateText, header, profile) {
+    var text = (templateText === null || templateText === undefined) ? '' : String(templateText);
+    var lines = text.split('\n');
+    var out = [];
+    var inTrip = false;
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (line === PROMPT_COPY_LINE) {
+        // Drop the instruction and the blank line under it, so no gap is left.
+        if (lines[i + 1] === '') i++;
+        continue;
+      }
+      if (/^##\s/.test(line)) inTrip = /^##\s+Trip details\s*$/.test(line);
+      if (inTrip && line.indexOf('- **') === 0) {
+        for (var r = 0; r < HEADER_BULLETS.length; r++) {
+          if (line.indexOf('- **' + HEADER_BULLETS[r].label + ':**') === 0) {
+            line = fillHeaderLine(line, HEADER_BULLETS[r], header);
+            break;
+          }
+        }
+      }
+      out.push(line);
+    }
+    var joined = fillTripNotes(out.join('\n'), header && header.notes);
+    out = joined.split('\n');
+    var p = normalizeProfile(profile);
+    if (!profileIsEmpty(p)) {
+      out = insertInterestsBlock(out, interestsBlockLines(p, INTERESTS_LEAD));
+    }
+    return out.join('\n');
+  }
+
+  // ---- re-run (delta) prompt builders ----
+  // Both build a self-contained prompt for the traveler's own AI out of three
+  // things: fixed instruction text sliced verbatim from PROMPT.md between HTML
+  // comment landmarks, the city they already have, and (for interests) their
+  // profile. Nothing is invented here and nothing is paraphrased: PROMPT.md
+  // stays the single source of prompt wording, and these functions only choose
+  // which parts of it to include and in what order.
+  //
+  // A missing landmark throws rather than silently building a prompt with a
+  // hole in it. The app shows the message inline; it means the build shipped an
+  // older PROMPT.md than the engine expects.
+  function sliceLandmark(templateText, name) {
+    var text = (templateText === null || templateText === undefined) ? '' : String(templateText);
+    // Built by concatenation on purpose: a literal HTML comment opener in
+    // engine source would put the tokenizer into script-data-escaped state
+    // inside the app's embedded copy of the guide template (the assembler
+    // rejects it outright).
+    var mark = '<' + '!--';
+    var open = mark + ' ' + name + ' -->';
+    var close = mark + ' /' + name + ' -->';
+    var a = text.indexOf(open);
+    var b = text.indexOf(close);
+    if (a === -1 || b === -1 || b < a) {
+      throw new Error('The prompt template in this build has no ' + name +
+        ' block. Update PROMPT.md from the repo and rebuild.');
+    }
+    return text.slice(a + open.length, b).replace(/^\n+/, '').replace(/\n+$/, '');
+  }
+
+  // The city, as the AI needs to see it in a re-run: enough to know where and
+  // when, and nothing else. Fields the city does not carry are left out rather
+  // than emitted empty.
+  function cityHeaderLines(data) {
+    var c = (data && data.city) ? data.city : {};
+    var d = c.dates || {};
+    var b = ['## The city', ''];
+    b.push('- **City:** ' + trimStr(c.name));
+    if (trimStr(c.country)) b.push('- **Country:** ' + trimStr(c.country));
+    if (trimStr(d.from) || trimStr(d.to)) {
+      b.push('- **Dates:** ' + trimStr(d.from) + ' to ' + trimStr(d.to));
+    }
+    var acc = (c.accommodation && trimStr(c.accommodation.name)) ? trimStr(c.accommodation.name) : '';
+    if (acc) b.push('- **Accommodation:** ' + acc);
+    b.push('');
+    return b;
+  }
+
+  // One line per item, in the compact form both re-run blocks refer to.
+  function itemListLines(items) {
+    var b = [];
+    (Array.isArray(items) ? items : []).forEach(function (it) {
+      if (!it || !it.id) return;
+      b.push('- ' + it.id + ' | ' + trimStr(it.section) + ' | ' + trimStr(it.name));
+    });
+    return b;
+  }
+
+  var INTERESTS_LEAD = 'Add a ninth section for these interests as described under Interests below.';
+
+  // Assembly order, top to bottom:
+  //   1. one header line saying what this run is
+  //   2. the city block (name, country, dates, accommodation name)
+  //   3. the Traveler interests block, same formatter buildCityPrompt uses
+  //   4. the RERUN:INTERESTS instructions, verbatim from PROMPT.md
+  //   5. the existing-item list the re-run block refers to as "below"
+  //   6. the CONTRACT:ITEM rules, verbatim, so the AI has the item shape
+  // Step 6 is the item-level half of PROMPT.md's output contract only: the
+  // whole-guide half (city, dates, the eight-section list) would tell the AI to
+  // emit exactly what a delta must never contain.
+  function buildInterestsDeltaPrompt(templateText, cityData, profile) {
+    var rerun = sliceLandmark(templateText, 'RERUN:INTERESTS');
+    var contract = sliceLandmark(templateText, 'CONTRACT:ITEM');
+    var p = normalizeProfile(profile);
+    var out = ['You are extending an existing CityOps city guide.', ''];
+    out = out.concat(cityHeaderLines(cityData));
+    if (!profileIsEmpty(p)) out = out.concat(interestsBlockLines(p, null));
+    out.push('## What I need', '', rerun, '');
+    out.push('## Existing items (do not re-suggest these)', '');
+    out = out.concat(itemListLines(cityData && cityData.items));
+    out.push('');
+    out.push('## Item shape', '', contract, '');
+    return out.join('\n');
+  }
+
+  // Assembly order, top to bottom:
+  //   1. one header line saying what this run is
+  //   2. the city block
+  //   3. the Intel quality rules, verbatim, BEFORE the instructions that say
+  //      "follow the Intel quality rules above"
+  //   4. the RERUN:INTEL instructions, verbatim
+  //   5. the item list the re-run block refers to as "below", archived items
+  //      omitted (nobody needs intel on something already put away)
+  //   6. the coverage instruction
+  function buildIntelPassPrompt(templateText, cityData) {
+    var rules = sliceLandmark(templateText, 'RULES:INTEL');
+    var rerun = sliceLandmark(templateText, 'RERUN:INTEL');
+    var items = (cityData && Array.isArray(cityData.items) ? cityData.items : [])
+      .filter(function (it) { return it && it.status !== 'archived'; });
+    var out = ['You are adding review-verified intel to an existing CityOps city guide.', ''];
+    out = out.concat(cityHeaderLines(cityData));
+    out.push('## Intel quality rules', '', rules, '');
+    out.push('## What I need', '', rerun, '');
+    out.push('## Items', '');
+    out = out.concat(itemListLines(items));
+    out.push('');
+    out.push('Cover as many of these as you can verify from real reviews. ' +
+      'Leave out the ones you cannot: a partial payload of real intel is the ' +
+      'correct answer, a complete one of invented intel is not.', '');
+    return out.join('\n');
+  }
+
+  // ---- AI response parsing (pure) ----
+  // Ported from tools/city-input.js so the CLI's .md-ingest path and the
+  // in-app "generate with Claude" path (Phase 2) share one rule for finding
+  // the city JSON in a chat response, rather than keeping two copies that can
+  // drift. tools/city-input.js now calls this via the same loadCityOps()
+  // harness it already used for parse()/validate().
+  //
+  // Matches a markdown fence: an opening line of ``` plus an optional
+  // language tag and nothing else, then the body, then a closing line of
+  // ``` and nothing else. Both delimiters are anchored to their own line
+  // (multiline ^/$) so a closing ``` is never confused with the next fence's
+  // OPENING ``` when a response contains more than one fenced block (e.g. a
+  // ```bash setup snippet before the ```json guide): a naive "``` ... ```"
+  // regex with no line anchor matches leftmost-first and would swallow the
+  // second fence's own opening marker as if it were the first fence's close.
+  var FENCE_RE = /^```[ \t]*(\w*)[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*$/gm;
+
+  // Returns the trimmed text of the first fenced block that parses as JSON,
+  // or null if the text has no fenced block that does. Never throws: an
+  // unparseable candidate fence is skipped, not reported, since a later fence
+  // (or none at all) is just as valid an outcome.
+  function extractJsonBlock(md) {
+    FENCE_RE.lastIndex = 0;
+    var m;
+    var text = String(md === null || md === undefined ? '' : md);
+    while ((m = FENCE_RE.exec(text)) !== null) {
+      var body = m[2].replace(/^\s+|\s+$/g, '');
+      try { JSON.parse(body); return body; }
+      catch (e) { /* not this fence (e.g. a ```bash block before the JSON one) */ }
+    }
+    return null;
+  }
+
+  // Shared wording for "the response had no parseable JSON block": the CLI
+  // shows it verbatim, the app shows it verbatim too (with its own Retry
+  // button alongside, since the app can re-ask automatically).
+  var RETRY_INSTRUCTION =
+    'Ask the chat to reply again with: "reply with the full city guide as a ' +
+    'single ```json code block and nothing else after it."';
+
+  // ---- sync helpers (pure) ----
+  // Every network call, session store and piece of sync UI lives in the app
+  // shell (src/app-shell.html). Only decision logic lives here, so it is unit
+  // testable in Node and so standalone guide files carry no sync code at all.
+
+  // Timestamps arrive in two dialects: the device writes
+  // "2026-08-11T09:00:00.000Z", PostgREST returns "2026-08-11T09:00:00+00:00".
+  // Those two are the same instant but do NOT compare equal as strings, so
+  // every comparison goes through epoch milliseconds. Unparseable or missing
+  // values are treated as "no timestamp" rather than as year 0.
+  function isoMs(v) {
+    if (typeof v !== 'string' || !v) return null;
+    var t = Date.parse(v);
+    return (typeof t !== 'number' || isNaN(t)) ? null : t;
+  }
+
+  // Newer wins, ties keep local (spec M2). 'push' = local should go up,
+  // 'pull' = remote should come down, 'noop' = leave both alone.
+  function decideSync(localIso, remoteIso) {
+    var l = isoMs(localIso);
+    var r = isoMs(remoteIso);
+    if (l === null && r === null) return 'noop';
+    if (r === null) return 'push';
+    if (l === null) return 'pull';
+    if (l > r) return 'push';
+    if (l < r) return 'pull';
+    return 'noop';
+  }
+
+  // Whole-side plan: maps of id -> iso on each side (a missing key means the
+  // row does not exist on that side). skipIds names cities removed on this
+  // device in this session; they are never pulled back (removal does not
+  // propagate in v1, but a removal must not be undone by our own next pull).
+  function planSync(localMap, remoteMap, skipIds) {
+    var local = localMap || {};
+    var remote = remoteMap || {};
+    var skip = skipIds || {};
+    var ids = [];
+    var seen = {};
+    function collect(m) {
+      Object.keys(m).forEach(function (id) {
+        if (!Object.prototype.hasOwnProperty.call(seen, id)) { seen[id] = 1; ids.push(id); }
+      });
+    }
+    collect(local);
+    collect(remote);
+    ids.sort();
+    var out = { push: [], pull: [], noop: [] };
+    ids.forEach(function (id) {
+      var hasLocal = Object.prototype.hasOwnProperty.call(local, id);
+      var d = decideSync(hasLocal ? local[id] : null,
+        Object.prototype.hasOwnProperty.call(remote, id) ? remote[id] : null);
+      if (d === 'pull' && !hasLocal && Object.prototype.hasOwnProperty.call(skip, id)) {
+        out.noop.push(id);
+        return;
+      }
+      out[d].push(id);
+    });
+    return out;
+  }
+
+  // Accepted limitation: updated_at is client-driven (the device stamps it,
+  // not the server), so a device with a fast clock wins every reconcile for
+  // as long as its clock stays skewed. Bounded by real device skew, which for
+  // NTP-synced phones and laptops is sub-second in practice. v2 fix: a
+  // server-side `now()` default on the column plus the client adopting the
+  // stamp Postgres actually wrote via `Prefer: return=representation` instead
+  // of trusting its own clock.
+  //
+  // Rows for a PostgREST upsert. user_id is never sent: it defaults to
+  // auth.uid() server side, and RLS rejects anything else.
+  function buildRows(field, entries) {
+    var rows = [];
+    (entries || []).forEach(function (e) {
+      if (!e || !e.cityId || !e.payload || typeof e.payload !== 'object') return;
+      var row = { city_id: e.cityId, updated_at: (typeof e.updatedAt === 'string' && e.updatedAt) ? e.updatedAt : EPOCH_ISO };
+      row[field] = e.payload;
+      rows.push(row);
+    });
+    return rows;
+  }
+
+  // GoTrue returns the magic-link session in the URL fragment. Both tokens are
+  // required: an access token with no refresh token would die silently in an
+  // hour with no way back, so that case is treated as no session at all.
+  // When the fragment carries no expiry at all we mark it already expired,
+  // which forces a refresh on first use rather than trusting an unknown TTL.
+  function parseAuthHash(hash, nowMs) {
+    var s = String(hash === null || hash === undefined ? '' : hash);
+    if (s.charAt(0) === '#') s = s.slice(1);
+    if (!s || s.indexOf('=') === -1) return null;
+    var out = {};
+    s.split('&').forEach(function (pair) {
+      if (!pair) return;
+      var i = pair.indexOf('=');
+      if (i === -1) return;
+      var k = pair.slice(0, i);
+      var v = pair.slice(i + 1);
+      try { k = decodeURIComponent(k); } catch (e) {}
+      try { v = decodeURIComponent(v.replace(/\+/g, ' ')); } catch (e2) {}
+      if (k) out[k] = v;
+    });
+    if (!out.access_token || !out.refresh_token) return null;
+    var now = (typeof nowMs === 'number') ? nowMs : Date.now();
+    var expSec;
+    if (out.expires_at && /^\d+$/.test(out.expires_at)) expSec = parseInt(out.expires_at, 10);
+    else if (out.expires_in && /^\d+$/.test(out.expires_in)) expSec = Math.floor(now / 1000) + parseInt(out.expires_in, 10);
+    else expSec = Math.floor(now / 1000);
+    return {
+      access_token: out.access_token,
+      refresh_token: out.refresh_token,
+      token_type: out.token_type || 'bearer',
+      expires_at: expSec,
+      email: out.email || ''
+    };
+  }
+
+  // True whenever the access token is missing, unreadable, or within 60s of
+  // expiry. Accepts expires_at in seconds (GoTrue's own unit) or milliseconds.
+  function sessionExpiringSoon(session, nowMs) {
+    if (!session || !session.access_token) return true;
+    var exp = session.expires_at;
+    if (typeof exp === 'string' && /^\d+$/.test(exp)) exp = parseInt(exp, 10);
+    if (typeof exp !== 'number' || !isFinite(exp)) return true;
+    var ms = exp > 1e12 ? exp : exp * 1000;
+    var now = (typeof nowMs === 'number') ? nowMs : Date.now();
+    return (ms - now) < 60000;
+  }
+
+  // ---- DOM rendering (browser only) ----
+  var ctx = null; // { base, store }; replaced wholesale when the app boots another city
+  var drag = null; // { card, grip, startY, list, cards, sec } while a pointer drag is in progress
+  var listenersBound = false; // window drag listeners bind once per page, not per boot
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+
+  function tierLabel(tier) {
+    return tier === 'must' ? 'Must' : (tier === 'skip' ? 'Skip' : 'Good');
+  }
+
+  function verdictRow(v) {
+    var p = el('p', 'verdict');
+    p.appendChild(el('span', 'tier tier-' + v.tier, tierLabel(v.tier)));
+    p.appendChild(document.createTextNode(v.text));
+    return p;
+  }
+
+  function intelBody(intel, verdictsOnly) {
+    var frag = document.createDocumentFragment();
+    (intel.verdicts || []).forEach(function (v) { frag.appendChild(verdictRow(v)); });
+    if (!verdictsOnly) {
+      if (intel.tips && intel.tips.length) {
+        var ul = el('ul', 'tips');
+        intel.tips.forEach(function (t) { ul.appendChild(el('li', null, t)); });
+        frag.appendChild(ul);
+      }
+      if (intel.source) frag.appendChild(el('p', 'intel-src', intel.source));
+    }
+    return frag;
+  }
+
+  // Full render (planner/calendar): inline when small, collapsed behind a
+  // <details> toggle once there is enough content to be worth hiding.
+  function intelStrip(intel) {
+    var verdicts = intel.verdicts || [];
+    var tips = intel.tips || [];
+    var total = verdicts.length + tips.length;
+    if (!total) return null;
+    if (total <= 2) {
+      var div = el('div', 'intel');
+      div.appendChild(intelBody(intel, false));
+      return div;
+    }
+    var det = el('details', 'intel');
+    det.appendChild(el('summary', null, 'Intel: ' + verdicts.length + ' verdicts, ' + tips.length + ' tips'));
+    det.appendChild(intelBody(intel, false));
+    return det;
+  }
+
+  // Share view: verdicts only, always inline, no tips/source/details.
+  function intelShareStrip(intel) {
+    if (!intel.verdicts || !intel.verdicts.length) return null;
+    var div = el('div', 'intel');
+    div.appendChild(intelBody(intel, true));
+    return div;
+  }
+
+  function linkPill(l) {
+    var a = document.createElement('a');
+    a.href = l.href;
+    if (l.kind === 'map') { a.className = 'maplink'; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = '📍 ' + l.label; }
+    else if (l.kind === 'web') { a.className = 'weblink'; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = '🌐 ' + l.label; }
+    else { a.className = 'phonelink'; a.textContent = '📞 ' + l.label; }
+    return a;
+  }
+
+  function onStatus(id, to) {
+    var st = ctx.store.load();
+    setStatus(st, id, to);
+    ctx.store.save(st);
+    rerender();
+  }
+
+  var curState = null;       // state snapshot for the current render pass
+  var pendingPromote = null; // item id whose promote day-picker is open (session-only UI state)
+  var pendingMove = null;    // item id whose move day-picker is open
+  var pendingEdit = null;    // item id whose title editor is open
+
+  function promoteTo(it, iso) {
+    var st = ctx.store.load();
+    // Resolve the slot BEFORE flipping status: once the item counts as active,
+    // its own stale day from a prior plan stint could contaminate the lookup.
+    var key = (iso === null) ? null : keyForDisplayedDate(effectiveData(ctx.base, st), st, it.section, iso);
+    setStatus(st, it.id, 'plan');
+    setDay(st, it.id, key);
+    ctx.store.save(st);
+    pendingPromote = null;
+    rerender();
+  }
+
+  function moveTo(it, iso) {
+    var st = ctx.store.load();
+    var key = (iso === null) ? null : keyForDisplayedDate(effectiveData(ctx.base, st), st, it.section, iso);
+    setDay(st, it.id, key);
+    ctx.store.save(st);
+    pendingMove = null;
+    rerender();
+  }
+
+  function dayPickerRow(hint, onPick, onCancel) {
+    var frag = document.createDocumentFragment();
+    frag.appendChild(el('p', 'when-line', hint));
+    var pick = el('div', 'ctl-row');
+    var pst = ctx.store.load();
+    stayDates(effectiveDates(effectiveData(ctx.base, pst), pst)).forEach(function (iso) {
+      var db = el('button', 'ctl', dayLabel(iso));
+      db.type = 'button';
+      db.onclick = function () { onPick(iso); };
+      pick.appendChild(db);
+    });
+    var nd = el('button', 'ctl', 'No day');
+    nd.type = 'button';
+    nd.onclick = function () { onPick(null); };
+    pick.appendChild(nd);
+    var cancel = el('button', 'ctl to-archived', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = onCancel;
+    pick.appendChild(cancel);
+    frag.appendChild(pick);
+    return frag;
+  }
+
+  function itemBody(it, status, showWhen, withDayPicker) {
+    var frag = document.createDocumentFragment();
+    if (pendingEdit === it.id) {
+      frag.appendChild(el('p', 'when-line', 'Rename this item'));
+      var inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'title-edit';
+      inp.value = effectiveName(it, curState);
+      frag.appendChild(inp);
+      var erow = el('div', 'ctl-row');
+      var save = el('button', 'ctl to-done', 'Save');
+      save.type = 'button';
+      save.onclick = function () {
+        var st = ctx.store.load();
+        setTitle(st, it.id, inp.value);
+        ctx.store.save(st);
+        pendingEdit = null;
+        rerender();
+      };
+      var orig = el('button', 'ctl', 'Original name');
+      orig.type = 'button';
+      orig.onclick = function () {
+        var st = ctx.store.load();
+        setTitle(st, it.id, null);
+        ctx.store.save(st);
+        pendingEdit = null;
+        rerender();
+      };
+      var ecancel = el('button', 'ctl to-archived', 'Cancel');
+      ecancel.type = 'button';
+      ecancel.onclick = function () { pendingEdit = null; rerender(); };
+      erow.appendChild(save); erow.appendChild(orig); erow.appendChild(ecancel);
+      frag.appendChild(erow);
+      var focusLater = inp;
+      setTimeout(function () { try { focusLater.focus(); focusLater.select(); } catch (e) {} }, 0);
+      return frag;
+    }
+    var h3 = el('h3');
+    var tname = el('span', 'tname');
+    if (status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
+    tname.appendChild(document.createTextNode(effectiveName(it, curState)));
+    h3.appendChild(tname);
+    if (it.price) h3.appendChild(el('span', 'price', it.price.text));
+    frag.appendChild(h3);
+    if (showWhen && it.when) frag.appendChild(el('p', 'when-line', it.when));
+    if (it.tags && it.tags.length) {
+      var tp = el('p');
+      it.tags.forEach(function (t) { tp.appendChild(el('span', 'tag', t)); });
+      frag.appendChild(tp);
+    }
+    if (it.note) frag.appendChild(el('p', null, it.note));
+    if (it.intel) {
+      var strip = intelStrip(it.intel);
+      if (strip) frag.appendChild(strip);
+    }
+    var row = el('div', 'row');
+    if (it.hours) row.appendChild(el('span', 'hours' + (it.hours.class ? ' ' + it.hours.class : ''), it.hours.text));
+    (it.links || []).forEach(function (l) { row.appendChild(linkPill(l)); });
+    if (row.children.length) frag.appendChild(row);
+    if (status === 'backup' && withDayPicker && pendingPromote === it.id) {
+      frag.appendChild(dayPickerRow('Promote to which day?',
+        function (iso) { promoteTo(it, iso); },
+        function () { pendingPromote = null; rerender(); }));
+      return frag;
+    }
+    if (pendingMove === it.id) {
+      frag.appendChild(dayPickerRow('Move to which day?',
+        function (iso) { moveTo(it, iso); },
+        function () { pendingMove = null; rerender(); }));
+      return frag;
+    }
+    var ctl = el('div', 'ctl-row');
+    (TRANSITIONS[status] || []).forEach(function (t) {
+      var b = el('button', 'ctl to-' + t.to, t.label);
+      b.type = 'button';
+      if (t.to === 'plan' && status === 'backup' && withDayPicker) {
+        b.onclick = function () { pendingPromote = it.id; rerender(); };
+      } else {
+        b.onclick = function () { onStatus(it.id, t.to); };
+      }
+      ctl.appendChild(b);
+    });
+    if (withDayPicker && (status === 'plan' || status === 'done')) {
+      var mv = el('button', 'ctl', '⇄ Day');
+      mv.type = 'button';
+      mv.onclick = function () { pendingMove = it.id; rerender(); };
+      ctl.appendChild(mv);
+    }
+    if (status !== 'archived') {
+      var ed = el('button', 'ctl', '✎');
+      ed.type = 'button';
+      ed.setAttribute('aria-label', 'Rename');
+      ed.onclick = function () { pendingEdit = it.id; rerender(); };
+      ctl.appendChild(ed);
+    }
+    if (ctl.children.length) frag.appendChild(ctl);
+    return frag;
+  }
+
+  function renderCard(it, status, withDayPicker) {
+    var card = el('div', 'card' + (status === 'done' ? ' item-done' : ''));
+    card.appendChild(itemBody(it, status, true, withDayPicker));
+    return card;
+  }
+
+  function renderDayCard(day, state) {
+    var dc = el('div', 'daycard');
+    dc.dataset.day = day.key; // stable group identity; the rendered date is the slot
+    var hd = el('div', 'hd');
+    hd.appendChild(el('span', 'd', day.label));
+    if (day.outside) hd.appendChild(el('span', 'tag', 'Outside stay'));
+    if (day.items.length === 1 && day.items[0].when) hd.appendChild(el('span', 't', day.items[0].when));
+    dc.appendChild(hd);
+    if (!day.items.length) {
+      dc.className += ' empty-day';
+      dc.appendChild(el('div', 'bd free-day', 'free'));
+      return dc;
+    }
+    day.items.forEach(function (it) {
+      var status = effectiveStatus(it, state);
+      var bd = el('div', 'bd' + (status === 'done' ? ' item-done' : ''));
+      bd.appendChild(itemBody(it, status, day.items.length > 1, true));
+      dc.appendChild(bd);
+    });
+    return dc;
+  }
+
+  function renderHeader(data, state) {
+    var c = data.city;
+    var dates = effectiveDates(data, state);
+    var h = document.getElementById('hdr');
+    h.innerHTML = '';
+    h.appendChild(el('h1', null, c.name));
+    var sub = fmtRange(dates) + (c.accommodation && c.accommodation.name ? ' · ' + c.accommodation.name : '');
+    if (state.stayOverride) sub += ' · dates adjusted';
+    h.appendChild(el('div', 'sub', sub));
+    var facts = el('div', 'facts');
+    if (c.currency && c.currency.code !== 'USD') {
+      facts.appendChild(el('span', 'chip', c.currency.code + ' = $' + c.currency.usd));
+    }
+    (c.notes || []).forEach(function (n) { facts.appendChild(el('span', 'chip', n)); });
+    h.appendChild(facts);
+    document.title = c.name + ' Guide · ' + fmtRange(dates);
+  }
+
+  function renderSection(sv, state) {
+    var frag = document.createDocumentFragment();
+    var collapsed = !!(state.collapsedSections && state.collapsedSections[sv.section.id]);
+    var h2 = el('h2', collapsed ? 'collapsed' : null);
+    var tbtn = el('button', 'sec-toggle');
+    tbtn.type = 'button';
+    tbtn.setAttribute('aria-expanded', String(!collapsed));
+    tbtn.appendChild(el('span', 'chev', collapsed ? '▸' : '▾'));
+    if (sv.section.icon) tbtn.appendChild(el('span', 'ic', sv.section.icon));
+    tbtn.appendChild(document.createTextNode(' ' + sv.section.label));
+    if (collapsed) {
+      var n = sv.undated.length + sv.backups.length + sv.archived.length;
+      sv.days.forEach(function (d) { n += d.items.length; });
+      tbtn.appendChild(el('span', 'sec-count', n + (n === 1 ? ' item' : ' items')));
+    }
+    tbtn.onclick = function () {
+      var st = ctx.store.load();
+      toggleSection(st, sv.section.id);
+      ctx.store.save(st);
+      rerender();
+    };
+    h2.appendChild(tbtn);
+    frag.appendChild(h2);
+    if (collapsed) return frag;
+    if (sv.days.length) {
+      var days = el('div', 'days');
+      days.dataset.sec = sv.section.id;
+      sv.days.forEach(function (d) { days.appendChild(renderDayCard(d, state)); });
+      frag.appendChild(days);
+    }
+    sv.undated.forEach(function (it) { frag.appendChild(renderCard(it, effectiveStatus(it, state), sv.days.length > 0)); });
+    if (sv.backups.length) {
+      var withPicker = sv.days.length > 0;
+      var bk = el('div', 'backup');
+      bk.appendChild(el('div', 'bt', '↩ Backups: if Plan A is full, closed, or you want a change'));
+      sv.backups.forEach(function (it) { bk.appendChild(renderCard(it, 'backup', withPicker)); });
+      frag.appendChild(bk);
+    }
+    if (sv.archived.length) {
+      var det = el('details', 'arch-details');
+      det.appendChild(el('summary', null, 'Archived (' + sv.archived.length + ')'));
+      sv.archived.forEach(function (it) { det.appendChild(renderCard(it, 'archived')); });
+      frag.appendChild(det);
+    }
+    return frag;
+  }
+
+  function saveDayOrder(sec, keys, focusKey) {
+    var st = ctx.store.load();
+    st.dayOrder[sec] = keys;
+    ctx.store.save(st);
+    // Dates are slots: after a reorder the cards must re-label to their new
+    // chronological slots, so a full rerender is required (not just a DOM move).
+    rerender();
+    if (focusKey) {
+      var g = document.querySelector('.days[data-sec="' + sec + '"] .daycard[data-day="' + focusKey + '"] .grip');
+      if (g) g.focus();
+    }
+  }
+
+  // Window-level pointermove/pointerup/pointercancel are bound once in init()
+  // (not per rerender, which would stack duplicate listeners). They read the
+  // shared module-scope `drag` context and no-op when it is null.
+  function onDragPointerMove(e) {
+    if (!drag) return;
+    var list = drag.list, cards = drag.cards;
+    if (!list.contains(drag.card)) { drag = null; return; }
+    e.preventDefault();
+    var y = e.clientY;
+    drag.card.style.transform = 'translateY(' + (y - drag.startY) + 'px) scale(1.015)';
+    var others = cards().filter(function (c) { return c !== drag.card; });
+    for (var i = 0; i < others.length; i++) {
+      var r = others[i].getBoundingClientRect();
+      var mid = r.top + r.height / 2;
+      var after = drag.card.compareDocumentPosition(others[i]) & Node.DOCUMENT_POSITION_FOLLOWING;
+      if (after && y > mid) {
+        drag.card.style.transform = '';
+        list.insertBefore(others[i], drag.card);
+        drag.startY = y;
+        drag.card.style.transform = 'scale(1.015)';
+        return;
+      }
+      if (!after && y < mid) {
+        drag.card.style.transform = '';
+        list.insertBefore(drag.card, others[i]);
+        drag.startY = y;
+        drag.card.style.transform = 'scale(1.015)';
+        return;
+      }
+    }
+  }
+
+  function onDragPointerEnd(e) {
+    if (!drag) return;
+    var d = drag;
+    if (!d.list.contains(d.card)) { drag = null; return; }
+    d.card.classList.remove('dragging');
+    d.card.style.transform = '';
+    try { d.grip.releasePointerCapture(e.pointerId); } catch (err) {}
+    drag = null;
+    saveDayOrder(d.sec, d.cards().map(function (c) { return c.dataset.day; }));
+  }
+
+  function attachReorder() {
+    var lists = document.querySelectorAll('.days');
+    Array.prototype.forEach.call(lists, function (list) {
+      var sec = list.dataset.sec;
+      var cards = function () { return Array.prototype.slice.call(list.querySelectorAll('.daycard')); };
+      if (cards().length < 2) return;
+
+      var bar = el('div', 'reorderbar');
+      var status = el('span', null, 'Drag the ⠿ handle to reorder days. Saved on this device.');
+      var reset = el('button', null, 'Reset to date order');
+      reset.type = 'button';
+      reset.onclick = function () {
+        var st = ctx.store.load();
+        delete st.dayOrder[sec];
+        ctx.store.save(st);
+        rerender();
+      };
+      bar.appendChild(status);
+      bar.appendChild(reset);
+      list.parentNode.insertBefore(bar, list);
+
+      cards().forEach(function (card) {
+        var g = el('div', 'grip');
+        g.setAttribute('role', 'button');
+        g.setAttribute('tabindex', '0');
+        g.setAttribute('aria-label', 'Reorder this day. Use arrow up and arrow down keys.');
+        g.innerHTML = '<svg viewBox="0 0 10 16" fill="currentColor" aria-hidden="true">' +
+          '<circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/>' +
+          '<circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/>' +
+          '<circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg>';
+        card.appendChild(g);
+      });
+
+      list.addEventListener('pointerdown', function (e) {
+        var grip = e.target.closest('.grip');
+        if (!grip) return;
+        var card = grip.closest('.daycard');
+        if (!card) return;
+        e.preventDefault();
+        grip.setPointerCapture(e.pointerId);
+        drag = { card: card, grip: grip, startY: e.clientY, list: list, cards: cards, sec: sec };
+        card.classList.add('dragging');
+      });
+
+      list.addEventListener('keydown', function (e) {
+        var grip = e.target.closest('.grip');
+        if (!grip) return;
+        var card = grip.closest('.daycard');
+        if (e.key === 'ArrowUp' && card.previousElementSibling) {
+          e.preventDefault();
+          list.insertBefore(card, card.previousElementSibling);
+          saveDayOrder(sec, cards().map(function (c) { return c.dataset.day; }), card.dataset.day);
+        } else if (e.key === 'ArrowDown' && card.nextElementSibling) {
+          e.preventDefault();
+          list.insertBefore(card.nextElementSibling, card);
+          saveDayOrder(sec, cards().map(function (c) { return c.dataset.day; }), card.dataset.day);
+        }
+      });
+    });
+  }
+
+  var shareOn = false;
+
+  function renderShare() {
+    var state = ctx.store.load();
+    curState = state;
+    var data = effectiveData(ctx.base, state);
+    var sm = shareModel(data, state);
+    var main = document.getElementById('main');
+    main.innerHTML = '';
+    sm.days.forEach(function (d) {
+      var dc = el('div', 'daycard');
+      var hd = el('div', 'hd');
+      hd.appendChild(el('span', 'd', d.label));
+      dc.appendChild(hd);
+      d.entries.forEach(function (e) {
+        var bd = el('div', 'bd' + (e.status === 'done' ? ' item-done' : ''));
+        var h3 = el('h3');
+        var tname = el('span', 'tname');
+        if (e.status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
+        tname.appendChild(document.createTextNode(effectiveName(e.it, state)));
+        h3.appendChild(tname);
+        if (e.it.price) h3.appendChild(el('span', 'price', e.it.price.text));
+        bd.appendChild(h3);
+        var meta = (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label + (e.it.when ? ' · ' + e.it.when : '');
+        bd.appendChild(el('p', 'when-line', meta));
+        if (e.it.hours) {
+          var row = el('div', 'row');
+          row.appendChild(el('span', 'hours' + (e.it.hours.class ? ' ' + e.it.hours.class : ''), e.it.hours.text));
+          bd.appendChild(row);
+        }
+        if (e.it.intel) {
+          var shareStrip = intelShareStrip(e.it.intel);
+          if (shareStrip) bd.appendChild(shareStrip);
+        }
+        dc.appendChild(bd);
+      });
+      main.appendChild(dc);
+    });
+    if (sm.undated.length) {
+      var h2 = el('h2', null, 'Anytime');
+      main.appendChild(h2);
+      sm.undated.forEach(function (e) {
+        var card = el('div', 'card' + (e.status === 'done' ? ' item-done' : ''));
+        var h3 = el('h3');
+        var tname = el('span', 'tname');
+        if (e.status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
+        tname.appendChild(document.createTextNode(effectiveName(e.it, state)));
+        h3.appendChild(tname);
+        if (e.it.price) h3.appendChild(el('span', 'price', e.it.price.text));
+        card.appendChild(h3);
+        card.appendChild(el('p', 'when-line', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
+        if (e.it.intel) {
+          var undatedStrip = intelShareStrip(e.it.intel);
+          if (undatedStrip) card.appendChild(undatedStrip);
+        }
+        main.appendChild(card);
+      });
+    }
+  }
+
+  function renderCalendar(data, state) {
+    var cm = calendarModel(data, state);
+    var main = document.getElementById('main');
+    main.innerHTML = '';
+    cm.days.forEach(function (d) {
+      var dc = el('div', 'daycard' + (d.entries.length ? '' : ' empty-day'));
+      var hd = el('div', 'hd');
+      hd.appendChild(el('span', 'd', d.label));
+      dc.appendChild(hd);
+      if (!d.entries.length) {
+        dc.appendChild(el('div', 'bd free-day', 'free'));
+      }
+      d.entries.forEach(function (e) {
+        var bd = el('div', 'bd' + (e.status === 'done' ? ' item-done' : ''));
+        bd.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
+        bd.appendChild(itemBody(e.it, e.status, true, true));
+        dc.appendChild(bd);
+      });
+      main.appendChild(dc);
+    });
+    if (cm.undated.length) {
+      main.appendChild(el('h2', null, 'Anytime'));
+      cm.undated.forEach(function (e) {
+        var card = el('div', 'card' + (e.status === 'done' ? ' item-done' : ''));
+        card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
+        card.appendChild(itemBody(e.it, e.status, true, true));
+        main.appendChild(card);
+      });
+    }
+    cm.sections.forEach(function (sv) {
+      if (sv.backups.length) {
+        var bk = el('div', 'backup');
+        bk.appendChild(el('div', 'bt', '↩ ' + sv.section.label + ' backups'));
+        sv.backups.forEach(function (it) { bk.appendChild(renderCard(it, 'backup', true)); });
+        main.appendChild(bk);
+      }
+      if (sv.archived.length) {
+        var det = el('details', 'arch-details');
+        det.appendChild(el('summary', null, sv.section.label + ': archived (' + sv.archived.length + ')'));
+        sv.archived.forEach(function (it) { det.appendChild(renderCard(it, 'archived')); });
+        main.appendChild(det);
+      }
+    });
+  }
+
+  function rerender() {
+    // Any in-flight drag references nodes from the previous render's #main;
+    // drop it so a stray window pointerup after a rerender is a no-op.
+    drag = null;
+    var state = ctx.store.load();
+    curState = state;
+    var data = effectiveData(ctx.base, state);
+    renderHeader(data, state);
+    renderToolbar(data, state);
+    if (shareOn) {
+      renderShare();
+    } else if (state.viewMode === 'day') {
+      renderCalendar(data, state);
+    } else {
+      var main = document.getElementById('main');
+      main.innerHTML = '';
+      viewModel(data, state).forEach(function (sv) { main.appendChild(renderSection(sv, state)); });
+      attachReorder();
+    }
+    var foot = document.getElementById('foot');
+    foot.textContent = 'cityops · schema v1 · state saved on this device';
+    var notice = document.getElementById('notice');
+    notice.textContent = ctx.store.persistent ? '' :
+      'Private mode: changes hold for this session only and are not saved.';
+    // Additive hook: the app shell sets this to re-render its citybar (name/dates)
+    // whenever engine state changes, without the shell re-implementing rerender.
+    if (CityOps.onStateChange) CityOps.onStateChange();
+  }
+
+  // Live in-memory state for the currently booted city, bypassing a fresh
+  // makeStore() read. In private/incognito mode makeStore() falls back to a
+  // per-instance memory cache that a NEW store instance would not see, so
+  // exportStandalone must read the live ctx.store rather than re-deriving one.
+  function liveState() {
+    return ctx ? ctx.store.load() : null;
+  }
+
+  function buildExport(data, state) {
+    var out = JSON.parse(JSON.stringify(data));
+    out.city.dates = JSON.parse(JSON.stringify(effectiveDates(data, state)));
+    out.items.forEach(function (it) {
+      it.status = effectiveStatus(it, state);
+      it.name = effectiveName(it, state);
+      var d = effectiveDay(it, state);
+      if (d) { it.day = d; } else { delete it.day; }
+    });
+    var vm = viewModel(out, { itemStatus: {}, itemDay: {}, dayOrder: state.dayOrder || {}, dataOverride: null, stayOverride: null });
+    var rank = {};
+    var r = 0;
+    var byId = {};
+    out.items.forEach(function (it) { byId[it.id] = it; });
+    vm.forEach(function (sv) {
+      sv.days.forEach(function (d) {
+        d.items.forEach(function (it) {
+          byId[it.id].day = d.iso; // bake the slot date the planner displays
+          rank[it.id] = r++;
+        });
+      });
+      sv.undated.forEach(function (it) { rank[it.id] = r++; });
+      sv.backups.forEach(function (it) { rank[it.id] = r++; });
+      sv.archived.forEach(function (it) { rank[it.id] = r++; });
+    });
+    out.items.sort(function (a, b) {
+      var ra = (rank[a.id] !== undefined) ? rank[a.id] : 1e9;
+      var rb = (rank[b.id] !== undefined) ? rank[b.id] : 1e9;
+      return ra - rb;
+    });
+    return out;
+  }
+
+  function diffSummary(oldData, newData) {
+    var oldIds = {};
+    oldData.items.forEach(function (i) { oldIds[i.id] = 1; });
+    var added = 0, unchanged = 0;
+    newData.items.forEach(function (i) {
+      if (oldIds[i.id]) { unchanged++; delete oldIds[i.id]; } else { added++; }
+    });
+    var removed = Object.keys(oldIds).length;
+    return added + ' added, ' + removed + ' removed, ' + unchanged + ' unchanged';
+  }
+
+  function openDatesModal() {
+    var host = document.getElementById('modal');
+    host.innerHTML = '';
+    var st0 = ctx.store.load();
+    var cur = effectiveDates(effectiveData(ctx.base, st0), st0);
+    var wrap = el('div', 'modal-wrap');
+    var box = el('div', 'modal');
+    box.appendChild(el('h3', null, 'Edit stay dates'));
+    box.appendChild(el('p', 'diff', 'Adjusts the stay on this device and adds empty day cards for the new range. The file is not changed; Export bakes the new dates in.'));
+    function dateInput(iso) {
+      var inp = document.createElement('input');
+      inp.type = 'date';
+      inp.className = 'date-field';
+      inp.value = iso;
+      return inp;
+    }
+    var fromIn = dateInput(cur.from);
+    var toIn = dateInput(cur.to);
+    var row1 = el('div', 'mrow');
+    row1.appendChild(el('span', 'diff', 'From'));
+    row1.appendChild(fromIn);
+    row1.appendChild(el('span', 'diff', 'To'));
+    row1.appendChild(toIn);
+    box.appendChild(row1);
+    var msg = el('div', 'diff', '');
+    box.appendChild(msg);
+    var row = el('div', 'mrow');
+    var apply = el('button', 'ctl', 'Apply');
+    apply.type = 'button';
+    apply.onclick = function () {
+      var st = ctx.store.load();
+      try { setStayDates(st, fromIn.value, toIn.value); }
+      catch (e) { msg.textContent = 'Invalid: ' + e.message; return; }
+      ctx.store.save(st);
+      wrap.remove();
+      rerender();
+    };
+    var revert = el('button', 'ctl', 'Reset to file dates');
+    revert.type = 'button';
+    if (st0.stayOverride) {
+      revert.onclick = function () {
+        var st = ctx.store.load();
+        st.stayOverride = null;
+        ctx.store.save(st);
+        wrap.remove();
+        rerender();
+      };
+    } else {
+      revert.disabled = true;
+      revert.title = 'No date adjustment is active';
+    }
+    var cancel = el('button', 'ctl', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = function () { wrap.remove(); };
+    row.appendChild(apply); row.appendChild(revert); row.appendChild(cancel);
+    box.appendChild(row);
+    wrap.appendChild(box);
+    wrap.onclick = function (e) { if (e.target === wrap) wrap.remove(); };
+    host.appendChild(wrap);
+    fromIn.focus();
+  }
+
+  function openUpdateModal() {
+    var host = document.getElementById('modal');
+    host.innerHTML = '';
+    var wrap = el('div', 'modal-wrap');
+    var box = el('div', 'modal');
+    box.appendChild(el('h3', null, 'Update city data'));
+    box.appendChild(el('p', 'diff', 'Paste schema v1 JSON. It is stored on this device as an override; the file itself is not changed. Export and paste into the file to make it permanent.'));
+    var ta = document.createElement('textarea');
+    box.appendChild(ta);
+    var msg = el('div', 'diff', '');
+    box.appendChild(msg);
+    var row = el('div', 'mrow');
+    var apply = el('button', 'ctl', 'Apply');
+    apply.type = 'button';
+    apply.onclick = function () {
+      var res = parse(ta.value);
+      if (!res.data) { msg.textContent = 'Invalid:\n' + res.errors.join('\n'); return; }
+      var st = ctx.store.load();
+      var current = effectiveData(ctx.base, st);
+      var summary = diffSummary(current, res.data);
+      st.dataOverride = res.data;
+      ctx.store.save(st);
+      pendingPromote = pendingMove = pendingEdit = null; // item ids may change under an override
+      wrap.remove();
+      rerender();
+      document.getElementById('notice').textContent = 'Data updated: ' + summary + '.';
+    };
+    var revert = el('button', 'ctl', 'Revert to file data');
+    revert.type = 'button';
+    var hasOverride = !!ctx.store.load().dataOverride;
+    if (hasOverride) {
+      revert.onclick = function () {
+        var st = ctx.store.load();
+        st.dataOverride = null;
+        ctx.store.save(st);
+        pendingPromote = pendingMove = pendingEdit = null;
+        wrap.remove();
+        rerender();
+      };
+    } else {
+      revert.disabled = true;
+      revert.title = 'No in-app override is active';
+    }
+    var cancel = el('button', 'ctl', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = function () { wrap.remove(); };
+    row.appendChild(apply); row.appendChild(revert); row.appendChild(cancel);
+    box.appendChild(row);
+    wrap.appendChild(box);
+    wrap.onclick = function (e) { if (e.target === wrap) wrap.remove(); };
+    host.appendChild(wrap);
+    ta.focus();
+  }
+
+  function renderToolbar(data, state) {
+    var tb = document.getElementById('toolbar');
+    tb.innerHTML = '';
+    var share = el('button', null, shareOn ? 'Back to planner' : 'Share view');
+    share.type = 'button';
+    share.id = 'btn-share';
+    share.onclick = function () {
+      shareOn = !shareOn;
+      document.body.classList.toggle('share', shareOn);
+      rerender();
+    };
+    tb.appendChild(share);
+    if (!shareOn) {
+      var vw = el('button', null, state.viewMode === 'day' ? 'By type' : 'Calendar');
+      vw.type = 'button';
+      vw.onclick = function () {
+        var st = ctx.store.load();
+        setViewMode(st, st.viewMode === 'day' ? 'type' : 'day');
+        ctx.store.save(st);
+        rerender();
+      };
+      tb.appendChild(vw);
+      var exp = el('button', null, 'Export JSON');
+      exp.type = 'button';
+      exp.id = 'btn-export';
+      exp.onclick = function () {
+        var st = ctx.store.load();
+        var out = buildExport(effectiveData(ctx.base, st), st);
+        var blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = cityId(out) + '.cityops.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        var freeUrl = a.href;
+        setTimeout(function () { URL.revokeObjectURL(freeUrl); }, 4000);
+      };
+      tb.appendChild(exp);
+      var upd = el('button', null, 'Update data');
+      upd.type = 'button';
+      upd.onclick = openUpdateModal;
+      tb.appendChild(upd);
+      var dts = el('button', null, 'Edit dates');
+      dts.type = 'button';
+      dts.onclick = openDatesModal;
+      tb.appendChild(dts);
+      // App-only toolbar buttons whose LABEL must not ship inside standalone
+      // guides either. The re-run button is the case in point: it builds
+      // prompts out of PROMPT.md, which guide files do not carry at all. The
+      // shell appends those buttons here; guide files have no CityOpsApp, so
+      // nothing is added and no trace of them exists in template.html.
+      if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.toolbarExtras) {
+        window.CityOpsApp.toolbarExtras(tb);
+      }
+      // App context only: standalone guide files have no CityOpsApp, so this
+      // button never appears in them.
+      if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.exportStandalone) {
+        var expg = el('button', null, 'Export guide');
+        expg.type = 'button';
+        expg.id = 'btn-export-guide';
+        expg.onclick = function () { window.CityOpsApp.exportStandalone(); };
+        tb.appendChild(expg);
+      }
+    }
+    if (state.dataOverride) {
+      var flagText = 'Data updated in-app: export and paste into the file to make permanent';
+      if (typeof window !== 'undefined' && window && window.CityOpsApp) {
+        flagText = 'Data updated in-app: this override wins until you Replace the city or revert it';
+      }
+      tb.appendChild(el('span', 'flag', flagText));
+    }
+  }
+
+  function renderError(errors) {
+    var main = document.getElementById('main');
+    main.innerHTML = '';
+    var card = el('div', 'errcard');
+    var b = el('b', null, 'This guide\'s city data has a problem.');
+    card.appendChild(b);
+    errors.forEach(function (m) { card.appendChild(el('p', null, m)); });
+    card.appendChild(el('p', null, 'Fix the JSON inside the <script id="city-data"> block and reload.'));
+    main.appendChild(card);
+  }
+
+  // boot(data) renders a parsed city. The app shell calls it again on every city
+  // switch, so every piece of per-city session state is reset here; only the
+  // window-level drag listeners survive, and they bind exactly once.
+  function boot(data) {
+    var storageRef = null;
+    try { storageRef = (typeof localStorage !== 'undefined') ? localStorage : null; }
+    catch (e) { storageRef = null; }
+    ctx = { base: data, store: makeStore(cityId(data), storageRef) };
+    curState = null;
+    shareOn = false;
+    pendingPromote = null;
+    pendingMove = null;
+    pendingEdit = null;
+    drag = null;
+    if (typeof document !== 'undefined' && document.body) document.body.classList.remove('share');
+    if (!listenersBound && typeof window !== 'undefined' && window && window.addEventListener) {
+      window.addEventListener('pointermove', onDragPointerMove, { passive: false });
+      window.addEventListener('pointerup', onDragPointerEnd);
+      window.addEventListener('pointercancel', onDragPointerEnd);
+      listenersBound = true;
+    }
+    rerender();
+  }
+
+  function init() {
+    var elData = document.getElementById('city-data');
+    if (!elData) return; // Node test harness path, and the app shell (no data block)
+    var res = parse(elData.textContent);
+    if (!res.data) { renderError(res.errors); return; }
+    boot(res.data);
+  }
+
+  return {
+    STATUSES: STATUSES, slug: slug, cityId: cityId, dayLabel: dayLabel,
+    validate: validate, parse: parse, init: init, boot: boot,
+    mergeDelta: mergeDelta,
+    appStore: {
+      normalize: normalizeAppStore, add: appAddCity,
+      remove: appRemoveCity, keepBothName: keepBothName,
+      resolveStartCity: resolveStartCity, blankCity: blankCity,
+      exampleVisible: exampleCityVisible
+    },
+    profile: {
+      normalize: normalizeProfile, isEmpty: profileIsEmpty,
+      FACTOR_LEVELS: FACTOR_LEVELS, defaultFactors: defaultFactors,
+      normalizeFactors: normalizeFactors
+    },
+    promptKit: {
+      buildCityPrompt: buildCityPrompt, INTERESTS_SECTION: INTERESTS_SECTION,
+      COPY_LINE: PROMPT_COPY_LINE,
+      buildInterestsDeltaPrompt: buildInterestsDeltaPrompt,
+      buildIntelPassPrompt: buildIntelPassPrompt
+    },
+    extractJsonBlock: extractJsonBlock, RETRY_INSTRUCTION: RETRY_INSTRUCTION,
+    syncKit: {
+      EPOCH: EPOCH_ISO, decide: decideSync, plan: planSync, buildRows: buildRows,
+      parseAuthHash: parseAuthHash, sessionExpiringSoon: sessionExpiringSoon
+    },
+    onStateChange: null, liveState: liveState,
+    emptyState: emptyState, makeStore: makeStore, setStatus: setStatus,
+    effectiveStatus: effectiveStatus, effectiveData: effectiveData, viewModel: viewModel,
+    TRANSITIONS: TRANSITIONS, fmtRange: fmtRange, buildExport: buildExport,
+    diffSummary: diffSummary, shareModel: shareModel,
+    effectiveDay: effectiveDay, setDay: setDay, stayDates: stayDates,
+    normalizeState: normalizeState, effectiveDates: effectiveDates,
+    setStayDates: setStayDates, toggleSection: toggleSection,
+    effectiveName: effectiveName, setTitle: setTitle, setViewMode: setViewMode,
+    keyForDisplayedDate: keyForDisplayedDate, calendarModel: calendarModel
+  };
+})();
+CityOps.init();
+</script>
+</body>
+</html>
