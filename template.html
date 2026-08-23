@@ -885,6 +885,17 @@ var CityOps = (function () {
     return store.order.length ? store.order[0] : null;
   }
 
+  // Feature 3: whether the bundled example city should be visible. Rule: it
+  // shows by default when there are no real (non-seed) cities yet; once a
+  // real city exists it hides everywhere unless the traveler's "Show example
+  // city" profile toggle is on. `ids` is the app store's order (or any list
+  // of city ids); `seedId` names the one id that counts as "the example", so
+  // this stays pure and app-shell decides what its seed id actually is.
+  function exampleCityVisible(ids, seedId, showExampleToggle) {
+    var hasReal = (Array.isArray(ids) ? ids : []).some(function (id) { return id !== seedId; });
+    return !hasReal || !!showExampleToggle;
+  }
+
   // ---- interest profile + prompt assembly (pure) ----
   // The profile is app-only user data (it syncs as a third row kind), but its
   // shape and the prompt string assembly live in the engine so both are unit
@@ -896,6 +907,59 @@ var CityOps = (function () {
 
   function trimStr(v) {
     return (typeof v === 'string') ? v.replace(/^\s+|\s+$/g, '') : '';
+  }
+
+  // ---- planning factors (Phase 2) ----
+  // A factor is a named travel dimension (walkability, nightlife, ...) with an
+  // importance level on a fixed five-point scale. Seeded factors and
+  // user-added custom ones share the same shape; nothing here distinguishes
+  // them at read time (the `custom` flag is informational only, for the UI to
+  // label "your own" entries, never checked by validation or the prompt).
+  var FACTOR_LEVELS = ['blocker', 'very important', 'medium', 'low', 'not important'];
+
+  // Seeded on first use of the profile editor (app-shell decides "first use";
+  // the engine just describes what a sensible starting set looks like). Level
+  // defaults to 'medium' so a traveler who never touches a seeded factor is
+  // not silently telling the AI it's a blocker or a non-issue.
+  var DEFAULT_FACTOR_LABELS = [
+    'Food scene', 'Walkability', 'Safety', 'Work-friendly cafes',
+    'Nature access', 'Nightlife', 'Transit quality'
+  ];
+
+  // A fresh array of fresh objects every call: callers mutate factor objects
+  // in place (editing a level), so handing out one shared array would let one
+  // user's edit corrupt every future "first open" default.
+  function defaultFactors() {
+    return DEFAULT_FACTOR_LABELS.map(function (label) {
+      return { label: label, level: 'medium', custom: false };
+    });
+  }
+
+  // Trims, drops anything without a real label or a level on the fixed scale,
+  // dedupes by label (case-insensitive, first spelling wins, same rule as
+  // normalizeProfileList), assigns a slug id (deduped against itself), and
+  // caps the list. A dropped/invalid entry is simply absent, not corrected:
+  // this is normalize-on-read, not a validator with error messages.
+  function normalizeFactors(v) {
+    var out = [];
+    var seenLabel = {};
+    var seenId = {};
+    (Array.isArray(v) ? v : []).forEach(function (f) {
+      if (!f || typeof f !== 'object') return;
+      var label = trimStr(f.label);
+      if (!label) return;
+      var key = label.toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(seenLabel, key)) return;
+      if (FACTOR_LEVELS.indexOf(f.level) === -1) return;
+      if (out.length >= PROFILE_CAP) return;
+      seenLabel[key] = 1;
+      var id = slug(label) || 'factor';
+      var base = id, n = 2;
+      while (Object.prototype.hasOwnProperty.call(seenId, id)) { id = base + '-' + n; n++; }
+      seenId[id] = 1;
+      out.push({ id: id, label: label, level: f.level, custom: !!f.custom });
+    });
+    return out;
   }
 
   // Trims, drops empties, dedupes case-insensitively keeping the FIRST spelling
@@ -921,15 +985,22 @@ var CityOps = (function () {
       schema: 1,
       interests: normalizeProfileList(src.interests),
       avoid: normalizeProfileList(src.avoid),
+      factors: normalizeFactors(src.factors),
       notes: trimStr(src.notes).slice(0, PROFILE_NOTES_CAP),
+      // Feature 3 (example-city visibility): explicit user override, off by
+      // default. Lives on the profile so it persists and syncs the same way
+      // everything else here does; the app shell is the only reader.
+      showExample: src.showExample === true,
       updated: (typeof src.updated === 'string' && src.updated) ? src.updated : null
     };
   }
 
   // Empty means "nothing for the AI to work with": the stamp does not count.
+  // showExample is a display preference, not research input, so it never
+  // counts toward "empty" either.
   function profileIsEmpty(p) {
     var n = normalizeProfile(p);
-    return !n.interests.length && !n.avoid.length && !n.notes;
+    return !n.interests.length && !n.avoid.length && !n.notes && !n.factors.length;
   }
 
   var INTERESTS_SECTION = { id: 'interests', label: 'My interests', icon: '⭐' };
@@ -970,6 +1041,35 @@ var CityOps = (function () {
     });
   }
 
+  // Planning-factor lines for the Traveler interests block. `blocker` factors
+  // read as hard exclusions (the AI must not offer a weak pick on that
+  // dimension); the rest read as weighted preferences, strongest first.
+  // 'not important' factors are left out entirely: the traveler said this
+  // dimension does not matter, and a "no preference" line would only be
+  // noise the AI has to read past.
+  var FACTOR_WEIGHT_ORDER = ['very important', 'medium', 'low'];
+
+  function factorsBlockLines(factors) {
+    var b = [];
+    var blockers = factors.filter(function (f) { return f.level === 'blocker'; });
+    var weighted = FACTOR_WEIGHT_ORDER.reduce(function (acc, level) {
+      return acc.concat(factors.filter(function (f) { return f.level === level; }));
+    }, []);
+    if (blockers.length) {
+      b.push('Hard exclusions: treat these as non-negotiable. If a pick is ' +
+        'weak on one of these, do not suggest it at all, even as a backup:', '');
+      blockers.forEach(function (f) { b.push('- ' + f.label); });
+      b.push('');
+    }
+    if (weighted.length) {
+      b.push('Weighted preferences, strongest first (favor picks that score ' +
+        'well here over ones that do not, but these are not disqualifying):', '');
+      weighted.forEach(function (f) { b.push('- ' + f.label + ' (' + f.level + ')'); });
+      b.push('');
+    }
+    return b;
+  }
+
   // `lead` is the one instruction line that only makes sense in a whole-guide
   // prompt (where the Interests research section is part of the file). The
   // delta builder shares this formatter and passes no lead, because its own
@@ -987,6 +1087,7 @@ var CityOps = (function () {
       p.avoid.forEach(function (x) { b.push('- ' + x); });
       b.push('');
     }
+    if (p.factors && p.factors.length) b = b.concat(factorsBlockLines(p.factors));
     if (p.notes) b.push('Notes: ' + p.notes, '');
     return b;
   }
@@ -1016,9 +1117,28 @@ var CityOps = (function () {
     return lines.slice(0, at).concat(block, lines.slice(at));
   }
 
+  // The trip-specific paragraph is a bracket span that wraps across several
+  // lines in PROMPT.md ("[Add anything trip-specific here: ... this time.]"),
+  // so it cannot be filled line-by-line like HEADER_BULLETS: this operates on
+  // the whole joined text and replaces from the opening marker through the
+  // next "]". An empty note leaves the placeholder in place, same convention
+  // as every other optional header field.
+  var TRIP_NOTES_MARK = '[Add anything trip-specific here';
+
+  function fillTripNotes(text, notes) {
+    var n = trimStr(notes);
+    if (!n) return text;
+    var start = text.indexOf(TRIP_NOTES_MARK);
+    if (start === -1) return text;
+    var end = text.indexOf(']', start);
+    if (end === -1) return text;
+    return text.slice(0, start) + n + text.slice(end + 1);
+  }
+
   // Pure string assembly: fills PROMPT.md's Trip details bullets from `header`
-  // ({name, country, from, to, accommodation, arrival, departure}, all optional
-  // strings), drops the "copy this file" instruction line, and inserts the
+  // ({name, country, from, to, accommodation, arrival, departure, notes}, all
+  // optional strings), drops the "copy this file" instruction line, fills the
+  // trip-specific bracket paragraph from header.notes, and inserts the
   // Traveler interests block when the profile has anything in it.
   function buildCityPrompt(templateText, header, profile) {
     var text = (templateText === null || templateText === undefined) ? '' : String(templateText);
@@ -1043,6 +1163,8 @@ var CityOps = (function () {
       }
       out.push(line);
     }
+    var joined = fillTripNotes(out.join('\n'), header && header.notes);
+    out = joined.split('\n');
     var p = normalizeProfile(profile);
     if (!profileIsEmpty(p)) {
       out = insertInterestsBlock(out, interestsBlockLines(p, INTERESTS_LEAD));
@@ -1160,6 +1282,46 @@ var CityOps = (function () {
       'correct answer, a complete one of invented intel is not.', '');
     return out.join('\n');
   }
+
+  // ---- AI response parsing (pure) ----
+  // Ported from tools/city-input.js so the CLI's .md-ingest path and the
+  // in-app "generate with Claude" path (Phase 2) share one rule for finding
+  // the city JSON in a chat response, rather than keeping two copies that can
+  // drift. tools/city-input.js now calls this via the same loadCityOps()
+  // harness it already used for parse()/validate().
+  //
+  // Matches a markdown fence: an opening line of ``` plus an optional
+  // language tag and nothing else, then the body, then a closing line of
+  // ``` and nothing else. Both delimiters are anchored to their own line
+  // (multiline ^/$) so a closing ``` is never confused with the next fence's
+  // OPENING ``` when a response contains more than one fenced block (e.g. a
+  // ```bash setup snippet before the ```json guide): a naive "``` ... ```"
+  // regex with no line anchor matches leftmost-first and would swallow the
+  // second fence's own opening marker as if it were the first fence's close.
+  var FENCE_RE = /^```[ \t]*(\w*)[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*$/gm;
+
+  // Returns the trimmed text of the first fenced block that parses as JSON,
+  // or null if the text has no fenced block that does. Never throws: an
+  // unparseable candidate fence is skipped, not reported, since a later fence
+  // (or none at all) is just as valid an outcome.
+  function extractJsonBlock(md) {
+    FENCE_RE.lastIndex = 0;
+    var m;
+    var text = String(md === null || md === undefined ? '' : md);
+    while ((m = FENCE_RE.exec(text)) !== null) {
+      var body = m[2].replace(/^\s+|\s+$/g, '');
+      try { JSON.parse(body); return body; }
+      catch (e) { /* not this fence (e.g. a ```bash block before the JSON one) */ }
+    }
+    return null;
+  }
+
+  // Shared wording for "the response had no parseable JSON block": the CLI
+  // shows it verbatim, the app shows it verbatim too (with its own Retry
+  // button alongside, since the app can re-ask automatically).
+  var RETRY_INSTRUCTION =
+    'Ask the chat to reply again with: "reply with the full city guide as a ' +
+    'single ```json code block and nothing else after it."';
 
   // ---- sync helpers (pure) ----
   // Every network call, session store and piece of sync UI lives in the app
@@ -2153,15 +2315,21 @@ var CityOps = (function () {
     appStore: {
       normalize: normalizeAppStore, add: appAddCity,
       remove: appRemoveCity, keepBothName: keepBothName,
-      resolveStartCity: resolveStartCity, blankCity: blankCity
+      resolveStartCity: resolveStartCity, blankCity: blankCity,
+      exampleVisible: exampleCityVisible
     },
-    profile: { normalize: normalizeProfile, isEmpty: profileIsEmpty },
+    profile: {
+      normalize: normalizeProfile, isEmpty: profileIsEmpty,
+      FACTOR_LEVELS: FACTOR_LEVELS, defaultFactors: defaultFactors,
+      normalizeFactors: normalizeFactors
+    },
     promptKit: {
       buildCityPrompt: buildCityPrompt, INTERESTS_SECTION: INTERESTS_SECTION,
       COPY_LINE: PROMPT_COPY_LINE,
       buildInterestsDeltaPrompt: buildInterestsDeltaPrompt,
       buildIntelPassPrompt: buildIntelPassPrompt
     },
+    extractJsonBlock: extractJsonBlock, RETRY_INSTRUCTION: RETRY_INSTRUCTION,
     syncKit: {
       EPOCH: EPOCH_ISO, decide: decideSync, plan: planSync, buildRows: buildRows,
       parseAuthHash: parseAuthHash, sessionExpiringSoon: sessionExpiringSoon

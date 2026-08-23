@@ -789,7 +789,7 @@ test('buildExport round trip with intel present deep-equals', () => {
 
 // Task 2: interest profile + prompt assembly
 test('profile.normalize returns the empty shape for junk input', () => {
-  const empty = { schema: 1, interests: [], avoid: [], notes: '', updated: null };
+  const empty = { schema: 1, interests: [], avoid: [], factors: [], notes: '', showExample: false, updated: null };
   assert.deepEqual(C.profile.normalize(null), empty);
   assert.deepEqual(C.profile.normalize(undefined), empty);
   assert.deepEqual(C.profile.normalize('nope'), empty);
@@ -832,7 +832,7 @@ test('profile.isEmpty ignores the stamp and sees any real content', () => {
 });
 test('appStore.normalize carries a normalized profile and survives add/remove', () => {
   const empty = C.appStore.normalize(null);
-  assert.deepEqual(empty.profile, { schema: 1, interests: [], avoid: [], notes: '', updated: null });
+  assert.deepEqual(empty.profile, { schema: 1, interests: [], avoid: [], factors: [], notes: '', showExample: false, updated: null });
   let s = C.appStore.normalize({ profile: { interests: ['live jazz', 'LIVE JAZZ'], notes: ' walks a lot ' } });
   assert.deepEqual(s.profile.interests, ['live jazz']);
   assert.equal(s.profile.notes, 'walks a lot');
@@ -841,6 +841,86 @@ test('appStore.normalize carries a normalized profile and survives add/remove', 
   s = C.appStore.remove(s, 'batumi-2026-08-08');
   assert.deepEqual(s.profile.interests, ['live jazz']);
 });
+// ---- Phase 2, Feature 1: planning factors (part 1: shape, no template needed) ----
+test('profile.FACTOR_LEVELS is the exact five-point scale', () => {
+  assert.deepEqual(C.profile.FACTOR_LEVELS, ['blocker', 'very important', 'medium', 'low', 'not important']);
+});
+test('profile.defaultFactors seeds 7 sensible factors at medium and hands out a fresh array each call', () => {
+  const a = C.profile.defaultFactors();
+  const b = C.profile.defaultFactors();
+  assert.equal(a.length, 7);
+  assert.ok(a.every((f) => f.level === 'medium' && f.custom === false));
+  assert.ok(a.some((f) => f.label === 'Walkability'));
+  a[0].level = 'blocker';
+  assert.equal(b[0].level, 'medium'); // mutating one caller's array never touches another's
+});
+test('profile.normalizeFactors drops bad levels and junk, dedupes by label, assigns slug ids', () => {
+  const out = C.profile.normalizeFactors([
+    { label: 'Nightlife', level: 'blocker' },
+    { label: '  Nightlife ', level: 'medium' },       // dup label, dropped
+    { label: 'Safety', level: 'not a level' },          // bad level, dropped
+    { label: '', level: 'low' },                        // no label, dropped
+    'nope',                                              // not an object, dropped
+    { label: 'Food Scene', level: 'very important', custom: true }
+  ]);
+  assert.deepEqual(out, [
+    { id: 'nightlife', label: 'Nightlife', level: 'blocker', custom: false },
+    { id: 'food-scene', label: 'Food Scene', level: 'very important', custom: true }
+  ]);
+});
+test('profile.normalizeFactors dedupes id collisions from different labels', () => {
+  const out = C.profile.normalizeFactors([
+    { label: 'Café!', level: 'medium' },
+    { label: 'Café?', level: 'low' }
+  ]);
+  assert.deepEqual(out.map((f) => f.id), ['caf', 'caf-2']);
+});
+test('profile.normalizeFactors caps at 30', () => {
+  const many = [];
+  for (let i = 0; i < 45; i++) many.push({ label: 'factor ' + i, level: 'medium' });
+  assert.equal(C.profile.normalizeFactors(many).length, 30);
+});
+test('profile.normalize carries factors through and profile.isEmpty counts them', () => {
+  const p = C.profile.normalize({ factors: [{ label: 'Safety', level: 'blocker' }] });
+  assert.deepEqual(p.factors, [{ id: 'safety', label: 'Safety', level: 'blocker', custom: false }]);
+  assert.equal(C.profile.isEmpty(p), false);
+  assert.equal(C.profile.isEmpty({ factors: [] }), true);
+});
+
+// ---- Phase 2, Feature 2: shared JSON-fence extraction ----
+test('extractJsonBlock finds a ```json fence and returns its trimmed, parseable body', () => {
+  const md = 'Here is the guide:\n\n```json\n' + JSON.stringify(GOOD) + '\n```\n';
+  assert.deepEqual(JSON.parse(C.extractJsonBlock(md)), GOOD);
+});
+test('extractJsonBlock accepts a bare fence with no json language tag', () => {
+  const md = '```\n' + JSON.stringify(GOOD) + '\n```\n';
+  assert.deepEqual(JSON.parse(C.extractJsonBlock(md)), GOOD);
+});
+test('extractJsonBlock skips a non-JSON fence and finds a later one that parses', () => {
+  const md = '```bash\nnpm install\n```\n\n```json\n' + JSON.stringify(GOOD) + '\n```\n';
+  assert.deepEqual(JSON.parse(C.extractJsonBlock(md)), GOOD);
+});
+test('extractJsonBlock returns null when nothing in the text parses as JSON', () => {
+  assert.equal(C.extractJsonBlock('Sorry, ran out of room, ask me for the JSON separately.'), null);
+  assert.equal(C.extractJsonBlock(''), null);
+});
+test('RETRY_INSTRUCTION is the shared re-ask message the CLI and the app both show', () => {
+  assert.ok(/reply with the full city guide as a single/.test(C.RETRY_INSTRUCTION));
+});
+
+// ---- Phase 2, Feature 3: example-city visibility ----
+test('appStore.exampleVisible shows the example when there are no real cities yet', () => {
+  assert.equal(C.appStore.exampleVisible([], 'example-seed', false), true);
+  assert.equal(C.appStore.exampleVisible(['example-seed'], 'example-seed', false), true);
+});
+test('appStore.exampleVisible hides the example once a real city exists, unless the toggle is on', () => {
+  assert.equal(C.appStore.exampleVisible(['example-seed', 'batumi-2026-08-08'], 'example-seed', false), false);
+  assert.equal(C.appStore.exampleVisible(['example-seed', 'batumi-2026-08-08'], 'example-seed', true), true);
+});
+test('appStore.exampleVisible treats a missing/undefined id list as no real cities', () => {
+  assert.equal(C.appStore.exampleVisible(undefined, 'example-seed', false), true);
+});
+
 test('promptKit.INTERESTS_SECTION is the ninth section descriptor', () => {
   assert.deepEqual(C.promptKit.INTERESTS_SECTION, { id: 'interests', label: 'My interests', icon: '⭐' });
 });
@@ -950,6 +1030,45 @@ test('buildCityPrompt never mutates its inputs and tolerates a bare template', (
   const out = C.promptKit.buildCityPrompt(bare, HEADER, { interests: ['live jazz'] });
   assert.ok(out.indexOf('## Traveler interests') < out.indexOf('## What I need'));
 });
+// ---- Phase 2, Feature 1 (part 2): factors and trip notes inside the real prompt shape ----
+test('buildCityPrompt phrases blocker factors as hard exclusions and the rest as weighted preferences, strongest first', () => {
+  const out = C.promptKit.buildCityPrompt(FAKE_PROMPT, HEADER, {
+    factors: [
+      { label: 'Nightlife', level: 'low' },
+      { label: 'Safety', level: 'blocker' },
+      { label: 'Walkability', level: 'very important' },
+      { label: 'Food scene', level: 'not important' },
+      { label: 'Transit quality', level: 'medium' }
+    ]
+  });
+  assert.ok(out.includes('Hard exclusions'));
+  assert.ok(out.includes('- Safety'));
+  assert.ok(out.includes('Weighted preferences'));
+  assert.ok(out.includes('- Walkability (very important)'));
+  assert.ok(out.includes('- Transit quality (medium)'));
+  assert.ok(out.includes('- Nightlife (low)'));
+  // not important is left out entirely, not listed with a "no preference" line
+  assert.equal(out.indexOf('Food scene'), -1);
+  // strongest-first ordering
+  assert.ok(out.indexOf('Walkability (very important)') < out.indexOf('Transit quality (medium)'));
+  assert.ok(out.indexOf('Transit quality (medium)') < out.indexOf('Nightlife (low)'));
+});
+test('buildCityPrompt with only planning factors still inserts the Traveler interests block', () => {
+  const out = C.promptKit.buildCityPrompt(FAKE_PROMPT, HEADER, {
+    factors: [{ label: 'Safety', level: 'blocker' }]
+  });
+  assert.ok(out.includes('## Traveler interests'));
+});
+test('buildCityPrompt fills the trip-specific bracket paragraph from header.notes', () => {
+  const out = C.promptKit.buildCityPrompt(FAKE_PROMPT, { name: 'Tirana', notes: 'Vegetarian, traveling with a toddler.' }, null);
+  assert.ok(out.includes('Vegetarian, traveling with a toddler.'));
+  assert.equal(out.indexOf('[Add anything trip-specific here'), -1);
+});
+test('buildCityPrompt leaves the trip-specific bracket alone when notes is empty', () => {
+  const out = C.promptKit.buildCityPrompt(FAKE_PROMPT, { name: 'Tirana' }, null);
+  assert.ok(out.includes('[Add anything trip-specific here.]'));
+});
+
 test('index.html embeds PROMPT.md verbatim, escaped and reversible; template.html carries none of it', () => {
   const fs = require('fs');
   const path = require('path');
