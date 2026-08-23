@@ -861,9 +861,28 @@ var CityOps = (function () {
     return lines.slice(0, at).concat(block, lines.slice(at));
   }
 
+  // The trip-specific paragraph is a bracket span that wraps across several
+  // lines in PROMPT.md ("[Add anything trip-specific here: ... this time.]"),
+  // so it cannot be filled line-by-line like HEADER_BULLETS: this operates on
+  // the whole joined text and replaces from the opening marker through the
+  // next "]". An empty note leaves the placeholder in place, same convention
+  // as every other optional header field.
+  var TRIP_NOTES_MARK = '[Add anything trip-specific here';
+
+  function fillTripNotes(text, notes) {
+    var n = trimStr(notes);
+    if (!n) return text;
+    var start = text.indexOf(TRIP_NOTES_MARK);
+    if (start === -1) return text;
+    var end = text.indexOf(']', start);
+    if (end === -1) return text;
+    return text.slice(0, start) + n + text.slice(end + 1);
+  }
+
   // Pure string assembly: fills PROMPT.md's Trip details bullets from `header`
-  // ({name, country, from, to, accommodation, arrival, departure}, all optional
-  // strings), drops the "copy this file" instruction line, and inserts the
+  // ({name, country, from, to, accommodation, arrival, departure, notes}, all
+  // optional strings), drops the "copy this file" instruction line, fills the
+  // trip-specific bracket paragraph from header.notes, and inserts the
   // Traveler interests block when the profile has anything in it.
   function buildCityPrompt(templateText, header, profile) {
     var text = (templateText === null || templateText === undefined) ? '' : String(templateText);
@@ -888,6 +907,8 @@ var CityOps = (function () {
       }
       out.push(line);
     }
+    var joined = fillTripNotes(out.join('\n'), header && header.notes);
+    out = joined.split('\n');
     var p = normalizeProfile(profile);
     if (!profileIsEmpty(p)) {
       out = insertInterestsBlock(out, interestsBlockLines(p, INTERESTS_LEAD));
@@ -1005,6 +1026,46 @@ var CityOps = (function () {
       'correct answer, a complete one of invented intel is not.', '');
     return out.join('\n');
   }
+
+  // ---- AI response parsing (pure) ----
+  // Ported from tools/city-input.js so the CLI's .md-ingest path and the
+  // in-app "generate with Claude" path (Phase 2) share one rule for finding
+  // the city JSON in a chat response, rather than keeping two copies that can
+  // drift. tools/city-input.js now calls this via the same loadCityOps()
+  // harness it already used for parse()/validate().
+  //
+  // Matches a markdown fence: an opening line of ``` plus an optional
+  // language tag and nothing else, then the body, then a closing line of
+  // ``` and nothing else. Both delimiters are anchored to their own line
+  // (multiline ^/$) so a closing ``` is never confused with the next fence's
+  // OPENING ``` when a response contains more than one fenced block (e.g. a
+  // ```bash setup snippet before the ```json guide): a naive "``` ... ```"
+  // regex with no line anchor matches leftmost-first and would swallow the
+  // second fence's own opening marker as if it were the first fence's close.
+  var FENCE_RE = /^```[ \t]*(\w*)[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*$/gm;
+
+  // Returns the trimmed text of the first fenced block that parses as JSON,
+  // or null if the text has no fenced block that does. Never throws: an
+  // unparseable candidate fence is skipped, not reported, since a later fence
+  // (or none at all) is just as valid an outcome.
+  function extractJsonBlock(md) {
+    FENCE_RE.lastIndex = 0;
+    var m;
+    var text = String(md === null || md === undefined ? '' : md);
+    while ((m = FENCE_RE.exec(text)) !== null) {
+      var body = m[2].replace(/^\s+|\s+$/g, '');
+      try { JSON.parse(body); return body; }
+      catch (e) { /* not this fence (e.g. a ```bash block before the JSON one) */ }
+    }
+    return null;
+  }
+
+  // Shared wording for "the response had no parseable JSON block": the CLI
+  // shows it verbatim, the app shows it verbatim too (with its own Retry
+  // button alongside, since the app can re-ask automatically).
+  var RETRY_INSTRUCTION =
+    'Ask the chat to reply again with: "reply with the full city guide as a ' +
+    'single ```json code block and nothing else after it."';
 
   // ---- sync helpers (pure) ----
   // Every network call, session store and piece of sync UI lives in the app
