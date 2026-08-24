@@ -1676,5 +1676,113 @@ test('TRANSITIONS keeps the same to-state semantics under icon-only presentation
   assert.ok(C.TRANSITIONS.plan.every(t => typeof t.aria === 'string' && t.aria.length));
 });
 
+// ---- Phase 4: tabs (Plan / Eat & Drink / Do / Services / Info) ----
+test('TABS is the five fixed tabs, in nav order', () => {
+  assert.deepEqual(C.TABS.map(t => t.id), ['plan', 'eat', 'do', 'services', 'info']);
+  assert.deepEqual(C.TABS.map(t => t.label), ['Plan', 'Eat & Drink', 'Do', 'Services', 'Info']);
+});
+test('tabForSection maps the PROMPT.md schema sections', () => {
+  assert.equal(C.tabForSection({ id: 'dinner', label: 'Dinner' }), 'eat');
+  assert.equal(C.tabForSection({ id: 'breakfast', label: 'Breakfast' }), 'eat');
+  assert.equal(C.tabForSection({ id: 'lunch', label: 'Lunch' }), 'eat');
+  assert.equal(C.tabForSection({ id: 'coffee', label: 'Coffee' }), 'eat');
+  assert.equal(C.tabForSection({ id: 'cowork', label: 'Coworking' }), 'eat'); // a work cafe is an eat-drink venue
+  assert.equal(C.tabForSection({ id: 'activities', label: 'Activities' }), 'do');
+  assert.equal(C.tabForSection({ id: 'interests', label: 'My interests' }), 'do');
+  assert.equal(C.tabForSection({ id: 'services', label: 'Services' }), 'services');
+  assert.equal(C.tabForSection({ id: 'practical', label: 'Practical' }), 'info');
+});
+test('tabForSection maps Tirana\'s real freeform sections', () => {
+  assert.equal(C.tabForSection({ id: 'base', label: 'Base' }), 'info');
+  assert.equal(C.tabForSection({ id: 'money', label: 'Cash & currency' }), 'info');
+  assert.equal(C.tabForSection({ id: 'transport', label: 'Transport' }), 'info');
+  assert.equal(C.tabForSection({ id: 'restaurants', label: 'Restaurants' }), 'eat');
+  assert.equal(C.tabForSection({ id: 'bars', label: 'Bars' }), 'eat');
+  assert.equal(C.tabForSection({ id: 'laundry', label: 'Laundry' }), 'services');
+  assert.equal(C.tabForSection({ id: 'logistics', label: 'Logistics' }), 'info');
+  assert.equal(C.tabForSection({ id: 'context', label: 'Context' }), 'info');
+  assert.equal(C.tabForSection({ id: 'corrections', label: 'Corrections' }), 'info');
+});
+test('tabForSection: known info ids win over the services keyword fallback (real collision)', () => {
+  // Tirana's real "safety" section is labeled "Health & safety". A naive
+  // keyword match on "health" would misfile it as a services listing;
+  // explicit info ids must be checked first.
+  assert.equal(C.tabForSection({ id: 'safety', label: 'Health & safety' }), 'info');
+});
+test('tabForSection: itinerary and any tasks section route to Plan', () => {
+  assert.equal(C.tabForSection({ id: 'itinerary', label: 'Daily plan' }), 'plan');
+  assert.equal(C.tabForSection({ id: 'tasks', label: 'Open items' }), 'plan');
+  assert.equal(C.tabForSection({ id: 'errands', label: 'To-do / tasks' }), 'plan');
+});
+test('tabForSection: an unrecognized section falls back to Info', () => {
+  assert.equal(C.tabForSection({ id: 'weather', label: 'Weather notes' }), 'info');
+  assert.equal(C.tabForSection(null), 'info');
+});
+test('tabForSection: the services keyword fallback only fires for ids it does not already know', () => {
+  // Not one of the explicit ids anywhere: caught by the keyword match instead.
+  assert.equal(C.tabForSection({ id: 'barber-shops', label: 'Barbers' }), 'services');
+  assert.equal(C.tabForSection({ id: 'misc', label: 'Massage parlors' }), 'services');
+});
+test('setTab validates against the five ids; effectiveTab defaults to plan', () => {
+  const st = C.emptyState();
+  assert.equal(C.effectiveTab(st), 'plan'); // never chosen
+  C.setTab(st, 'eat');
+  assert.equal(st.tab, 'eat');
+  assert.equal(C.effectiveTab(st), 'eat');
+  assert.throws(() => C.setTab(st, 'guide')); // not one of the five tabs
+});
+test('normalizeState defaults tab to null (never chosen) and corrects a bogus stored value to plan', () => {
+  assert.equal(C.normalizeState({ itemStatus: {} }).tab, null); // key absent entirely
+  assert.equal(C.normalizeState({ itemStatus: {}, tab: null }).tab, null); // sentinel round-trips
+  assert.equal(C.normalizeState({ itemStatus: {}, tab: 'guide' }).tab, 'plan'); // stray value corrected
+  assert.equal(C.normalizeState({ itemStatus: {}, tab: 'services' }).tab, 'services');
+  assert.deepEqual(C.emptyState().collapsedPlanDays, {});
+});
+test('isPlanDayCollapsed/togglePlanDay: every remaining day starts collapsed; toggling twice clears the override', () => {
+  const st = C.emptyState();
+  assert.equal(C.isPlanDayCollapsed(st, '2026-08-11'), true);
+  C.togglePlanDay(st, '2026-08-11');
+  assert.equal(C.isPlanDayCollapsed(st, '2026-08-11'), false);
+  assert.equal(st.collapsedPlanDays['2026-08-11'], false);
+  C.togglePlanDay(st, '2026-08-11');
+  assert.equal(C.isPlanDayCollapsed(st, '2026-08-11'), true);
+  assert.ok(!('2026-08-11' in st.collapsedPlanDays)); // override dropped, not just flipped
+});
+test('planModel: today groups every dated-today item across sections, same as todayModel', () => {
+  const st = C.emptyState();
+  const pm = C.planModel(GOOD, st, '2026-08-10');
+  assert.equal(pm.todayIso, '2026-08-10');
+  assert.equal(pm.inRange, true);
+  assert.deepEqual(pm.today.map(e => e.it.id), ['tanini']);
+});
+test('planModel: every other day of the stay in order, excluding today, empty days included', () => {
+  const st = C.emptyState();
+  const pm = C.planModel(GOOD, st, '2026-08-10');
+  assert.deepEqual(pm.days.map(d => d.iso),
+    ['2026-08-08', '2026-08-09', '2026-08-11', '2026-08-12', '2026-08-13', '2026-08-14', '2026-08-15']);
+  assert.deepEqual(pm.days.find(d => d.iso === '2026-08-13').items.map(e => e.it.id), ['brasserie']);
+  assert.deepEqual(pm.days.find(d => d.iso === '2026-08-09').items, []); // nothing assigned: an empty day, not omitted
+});
+test('planModel: an item day-assigned from an Eat & Drink section still surfaces here (cross-tab)', () => {
+  const st = C.emptyState();
+  C.setDay(st, 'nord', '2026-08-09'); // nord is a coffee (Eat & Drink) item
+  const pm = C.planModel(GOOD, st, '2026-08-10');
+  assert.deepEqual(pm.days.find(d => d.iso === '2026-08-09').items.map(e => e.it.id), ['nord']);
+});
+test('planModel: open vs done tasks split, undated only (a dated task shows under its day instead)', () => {
+  const st = C.emptyState();
+  C.setStatus(st, 'old-errand', 'done'); // already done in the fixture's own data too
+  const pm = C.planModel(WITH_TASKS, st, '2026-08-10');
+  assert.deepEqual(pm.openTasks.map(e => e.it.id).sort(), ['book-train', 'buy-adapter']);
+  assert.deepEqual(pm.doneTasks.map(e => e.it.id), ['old-errand']);
+});
+test('planModel: a dated task item shows in its day, not in openTasks (no double-count)', () => {
+  const st = C.emptyState();
+  C.setDay(st, 'buy-adapter', '2026-08-09');
+  const pm = C.planModel(WITH_TASKS, st, '2026-08-10');
+  assert.ok(!pm.openTasks.some(e => e.it.id === 'buy-adapter'));
+  assert.deepEqual(pm.days.find(d => d.iso === '2026-08-09').items.map(e => e.it.id), ['buy-adapter']);
+});
+
 console.log(pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);
