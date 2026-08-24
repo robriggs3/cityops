@@ -17,10 +17,15 @@
   #hdr{position:relative;}
   #hdr h1{cursor:pointer; display:inline-flex; align-items:center; gap:2px;}
   .hdr-chev{font-size:.85rem; opacity:.85;}
-  .hdr-add{position:absolute; top:24px; right:20px; font:inherit; font-size:.75rem; font-weight:700;
+  /* Profile and + Add city are both app-level, top-of-header controls (not
+     inside the per-city switcher menu): Profile holds ONE interest profile
+     and ONE Claude key for every city, so it lives here rather than inside
+     the city dropdown, which would read as "this city's profile". */
+  .hdr-actions{position:absolute; top:24px; right:20px; display:flex; gap:6px;}
+  .hdr-chip{font:inherit; font-size:.75rem; font-weight:700;
     color:#fff; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.4);
     border-radius:20px; padding:5px 11px; cursor:pointer; white-space:nowrap;}
-  .hdr-add:hover{background:rgba(255,255,255,.25);}
+  .hdr-chip:hover{background:rgba(255,255,255,.25);}
 
   /* Dropdown panel: floats directly under the header (does not add header
      height); #citybar is its host, positioned inside .wrap right after
@@ -93,7 +98,8 @@
   .factor-row button:hover{background:var(--accent-soft); color:var(--accent-hover);}
   .key-field{flex:1 1 100%; min-width:0;}
   @media (max-width: 430px){
-    .hdr-add{top:17px; right:14px; padding:4px 9px; font-size:.7rem;}
+    .hdr-actions{top:17px; right:14px; gap:4px;}
+    .hdr-chip{padding:4px 9px; font-size:.7rem;}
   }
 </style>
 </head>
@@ -103,6 +109,7 @@
   <header id="hdr"></header>
   <div id="citybar"></div>
   <div class="toolbar" id="toolbar"></div>
+  <nav class="secnav" id="secnav" aria-label="Jump to section" hidden></nav>
   <main id="main"></main>
   <div class="foot" id="foot"></div>
 </div>
@@ -411,10 +418,9 @@
       exb.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); loadExampleCity(); };
       acts.appendChild(exb);
     }
-    var pf = el('button', null, 'Profile');
-    pf.type = 'button';
-    pf.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); openProfileModal(); };
-    acts.appendChild(pf);
+    // Feature 7: Profile moved to a top-level header chip (decorateHeader
+    // below), since it is one profile for every city, not a per-city
+    // setting. No row for it here anymore.
     // Sync control: absent entirely when no project is configured, so an
     // unconfigured build shows no sign-in affordance it cannot honour.
     if (syncOn()) {
@@ -472,7 +478,21 @@
     h1.onkeydown = function (e) {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); h1.click(); }
     };
-    var add = el('button', 'hdr-add', '+ Add city');
+    var actions = el('div', 'hdr-actions');
+    // Feature 7: Profile is app-level (one interest profile, one Claude key
+    // for every city), so it is a top-level header control, not a row inside
+    // the per-city switcher menu.
+    var profileBtn = el('button', 'hdr-chip', 'Profile');
+    profileBtn.type = 'button';
+    profileBtn.onclick = function (e) {
+      e.stopPropagation();
+      panelOpen = false;
+      updateHeaderExpanded();
+      renderPanel();
+      openProfileModal();
+    };
+    actions.appendChild(profileBtn);
+    var add = el('button', 'hdr-chip', '+ Add city');
     add.type = 'button';
     add.onclick = function (e) {
       e.stopPropagation();
@@ -481,7 +501,8 @@
       renderPanel();
       openAddModal();
     };
-    h.appendChild(add);
+    actions.appendChild(add);
+    h.appendChild(actions);
   }
 
   // ---- interest profile (app-only data; the engine owns its shape) ----
@@ -645,6 +666,7 @@
     m.box.appendChild(el('p', 'diff', 'Claude API key: used only by "Generate with Claude" when adding or ' +
       'editing a city. This key stays in this browser. It is never synced and never sent anywhere except ' +
       'Anthropic\'s API, directly from your device.'));
+    m.box.appendChild(el('p', 'diff', 'One profile and one key for all your cities.'));
     var keyRow = el('div', 'mrow');
     var keyInp = document.createElement('input');
     keyInp.type = 'password';
@@ -820,6 +842,46 @@
         return null;
       }
     }
+    // ---- Run with Claude (Phase 3, feature 6): same prompt, called in-app ----
+    // Deliberately reuses the paste-and-Apply path rather than writing a
+    // second apply codepath: the result fills the SAME textarea the paste
+    // flow reads, and the traveler still clicks the same Apply button below.
+    // That keeps exactly one tested place that ever calls mergeDelta and
+    // writes the merged city, and it means a delta from Claude gets the same
+    // "review the summary before it lands" moment a pasted delta always got.
+    function runWithClaude(kind, btn) {
+      var apiKey = loadApiKey();
+      if (!apiKey) { msg.textContent = 'No Claude API key saved. Add one in Profile first.'; return; }
+      var text = build(kind);
+      if (text === null) return;
+      var origLabel = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Running...';
+      msg.textContent = 'Starting...';
+      callClaudeStream(text, apiKey, function (p) {
+        msg.textContent = (p.kind === 'thinking' ? 'Thinking... ' : 'Writing... ') +
+          p.totalChars + ' characters so far.';
+      }).then(function (resultText) {
+        btn.disabled = false;
+        btn.textContent = origLabel;
+        var block = CityOps.extractJsonBlock(resultText);
+        if (block === null) { msg.textContent = CityOps.RETRY_INSTRUCTION; return; }
+        var parsed;
+        try { parsed = JSON.parse(block); }
+        catch (e) { msg.textContent = 'Claude\'s response was not valid JSON: ' + e.message; return; }
+        var res = CityOps.mergeDelta(currentData(), parsed);
+        if (!res.data) { msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n'); return; }
+        // Preview only: fill the textarea and report the counts, same as a
+        // paste would look right before the traveler hits Apply. Nothing is
+        // written until that explicit click.
+        ta.value = JSON.stringify(parsed, null, 2);
+        msg.textContent = 'Claude proposes: ' + enrichSummaryText(res.summary) + '. Review below, then Apply.';
+      }).catch(function (e) {
+        btn.disabled = false;
+        btn.textContent = origLabel;
+        msg.textContent = 'Claude API error: ' + e.message;
+      });
+    }
     function promptRow(kind, filename, disabledReason) {
       var row = el('div', 'mrow');
       var copy = el('button', 'ctl', 'Copy prompt');
@@ -836,6 +898,14 @@
       }
       row.appendChild(copy);
       row.appendChild(dl);
+      // Only offered once a Claude key is saved; the no-key case keeps the
+      // copy/paste path as the only option, exactly as before.
+      if (!disabledReason && loadApiKey()) {
+        var run = el('button', 'ctl to-done', 'Run with Claude');
+        run.type = 'button';
+        run.onclick = function () { runWithClaude(kind, run); };
+        row.appendChild(run);
+      }
       return row;
     }
 
@@ -1166,14 +1236,14 @@
     };
     brow2.appendChild(bdl);
     box.appendChild(el('p', 'diff', CityOps.profile.isEmpty(store.profile)
-      ? 'Build my prompt writes PROMPT.md with this header filled in. Add interests in Profile (city menu) and it will ask your AI for a matching ninth section too.'
+      ? 'Build my prompt writes PROMPT.md with this header filled in. Add interests in Profile (top of the app) and it will ask your AI for a matching ninth section too.'
       : 'Build my prompt writes PROMPT.md with this header and your interest profile filled in.'));
 
     // ---- Generate with Claude (Phase 2): the same prompt, called in-app ----
     var apiKey = loadApiKey();
     box.appendChild(el('p', 'diff', apiKey
       ? 'Generate with Claude runs the same prompt against your own Claude API key, right here, and adds the result to your cities when it finishes.'
-      : 'Generate with Claude needs an API key first. Add one in Profile (city menu): it stays in your browser only.'));
+      : 'Generate with Claude needs an API key first. Add one in Profile (top of the app): it stays in your browser only.'));
     var genRow = el('div', 'mrow');
     var genBtn = el('button', 'ctl to-done', 'Generate with Claude');
     genBtn.type = 'button';
