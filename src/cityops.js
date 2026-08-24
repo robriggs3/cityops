@@ -1219,6 +1219,43 @@ var CityOps = (function () {
     'Ask the chat to reply again with: "reply with the full city guide as a ' +
     'single ```json code block and nothing else after it."';
 
+  // True only when parse() failed for exactly one reason: the text was not
+  // valid JSON at all. Schema errors (bad status, unknown section, etc.)
+  // produce a different, longer errors list and are never mistaken for this.
+  // Shared by the paste path (better failure copy) and fetchTextToCity below,
+  // so both classify a syntax failure the same way.
+  function isJsonSyntaxError(errors) {
+    return Array.isArray(errors) && errors.length === 1 && /^JSON parse error:/.test(errors[0]);
+  }
+
+  // Turns arbitrary fetched text into a city, same contract as parse() plus a
+  // `kind` tag the caller uses to pick failure copy. Two entry transports feed
+  // this: a URL pointing straight at city JSON, and a URL pointing at a raw
+  // .md guide (JSON wrapped in a ```json fence, same shape Claude/ChatGPT
+  // replies produce). Try the direct parse first since that is the common
+  // case (this site's own cities/<file>.json); only fall back to fence
+  // extraction when the direct parse failed on JSON syntax specifically, so a
+  // schema error on a well-formed JSON file is never masked by a fence search.
+  // kind is one of:
+  //   'ok'       - data is a valid city, ready for commitFromForm
+  //   'not-json' - no parseable JSON found, direct or fenced
+  //   'invalid'  - JSON parsed fine but failed schema validation
+  function fetchTextToCity(text) {
+    var direct = parse(text);
+    if (direct.data) return { data: direct.data, errors: [], kind: 'ok' };
+    if (!isJsonSyntaxError(direct.errors)) {
+      return { data: null, errors: direct.errors, kind: 'invalid' };
+    }
+    var block = extractJsonBlock(text);
+    if (block === null) return { data: null, errors: direct.errors, kind: 'not-json' };
+    // extractJsonBlock only ever returns a fence body that already parsed as
+    // JSON once (see its own try/catch), so parse() here can only still fail
+    // on schema, never on syntax.
+    var viaFence = parse(block);
+    if (viaFence.data) return { data: viaFence.data, errors: [], kind: 'ok' };
+    return { data: null, errors: viaFence.errors, kind: 'invalid' };
+  }
+
   // ---- sync helpers (pure) ----
   // Every network call, session store and piece of sync UI lives in the app
   // shell (src/app-shell.html). Only decision logic lives here, so it is unit
@@ -2411,6 +2448,7 @@ var CityOps = (function () {
       buildIntelPassPrompt: buildIntelPassPrompt
     },
     extractJsonBlock: extractJsonBlock, RETRY_INSTRUCTION: RETRY_INSTRUCTION,
+    isJsonSyntaxError: isJsonSyntaxError, fetchTextToCity: fetchTextToCity,
     syncKit: {
       EPOCH: EPOCH_ISO, decide: decideSync, plan: planSync, buildRows: buildRows,
       parseAuthHash: parseAuthHash, sessionExpiringSoon: sessionExpiringSoon

@@ -156,6 +156,7 @@
   .empty-day .free-day{padding:6px 16px 10px; font-size:.8rem; color:var(--text-3); font-style:italic;}
   .date-field{font:inherit; font-size:.85rem; padding:6px 10px; border:1px solid var(--border-light);
     border-radius:8px; background:#fff; color:var(--text);}
+  .link-field{flex:1 1 220px; min-width:0;}
   .intel{margin-top:8px;}
   .intel summary{font-size:.72rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
     color:var(--text-3); cursor:pointer; padding:4px 0;}
