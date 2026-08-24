@@ -197,7 +197,13 @@
   .icon-btn{min-width:36px; text-align:center;}
 
   /* --- Phase 3: section header counts + sticky section nav --- */
-  #secnav{position:sticky; top:0; z-index:20; display:flex; gap:8px; overflow-x:auto;
+  /* top is the rendered #tabbar height (Phase 4), kept in sync by
+     updateTabbarHeightVar() in the engine so the two sticky bars stack
+     instead of overlapping; 0px is the safe fallback before that JS runs (or
+     on a shell that predates the tab bar). z-index stays below #tabbar's 26
+     so #tabbar is always the one on top if a scroll ever puts them in the
+     same few pixels. */
+  #secnav{position:sticky; top:var(--tabbar-h, 0px); z-index:20; display:flex; gap:8px; overflow-x:auto;
     -webkit-overflow-scrolling:touch; background:var(--bg); padding:8px 0 10px; margin:0 0 6px;}
   #secnav[hidden]{display:none;}
   .secnav-chip{flex:0 0 auto; font:inherit; font-size:.78rem; font-weight:700; color:var(--accent-hover);
@@ -238,13 +244,71 @@
     .viewtab{padding:5px 10px; font-size:.75rem;}
   }
   @media print{
-    .toolbar, .ctl-row, .grip, .reorderbar, #notice, #secnav{display:none !important;}
+    .toolbar, .ctl-row, .grip, .reorderbar, #notice, #secnav, #tabbar{display:none !important;}
     body{background:#fff;}
     .daycard, .card{box-shadow:none; break-inside:avoid;}
     header{background:var(--accent-hover) !important; -webkit-print-color-adjust:exact;}
     /* Print is a "here is everything" artifact: force every card open so a
        printed guide is not full of collapsed headers with nothing under them. */
     .card-detail{display:block !important;}
+  }
+
+  /* --- Phase 4: tab bar (replaces the Today/Guide/Calendar view switch) --- */
+  /* Sticky, horizontally scrollable, phone-first: at 375px five chips plus
+     More do not all fit without scrolling, and that is fine (a native
+     horizontal scroller reads better on a phone than wrapped rows of chips
+     eating vertical space). 44px min-height keeps every chip a comfortable
+     tap target. */
+  #tabbar{position:sticky; top:0; z-index:26; display:flex; gap:6px; overflow-x:auto;
+    -webkit-overflow-scrolling:touch; background:var(--bg); padding:8px 0 10px; margin:0 0 10px;
+    border-bottom:1px solid var(--border-light);}
+  #tabbar[hidden]{display:none;}
+  .tabchip{flex:0 0 auto; font:inherit; font-size:.82rem; font-weight:700; color:var(--accent-hover);
+    background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
+    padding:8px 14px; cursor:pointer; white-space:nowrap; min-height:44px;
+    display:flex; align-items:center;}
+  .tabchip:hover{border-color:var(--accent);}
+  .tabchip.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .tab-more{font-weight:800; padding:8px 12px; min-width:44px; justify-content:center; margin-left:auto;}
+
+  /* A small date pill on a flat item card (Eat & Drink / Do / Services /
+     Info) once that item has been assigned to a day: the visible result of
+     "Add to a day", and the reason a traveler can tell at a glance an item
+     already lives somewhere on the Plan tab. */
+  .daychip{font-size:.72rem; font-weight:700; color:var(--accent-hover); background:var(--accent-soft);
+    border-radius:20px; padding:2px 9px; white-space:nowrap;}
+
+  /* --- Phase 4: Info tab reference block --- */
+  /* One card per section, every undated item's name (bold) then its note,
+     stacked: no accordion, no status controls, since these are facts, not
+     todos (item 6 of the spec). */
+  .info-card h3{font-size:1rem; margin-bottom:2px;}
+  .info-item{font-size:.9rem; color:var(--text-3); margin-top:12px;}
+  .info-item:first-of-type{margin-top:10px;}
+  .info-item strong{display:block; color:var(--text); margin-bottom:2px; font-size:.94rem;}
+
+  /* --- Phase 4: Plan tab open tasks --- */
+  .task-row{padding:10px 0; border-bottom:1px solid var(--border-light);}
+  .task-row:last-child{border-bottom:none;}
+  .task-check{display:flex; align-items:center; gap:10px; font-size:.95rem; font-weight:600;
+    color:var(--text); cursor:pointer; min-height:44px;}
+  .task-check input[type="checkbox"]{width:20px; height:20px; flex:0 0 auto; cursor:pointer;}
+  .task-note{font-size:.85rem; color:var(--text-3); margin:2px 0 0 30px;}
+  .task-row.item-done .task-check{opacity:.55; text-decoration:line-through;}
+
+  /* --- Phase 4: the More action sheet (every utility action, one place) --- */
+  .sheet-list{display:flex; flex-direction:column; margin-top:6px;}
+  .sheet-row{font:inherit; font-size:.95rem; font-weight:600; color:var(--text); background:none;
+    border:none; border-bottom:1px solid var(--border-light); text-align:left; padding:14px 4px;
+    cursor:pointer; min-height:44px;}
+  .sheet-row:last-child{border-bottom:none;}
+  .sheet-row:hover{color:var(--accent-hover);}
+  .sheet-row.danger{color:var(--accent-hover); font-weight:800;}
+
+  @media (max-width: 430px){
+    #tabbar{gap:4px;}
+    .tabchip{padding:7px 11px; font-size:.76rem; min-height:40px;}
+    .tab-more{padding:7px 10px;}
   }
 
   /* --- app shell: multi-city switcher (index.html only) --- */
@@ -349,6 +413,7 @@
   <header id="hdr"></header>
   <div id="citybar"></div>
   <div class="toolbar" id="toolbar"></div>
+  <nav class="tabbar" id="tabbar" aria-label="Guide sections" hidden></nav>
   <nav class="secnav" id="secnav" aria-label="Jump to section" hidden></nav>
   <main id="main"></main>
   <div class="foot" id="foot"></div>
@@ -643,7 +708,8 @@ var CityOps = (function () {
   var VIEW_MODES = ['type', 'day', 'today'];
 
   function emptyState() {
-    return { itemStatus: {}, itemDay: {}, itemTitle: {}, dayOrder: {}, collapsedSections: {}, viewMode: null, dataOverride: null, stayOverride: null, updated: null };
+    return { itemStatus: {}, itemDay: {}, itemTitle: {}, dayOrder: {}, collapsedSections: {},
+      collapsedPlanDays: {}, viewMode: null, tab: null, dataOverride: null, stayOverride: null, updated: null };
   }
 
   function normalizeState(st) {
@@ -652,6 +718,11 @@ var CityOps = (function () {
     st.itemDay = st.itemDay || {};
     st.dayOrder = st.dayOrder || {};
     st.collapsedSections = st.collapsedSections || {};
+    // Phase 4: per-day collapse state for the Plan tab's "remaining days" list,
+    // the same tri-state pattern as collapsedSections (explicit true/false
+    // wins, absent falls back to a computed default). A separate map because
+    // Plan groups by DATE across every section, not by section id.
+    st.collapsedPlanDays = st.collapsedPlanDays || {};
     st.itemTitle = st.itemTitle || {};
     // null always means "unset" and is left alone (see VIEW_MODES comment
     // above). A value that is present but neither null nor one of the three
@@ -660,6 +731,16 @@ var CityOps = (function () {
     // object DID carry an opinion, it was just not a valid one.
     if (st.viewMode !== null && VIEW_MODES.indexOf(st.viewMode) === -1) {
       st.viewMode = Object.prototype.hasOwnProperty.call(st, 'viewMode') ? 'type' : null;
+    }
+    // Phase 4: which of the five tabs is active. Same "null means never
+    // chosen" convention as viewMode, except there is no auto-detection here
+    // (effectiveTab() just falls back to 'plan', the fixed default landing
+    // tab): a present-but-invalid value is corrected to 'plan' rather than
+    // left to silently misbehave.
+    if (Object.prototype.hasOwnProperty.call(st, 'tab')) {
+      if (st.tab !== null && TAB_IDS.indexOf(st.tab) === -1) st.tab = 'plan';
+    } else {
+      st.tab = null;
     }
     if (!('dataOverride' in st)) st.dataOverride = null;
     if (!('stayOverride' in st)) st.stayOverride = null;
@@ -838,6 +919,123 @@ var CityOps = (function () {
   // restaurant recommendation in the guide.
   function isTaskSection(sec) {
     return !!sec && (sec.id === 'tasks' || /task/i.test(sec.label || ''));
+  }
+
+  // ---- Phase 4: tabs (Plan / Eat & Drink / Do / Services / Info) ----
+  // Replaces the Today/Guide/Calendar view switch with five fixed tabs. A
+  // section maps to exactly one tab; the mapping has to work for BOTH data
+  // shapes seen in the wild: the PROMPT.md schema (dinner, breakfast, lunch,
+  // coffee, cowork, activities, services, practical, interests) and the
+  // freeform sections a traveler's own AI pass invents (Tirana's real guide:
+  // base, money, transport, itinerary, restaurants, coffee, bars, activities,
+  // services, laundry, safety, logistics, context, corrections, tasks).
+  var TABS = [
+    { id: 'plan', label: 'Plan' },
+    { id: 'eat', label: 'Eat & Drink' },
+    { id: 'do', label: 'Do' },
+    { id: 'services', label: 'Services' },
+    { id: 'info', label: 'Info' }
+  ];
+  var TAB_IDS = TABS.map(function (t) { return t.id; });
+
+  var EAT_SECTION_IDS = ['dinner', 'breakfast', 'lunch', 'coffee', 'restaurants', 'bars', 'cowork'];
+  var DO_SECTION_IDS = ['activities', 'interests'];
+  var SERVICE_SECTION_IDS = ['services', 'laundry'];
+  // Info's own explicit ids are checked BEFORE the generic services keyword
+  // fallback below, on purpose: Tirana's real "safety" section is labeled
+  // "Health & safety", and a naive keyword match on "health" would misfile a
+  // reference section as a services listing. Known ids always win; the
+  // keyword fallback only fires for a section this list has never heard of.
+  var INFO_SECTION_IDS = ['base', 'money', 'transport', 'safety', 'practical', 'logistics', 'context', 'corrections'];
+  var SERVICE_KEYWORD_RE = /service|laundry|health|beauty|barber|massage/;
+
+  function tabForSection(sec) {
+    if (!sec) return 'info';
+    var id = String(sec.id || '').toLowerCase();
+    var label = String(sec.label || '').toLowerCase();
+    if (isTaskSection(sec)) return 'plan';
+    if (id === 'itinerary' || /itinerary|daily.?plan/.test(label)) return 'plan';
+    if (EAT_SECTION_IDS.indexOf(id) !== -1) return 'eat';
+    if (DO_SECTION_IDS.indexOf(id) !== -1) return 'do';
+    if (SERVICE_SECTION_IDS.indexOf(id) !== -1) return 'services';
+    if (INFO_SECTION_IDS.indexOf(id) !== -1) return 'info';
+    if (SERVICE_KEYWORD_RE.test(id) || SERVICE_KEYWORD_RE.test(label)) return 'services';
+    return 'info'; // fallback bucket: an unrecognized section is reference, not a todo
+  }
+
+  function setTab(state, tabId) {
+    if (TAB_IDS.indexOf(tabId) === -1) throw new Error('bad tab "' + tabId + '"');
+    state.tab = tabId;
+    return state;
+  }
+
+  // Plan is the fixed default landing tab: unlike the old viewMode, there is
+  // no date-based auto-detection here (Plan's own Today block already covers
+  // that).
+  function effectiveTab(state) {
+    return (state && state.tab && TAB_IDS.indexOf(state.tab) !== -1) ? state.tab : 'plan';
+  }
+
+  // Phase 4: per-day collapse in the Plan tab's "remaining days" list. Same
+  // tri-state read as isSectionCollapsed (explicit override wins, otherwise a
+  // computed default), but the default here is always collapsed: today has
+  // its own block above this list, so every day IN this list starts closed
+  // until the traveler opens one.
+  function isPlanDayCollapsed(state, iso) {
+    var explicit = state.collapsedPlanDays ? state.collapsedPlanDays[iso] : undefined;
+    if (explicit === true || explicit === false) return explicit;
+    return true;
+  }
+
+  function togglePlanDay(state, iso) {
+    state.collapsedPlanDays = state.collapsedPlanDays || {};
+    var next = !isPlanDayCollapsed(state, iso);
+    if (next === true) delete state.collapsedPlanDays[iso]; // back to the default
+    else state.collapsedPlanDays[iso] = next;
+    return state;
+  }
+
+  // The Plan tab's model: today's day-assigned items (any section), every
+  // other day of the stay in chronological order with whatever is assigned
+  // to it (also any section: a dinner reservation and an itinerary stop both
+  // count, exactly like todayModel), and the guide's open/done tasks. Built
+  // on the same viewModel() every other view reads, so assigning an item to a
+  // day from ANY tab shows up here immediately with no separate bookkeeping.
+  // nowIso is an injection point for tests; real callers omit it.
+  function planModel(data, state, nowIso) {
+    var today = nowIso || todayIso();
+    var vms = viewModel(data, state);
+    var range = effectiveDates(data, state);
+    var byIso = {};
+    vms.forEach(function (sv) {
+      sv.days.forEach(function (d) {
+        if (!byIso[d.iso]) byIso[d.iso] = [];
+        d.items.forEach(function (it) {
+          byIso[d.iso].push({ sec: sv.section, it: it, status: effectiveStatus(it, state) });
+        });
+      });
+    });
+    var stayIsos = stayDates(range);
+    var otherDays = stayIsos.filter(function (iso) { return iso !== today; }).map(function (iso) {
+      return { iso: iso, label: dayLabel(iso), items: byIso[iso] || [] };
+    });
+    var openTasks = [], doneTasks = [];
+    vms.forEach(function (sv) {
+      if (!isTaskSection(sv.section)) return;
+      sv.undated.forEach(function (it) {
+        var s = effectiveStatus(it, state);
+        if (s === 'plan') openTasks.push({ sec: sv.section, it: it, status: s });
+        else if (s === 'done') doneTasks.push({ sec: sv.section, it: it, status: s });
+      });
+    });
+    return {
+      todayIso: today,
+      inRange: today >= range.from && today <= range.to,
+      today: byIso[today] || [],
+      days: otherDays,
+      openTasks: openTasks,
+      doneTasks: doneTasks
+    };
   }
 
   // Phase 3, feature 4: the "what matters today" view. Three buckets, all
@@ -1826,14 +2024,19 @@ var CityOps = (function () {
   var pendingPromote = null; // item id whose promote day-picker is open (session-only UI state)
   var pendingMove = null;    // item id whose move day-picker is open
   var pendingEdit = null;    // item id whose title editor is open
-  // Phase 3, feature 1: which cards are tap-expanded. Session-only (like the
-  // three pending* vars above), reset on every boot(): a fresh page load
-  // starts every card collapsed, which is what "compact by default" means.
-  // Deliberately NOT part of the persisted state object; expanding a card to
-  // read it is not a planning decision worth remembering across visits, and
-  // keeping it session-only avoids growing collapsedSections-style storage
-  // for something this transient.
-  var expandedItems = {};
+  // Phase 4: explicit expand/collapse OVERRIDES the traveler has made this
+  // session (id -> true/false). Session-only (like the three pending* vars
+  // above), reset on every boot(). Absent means "use the default": a
+  // not-done item renders expanded, a done one collapsed (item 5 of the
+  // Phase 4 spec: a tab's item count is small enough that default-open reads
+  // fine, and sunk done items collapsing keeps the tab from re-growing into
+  // the old wall). An explicit tap always wins over that default, for the
+  // rest of the session. Deliberately NOT part of the persisted state
+  // object; expanding a card to read it is not a planning decision worth
+  // remembering across visits.
+  var itemExpandOverride = {};
+
+  function defaultExpanded(status) { return status !== 'done'; }
 
   function promoteTo(it, iso) {
     var st = ctx.store.load();
@@ -1883,7 +2086,11 @@ var CityOps = (function () {
   // the done checkmark) and the tags row, per the spec: everything else lives
   // in the expanded detail panel. It is a <button> (not a div with a click
   // handler) so it is keyboard-reachable and gets a native aria-expanded.
-  function cardHeaderBtn(it, status, expanded) {
+  // `dayChip` (Phase 4) is a rendered date label shown when this card is
+  // rendered flat outside its own day grouping (every tab but Plan): it is
+  // what lets "Add to a day" have a visible result on the card it was set
+  // from, per the Phase 4 spec's populate-Plan-from-other-tabs feature.
+  function cardHeaderBtn(it, status, expanded, dayChip) {
     var btn = el('button', 'card-hd');
     btn.type = 'button';
     btn.setAttribute('aria-expanded', String(expanded));
@@ -1891,6 +2098,7 @@ var CityOps = (function () {
     if (status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
     tname.appendChild(document.createTextNode(effectiveName(it, curState)));
     btn.appendChild(tname);
+    if (dayChip) btn.appendChild(el('span', 'daychip', dayChip));
     if (it.tags && it.tags.length) {
       var tp = el('span', 'card-hd-tags');
       it.tags.forEach(function (t) { tp.appendChild(el('span', 'tag', t)); });
@@ -1982,10 +2190,17 @@ var CityOps = (function () {
       ctl.appendChild(b);
     });
     if (withDayPicker && (status === 'plan' || status === 'done')) {
-      var mv = el('button', 'ctl icon-btn', '⇄ Day');
+      // Phase 4: this is the "Add to a day" control from any Eat & Drink, Do
+      // or Services card (populate-Plan-from-other-tabs). Same picker either
+      // way (it already offers "No day" to clear an assignment); only the
+      // label changes so a traveler with nothing set yet does not read
+      // "change" for an action they have never taken.
+      var hasDay = !!effectiveDay(it, curState);
+      var mvLabel = hasDay ? 'Change day' : 'Add to a day';
+      var mv = el('button', 'ctl icon-btn', '📅');
       mv.type = 'button';
-      mv.setAttribute('aria-label', 'Move to a different day');
-      mv.title = 'Move to a different day';
+      mv.setAttribute('aria-label', mvLabel);
+      mv.title = mvLabel;
       mv.onclick = function () { pendingMove = it.id; rerender(); };
       ctl.appendChild(mv);
     }
@@ -2001,9 +2216,17 @@ var CityOps = (function () {
     return frag;
   }
 
-  function toggleExpand(id) {
-    if (expandedItems[id]) delete expandedItems[id];
-    else expandedItems[id] = true;
+  // Flips the EFFECTIVE expand state (default included) and stores the
+  // result explicitly, except when the new value matches the computed
+  // default again, in which case the override is dropped: the same
+  // tri-state pattern toggleSection uses for collapsedSections, so a card
+  // tapped back to its own default does not grow session state forever.
+  function toggleExpand(id, status) {
+    var def = defaultExpanded(status);
+    var current = Object.prototype.hasOwnProperty.call(itemExpandOverride, id) ? itemExpandOverride[id] : def;
+    var next = !current;
+    if (next === def) delete itemExpandOverride[id];
+    else itemExpandOverride[id] = next;
     rerender();
   }
 
@@ -2020,43 +2243,30 @@ var CityOps = (function () {
   // the spec asks; and the print stylesheet can force every detail open with
   // one rule, so a printed guide still shows everything even though the
   // on-screen app defaults every card to collapsed.
-  function appendCard(container, it, status, showWhen, withDayPicker) {
-    var expanded = !!expandedItems[it.id] || pendingEdit === it.id;
+  //
+  // Phase 4, item 5: the default is no longer "always collapsed". A NOT-done
+  // item defaults expanded (a tab's item count is small enough for that to
+  // read fine); a done item defaults collapsed (it has sunk out of the way
+  // on purpose). An explicit tap during this session always overrides that
+  // default, in either direction, via itemExpandOverride above.
+  function appendCard(container, it, status, showWhen, withDayPicker, dayChip) {
+    var expanded;
+    if (pendingEdit === it.id) expanded = true; // renaming must show the editor
+    else if (Object.prototype.hasOwnProperty.call(itemExpandOverride, it.id)) expanded = itemExpandOverride[it.id];
+    else expanded = defaultExpanded(status);
     container.classList.add(expanded ? 'expanded' : 'collapsed');
-    var hd = cardHeaderBtn(it, status, expanded);
-    hd.onclick = function () { toggleExpand(it.id); };
+    var hd = cardHeaderBtn(it, status, expanded, dayChip);
+    hd.onclick = function () { toggleExpand(it.id, status); };
     container.appendChild(hd);
     var detail = el('div', 'card-detail');
     detail.appendChild(itemDetailBody(it, status, showWhen, withDayPicker));
     container.appendChild(detail);
   }
 
-  function renderCard(it, status, withDayPicker) {
+  function renderCard(it, status, withDayPicker, dayChip) {
     var card = el('div', 'card' + (status === 'done' ? ' item-done' : ''));
-    appendCard(card, it, status, true, withDayPicker);
+    appendCard(card, it, status, true, withDayPicker, dayChip);
     return card;
-  }
-
-  function renderDayCard(day, state) {
-    var dc = el('div', 'daycard');
-    dc.dataset.day = day.key; // stable group identity; the rendered date is the slot
-    var hd = el('div', 'hd');
-    hd.appendChild(el('span', 'd', day.label));
-    if (day.outside) hd.appendChild(el('span', 'tag', 'Outside stay'));
-    if (day.items.length === 1 && day.items[0].when) hd.appendChild(el('span', 't', day.items[0].when));
-    dc.appendChild(hd);
-    if (!day.items.length) {
-      dc.className += ' empty-day';
-      dc.appendChild(el('div', 'bd free-day', 'free'));
-      return dc;
-    }
-    day.items.forEach(function (it) {
-      var status = effectiveStatus(it, state);
-      var bd = el('div', 'bd' + (status === 'done' ? ' item-done' : ''));
-      appendCard(bd, it, status, day.items.length > 1, true);
-      dc.appendChild(bd);
-    });
-    return dc;
   }
 
   function renderHeader(data, state) {
@@ -2101,13 +2311,15 @@ var CityOps = (function () {
     return '(' + s + ')';
   }
 
-  function renderSection(sv, state, totalItems) {
-    var frag = document.createDocumentFragment();
+  // Phase 4: the section header shared by every tab (Eat & Drink, Do,
+  // Services, Info). Unchanged from the old renderSection's h2: same
+  // collapse toggle, same anchor id for the sticky section-nav chips, same
+  // item counts. What sits below it is what changed (see renderTabSectionBlock
+  // and renderInfoTab): flat item cards instead of day-grouped columns, since
+  // the Plan tab is now the one place days are grouped.
+  function renderSectionHeader(sv, state, totalItems) {
     var collapsed = isSectionCollapsed(state, sv.section.id, totalItems);
     var h2 = el('h2', collapsed ? 'collapsed' : null);
-    // Anchor target for the sticky section-nav chips (feature 3): stable
-    // regardless of collapse state, so a chip tap always has something to
-    // scroll to.
     h2.id = 'sec-' + sv.section.id;
     var tbtn = el('button', 'sec-toggle');
     tbtn.type = 'button';
@@ -2123,20 +2335,41 @@ var CityOps = (function () {
       rerender();
     };
     h2.appendChild(tbtn);
-    frag.appendChild(h2);
-    if (collapsed) return frag;
-    if (sv.days.length) {
-      var days = el('div', 'days');
-      days.dataset.sec = sv.section.id;
-      sv.days.forEach(function (d) { days.appendChild(renderDayCard(d, state)); });
-      frag.appendChild(days);
-    }
-    sv.undated.forEach(function (it) { frag.appendChild(renderCard(it, effectiveStatus(it, state), sv.days.length > 0)); });
+    return { h2: h2, collapsed: collapsed };
+  }
+
+  // Every active item in a section (day-assigned or not), in chronological
+  // order with the undated ones last, paired with the date label to show as
+  // that card's day chip (null for undated). viewModel() already grouped the
+  // dayed ones into per-date slots; this just flattens that back into one
+  // ordered list, since a tab section is a flat card list, not a day-card
+  // grid (Plan owns day grouping now).
+  function tabItemsFlat(sv) {
+    var out = [];
+    sv.days.forEach(function (d) {
+      d.items.forEach(function (it) { out.push({ it: it, dayIso: d.iso }); });
+    });
+    sv.undated.forEach(function (it) { out.push({ it: it, dayIso: null }); });
+    return out;
+  }
+
+  // Eat & Drink / Do / Services: one section block per mapped section, items
+  // as flat cards (day chip if assigned, "Add to a day" control either way),
+  // then backups and archived exactly as before.
+  function renderTabSectionBlock(sv, state, totalItems) {
+    var frag = document.createDocumentFragment();
+    var hdr = renderSectionHeader(sv, state, totalItems);
+    frag.appendChild(hdr.h2);
+    if (hdr.collapsed) return frag;
+    tabItemsFlat(sv).forEach(function (entry) {
+      var status = effectiveStatus(entry.it, state);
+      var chip = entry.dayIso ? dayLabel(entry.dayIso) : null;
+      frag.appendChild(renderCard(entry.it, status, true, chip));
+    });
     if (sv.backups.length) {
-      var withPicker = sv.days.length > 0;
       var bk = el('div', 'backup');
       bk.appendChild(el('div', 'bt', '↩ Backups: if Plan A is full, closed, or you want a change'));
-      sv.backups.forEach(function (it) { bk.appendChild(renderCard(it, 'backup', withPicker)); });
+      sv.backups.forEach(function (it) { bk.appendChild(renderCard(it, 'backup', true)); });
       frag.appendChild(bk);
     }
     if (sv.archived.length) {
@@ -2148,17 +2381,87 @@ var CityOps = (function () {
     return frag;
   }
 
-  // Phase 3, feature 3: the sticky chip row. Reads the SAME viewModel array
-  // rerender() already built for the section list, so this never disagrees
-  // with what is actually on the page. Hidden entirely (rather than left
-  // empty) when there is only one section, or in a view where "jump to
-  // section" does not apply (Calendar groups by date, Today is not
-  // section-organized at all): an empty sticky bar is still visual clutter.
+  function renderTabSections(vms, state, totalItems) {
+    var main = document.getElementById('main');
+    main.innerHTML = '';
+    if (!vms.length) {
+      main.appendChild(el('p', 'when-line', 'Nothing in this tab yet.'));
+      return;
+    }
+    vms.forEach(function (sv) { main.appendChild(renderTabSectionBlock(sv, state, totalItems)); });
+  }
+
+  // Info tab (item 6 of the Phase 4 spec): a section's UNDATED items merge
+  // into one reference card, name-as-lead-in plus note, no per-item
+  // accordion and no status controls, since these are facts, not todos. Any
+  // item that DOES carry a day (Tirana's real "logistics" section has
+  // arrival/departure dates right alongside pure reference notes) keeps
+  // behaving like a normal item card: it still needs its status controls and
+  // it still needs to surface in Plan.
+  function infoBlockCard(sv, items, state) {
+    var card = el('div', 'card info-card');
+    card.appendChild(el('h3', null, (sv.section.icon ? sv.section.icon + ' ' : '') + sv.section.label));
+    items.forEach(function (it) {
+      var p = el('p', 'info-item');
+      p.appendChild(el('strong', null, effectiveName(it, state)));
+      if (it.note) {
+        p.appendChild(document.createElement('br'));
+        p.appendChild(document.createTextNode(it.note));
+      }
+      card.appendChild(p);
+      if (it.links && it.links.length) {
+        var row = el('div', 'row');
+        it.links.forEach(function (l) { row.appendChild(linkPill(l)); });
+        card.appendChild(row);
+      }
+    });
+    return card;
+  }
+
+  function renderInfoTab(vms, state, totalItems) {
+    var main = document.getElementById('main');
+    main.innerHTML = '';
+    if (!vms.length) {
+      main.appendChild(el('p', 'when-line', 'Nothing in this tab yet.'));
+      return;
+    }
+    vms.forEach(function (sv) {
+      var hdr = renderSectionHeader(sv, state, totalItems);
+      main.appendChild(hdr.h2);
+      if (hdr.collapsed) return;
+      var dayed = [];
+      sv.days.forEach(function (d) { d.items.forEach(function (it) { dayed.push({ it: it, dayIso: d.iso }); }); });
+      dayed.forEach(function (entry) {
+        main.appendChild(renderCard(entry.it, effectiveStatus(entry.it, state), true, dayLabel(entry.dayIso)));
+      });
+      if (sv.undated.length) main.appendChild(infoBlockCard(sv, sv.undated, state));
+      if (sv.backups.length) {
+        var bk = el('div', 'backup');
+        bk.appendChild(el('div', 'bt', '↩ Backups'));
+        sv.backups.forEach(function (it) { bk.appendChild(renderCard(it, 'backup', true)); });
+        main.appendChild(bk);
+      }
+      if (sv.archived.length) {
+        var det = el('details', 'arch-details');
+        det.appendChild(el('summary', null, 'Archived (' + sv.archived.length + ')'));
+        sv.archived.forEach(function (it) { det.appendChild(renderCard(it, 'archived')); });
+        main.appendChild(det);
+      }
+    });
+  }
+
+  // Phase 4: the sticky "jump to section" chip row, now scoped to whichever
+  // tab is active (Calendar's cross-section date grouping and Plan's
+  // day/tasks layout never had a use for it; hidden for both, same as share).
+  // Reads the SAME tab-filtered viewModel array rerender() already built, so
+  // this never disagrees with what is actually on the page. Hidden entirely
+  // (rather than left empty) when a tab has only one section: an empty
+  // sticky bar is still visual clutter.
   function renderSectionNav(vms, state, totalItems, mode) {
     var nav = document.getElementById('secnav');
     if (!nav) return; // standalone/older shells without the marker: no-op
     nav.innerHTML = '';
-    if (mode !== 'type' || vms.length < 2) { nav.hidden = true; return; }
+    if (mode !== 'tab' || vms.length < 2) { nav.hidden = true; return; }
     nav.hidden = false;
     vms.forEach(function (sv) {
       var chip = el('button', 'secnav-chip',
@@ -2234,6 +2537,15 @@ var CityOps = (function () {
     saveDayOrder(d.sec, d.cards().map(function (c) { return c.dataset.day; }));
   }
 
+  // Phase 3's per-section day-slot drag-to-reorder. Dormant as of Phase 4: it
+  // only ever wired up a section's own `.days` grid, and the tab redesign has
+  // no such grid anymore (Plan groups by date ACROSS sections and lists days
+  // chronologically only; a per-section reorder no longer has a coherent
+  // meaning). No render path calls this now; left defined rather than
+  // deleted outright so the drag mechanics are still here if a future Plan
+  // feature wants to resurrect them, but it is a good candidate for a
+  // follow-up cleanup pass. The window pointermove/up/cancel listeners bound
+  // in boot() below are harmless no-ops with `drag` always null.
   function attachReorder() {
     var lists = document.querySelectorAll('.days');
     Array.prototype.forEach.call(lists, function (list) {
@@ -2355,87 +2667,89 @@ var CityOps = (function () {
     }
   }
 
-  function renderCalendar(data, state) {
-    var cm = calendarModel(data, state);
+  // Phase 4: an "Open tasks" row. Its whole job is the checkbox: checked
+  // means done, using the exact same setStatus/effectiveStatus semantics as
+  // every other status control, so a task is a first-class item (undo-able,
+  // exportable) and not a second state shape. Ticking a completed task again
+  // unticks it, back to plan.
+  function renderTaskRow(it, status) {
+    var row = el('div', 'task-row' + (status === 'done' ? ' item-done' : ''));
+    var label = el('label', 'task-check');
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = status === 'done';
+    cb.setAttribute('aria-label', (status === 'done' ? 'Mark not done: ' : 'Mark done: ') + effectiveName(it, curState));
+    cb.onchange = function () { onStatus(it.id, cb.checked ? 'done' : 'plan'); };
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(' ' + effectiveName(it, curState)));
+    row.appendChild(label);
+    if (it.note) row.appendChild(el('p', 'task-note', it.note));
+    return row;
+  }
+
+  // Phase 4: the Plan tab, the new default landing tab and the home of every
+  // date. Reads planModel() (pure, tested on its own): today first, then
+  // every other day of the stay in order (collapsed by default; a day with
+  // nothing assigned says so instead of rendering an empty card), then open
+  // tasks with done ones sunk below, collapsed.
+  function renderPlanTab(data, state) {
+    var pm = planModel(data, state);
     var main = document.getElementById('main');
     main.innerHTML = '';
-    cm.days.forEach(function (d) {
-      var dc = el('div', 'daycard' + (d.entries.length ? '' : ' empty-day'));
-      var hd = el('div', 'hd');
-      hd.appendChild(el('span', 'd', d.label));
-      dc.appendChild(hd);
-      if (!d.entries.length) {
-        dc.appendChild(el('div', 'bd free-day', 'free'));
-      }
-      d.entries.forEach(function (e) {
-        var bd = el('div', 'bd' + (e.status === 'done' ? ' item-done' : ''));
-        bd.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
-        appendCard(bd, e.it, e.status, true, true);
-        dc.appendChild(bd);
-      });
-      main.appendChild(dc);
-    });
-    if (cm.undated.length) {
-      main.appendChild(el('h2', null, 'Anytime'));
-      cm.undated.forEach(function (e) {
+    if (!pm.inRange) {
+      main.appendChild(el('p', 'when-line',
+        'Today (' + dayLabel(pm.todayIso) + ') is outside this trip\'s dates (' +
+        fmtRange(effectiveDates(data, state)) + '). Showing anything dated today anyway.'));
+    }
+    main.appendChild(el('h2', null, 'Today · ' + dayLabel(pm.todayIso)));
+    if (!pm.today.length) {
+      main.appendChild(el('p', 'when-line', 'Nothing planned yet.'));
+    } else {
+      pm.today.forEach(function (e) {
         var card = el('div', 'card' + (e.status === 'done' ? ' item-done' : ''));
         card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
         appendCard(card, e.it, e.status, true, true);
         main.appendChild(card);
       });
     }
-    cm.sections.forEach(function (sv) {
-      if (sv.backups.length) {
-        var bk = el('div', 'backup');
-        bk.appendChild(el('div', 'bt', '↩ ' + sv.section.label + ' backups'));
-        sv.backups.forEach(function (it) { bk.appendChild(renderCard(it, 'backup', true)); });
-        main.appendChild(bk);
+    pm.days.forEach(function (d) {
+      var collapsed = isPlanDayCollapsed(state, d.iso);
+      var h2 = el('h2', collapsed ? 'collapsed' : null);
+      var tbtn = el('button', 'sec-toggle');
+      tbtn.type = 'button';
+      tbtn.setAttribute('aria-expanded', String(!collapsed));
+      tbtn.appendChild(el('span', 'chev', collapsed ? '▸' : '▾'));
+      tbtn.appendChild(document.createTextNode(' ' + d.label + ' '));
+      tbtn.appendChild(el('span', 'sec-count', '(' + d.items.length + (d.items.length === 1 ? ' item' : ' items') + ')'));
+      tbtn.onclick = function () {
+        var st = ctx.store.load();
+        togglePlanDay(st, d.iso);
+        ctx.store.save(st);
+        rerender();
+      };
+      h2.appendChild(tbtn);
+      main.appendChild(h2);
+      if (collapsed) return;
+      if (!d.items.length) {
+        main.appendChild(el('p', 'when-line', 'Nothing planned yet.'));
+        return;
       }
-      if (sv.archived.length) {
+      d.items.forEach(function (e) {
+        var card = el('div', 'card' + (e.status === 'done' ? ' item-done' : ''));
+        card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
+        appendCard(card, e.it, e.status, true, true);
+        main.appendChild(card);
+      });
+    });
+    if (pm.openTasks.length || pm.doneTasks.length) {
+      main.appendChild(el('h2', null, 'Open tasks'));
+      pm.openTasks.forEach(function (e) { main.appendChild(renderTaskRow(e.it, e.status)); });
+      if (pm.doneTasks.length) {
         var det = el('details', 'arch-details');
-        det.appendChild(el('summary', null, sv.section.label + ': archived (' + sv.archived.length + ')'));
-        sv.archived.forEach(function (it) { det.appendChild(renderCard(it, 'archived')); });
+        det.appendChild(el('summary', null, 'Done (' + pm.doneTasks.length + ')'));
+        pm.doneTasks.forEach(function (e) { det.appendChild(renderTaskRow(e.it, e.status)); });
         main.appendChild(det);
       }
-    });
-  }
-
-  // Phase 3, feature 4: the Today view. Reads todayModel() (pure, tested on
-  // its own) and renders three groups: what is on for today, open undated
-  // tasks, and a one-line peek at tomorrow. Falls back to a plain message
-  // when nothing qualifies, so an empty trip day is never a blank screen.
-  function renderToday(data, state) {
-    var tm = todayModel(data, state);
-    var main = document.getElementById('main');
-    main.innerHTML = '';
-    if (!tm.inRange) {
-      main.appendChild(el('p', 'when-line',
-        'Today (' + dayLabel(tm.todayIso) + ') is outside this trip\'s dates (' +
-        fmtRange(effectiveDates(data, state)) + '). Showing anything dated today anyway.'));
-    }
-    main.appendChild(el('h2', null, 'Today · ' + dayLabel(tm.todayIso)));
-    if (!tm.today.length) {
-      main.appendChild(el('p', 'when-line', 'Nothing on the itinerary for today.'));
-    } else {
-      tm.today.forEach(function (e) {
-        var card = el('div', 'card today-card' + (e.status === 'done' ? ' item-done' : ''));
-        card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
-        appendCard(card, e.it, e.status, true, true);
-        main.appendChild(card);
-      });
-    }
-    if (tm.tasks.length) {
-      main.appendChild(el('h2', null, 'Open tasks'));
-      tm.tasks.forEach(function (e) {
-        var card = el('div', 'card today-card');
-        card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
-        appendCard(card, e.it, e.status, true, true);
-        main.appendChild(card);
-      });
-    }
-    if (tm.upNext.length) {
-      var names = tm.upNext.map(function (e) { return effectiveName(e.it, state); }).join(', ');
-      main.appendChild(el('p', 'up-next', '→ Up next tomorrow: ' + names));
     }
   }
 
@@ -2447,24 +2761,24 @@ var CityOps = (function () {
     curState = state;
     var data = effectiveData(ctx.base, state);
     var totalItems = Array.isArray(data.items) ? data.items.length : 0;
-    var mode = effectiveViewMode(data, state);
+    var tab = effectiveTab(state);
     renderHeader(data, state);
-    renderToolbar(data, state, mode);
+    renderToolbar(data, state);
+    renderTabBar(data, state, tab);
     var vms = viewModel(data, state);
-    // 'share' is not a real viewMode; it just tells the nav to hide (share is
-    // its own read-only layout, not section-organized the way Guide is).
-    renderSectionNav(vms, state, totalItems, shareOn ? 'share' : mode);
     if (shareOn) {
+      renderSectionNav([], state, totalItems, 'hide');
       renderShare();
-    } else if (mode === 'day') {
-      renderCalendar(data, state);
-    } else if (mode === 'today') {
-      renderToday(data, state);
+    } else if (tab === 'plan') {
+      // Plan is not section-organized (it groups by date, then tasks), so
+      // the sticky "jump to section" nav never applies here, same as Share.
+      renderSectionNav([], state, totalItems, 'hide');
+      renderPlanTab(data, state);
     } else {
-      var main = document.getElementById('main');
-      main.innerHTML = '';
-      vms.forEach(function (sv) { main.appendChild(renderSection(sv, state, totalItems)); });
-      attachReorder();
+      var tabVms = vms.filter(function (sv) { return tabForSection(sv.section) === tab; });
+      renderSectionNav(tabVms, state, totalItems, 'tab');
+      if (tab === 'info') renderInfoTab(tabVms, state, totalItems);
+      else renderTabSections(tabVms, state, totalItems);
     }
     var foot = document.getElementById('foot');
     foot.textContent = 'cityops · schema v1 · state saved on this device';
@@ -2644,92 +2958,137 @@ var CityOps = (function () {
     ta.focus();
   }
 
-  // Phase 3, feature 4: the three-way view switch. A segmented control (not a
-  // single cycling button) so all three destinations are visible and
-  // reachable in one tap, and so the current one is legible via aria-pressed
-  // without reading a label that changes.
-  var VIEW_TABS = [
-    { mode: 'today', label: 'Today' },
-    { mode: 'type', label: 'Guide' },
-    { mode: 'day', label: 'Calendar' }
-  ];
+  // Phase 4, item 7 (nav cleanup): every utility action that used to live in
+  // the toolbar (Share view, Export JSON, Update data, Edit dates, plus the
+  // app-only Enrich, Edit city, Export guide, Remove city) now lives in ONE
+  // "More" action sheet, opened from the overflow chip at the end of the tab
+  // bar. doExportJson is pulled out to its own function so both this sheet
+  // and (if ever needed again) another entry point can call it identically.
+  function doExportJson() {
+    var st = ctx.store.load();
+    var out = buildExport(effectiveData(ctx.base, st), st);
+    var blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = cityId(out) + '.cityops.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    var freeUrl = a.href;
+    setTimeout(function () { URL.revokeObjectURL(freeUrl); }, 4000);
+  }
 
-  function renderViewSwitch(tb, mode) {
-    var seg = el('div', 'viewseg');
-    seg.setAttribute('role', 'tablist');
-    VIEW_TABS.forEach(function (tab) {
-      var active = tab.mode === mode;
-      var b = el('button', 'viewtab' + (active ? ' active' : ''), tab.label);
+  // App-only rows (Enrich, Edit city, Export guide, Remove city) are supplied
+  // by the shell via window.CityOpsApp.moreActions(), returning
+  // [{label, onClick, cls}]. Standalone guide files have no CityOpsApp, so
+  // the sheet there only ever shows the four base rows: no trace of an
+  // app-only action ships inside them.
+  function openMoreSheet() {
+    var host = document.getElementById('modal');
+    host.innerHTML = '';
+    var wrap = el('div', 'modal-wrap');
+    var box = el('div', 'modal');
+    box.appendChild(el('h3', null, 'More'));
+    var list = el('div', 'sheet-list');
+    function addRow(label, onClick, cls) {
+      var b = el('button', 'sheet-row' + (cls ? ' ' + cls : ''), label);
+      b.type = 'button';
+      b.onclick = function () { wrap.remove(); onClick(); };
+      list.appendChild(b);
+    }
+    addRow(shareOn ? 'Back to planner' : 'Share view', function () {
+      shareOn = !shareOn;
+      document.body.classList.toggle('share', shareOn);
+      rerender();
+    });
+    addRow('Export JSON', doExportJson);
+    addRow('Update data', openUpdateModal);
+    addRow('Edit dates', openDatesModal);
+    if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.moreActions) {
+      window.CityOpsApp.moreActions().forEach(function (a) { addRow(a.label, a.onClick, a.cls); });
+    }
+    box.appendChild(list);
+    wrap.appendChild(box);
+    wrap.onclick = function (e) { if (e.target === wrap) wrap.remove(); };
+    host.appendChild(wrap);
+  }
+
+  // QA fix (Phase 4): #secnav is ALSO position:sticky top:0, so on a tab with
+  // 2+ mapped sections (Eat & Drink and Services both hit this on the real
+  // Tirana data) it would scroll up underneath #tabbar and disappear (both
+  // pinned to the same top:0, #tabbar's z-index winning). #secnav's CSS reads
+  // its offset from the --tabbar-h custom property instead of a bare 0; this
+  // keeps that property in sync with the tab bar's actual rendered height, so
+  // the two bars stack instead of overlapping. Recomputed on every tab-bar
+  // render (font-size/padding changes at the narrow-phone breakpoint change
+  // the height) and on window resize (a rotation or a browser chrome change
+  // can cross that breakpoint without a rerender happening on its own).
+  function updateTabbarHeightVar() {
+    var bar = document.getElementById('tabbar');
+    var root = (typeof document !== 'undefined' && document) ? document.documentElement : null;
+    if (!bar || !root || !root.style || typeof root.style.setProperty !== 'function') return;
+    var h = (typeof bar.offsetHeight === 'number') ? bar.offsetHeight : 0;
+    root.style.setProperty('--tabbar-h', h + 'px');
+  }
+
+  // Phase 4: the sticky tab bar (Plan, Eat & Drink, Do, Services, Info) plus
+  // the More overflow chip, replacing the old Today/Guide/Calendar segmented
+  // control. Hidden while Share is on: share is a clean, printable read-only
+  // layout, and the tab chrome (like every other control) has no place in
+  // it; the sole way out is the Back-to-planner button renderToolbar shows
+  // instead.
+  function renderTabBar(data, state, tab) {
+    var bar = document.getElementById('tabbar');
+    if (!bar) return; // standalone/older shells without the marker: no-op
+    bar.innerHTML = '';
+    if (shareOn) {
+      bar.hidden = true;
+      updateTabbarHeightVar(); // hidden collapses to 0 height: #secnav's offset must follow
+      return;
+    }
+    bar.hidden = false;
+    bar.setAttribute('role', 'tablist');
+    TABS.forEach(function (t) {
+      var active = t.id === tab;
+      var b = el('button', 'tabchip' + (active ? ' active' : ''), t.label);
       b.type = 'button';
       b.setAttribute('role', 'tab');
       b.setAttribute('aria-selected', String(active));
       b.onclick = function () {
         var st = ctx.store.load();
-        setViewMode(st, tab.mode);
+        setTab(st, t.id);
         ctx.store.save(st);
         rerender();
       };
-      seg.appendChild(b);
+      bar.appendChild(b);
     });
-    tb.appendChild(seg);
+    var more = el('button', 'tabchip tab-more', '⋯');
+    more.type = 'button';
+    more.setAttribute('aria-label', 'More actions');
+    more.title = 'More actions';
+    more.onclick = openMoreSheet;
+    bar.appendChild(more);
+    updateTabbarHeightVar();
   }
 
-  function renderToolbar(data, state, mode) {
+  // What is left of the old toolbar once every action moved into More: the
+  // Back-to-planner exit while Share is on, and the "data updated in-app"
+  // flag. Both are non-navigational, so they stay put rather than joining
+  // the tab bar.
+  function renderToolbar(data, state) {
     var tb = document.getElementById('toolbar');
+    if (!tb) return;
     tb.innerHTML = '';
-    var share = el('button', null, shareOn ? 'Back to planner' : 'Share view');
-    share.type = 'button';
-    share.id = 'btn-share';
-    share.onclick = function () {
-      shareOn = !shareOn;
-      document.body.classList.toggle('share', shareOn);
-      rerender();
-    };
-    tb.appendChild(share);
-    if (!shareOn) {
-      renderViewSwitch(tb, mode);
-      var exp = el('button', null, 'Export JSON');
-      exp.type = 'button';
-      exp.id = 'btn-export';
-      exp.onclick = function () {
-        var st = ctx.store.load();
-        var out = buildExport(effectiveData(ctx.base, st), st);
-        var blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = cityId(out) + '.cityops.json';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        var freeUrl = a.href;
-        setTimeout(function () { URL.revokeObjectURL(freeUrl); }, 4000);
+    if (shareOn) {
+      var back = el('button', null, 'Back to planner');
+      back.type = 'button';
+      back.id = 'btn-share';
+      back.onclick = function () {
+        shareOn = false;
+        document.body.classList.remove('share');
+        rerender();
       };
-      tb.appendChild(exp);
-      var upd = el('button', null, 'Update data');
-      upd.type = 'button';
-      upd.onclick = openUpdateModal;
-      tb.appendChild(upd);
-      var dts = el('button', null, 'Edit dates');
-      dts.type = 'button';
-      dts.onclick = openDatesModal;
-      tb.appendChild(dts);
-      // App-only toolbar buttons whose LABEL must not ship inside standalone
-      // guides either. The re-run button is the case in point: it builds
-      // prompts out of PROMPT.md, which guide files do not carry at all. The
-      // shell appends those buttons here; guide files have no CityOpsApp, so
-      // nothing is added and no trace of them exists in template.html.
-      if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.toolbarExtras) {
-        window.CityOpsApp.toolbarExtras(tb);
-      }
-      // App context only: standalone guide files have no CityOpsApp, so this
-      // button never appears in them.
-      if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.exportStandalone) {
-        var expg = el('button', null, 'Export guide');
-        expg.type = 'button';
-        expg.id = 'btn-export-guide';
-        expg.onclick = function () { window.CityOpsApp.exportStandalone(); };
-        tb.appendChild(expg);
-      }
+      tb.appendChild(back);
     }
     if (state.dataOverride) {
       var flagText = 'Data updated in-app: export and paste into the file to make permanent';
@@ -2764,13 +3123,17 @@ var CityOps = (function () {
     pendingPromote = null;
     pendingMove = null;
     pendingEdit = null;
-    expandedItems = {};
+    itemExpandOverride = {};
     drag = null;
     if (typeof document !== 'undefined' && document.body) document.body.classList.remove('share');
     if (!listenersBound && typeof window !== 'undefined' && window && window.addEventListener) {
       window.addEventListener('pointermove', onDragPointerMove, { passive: false });
       window.addEventListener('pointerup', onDragPointerEnd);
       window.addEventListener('pointercancel', onDragPointerEnd);
+      // QA fix: a rotation or a browser-chrome change can cross the
+      // narrow-phone breakpoint (which changes #tabbar's padding/height)
+      // without any rerender happening on its own; keep --tabbar-h honest.
+      window.addEventListener('resize', updateTabbarHeightVar);
       listenersBound = true;
     }
     rerender();
@@ -2824,7 +3187,11 @@ var CityOps = (function () {
     // Phase 3 additions, all pure and unit-tested on their own.
     todayModel: todayModel, effectiveViewMode: effectiveViewMode,
     todayIso: todayIso, isSectionCollapsed: isSectionCollapsed,
-    defaultSectionCollapsed: defaultSectionCollapsed, isTaskSection: isTaskSection
+    defaultSectionCollapsed: defaultSectionCollapsed, isTaskSection: isTaskSection,
+    // Phase 4 additions: tabs (replaces the Today/Guide/Calendar view switch)
+    // and the Plan tab's own model, all pure and unit-tested on their own.
+    TABS: TABS, tabForSection: tabForSection, setTab: setTab, effectiveTab: effectiveTab,
+    planModel: planModel, isPlanDayCollapsed: isPlanDayCollapsed, togglePlanDay: togglePlanDay
   };
 })();
 CityOps.init();
@@ -3030,7 +3397,13 @@ CityOps.init();
   .icon-btn{min-width:36px; text-align:center;}
 
   /* --- Phase 3: section header counts + sticky section nav --- */
-  #secnav{position:sticky; top:0; z-index:20; display:flex; gap:8px; overflow-x:auto;
+  /* top is the rendered #tabbar height (Phase 4), kept in sync by
+     updateTabbarHeightVar() in the engine so the two sticky bars stack
+     instead of overlapping; 0px is the safe fallback before that JS runs (or
+     on a shell that predates the tab bar). z-index stays below #tabbar's 26
+     so #tabbar is always the one on top if a scroll ever puts them in the
+     same few pixels. */
+  #secnav{position:sticky; top:var(--tabbar-h, 0px); z-index:20; display:flex; gap:8px; overflow-x:auto;
     -webkit-overflow-scrolling:touch; background:var(--bg); padding:8px 0 10px; margin:0 0 6px;}
   #secnav[hidden]{display:none;}
   .secnav-chip{flex:0 0 auto; font:inherit; font-size:.78rem; font-weight:700; color:var(--accent-hover);
@@ -3071,13 +3444,71 @@ CityOps.init();
     .viewtab{padding:5px 10px; font-size:.75rem;}
   }
   @media print{
-    .toolbar, .ctl-row, .grip, .reorderbar, #notice, #secnav{display:none !important;}
+    .toolbar, .ctl-row, .grip, .reorderbar, #notice, #secnav, #tabbar{display:none !important;}
     body{background:#fff;}
     .daycard, .card{box-shadow:none; break-inside:avoid;}
     header{background:var(--accent-hover) !important; -webkit-print-color-adjust:exact;}
     /* Print is a "here is everything" artifact: force every card open so a
        printed guide is not full of collapsed headers with nothing under them. */
     .card-detail{display:block !important;}
+  }
+
+  /* --- Phase 4: tab bar (replaces the Today/Guide/Calendar view switch) --- */
+  /* Sticky, horizontally scrollable, phone-first: at 375px five chips plus
+     More do not all fit without scrolling, and that is fine (a native
+     horizontal scroller reads better on a phone than wrapped rows of chips
+     eating vertical space). 44px min-height keeps every chip a comfortable
+     tap target. */
+  #tabbar{position:sticky; top:0; z-index:26; display:flex; gap:6px; overflow-x:auto;
+    -webkit-overflow-scrolling:touch; background:var(--bg); padding:8px 0 10px; margin:0 0 10px;
+    border-bottom:1px solid var(--border-light);}
+  #tabbar[hidden]{display:none;}
+  .tabchip{flex:0 0 auto; font:inherit; font-size:.82rem; font-weight:700; color:var(--accent-hover);
+    background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
+    padding:8px 14px; cursor:pointer; white-space:nowrap; min-height:44px;
+    display:flex; align-items:center;}
+  .tabchip:hover{border-color:var(--accent);}
+  .tabchip.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .tab-more{font-weight:800; padding:8px 12px; min-width:44px; justify-content:center; margin-left:auto;}
+
+  /* A small date pill on a flat item card (Eat & Drink / Do / Services /
+     Info) once that item has been assigned to a day: the visible result of
+     "Add to a day", and the reason a traveler can tell at a glance an item
+     already lives somewhere on the Plan tab. */
+  .daychip{font-size:.72rem; font-weight:700; color:var(--accent-hover); background:var(--accent-soft);
+    border-radius:20px; padding:2px 9px; white-space:nowrap;}
+
+  /* --- Phase 4: Info tab reference block --- */
+  /* One card per section, every undated item's name (bold) then its note,
+     stacked: no accordion, no status controls, since these are facts, not
+     todos (item 6 of the spec). */
+  .info-card h3{font-size:1rem; margin-bottom:2px;}
+  .info-item{font-size:.9rem; color:var(--text-3); margin-top:12px;}
+  .info-item:first-of-type{margin-top:10px;}
+  .info-item strong{display:block; color:var(--text); margin-bottom:2px; font-size:.94rem;}
+
+  /* --- Phase 4: Plan tab open tasks --- */
+  .task-row{padding:10px 0; border-bottom:1px solid var(--border-light);}
+  .task-row:last-child{border-bottom:none;}
+  .task-check{display:flex; align-items:center; gap:10px; font-size:.95rem; font-weight:600;
+    color:var(--text); cursor:pointer; min-height:44px;}
+  .task-check input[type="checkbox"]{width:20px; height:20px; flex:0 0 auto; cursor:pointer;}
+  .task-note{font-size:.85rem; color:var(--text-3); margin:2px 0 0 30px;}
+  .task-row.item-done .task-check{opacity:.55; text-decoration:line-through;}
+
+  /* --- Phase 4: the More action sheet (every utility action, one place) --- */
+  .sheet-list{display:flex; flex-direction:column; margin-top:6px;}
+  .sheet-row{font:inherit; font-size:.95rem; font-weight:600; color:var(--text); background:none;
+    border:none; border-bottom:1px solid var(--border-light); text-align:left; padding:14px 4px;
+    cursor:pointer; min-height:44px;}
+  .sheet-row:last-child{border-bottom:none;}
+  .sheet-row:hover{color:var(--accent-hover);}
+  .sheet-row.danger{color:var(--accent-hover); font-weight:800;}
+
+  @media (max-width: 430px){
+    #tabbar{gap:4px;}
+    .tabchip{padding:7px 11px; font-size:.76rem; min-height:40px;}
+    .tab-more{padding:7px 10px;}
   }
 </style>
 </head>
@@ -3086,6 +3517,7 @@ CityOps.init();
   <div id="notice"></div>
   <header id="hdr"></header>
   <div class="toolbar" id="toolbar"></div>
+  <nav class="tabbar" id="tabbar" aria-label="Guide sections" hidden></nav>
   <nav class="secnav" id="secnav" aria-label="Jump to section" hidden></nav>
   <main id="main"></main>
   <div class="foot" id="foot"></div>
@@ -3384,7 +3816,8 @@ var CityOps = (function () {
   var VIEW_MODES = ['type', 'day', 'today'];
 
   function emptyState() {
-    return { itemStatus: {}, itemDay: {}, itemTitle: {}, dayOrder: {}, collapsedSections: {}, viewMode: null, dataOverride: null, stayOverride: null, updated: null };
+    return { itemStatus: {}, itemDay: {}, itemTitle: {}, dayOrder: {}, collapsedSections: {},
+      collapsedPlanDays: {}, viewMode: null, tab: null, dataOverride: null, stayOverride: null, updated: null };
   }
 
   function normalizeState(st) {
@@ -3393,6 +3826,11 @@ var CityOps = (function () {
     st.itemDay = st.itemDay || {};
     st.dayOrder = st.dayOrder || {};
     st.collapsedSections = st.collapsedSections || {};
+    // Phase 4: per-day collapse state for the Plan tab's "remaining days" list,
+    // the same tri-state pattern as collapsedSections (explicit true/false
+    // wins, absent falls back to a computed default). A separate map because
+    // Plan groups by DATE across every section, not by section id.
+    st.collapsedPlanDays = st.collapsedPlanDays || {};
     st.itemTitle = st.itemTitle || {};
     // null always means "unset" and is left alone (see VIEW_MODES comment
     // above). A value that is present but neither null nor one of the three
@@ -3401,6 +3839,16 @@ var CityOps = (function () {
     // object DID carry an opinion, it was just not a valid one.
     if (st.viewMode !== null && VIEW_MODES.indexOf(st.viewMode) === -1) {
       st.viewMode = Object.prototype.hasOwnProperty.call(st, 'viewMode') ? 'type' : null;
+    }
+    // Phase 4: which of the five tabs is active. Same "null means never
+    // chosen" convention as viewMode, except there is no auto-detection here
+    // (effectiveTab() just falls back to 'plan', the fixed default landing
+    // tab): a present-but-invalid value is corrected to 'plan' rather than
+    // left to silently misbehave.
+    if (Object.prototype.hasOwnProperty.call(st, 'tab')) {
+      if (st.tab !== null && TAB_IDS.indexOf(st.tab) === -1) st.tab = 'plan';
+    } else {
+      st.tab = null;
     }
     if (!('dataOverride' in st)) st.dataOverride = null;
     if (!('stayOverride' in st)) st.stayOverride = null;
@@ -3579,6 +4027,123 @@ var CityOps = (function () {
   // restaurant recommendation in the guide.
   function isTaskSection(sec) {
     return !!sec && (sec.id === 'tasks' || /task/i.test(sec.label || ''));
+  }
+
+  // ---- Phase 4: tabs (Plan / Eat & Drink / Do / Services / Info) ----
+  // Replaces the Today/Guide/Calendar view switch with five fixed tabs. A
+  // section maps to exactly one tab; the mapping has to work for BOTH data
+  // shapes seen in the wild: the PROMPT.md schema (dinner, breakfast, lunch,
+  // coffee, cowork, activities, services, practical, interests) and the
+  // freeform sections a traveler's own AI pass invents (Tirana's real guide:
+  // base, money, transport, itinerary, restaurants, coffee, bars, activities,
+  // services, laundry, safety, logistics, context, corrections, tasks).
+  var TABS = [
+    { id: 'plan', label: 'Plan' },
+    { id: 'eat', label: 'Eat & Drink' },
+    { id: 'do', label: 'Do' },
+    { id: 'services', label: 'Services' },
+    { id: 'info', label: 'Info' }
+  ];
+  var TAB_IDS = TABS.map(function (t) { return t.id; });
+
+  var EAT_SECTION_IDS = ['dinner', 'breakfast', 'lunch', 'coffee', 'restaurants', 'bars', 'cowork'];
+  var DO_SECTION_IDS = ['activities', 'interests'];
+  var SERVICE_SECTION_IDS = ['services', 'laundry'];
+  // Info's own explicit ids are checked BEFORE the generic services keyword
+  // fallback below, on purpose: Tirana's real "safety" section is labeled
+  // "Health & safety", and a naive keyword match on "health" would misfile a
+  // reference section as a services listing. Known ids always win; the
+  // keyword fallback only fires for a section this list has never heard of.
+  var INFO_SECTION_IDS = ['base', 'money', 'transport', 'safety', 'practical', 'logistics', 'context', 'corrections'];
+  var SERVICE_KEYWORD_RE = /service|laundry|health|beauty|barber|massage/;
+
+  function tabForSection(sec) {
+    if (!sec) return 'info';
+    var id = String(sec.id || '').toLowerCase();
+    var label = String(sec.label || '').toLowerCase();
+    if (isTaskSection(sec)) return 'plan';
+    if (id === 'itinerary' || /itinerary|daily.?plan/.test(label)) return 'plan';
+    if (EAT_SECTION_IDS.indexOf(id) !== -1) return 'eat';
+    if (DO_SECTION_IDS.indexOf(id) !== -1) return 'do';
+    if (SERVICE_SECTION_IDS.indexOf(id) !== -1) return 'services';
+    if (INFO_SECTION_IDS.indexOf(id) !== -1) return 'info';
+    if (SERVICE_KEYWORD_RE.test(id) || SERVICE_KEYWORD_RE.test(label)) return 'services';
+    return 'info'; // fallback bucket: an unrecognized section is reference, not a todo
+  }
+
+  function setTab(state, tabId) {
+    if (TAB_IDS.indexOf(tabId) === -1) throw new Error('bad tab "' + tabId + '"');
+    state.tab = tabId;
+    return state;
+  }
+
+  // Plan is the fixed default landing tab: unlike the old viewMode, there is
+  // no date-based auto-detection here (Plan's own Today block already covers
+  // that).
+  function effectiveTab(state) {
+    return (state && state.tab && TAB_IDS.indexOf(state.tab) !== -1) ? state.tab : 'plan';
+  }
+
+  // Phase 4: per-day collapse in the Plan tab's "remaining days" list. Same
+  // tri-state read as isSectionCollapsed (explicit override wins, otherwise a
+  // computed default), but the default here is always collapsed: today has
+  // its own block above this list, so every day IN this list starts closed
+  // until the traveler opens one.
+  function isPlanDayCollapsed(state, iso) {
+    var explicit = state.collapsedPlanDays ? state.collapsedPlanDays[iso] : undefined;
+    if (explicit === true || explicit === false) return explicit;
+    return true;
+  }
+
+  function togglePlanDay(state, iso) {
+    state.collapsedPlanDays = state.collapsedPlanDays || {};
+    var next = !isPlanDayCollapsed(state, iso);
+    if (next === true) delete state.collapsedPlanDays[iso]; // back to the default
+    else state.collapsedPlanDays[iso] = next;
+    return state;
+  }
+
+  // The Plan tab's model: today's day-assigned items (any section), every
+  // other day of the stay in chronological order with whatever is assigned
+  // to it (also any section: a dinner reservation and an itinerary stop both
+  // count, exactly like todayModel), and the guide's open/done tasks. Built
+  // on the same viewModel() every other view reads, so assigning an item to a
+  // day from ANY tab shows up here immediately with no separate bookkeeping.
+  // nowIso is an injection point for tests; real callers omit it.
+  function planModel(data, state, nowIso) {
+    var today = nowIso || todayIso();
+    var vms = viewModel(data, state);
+    var range = effectiveDates(data, state);
+    var byIso = {};
+    vms.forEach(function (sv) {
+      sv.days.forEach(function (d) {
+        if (!byIso[d.iso]) byIso[d.iso] = [];
+        d.items.forEach(function (it) {
+          byIso[d.iso].push({ sec: sv.section, it: it, status: effectiveStatus(it, state) });
+        });
+      });
+    });
+    var stayIsos = stayDates(range);
+    var otherDays = stayIsos.filter(function (iso) { return iso !== today; }).map(function (iso) {
+      return { iso: iso, label: dayLabel(iso), items: byIso[iso] || [] };
+    });
+    var openTasks = [], doneTasks = [];
+    vms.forEach(function (sv) {
+      if (!isTaskSection(sv.section)) return;
+      sv.undated.forEach(function (it) {
+        var s = effectiveStatus(it, state);
+        if (s === 'plan') openTasks.push({ sec: sv.section, it: it, status: s });
+        else if (s === 'done') doneTasks.push({ sec: sv.section, it: it, status: s });
+      });
+    });
+    return {
+      todayIso: today,
+      inRange: today >= range.from && today <= range.to,
+      today: byIso[today] || [],
+      days: otherDays,
+      openTasks: openTasks,
+      doneTasks: doneTasks
+    };
   }
 
   // Phase 3, feature 4: the "what matters today" view. Three buckets, all
@@ -4567,14 +5132,19 @@ var CityOps = (function () {
   var pendingPromote = null; // item id whose promote day-picker is open (session-only UI state)
   var pendingMove = null;    // item id whose move day-picker is open
   var pendingEdit = null;    // item id whose title editor is open
-  // Phase 3, feature 1: which cards are tap-expanded. Session-only (like the
-  // three pending* vars above), reset on every boot(): a fresh page load
-  // starts every card collapsed, which is what "compact by default" means.
-  // Deliberately NOT part of the persisted state object; expanding a card to
-  // read it is not a planning decision worth remembering across visits, and
-  // keeping it session-only avoids growing collapsedSections-style storage
-  // for something this transient.
-  var expandedItems = {};
+  // Phase 4: explicit expand/collapse OVERRIDES the traveler has made this
+  // session (id -> true/false). Session-only (like the three pending* vars
+  // above), reset on every boot(). Absent means "use the default": a
+  // not-done item renders expanded, a done one collapsed (item 5 of the
+  // Phase 4 spec: a tab's item count is small enough that default-open reads
+  // fine, and sunk done items collapsing keeps the tab from re-growing into
+  // the old wall). An explicit tap always wins over that default, for the
+  // rest of the session. Deliberately NOT part of the persisted state
+  // object; expanding a card to read it is not a planning decision worth
+  // remembering across visits.
+  var itemExpandOverride = {};
+
+  function defaultExpanded(status) { return status !== 'done'; }
 
   function promoteTo(it, iso) {
     var st = ctx.store.load();
@@ -4624,7 +5194,11 @@ var CityOps = (function () {
   // the done checkmark) and the tags row, per the spec: everything else lives
   // in the expanded detail panel. It is a <button> (not a div with a click
   // handler) so it is keyboard-reachable and gets a native aria-expanded.
-  function cardHeaderBtn(it, status, expanded) {
+  // `dayChip` (Phase 4) is a rendered date label shown when this card is
+  // rendered flat outside its own day grouping (every tab but Plan): it is
+  // what lets "Add to a day" have a visible result on the card it was set
+  // from, per the Phase 4 spec's populate-Plan-from-other-tabs feature.
+  function cardHeaderBtn(it, status, expanded, dayChip) {
     var btn = el('button', 'card-hd');
     btn.type = 'button';
     btn.setAttribute('aria-expanded', String(expanded));
@@ -4632,6 +5206,7 @@ var CityOps = (function () {
     if (status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
     tname.appendChild(document.createTextNode(effectiveName(it, curState)));
     btn.appendChild(tname);
+    if (dayChip) btn.appendChild(el('span', 'daychip', dayChip));
     if (it.tags && it.tags.length) {
       var tp = el('span', 'card-hd-tags');
       it.tags.forEach(function (t) { tp.appendChild(el('span', 'tag', t)); });
@@ -4723,10 +5298,17 @@ var CityOps = (function () {
       ctl.appendChild(b);
     });
     if (withDayPicker && (status === 'plan' || status === 'done')) {
-      var mv = el('button', 'ctl icon-btn', '⇄ Day');
+      // Phase 4: this is the "Add to a day" control from any Eat & Drink, Do
+      // or Services card (populate-Plan-from-other-tabs). Same picker either
+      // way (it already offers "No day" to clear an assignment); only the
+      // label changes so a traveler with nothing set yet does not read
+      // "change" for an action they have never taken.
+      var hasDay = !!effectiveDay(it, curState);
+      var mvLabel = hasDay ? 'Change day' : 'Add to a day';
+      var mv = el('button', 'ctl icon-btn', '📅');
       mv.type = 'button';
-      mv.setAttribute('aria-label', 'Move to a different day');
-      mv.title = 'Move to a different day';
+      mv.setAttribute('aria-label', mvLabel);
+      mv.title = mvLabel;
       mv.onclick = function () { pendingMove = it.id; rerender(); };
       ctl.appendChild(mv);
     }
@@ -4742,9 +5324,17 @@ var CityOps = (function () {
     return frag;
   }
 
-  function toggleExpand(id) {
-    if (expandedItems[id]) delete expandedItems[id];
-    else expandedItems[id] = true;
+  // Flips the EFFECTIVE expand state (default included) and stores the
+  // result explicitly, except when the new value matches the computed
+  // default again, in which case the override is dropped: the same
+  // tri-state pattern toggleSection uses for collapsedSections, so a card
+  // tapped back to its own default does not grow session state forever.
+  function toggleExpand(id, status) {
+    var def = defaultExpanded(status);
+    var current = Object.prototype.hasOwnProperty.call(itemExpandOverride, id) ? itemExpandOverride[id] : def;
+    var next = !current;
+    if (next === def) delete itemExpandOverride[id];
+    else itemExpandOverride[id] = next;
     rerender();
   }
 
@@ -4761,43 +5351,30 @@ var CityOps = (function () {
   // the spec asks; and the print stylesheet can force every detail open with
   // one rule, so a printed guide still shows everything even though the
   // on-screen app defaults every card to collapsed.
-  function appendCard(container, it, status, showWhen, withDayPicker) {
-    var expanded = !!expandedItems[it.id] || pendingEdit === it.id;
+  //
+  // Phase 4, item 5: the default is no longer "always collapsed". A NOT-done
+  // item defaults expanded (a tab's item count is small enough for that to
+  // read fine); a done item defaults collapsed (it has sunk out of the way
+  // on purpose). An explicit tap during this session always overrides that
+  // default, in either direction, via itemExpandOverride above.
+  function appendCard(container, it, status, showWhen, withDayPicker, dayChip) {
+    var expanded;
+    if (pendingEdit === it.id) expanded = true; // renaming must show the editor
+    else if (Object.prototype.hasOwnProperty.call(itemExpandOverride, it.id)) expanded = itemExpandOverride[it.id];
+    else expanded = defaultExpanded(status);
     container.classList.add(expanded ? 'expanded' : 'collapsed');
-    var hd = cardHeaderBtn(it, status, expanded);
-    hd.onclick = function () { toggleExpand(it.id); };
+    var hd = cardHeaderBtn(it, status, expanded, dayChip);
+    hd.onclick = function () { toggleExpand(it.id, status); };
     container.appendChild(hd);
     var detail = el('div', 'card-detail');
     detail.appendChild(itemDetailBody(it, status, showWhen, withDayPicker));
     container.appendChild(detail);
   }
 
-  function renderCard(it, status, withDayPicker) {
+  function renderCard(it, status, withDayPicker, dayChip) {
     var card = el('div', 'card' + (status === 'done' ? ' item-done' : ''));
-    appendCard(card, it, status, true, withDayPicker);
+    appendCard(card, it, status, true, withDayPicker, dayChip);
     return card;
-  }
-
-  function renderDayCard(day, state) {
-    var dc = el('div', 'daycard');
-    dc.dataset.day = day.key; // stable group identity; the rendered date is the slot
-    var hd = el('div', 'hd');
-    hd.appendChild(el('span', 'd', day.label));
-    if (day.outside) hd.appendChild(el('span', 'tag', 'Outside stay'));
-    if (day.items.length === 1 && day.items[0].when) hd.appendChild(el('span', 't', day.items[0].when));
-    dc.appendChild(hd);
-    if (!day.items.length) {
-      dc.className += ' empty-day';
-      dc.appendChild(el('div', 'bd free-day', 'free'));
-      return dc;
-    }
-    day.items.forEach(function (it) {
-      var status = effectiveStatus(it, state);
-      var bd = el('div', 'bd' + (status === 'done' ? ' item-done' : ''));
-      appendCard(bd, it, status, day.items.length > 1, true);
-      dc.appendChild(bd);
-    });
-    return dc;
   }
 
   function renderHeader(data, state) {
@@ -4842,13 +5419,15 @@ var CityOps = (function () {
     return '(' + s + ')';
   }
 
-  function renderSection(sv, state, totalItems) {
-    var frag = document.createDocumentFragment();
+  // Phase 4: the section header shared by every tab (Eat & Drink, Do,
+  // Services, Info). Unchanged from the old renderSection's h2: same
+  // collapse toggle, same anchor id for the sticky section-nav chips, same
+  // item counts. What sits below it is what changed (see renderTabSectionBlock
+  // and renderInfoTab): flat item cards instead of day-grouped columns, since
+  // the Plan tab is now the one place days are grouped.
+  function renderSectionHeader(sv, state, totalItems) {
     var collapsed = isSectionCollapsed(state, sv.section.id, totalItems);
     var h2 = el('h2', collapsed ? 'collapsed' : null);
-    // Anchor target for the sticky section-nav chips (feature 3): stable
-    // regardless of collapse state, so a chip tap always has something to
-    // scroll to.
     h2.id = 'sec-' + sv.section.id;
     var tbtn = el('button', 'sec-toggle');
     tbtn.type = 'button';
@@ -4864,20 +5443,41 @@ var CityOps = (function () {
       rerender();
     };
     h2.appendChild(tbtn);
-    frag.appendChild(h2);
-    if (collapsed) return frag;
-    if (sv.days.length) {
-      var days = el('div', 'days');
-      days.dataset.sec = sv.section.id;
-      sv.days.forEach(function (d) { days.appendChild(renderDayCard(d, state)); });
-      frag.appendChild(days);
-    }
-    sv.undated.forEach(function (it) { frag.appendChild(renderCard(it, effectiveStatus(it, state), sv.days.length > 0)); });
+    return { h2: h2, collapsed: collapsed };
+  }
+
+  // Every active item in a section (day-assigned or not), in chronological
+  // order with the undated ones last, paired with the date label to show as
+  // that card's day chip (null for undated). viewModel() already grouped the
+  // dayed ones into per-date slots; this just flattens that back into one
+  // ordered list, since a tab section is a flat card list, not a day-card
+  // grid (Plan owns day grouping now).
+  function tabItemsFlat(sv) {
+    var out = [];
+    sv.days.forEach(function (d) {
+      d.items.forEach(function (it) { out.push({ it: it, dayIso: d.iso }); });
+    });
+    sv.undated.forEach(function (it) { out.push({ it: it, dayIso: null }); });
+    return out;
+  }
+
+  // Eat & Drink / Do / Services: one section block per mapped section, items
+  // as flat cards (day chip if assigned, "Add to a day" control either way),
+  // then backups and archived exactly as before.
+  function renderTabSectionBlock(sv, state, totalItems) {
+    var frag = document.createDocumentFragment();
+    var hdr = renderSectionHeader(sv, state, totalItems);
+    frag.appendChild(hdr.h2);
+    if (hdr.collapsed) return frag;
+    tabItemsFlat(sv).forEach(function (entry) {
+      var status = effectiveStatus(entry.it, state);
+      var chip = entry.dayIso ? dayLabel(entry.dayIso) : null;
+      frag.appendChild(renderCard(entry.it, status, true, chip));
+    });
     if (sv.backups.length) {
-      var withPicker = sv.days.length > 0;
       var bk = el('div', 'backup');
       bk.appendChild(el('div', 'bt', '↩ Backups: if Plan A is full, closed, or you want a change'));
-      sv.backups.forEach(function (it) { bk.appendChild(renderCard(it, 'backup', withPicker)); });
+      sv.backups.forEach(function (it) { bk.appendChild(renderCard(it, 'backup', true)); });
       frag.appendChild(bk);
     }
     if (sv.archived.length) {
@@ -4889,17 +5489,87 @@ var CityOps = (function () {
     return frag;
   }
 
-  // Phase 3, feature 3: the sticky chip row. Reads the SAME viewModel array
-  // rerender() already built for the section list, so this never disagrees
-  // with what is actually on the page. Hidden entirely (rather than left
-  // empty) when there is only one section, or in a view where "jump to
-  // section" does not apply (Calendar groups by date, Today is not
-  // section-organized at all): an empty sticky bar is still visual clutter.
+  function renderTabSections(vms, state, totalItems) {
+    var main = document.getElementById('main');
+    main.innerHTML = '';
+    if (!vms.length) {
+      main.appendChild(el('p', 'when-line', 'Nothing in this tab yet.'));
+      return;
+    }
+    vms.forEach(function (sv) { main.appendChild(renderTabSectionBlock(sv, state, totalItems)); });
+  }
+
+  // Info tab (item 6 of the Phase 4 spec): a section's UNDATED items merge
+  // into one reference card, name-as-lead-in plus note, no per-item
+  // accordion and no status controls, since these are facts, not todos. Any
+  // item that DOES carry a day (Tirana's real "logistics" section has
+  // arrival/departure dates right alongside pure reference notes) keeps
+  // behaving like a normal item card: it still needs its status controls and
+  // it still needs to surface in Plan.
+  function infoBlockCard(sv, items, state) {
+    var card = el('div', 'card info-card');
+    card.appendChild(el('h3', null, (sv.section.icon ? sv.section.icon + ' ' : '') + sv.section.label));
+    items.forEach(function (it) {
+      var p = el('p', 'info-item');
+      p.appendChild(el('strong', null, effectiveName(it, state)));
+      if (it.note) {
+        p.appendChild(document.createElement('br'));
+        p.appendChild(document.createTextNode(it.note));
+      }
+      card.appendChild(p);
+      if (it.links && it.links.length) {
+        var row = el('div', 'row');
+        it.links.forEach(function (l) { row.appendChild(linkPill(l)); });
+        card.appendChild(row);
+      }
+    });
+    return card;
+  }
+
+  function renderInfoTab(vms, state, totalItems) {
+    var main = document.getElementById('main');
+    main.innerHTML = '';
+    if (!vms.length) {
+      main.appendChild(el('p', 'when-line', 'Nothing in this tab yet.'));
+      return;
+    }
+    vms.forEach(function (sv) {
+      var hdr = renderSectionHeader(sv, state, totalItems);
+      main.appendChild(hdr.h2);
+      if (hdr.collapsed) return;
+      var dayed = [];
+      sv.days.forEach(function (d) { d.items.forEach(function (it) { dayed.push({ it: it, dayIso: d.iso }); }); });
+      dayed.forEach(function (entry) {
+        main.appendChild(renderCard(entry.it, effectiveStatus(entry.it, state), true, dayLabel(entry.dayIso)));
+      });
+      if (sv.undated.length) main.appendChild(infoBlockCard(sv, sv.undated, state));
+      if (sv.backups.length) {
+        var bk = el('div', 'backup');
+        bk.appendChild(el('div', 'bt', '↩ Backups'));
+        sv.backups.forEach(function (it) { bk.appendChild(renderCard(it, 'backup', true)); });
+        main.appendChild(bk);
+      }
+      if (sv.archived.length) {
+        var det = el('details', 'arch-details');
+        det.appendChild(el('summary', null, 'Archived (' + sv.archived.length + ')'));
+        sv.archived.forEach(function (it) { det.appendChild(renderCard(it, 'archived')); });
+        main.appendChild(det);
+      }
+    });
+  }
+
+  // Phase 4: the sticky "jump to section" chip row, now scoped to whichever
+  // tab is active (Calendar's cross-section date grouping and Plan's
+  // day/tasks layout never had a use for it; hidden for both, same as share).
+  // Reads the SAME tab-filtered viewModel array rerender() already built, so
+  // this never disagrees with what is actually on the page. Hidden entirely
+  // (rather than left empty) when a tab has only one section: an empty
+  // sticky bar is still visual clutter.
   function renderSectionNav(vms, state, totalItems, mode) {
     var nav = document.getElementById('secnav');
     if (!nav) return; // standalone/older shells without the marker: no-op
     nav.innerHTML = '';
-    if (mode !== 'type' || vms.length < 2) { nav.hidden = true; return; }
+    if (mode !== 'tab' || vms.length < 2) { nav.hidden = true; return; }
     nav.hidden = false;
     vms.forEach(function (sv) {
       var chip = el('button', 'secnav-chip',
@@ -4975,6 +5645,15 @@ var CityOps = (function () {
     saveDayOrder(d.sec, d.cards().map(function (c) { return c.dataset.day; }));
   }
 
+  // Phase 3's per-section day-slot drag-to-reorder. Dormant as of Phase 4: it
+  // only ever wired up a section's own `.days` grid, and the tab redesign has
+  // no such grid anymore (Plan groups by date ACROSS sections and lists days
+  // chronologically only; a per-section reorder no longer has a coherent
+  // meaning). No render path calls this now; left defined rather than
+  // deleted outright so the drag mechanics are still here if a future Plan
+  // feature wants to resurrect them, but it is a good candidate for a
+  // follow-up cleanup pass. The window pointermove/up/cancel listeners bound
+  // in boot() below are harmless no-ops with `drag` always null.
   function attachReorder() {
     var lists = document.querySelectorAll('.days');
     Array.prototype.forEach.call(lists, function (list) {
@@ -5096,87 +5775,89 @@ var CityOps = (function () {
     }
   }
 
-  function renderCalendar(data, state) {
-    var cm = calendarModel(data, state);
+  // Phase 4: an "Open tasks" row. Its whole job is the checkbox: checked
+  // means done, using the exact same setStatus/effectiveStatus semantics as
+  // every other status control, so a task is a first-class item (undo-able,
+  // exportable) and not a second state shape. Ticking a completed task again
+  // unticks it, back to plan.
+  function renderTaskRow(it, status) {
+    var row = el('div', 'task-row' + (status === 'done' ? ' item-done' : ''));
+    var label = el('label', 'task-check');
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = status === 'done';
+    cb.setAttribute('aria-label', (status === 'done' ? 'Mark not done: ' : 'Mark done: ') + effectiveName(it, curState));
+    cb.onchange = function () { onStatus(it.id, cb.checked ? 'done' : 'plan'); };
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(' ' + effectiveName(it, curState)));
+    row.appendChild(label);
+    if (it.note) row.appendChild(el('p', 'task-note', it.note));
+    return row;
+  }
+
+  // Phase 4: the Plan tab, the new default landing tab and the home of every
+  // date. Reads planModel() (pure, tested on its own): today first, then
+  // every other day of the stay in order (collapsed by default; a day with
+  // nothing assigned says so instead of rendering an empty card), then open
+  // tasks with done ones sunk below, collapsed.
+  function renderPlanTab(data, state) {
+    var pm = planModel(data, state);
     var main = document.getElementById('main');
     main.innerHTML = '';
-    cm.days.forEach(function (d) {
-      var dc = el('div', 'daycard' + (d.entries.length ? '' : ' empty-day'));
-      var hd = el('div', 'hd');
-      hd.appendChild(el('span', 'd', d.label));
-      dc.appendChild(hd);
-      if (!d.entries.length) {
-        dc.appendChild(el('div', 'bd free-day', 'free'));
-      }
-      d.entries.forEach(function (e) {
-        var bd = el('div', 'bd' + (e.status === 'done' ? ' item-done' : ''));
-        bd.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
-        appendCard(bd, e.it, e.status, true, true);
-        dc.appendChild(bd);
-      });
-      main.appendChild(dc);
-    });
-    if (cm.undated.length) {
-      main.appendChild(el('h2', null, 'Anytime'));
-      cm.undated.forEach(function (e) {
+    if (!pm.inRange) {
+      main.appendChild(el('p', 'when-line',
+        'Today (' + dayLabel(pm.todayIso) + ') is outside this trip\'s dates (' +
+        fmtRange(effectiveDates(data, state)) + '). Showing anything dated today anyway.'));
+    }
+    main.appendChild(el('h2', null, 'Today · ' + dayLabel(pm.todayIso)));
+    if (!pm.today.length) {
+      main.appendChild(el('p', 'when-line', 'Nothing planned yet.'));
+    } else {
+      pm.today.forEach(function (e) {
         var card = el('div', 'card' + (e.status === 'done' ? ' item-done' : ''));
         card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
         appendCard(card, e.it, e.status, true, true);
         main.appendChild(card);
       });
     }
-    cm.sections.forEach(function (sv) {
-      if (sv.backups.length) {
-        var bk = el('div', 'backup');
-        bk.appendChild(el('div', 'bt', '↩ ' + sv.section.label + ' backups'));
-        sv.backups.forEach(function (it) { bk.appendChild(renderCard(it, 'backup', true)); });
-        main.appendChild(bk);
+    pm.days.forEach(function (d) {
+      var collapsed = isPlanDayCollapsed(state, d.iso);
+      var h2 = el('h2', collapsed ? 'collapsed' : null);
+      var tbtn = el('button', 'sec-toggle');
+      tbtn.type = 'button';
+      tbtn.setAttribute('aria-expanded', String(!collapsed));
+      tbtn.appendChild(el('span', 'chev', collapsed ? '▸' : '▾'));
+      tbtn.appendChild(document.createTextNode(' ' + d.label + ' '));
+      tbtn.appendChild(el('span', 'sec-count', '(' + d.items.length + (d.items.length === 1 ? ' item' : ' items') + ')'));
+      tbtn.onclick = function () {
+        var st = ctx.store.load();
+        togglePlanDay(st, d.iso);
+        ctx.store.save(st);
+        rerender();
+      };
+      h2.appendChild(tbtn);
+      main.appendChild(h2);
+      if (collapsed) return;
+      if (!d.items.length) {
+        main.appendChild(el('p', 'when-line', 'Nothing planned yet.'));
+        return;
       }
-      if (sv.archived.length) {
+      d.items.forEach(function (e) {
+        var card = el('div', 'card' + (e.status === 'done' ? ' item-done' : ''));
+        card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
+        appendCard(card, e.it, e.status, true, true);
+        main.appendChild(card);
+      });
+    });
+    if (pm.openTasks.length || pm.doneTasks.length) {
+      main.appendChild(el('h2', null, 'Open tasks'));
+      pm.openTasks.forEach(function (e) { main.appendChild(renderTaskRow(e.it, e.status)); });
+      if (pm.doneTasks.length) {
         var det = el('details', 'arch-details');
-        det.appendChild(el('summary', null, sv.section.label + ': archived (' + sv.archived.length + ')'));
-        sv.archived.forEach(function (it) { det.appendChild(renderCard(it, 'archived')); });
+        det.appendChild(el('summary', null, 'Done (' + pm.doneTasks.length + ')'));
+        pm.doneTasks.forEach(function (e) { det.appendChild(renderTaskRow(e.it, e.status)); });
         main.appendChild(det);
       }
-    });
-  }
-
-  // Phase 3, feature 4: the Today view. Reads todayModel() (pure, tested on
-  // its own) and renders three groups: what is on for today, open undated
-  // tasks, and a one-line peek at tomorrow. Falls back to a plain message
-  // when nothing qualifies, so an empty trip day is never a blank screen.
-  function renderToday(data, state) {
-    var tm = todayModel(data, state);
-    var main = document.getElementById('main');
-    main.innerHTML = '';
-    if (!tm.inRange) {
-      main.appendChild(el('p', 'when-line',
-        'Today (' + dayLabel(tm.todayIso) + ') is outside this trip\'s dates (' +
-        fmtRange(effectiveDates(data, state)) + '). Showing anything dated today anyway.'));
-    }
-    main.appendChild(el('h2', null, 'Today · ' + dayLabel(tm.todayIso)));
-    if (!tm.today.length) {
-      main.appendChild(el('p', 'when-line', 'Nothing on the itinerary for today.'));
-    } else {
-      tm.today.forEach(function (e) {
-        var card = el('div', 'card today-card' + (e.status === 'done' ? ' item-done' : ''));
-        card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
-        appendCard(card, e.it, e.status, true, true);
-        main.appendChild(card);
-      });
-    }
-    if (tm.tasks.length) {
-      main.appendChild(el('h2', null, 'Open tasks'));
-      tm.tasks.forEach(function (e) {
-        var card = el('div', 'card today-card');
-        card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
-        appendCard(card, e.it, e.status, true, true);
-        main.appendChild(card);
-      });
-    }
-    if (tm.upNext.length) {
-      var names = tm.upNext.map(function (e) { return effectiveName(e.it, state); }).join(', ');
-      main.appendChild(el('p', 'up-next', '→ Up next tomorrow: ' + names));
     }
   }
 
@@ -5188,24 +5869,24 @@ var CityOps = (function () {
     curState = state;
     var data = effectiveData(ctx.base, state);
     var totalItems = Array.isArray(data.items) ? data.items.length : 0;
-    var mode = effectiveViewMode(data, state);
+    var tab = effectiveTab(state);
     renderHeader(data, state);
-    renderToolbar(data, state, mode);
+    renderToolbar(data, state);
+    renderTabBar(data, state, tab);
     var vms = viewModel(data, state);
-    // 'share' is not a real viewMode; it just tells the nav to hide (share is
-    // its own read-only layout, not section-organized the way Guide is).
-    renderSectionNav(vms, state, totalItems, shareOn ? 'share' : mode);
     if (shareOn) {
+      renderSectionNav([], state, totalItems, 'hide');
       renderShare();
-    } else if (mode === 'day') {
-      renderCalendar(data, state);
-    } else if (mode === 'today') {
-      renderToday(data, state);
+    } else if (tab === 'plan') {
+      // Plan is not section-organized (it groups by date, then tasks), so
+      // the sticky "jump to section" nav never applies here, same as Share.
+      renderSectionNav([], state, totalItems, 'hide');
+      renderPlanTab(data, state);
     } else {
-      var main = document.getElementById('main');
-      main.innerHTML = '';
-      vms.forEach(function (sv) { main.appendChild(renderSection(sv, state, totalItems)); });
-      attachReorder();
+      var tabVms = vms.filter(function (sv) { return tabForSection(sv.section) === tab; });
+      renderSectionNav(tabVms, state, totalItems, 'tab');
+      if (tab === 'info') renderInfoTab(tabVms, state, totalItems);
+      else renderTabSections(tabVms, state, totalItems);
     }
     var foot = document.getElementById('foot');
     foot.textContent = 'cityops · schema v1 · state saved on this device';
@@ -5385,92 +6066,137 @@ var CityOps = (function () {
     ta.focus();
   }
 
-  // Phase 3, feature 4: the three-way view switch. A segmented control (not a
-  // single cycling button) so all three destinations are visible and
-  // reachable in one tap, and so the current one is legible via aria-pressed
-  // without reading a label that changes.
-  var VIEW_TABS = [
-    { mode: 'today', label: 'Today' },
-    { mode: 'type', label: 'Guide' },
-    { mode: 'day', label: 'Calendar' }
-  ];
+  // Phase 4, item 7 (nav cleanup): every utility action that used to live in
+  // the toolbar (Share view, Export JSON, Update data, Edit dates, plus the
+  // app-only Enrich, Edit city, Export guide, Remove city) now lives in ONE
+  // "More" action sheet, opened from the overflow chip at the end of the tab
+  // bar. doExportJson is pulled out to its own function so both this sheet
+  // and (if ever needed again) another entry point can call it identically.
+  function doExportJson() {
+    var st = ctx.store.load();
+    var out = buildExport(effectiveData(ctx.base, st), st);
+    var blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = cityId(out) + '.cityops.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    var freeUrl = a.href;
+    setTimeout(function () { URL.revokeObjectURL(freeUrl); }, 4000);
+  }
 
-  function renderViewSwitch(tb, mode) {
-    var seg = el('div', 'viewseg');
-    seg.setAttribute('role', 'tablist');
-    VIEW_TABS.forEach(function (tab) {
-      var active = tab.mode === mode;
-      var b = el('button', 'viewtab' + (active ? ' active' : ''), tab.label);
+  // App-only rows (Enrich, Edit city, Export guide, Remove city) are supplied
+  // by the shell via window.CityOpsApp.moreActions(), returning
+  // [{label, onClick, cls}]. Standalone guide files have no CityOpsApp, so
+  // the sheet there only ever shows the four base rows: no trace of an
+  // app-only action ships inside them.
+  function openMoreSheet() {
+    var host = document.getElementById('modal');
+    host.innerHTML = '';
+    var wrap = el('div', 'modal-wrap');
+    var box = el('div', 'modal');
+    box.appendChild(el('h3', null, 'More'));
+    var list = el('div', 'sheet-list');
+    function addRow(label, onClick, cls) {
+      var b = el('button', 'sheet-row' + (cls ? ' ' + cls : ''), label);
+      b.type = 'button';
+      b.onclick = function () { wrap.remove(); onClick(); };
+      list.appendChild(b);
+    }
+    addRow(shareOn ? 'Back to planner' : 'Share view', function () {
+      shareOn = !shareOn;
+      document.body.classList.toggle('share', shareOn);
+      rerender();
+    });
+    addRow('Export JSON', doExportJson);
+    addRow('Update data', openUpdateModal);
+    addRow('Edit dates', openDatesModal);
+    if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.moreActions) {
+      window.CityOpsApp.moreActions().forEach(function (a) { addRow(a.label, a.onClick, a.cls); });
+    }
+    box.appendChild(list);
+    wrap.appendChild(box);
+    wrap.onclick = function (e) { if (e.target === wrap) wrap.remove(); };
+    host.appendChild(wrap);
+  }
+
+  // QA fix (Phase 4): #secnav is ALSO position:sticky top:0, so on a tab with
+  // 2+ mapped sections (Eat & Drink and Services both hit this on the real
+  // Tirana data) it would scroll up underneath #tabbar and disappear (both
+  // pinned to the same top:0, #tabbar's z-index winning). #secnav's CSS reads
+  // its offset from the --tabbar-h custom property instead of a bare 0; this
+  // keeps that property in sync with the tab bar's actual rendered height, so
+  // the two bars stack instead of overlapping. Recomputed on every tab-bar
+  // render (font-size/padding changes at the narrow-phone breakpoint change
+  // the height) and on window resize (a rotation or a browser chrome change
+  // can cross that breakpoint without a rerender happening on its own).
+  function updateTabbarHeightVar() {
+    var bar = document.getElementById('tabbar');
+    var root = (typeof document !== 'undefined' && document) ? document.documentElement : null;
+    if (!bar || !root || !root.style || typeof root.style.setProperty !== 'function') return;
+    var h = (typeof bar.offsetHeight === 'number') ? bar.offsetHeight : 0;
+    root.style.setProperty('--tabbar-h', h + 'px');
+  }
+
+  // Phase 4: the sticky tab bar (Plan, Eat & Drink, Do, Services, Info) plus
+  // the More overflow chip, replacing the old Today/Guide/Calendar segmented
+  // control. Hidden while Share is on: share is a clean, printable read-only
+  // layout, and the tab chrome (like every other control) has no place in
+  // it; the sole way out is the Back-to-planner button renderToolbar shows
+  // instead.
+  function renderTabBar(data, state, tab) {
+    var bar = document.getElementById('tabbar');
+    if (!bar) return; // standalone/older shells without the marker: no-op
+    bar.innerHTML = '';
+    if (shareOn) {
+      bar.hidden = true;
+      updateTabbarHeightVar(); // hidden collapses to 0 height: #secnav's offset must follow
+      return;
+    }
+    bar.hidden = false;
+    bar.setAttribute('role', 'tablist');
+    TABS.forEach(function (t) {
+      var active = t.id === tab;
+      var b = el('button', 'tabchip' + (active ? ' active' : ''), t.label);
       b.type = 'button';
       b.setAttribute('role', 'tab');
       b.setAttribute('aria-selected', String(active));
       b.onclick = function () {
         var st = ctx.store.load();
-        setViewMode(st, tab.mode);
+        setTab(st, t.id);
         ctx.store.save(st);
         rerender();
       };
-      seg.appendChild(b);
+      bar.appendChild(b);
     });
-    tb.appendChild(seg);
+    var more = el('button', 'tabchip tab-more', '⋯');
+    more.type = 'button';
+    more.setAttribute('aria-label', 'More actions');
+    more.title = 'More actions';
+    more.onclick = openMoreSheet;
+    bar.appendChild(more);
+    updateTabbarHeightVar();
   }
 
-  function renderToolbar(data, state, mode) {
+  // What is left of the old toolbar once every action moved into More: the
+  // Back-to-planner exit while Share is on, and the "data updated in-app"
+  // flag. Both are non-navigational, so they stay put rather than joining
+  // the tab bar.
+  function renderToolbar(data, state) {
     var tb = document.getElementById('toolbar');
+    if (!tb) return;
     tb.innerHTML = '';
-    var share = el('button', null, shareOn ? 'Back to planner' : 'Share view');
-    share.type = 'button';
-    share.id = 'btn-share';
-    share.onclick = function () {
-      shareOn = !shareOn;
-      document.body.classList.toggle('share', shareOn);
-      rerender();
-    };
-    tb.appendChild(share);
-    if (!shareOn) {
-      renderViewSwitch(tb, mode);
-      var exp = el('button', null, 'Export JSON');
-      exp.type = 'button';
-      exp.id = 'btn-export';
-      exp.onclick = function () {
-        var st = ctx.store.load();
-        var out = buildExport(effectiveData(ctx.base, st), st);
-        var blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = cityId(out) + '.cityops.json';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        var freeUrl = a.href;
-        setTimeout(function () { URL.revokeObjectURL(freeUrl); }, 4000);
+    if (shareOn) {
+      var back = el('button', null, 'Back to planner');
+      back.type = 'button';
+      back.id = 'btn-share';
+      back.onclick = function () {
+        shareOn = false;
+        document.body.classList.remove('share');
+        rerender();
       };
-      tb.appendChild(exp);
-      var upd = el('button', null, 'Update data');
-      upd.type = 'button';
-      upd.onclick = openUpdateModal;
-      tb.appendChild(upd);
-      var dts = el('button', null, 'Edit dates');
-      dts.type = 'button';
-      dts.onclick = openDatesModal;
-      tb.appendChild(dts);
-      // App-only toolbar buttons whose LABEL must not ship inside standalone
-      // guides either. The re-run button is the case in point: it builds
-      // prompts out of PROMPT.md, which guide files do not carry at all. The
-      // shell appends those buttons here; guide files have no CityOpsApp, so
-      // nothing is added and no trace of them exists in template.html.
-      if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.toolbarExtras) {
-        window.CityOpsApp.toolbarExtras(tb);
-      }
-      // App context only: standalone guide files have no CityOpsApp, so this
-      // button never appears in them.
-      if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.exportStandalone) {
-        var expg = el('button', null, 'Export guide');
-        expg.type = 'button';
-        expg.id = 'btn-export-guide';
-        expg.onclick = function () { window.CityOpsApp.exportStandalone(); };
-        tb.appendChild(expg);
-      }
+      tb.appendChild(back);
     }
     if (state.dataOverride) {
       var flagText = 'Data updated in-app: export and paste into the file to make permanent';
@@ -5505,13 +6231,17 @@ var CityOps = (function () {
     pendingPromote = null;
     pendingMove = null;
     pendingEdit = null;
-    expandedItems = {};
+    itemExpandOverride = {};
     drag = null;
     if (typeof document !== 'undefined' && document.body) document.body.classList.remove('share');
     if (!listenersBound && typeof window !== 'undefined' && window && window.addEventListener) {
       window.addEventListener('pointermove', onDragPointerMove, { passive: false });
       window.addEventListener('pointerup', onDragPointerEnd);
       window.addEventListener('pointercancel', onDragPointerEnd);
+      // QA fix: a rotation or a browser-chrome change can cross the
+      // narrow-phone breakpoint (which changes #tabbar's padding/height)
+      // without any rerender happening on its own; keep --tabbar-h honest.
+      window.addEventListener('resize', updateTabbarHeightVar);
       listenersBound = true;
     }
     rerender();
@@ -5565,7 +6295,11 @@ var CityOps = (function () {
     // Phase 3 additions, all pure and unit-tested on their own.
     todayModel: todayModel, effectiveViewMode: effectiveViewMode,
     todayIso: todayIso, isSectionCollapsed: isSectionCollapsed,
-    defaultSectionCollapsed: defaultSectionCollapsed, isTaskSection: isTaskSection
+    defaultSectionCollapsed: defaultSectionCollapsed, isTaskSection: isTaskSection,
+    // Phase 4 additions: tabs (replaces the Today/Guide/Calendar view switch)
+    // and the Plan tab's own model, all pure and unit-tested on their own.
+    TABS: TABS, tabForSection: tabForSection, setTab: setTab, effectiveTab: effectiveTab,
+    planModel: planModel, isPlanDayCollapsed: isPlanDayCollapsed, togglePlanDay: togglePlanDay
   };
 })();
 CityOps.init();
@@ -6285,8 +7019,9 @@ ignored.
     }
   }
 
-  // Renders (or clears) the dropdown panel: city list + Remove city. Add city
-  // now lives in the header chip, so the panel's own action row only has Remove.
+  // Renders (or clears) the dropdown panel: the city list plus + Add city
+  // (and Load example / Sync, when applicable). Remove city lives in the
+  // More action sheet now (Phase 4 nav cleanup), not here.
   function renderPanel() {
     var bar = document.getElementById('citybar');
     bar.innerHTML = '';
@@ -6326,10 +7061,9 @@ ignored.
     add.type = 'button';
     add.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); openAddModal(); };
     acts.appendChild(add);
-    var rm = el('button', null, 'Remove city');
-    rm.type = 'button';
-    rm.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); openRemoveModal(); };
-    acts.appendChild(rm);
+    // Phase 4, item 7: Remove city moved to the More action sheet (nav
+    // cleanup groups every utility action in one place); no row for it here
+    // anymore.
     if (!exVisible) {
       var exb = el('button', null, 'Load example');
       exb.type = 'button';
@@ -6892,23 +7626,26 @@ ignored.
       'In-app research is planned for a future version.'));
   }
 
-  // Appended to the engine's toolbar on every render (app context only).
-  function toolbarExtras(tb) {
-    var b = el('button', null, 'Enrich');
-    b.type = 'button';
-    b.id = 'btn-enrich';
-    b.onclick = openEnrichModal;
-    tb.appendChild(b);
+  // Phase 4: rows appended to the engine's More action sheet (app context
+  // only), replacing the old toolbarExtras + the standalone Export-guide
+  // button + Remove city's old home inside the city-switcher panel. Returns
+  // [{label, onClick, cls}]; the engine renders each as a sheet row.
+  function moreActions() {
+    var actions = [];
+    actions.push({ label: 'Enrich', onClick: openEnrichModal });
     // Phase 2: Edit reopens the Add/Edit city form for the ACTIVE city,
     // pre-filled with its saved form values (see openAddModal's editCityId
     // param), so a traveler can tweak the header and regenerate.
     if (activeId && has(store.cities, activeId)) {
-      var ed = el('button', null, 'Edit city');
-      ed.type = 'button';
-      ed.id = 'btn-edit-city';
-      ed.onclick = function () { openAddModal(activeId); };
-      tb.appendChild(ed);
+      actions.push({ label: 'Edit city', onClick: function () { openAddModal(activeId); } });
     }
+    actions.push({ label: 'Export guide', onClick: exportStandalone });
+    // Phase 4, item 7: Remove city moves here from the city-switcher panel,
+    // keeping its existing type-to-confirm modal unchanged.
+    if (activeId && has(store.cities, activeId)) {
+      actions.push({ label: 'Remove city', onClick: openRemoveModal, cls: 'danger' });
+    }
+    return actions;
   }
 
   // ---- Phase 2: in-app Claude generation (transport only; no SDK) ----
@@ -8282,8 +9019,9 @@ ignored.
     setTimeout(function () { URL.revokeObjectURL(freeUrl); }, 4000);
   }
 
-  // Set before the first boot so the engine's toolbar picks up the app-only button.
-  window.CityOpsApp = { exportStandalone: exportStandalone, toolbarExtras: toolbarExtras };
+  // Set before the first boot so the engine's More sheet picks up the
+  // app-only rows.
+  window.CityOpsApp = { exportStandalone: exportStandalone, moreActions: moreActions };
 
   // Re-decorate the header and re-render the panel on every engine state
   // change (not just on city switch, which activateCity already triggers via
