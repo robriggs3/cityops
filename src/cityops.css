@@ -168,6 +168,45 @@
   .tips{margin:6px 0 0 18px; font-size:.84rem; color:var(--text-3);}
   .tips li{margin-bottom:3px;}
   .intel-src{font-size:.72rem; color:var(--text-3); font-style:italic; margin-top:4px;}
+
+  /* --- Phase 3: compact cards, tap to expand --- */
+  /* The header button IS the whole collapsed row: name (+ done check) and the
+     tags, nothing else. Styled to read exactly like the old h3 it replaces. */
+  .card-hd{width:100%; font:inherit; font-size:1.02rem; color:inherit; background:none; border:none;
+    margin:0; padding:0; text-align:left; cursor:pointer;
+    display:flex; align-items:baseline; justify-content:flex-start; gap:8px; flex-wrap:wrap;}
+  .card-hd-tags{display:flex; gap:6px; flex-wrap:wrap; margin-left:2px;}
+  .card-hd-chev{font-size:.78rem; color:var(--text-3); margin-left:auto; flex:0 0 auto; padding-left:8px;}
+  .card-detail{margin-top:8px;}
+  /* Always in the DOM (see appendCard's comment); hidden, not just visual,
+     when the card is collapsed: display:none also drops it from the tab
+     order and the accessibility tree. */
+  .collapsed > .card-detail{display:none;}
+  .price-line{font-size:.82rem; color:var(--text-3); font-weight:600; margin-top:2px;}
+  /* Icon-only status buttons (feature 5): a touch-friendly minimum width so a
+     single glyph is not a sliver to tap. Archive keeps its text label (see
+     the engine's TRANSITIONS table) so its button is simply wider. */
+  .icon-btn{min-width:36px; text-align:center;}
+
+  /* --- Phase 3: section header counts + sticky section nav --- */
+  #secnav{position:sticky; top:0; z-index:20; display:flex; gap:8px; overflow-x:auto;
+    -webkit-overflow-scrolling:touch; background:var(--bg); padding:8px 0 10px; margin:0 0 6px;}
+  #secnav[hidden]{display:none;}
+  .secnav-chip{flex:0 0 auto; font:inherit; font-size:.78rem; font-weight:700; color:var(--accent-hover);
+    background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
+    padding:5px 13px; cursor:pointer; white-space:nowrap;}
+  .secnav-chip:hover{border-color:var(--accent);}
+
+  /* --- Phase 3: Today / Guide / Calendar segmented control --- */
+  .viewseg{display:flex; border:1.5px solid var(--border-light); border-radius:20px; overflow:hidden;}
+  .viewtab{font:inherit; font-size:.8rem; font-weight:700; color:var(--accent-hover); background:#fff;
+    border:none; padding:5px 13px; cursor:pointer;}
+  .viewtab + .viewtab{border-left:1.5px solid var(--border-light);}
+  .viewtab.active{background:var(--accent); color:#fff;}
+
+  /* --- Phase 3: Today view --- */
+  .up-next{font-size:.85rem; color:var(--text-3); font-style:italic; margin:4px 0 20px;}
+
   /* narrow phones: trim horizontal chrome so cards get the width */
   @media (max-width: 430px){
     .wrap{padding:0 10px 48px;}
@@ -185,10 +224,17 @@
     .toolbar{gap:6px;}
     .toolbar button{padding:5px 10px; font-size:.75rem;}
     h2{margin:20px 0 10px;}
+    .card-hd{font-size:.96rem;}
+    #secnav{gap:6px;}
+    .secnav-chip{padding:4px 10px; font-size:.74rem;}
+    .viewtab{padding:5px 10px; font-size:.75rem;}
   }
   @media print{
-    .toolbar, .ctl-row, .grip, .reorderbar, #notice{display:none !important;}
+    .toolbar, .ctl-row, .grip, .reorderbar, #notice, #secnav{display:none !important;}
     body{background:#fff;}
     .daycard, .card{box-shadow:none; break-inside:avoid;}
     header{background:var(--accent-hover) !important; -webkit-print-color-adjust:exact;}
+    /* Print is a "here is everything" artifact: force every card open so a
+       printed guide is not full of collapsed headers with nothing under them. */
+    .card-detail{display:block !important;}
   }
