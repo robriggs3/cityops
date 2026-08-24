@@ -787,7 +787,8 @@
       "tags": [
         "4 min walk",
         "Cash only"
-      ]
+      ],
+      "day": "2026-08-22"
     },
     {
       "id": "restaurants-02",
@@ -830,7 +831,8 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=Mullixhiu&query_place_id=ChIJtU6qmvwwUBMRmQMszz1aCac"
         }
-      ]
+      ],
+      "day": "2026-08-26"
     },
     {
       "id": "restaurants-04",
@@ -852,7 +854,8 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=Taverna+Peshkatari&query_place_id=ChIJ8W6QhWkxUBMRcwGiAs5K5-I"
         }
-      ]
+      ],
+      "day": "2026-08-27"
     },
     {
       "id": "restaurants-05",
@@ -896,7 +899,8 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=Era+Blloku&query_place_id=ChIJIxwHRAIxUBMRVC_DEyTXYgA"
         }
-      ]
+      ],
+      "day": "2026-08-24"
     },
     {
       "id": "restaurants-07",
@@ -945,7 +949,8 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=The+Kitchen+blloku&query_place_id=ChIJ7ar4lpExUBMRyVK8Jzank-U"
         }
-      ]
+      ],
+      "day": "2026-08-25"
     },
     {
       "id": "restaurants-09",
@@ -1041,7 +1046,8 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=Streha+Coffee+Community&query_place_id=ChIJJ110YQAxUBMRT--Ia1i_dBs"
         }
-      ]
+      ],
+      "day": "2026-08-23"
     },
     {
       "id": "coffee-02",
@@ -1107,7 +1113,8 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=The+Back+Room+Specialty+Coffee&query_place_id=ChIJ9anxYJIxUBMRwSKQChSnYf0"
         }
-      ]
+      ],
+      "day": "2026-08-27"
     },
     {
       "id": "coffee-05",
@@ -1129,7 +1136,8 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=Frutza+Blloku&query_place_id=ChIJq7VMVlQxUBMRfLuE4G-K2-o"
         }
-      ]
+      ],
+      "day": "2026-08-27"
     },
     {
       "id": "coffee-06",
@@ -1233,7 +1241,8 @@
         "rating": 4.9,
         "rating_count": 34,
         "closed_sunday": true
-      }
+      },
+      "day": "2026-08-24"
     },
     {
       "id": "bars-01",
@@ -1255,7 +1264,8 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=Komiteti+Kafe+Muzeum&query_place_id=ChIJOYWBuxsxUBMRCpjsacARfuY"
         }
-      ]
+      ],
+      "day": "2026-08-23"
     },
     {
       "id": "bars-02",
@@ -1276,7 +1286,8 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=Sky+Club+Tirana&query_place_id=ChIJK1CMo_sxUBMRAPyHhSO2xmg"
         }
-      ]
+      ],
+      "day": "2026-08-28"
     },
     {
       "id": "bars-03",
@@ -1320,7 +1331,8 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=BunkArt+1&query_place_id=ChIJWefPqAE0UBMRe5lBduTNzf4"
         }
-      ]
+      ],
+      "day": "2026-08-26"
     },
     {
       "id": "activities-02",
@@ -1345,7 +1357,8 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=Dajti+Ekspres&query_place_id=ChIJ-0qSJQI0UBMRxurnvQkJw_E"
         }
-      ]
+      ],
+      "day": "2026-08-26"
     },
     {
       "id": "activities-03",
@@ -1369,7 +1382,8 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=House+of+Leaves+Museum&query_place_id=ChIJS-JbDQUxUBMRJpTxxW-ELEU"
         }
-      ]
+      ],
+      "day": "2026-08-27"
     },
     {
       "id": "activities-04",
@@ -1393,7 +1407,8 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=BunkArt+2&query_place_id=ChIJ9UMspBoxUBMRfwKKAxuMsQg"
         }
-      ]
+      ],
+      "day": "2026-08-23"
     },
     {
       "id": "activities-05",
@@ -1415,7 +1430,8 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=Pyramid+of+Tirana&query_place_id=ChIJ13HJcBsxUBMRg0s9vq3gwuA"
         }
-      ]
+      ],
+      "day": "2026-08-23"
     },
     {
       "id": "activities-06",
@@ -1439,7 +1455,8 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=Skanderbeg+Square&query_place_id=ChIJObkn_A8xUBMRFY95E3CdgpE"
         }
-      ]
+      ],
+      "day": "2026-08-23"
     },
     {
       "id": "activities-07",
@@ -1466,7 +1483,8 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=Tirana+Lake+Park&query_place_id=ChIJz-mqoOYwUBMRl40WII0892I"
         }
-      ]
+      ],
+      "day": "2026-08-28"
     },
     {
       "id": "activities-08",
@@ -1493,7 +1511,8 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=Pazari+i+Ri&query_place_id=ChIJw_xRNRExUBMRf68YulV8sPo"
         }
-      ]
+      ],
+      "day": "2026-08-25"
     },
     {
       "id": "activities-09",
@@ -1515,7 +1534,8 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=National+Historical+Museum+Tirana&query_place_id=ChIJ8UCauA8xUBMRnbaL_o6uAXc"
         }
-      ]
+      ],
+      "day": "2026-08-23"
     },
     {
       "id": "activities-10",
