@@ -175,6 +175,45 @@
   .tips{margin:6px 0 0 18px; font-size:.84rem; color:var(--text-3);}
   .tips li{margin-bottom:3px;}
   .intel-src{font-size:.72rem; color:var(--text-3); font-style:italic; margin-top:4px;}
+
+  /* --- Phase 3: compact cards, tap to expand --- */
+  /* The header button IS the whole collapsed row: name (+ done check) and the
+     tags, nothing else. Styled to read exactly like the old h3 it replaces. */
+  .card-hd{width:100%; font:inherit; font-size:1.02rem; color:inherit; background:none; border:none;
+    margin:0; padding:0; text-align:left; cursor:pointer;
+    display:flex; align-items:baseline; justify-content:flex-start; gap:8px; flex-wrap:wrap;}
+  .card-hd-tags{display:flex; gap:6px; flex-wrap:wrap; margin-left:2px;}
+  .card-hd-chev{font-size:.78rem; color:var(--text-3); margin-left:auto; flex:0 0 auto; padding-left:8px;}
+  .card-detail{margin-top:8px;}
+  /* Always in the DOM (see appendCard's comment); hidden, not just visual,
+     when the card is collapsed: display:none also drops it from the tab
+     order and the accessibility tree. */
+  .collapsed > .card-detail{display:none;}
+  .price-line{font-size:.82rem; color:var(--text-3); font-weight:600; margin-top:2px;}
+  /* Icon-only status buttons (feature 5): a touch-friendly minimum width so a
+     single glyph is not a sliver to tap. Archive keeps its text label (see
+     the engine's TRANSITIONS table) so its button is simply wider. */
+  .icon-btn{min-width:36px; text-align:center;}
+
+  /* --- Phase 3: section header counts + sticky section nav --- */
+  #secnav{position:sticky; top:0; z-index:20; display:flex; gap:8px; overflow-x:auto;
+    -webkit-overflow-scrolling:touch; background:var(--bg); padding:8px 0 10px; margin:0 0 6px;}
+  #secnav[hidden]{display:none;}
+  .secnav-chip{flex:0 0 auto; font:inherit; font-size:.78rem; font-weight:700; color:var(--accent-hover);
+    background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
+    padding:5px 13px; cursor:pointer; white-space:nowrap;}
+  .secnav-chip:hover{border-color:var(--accent);}
+
+  /* --- Phase 3: Today / Guide / Calendar segmented control --- */
+  .viewseg{display:flex; border:1.5px solid var(--border-light); border-radius:20px; overflow:hidden;}
+  .viewtab{font:inherit; font-size:.8rem; font-weight:700; color:var(--accent-hover); background:#fff;
+    border:none; padding:5px 13px; cursor:pointer;}
+  .viewtab + .viewtab{border-left:1.5px solid var(--border-light);}
+  .viewtab.active{background:var(--accent); color:#fff;}
+
+  /* --- Phase 3: Today view --- */
+  .up-next{font-size:.85rem; color:var(--text-3); font-style:italic; margin:4px 0 20px;}
+
   /* narrow phones: trim horizontal chrome so cards get the width */
   @media (max-width: 430px){
     .wrap{padding:0 10px 48px;}
@@ -192,12 +231,19 @@
     .toolbar{gap:6px;}
     .toolbar button{padding:5px 10px; font-size:.75rem;}
     h2{margin:20px 0 10px;}
+    .card-hd{font-size:.96rem;}
+    #secnav{gap:6px;}
+    .secnav-chip{padding:4px 10px; font-size:.74rem;}
+    .viewtab{padding:5px 10px; font-size:.75rem;}
   }
   @media print{
-    .toolbar, .ctl-row, .grip, .reorderbar, #notice{display:none !important;}
+    .toolbar, .ctl-row, .grip, .reorderbar, #notice, #secnav{display:none !important;}
     body{background:#fff;}
     .daycard, .card{box-shadow:none; break-inside:avoid;}
     header{background:var(--accent-hover) !important; -webkit-print-color-adjust:exact;}
+    /* Print is a "here is everything" artifact: force every card open so a
+       printed guide is not full of collapsed headers with nothing under them. */
+    .card-detail{display:block !important;}
   }
 </style>
 </head>
@@ -206,6 +252,7 @@
   <div id="notice"></div>
   <header id="hdr"></header>
   <div class="toolbar" id="toolbar"></div>
+  <nav class="secnav" id="secnav" aria-label="Jump to section" hidden></nav>
   <main id="main"></main>
   <div class="foot" id="foot"></div>
 </div>
@@ -2614,15 +2661,32 @@ var CityOps = (function () {
     return { data: out, summary: summary, errors: [] };
   }
 
+  // Icon-only controls (Phase 3, feature 5): `aria` is the accessible name and
+  // title tooltip on every button; `label` is set ONLY on the destructive
+  // Archive transition, where a visible text label stays alongside the icon
+  // so a mistap is less likely. The `to` semantics are unchanged from the
+  // original text-button version: only the presentation changed.
   var TRANSITIONS = {
-    plan:     [{ to: 'done', label: '✓ Done' }, { to: 'backup', label: '↓ Backup' }, { to: 'archived', label: '✕ Archive' }],
-    backup:   [{ to: 'plan', label: '↑ Promote' }, { to: 'archived', label: '✕ Archive' }],
-    done:     [{ to: 'plan', label: '↩ Undo' }],
-    archived: [{ to: 'backup', label: '↩ Restore' }]
+    plan:     [{ to: 'done', icon: '✓', aria: 'Mark done' },
+               { to: 'backup', icon: '↓', aria: 'Move to backup' },
+               { to: 'archived', icon: '✕', aria: 'Archive', label: 'Archive' }],
+    backup:   [{ to: 'plan', icon: '↑', aria: 'Promote to plan' },
+               { to: 'archived', icon: '✕', aria: 'Archive', label: 'Archive' }],
+    done:     [{ to: 'plan', icon: '↩', aria: 'Undo, back to plan' }],
+    archived: [{ to: 'backup', icon: '↩', aria: 'Restore to backup' }]
   };
 
+  // Phase 3: Today / Guide / Calendar. viewMode of null is a distinct sentinel
+  // from any of the three named modes: it means "the traveler has never
+  // explicitly chosen a view", which is what lets effectiveViewMode() pick
+  // Today automatically for a guide whose stay covers today. The moment the
+  // traveler taps any of the three tabs, setViewMode stamps one of the named
+  // values and that explicit choice persists from then on, exactly like every
+  // other per-device preference here.
+  var VIEW_MODES = ['type', 'day', 'today'];
+
   function emptyState() {
-    return { itemStatus: {}, itemDay: {}, itemTitle: {}, dayOrder: {}, collapsedSections: {}, viewMode: 'type', dataOverride: null, stayOverride: null, updated: null };
+    return { itemStatus: {}, itemDay: {}, itemTitle: {}, dayOrder: {}, collapsedSections: {}, viewMode: null, dataOverride: null, stayOverride: null, updated: null };
   }
 
   function normalizeState(st) {
@@ -2632,7 +2696,14 @@ var CityOps = (function () {
     st.dayOrder = st.dayOrder || {};
     st.collapsedSections = st.collapsedSections || {};
     st.itemTitle = st.itemTitle || {};
-    if (st.viewMode !== 'type' && st.viewMode !== 'day') st.viewMode = 'type';
+    // null always means "unset" and is left alone (see VIEW_MODES comment
+    // above). A value that is present but neither null nor one of the three
+    // named modes (a stray "bogus" string, or garbage from an old build) is
+    // corrected to 'type' rather than silently reset to "unset": the state
+    // object DID carry an opinion, it was just not a valid one.
+    if (st.viewMode !== null && VIEW_MODES.indexOf(st.viewMode) === -1) {
+      st.viewMode = Object.prototype.hasOwnProperty.call(st, 'viewMode') ? 'type' : null;
+    }
     if (!('dataOverride' in st)) st.dataOverride = null;
     if (!('stayOverride' in st)) st.stayOverride = null;
     return st;
@@ -2729,9 +2800,38 @@ var CityOps = (function () {
   }
 
   function setViewMode(state, mode) {
-    if (mode !== 'type' && mode !== 'day') throw new Error('bad view mode "' + mode + '"');
+    if (VIEW_MODES.indexOf(mode) === -1) throw new Error('bad view mode "' + mode + '"');
     state.viewMode = mode;
     return state;
+  }
+
+  // Local (not UTC) YYYY-MM-DD for "today", so a stay's from/to (also local
+  // calendar dates) compare correctly. nowMs is an injection point for tests;
+  // real callers omit it and get the device's actual clock.
+  function todayIso(nowMs) {
+    var d = (typeof nowMs === 'number') ? new Date(nowMs) : new Date();
+    var m = d.getMonth() + 1, day = d.getDate();
+    return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
+  }
+
+  function addDaysIso(iso, n) {
+    var d = new Date(iso + 'T12:00:00');
+    d.setDate(d.getDate() + n);
+    var m = d.getMonth() + 1, day = d.getDate();
+    return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
+  }
+
+  // Pure decision for which of the three views to show when the traveler has
+  // never explicitly picked one (state.viewMode === null, see the VIEW_MODES
+  // comment above): Today when the device's today falls inside the stay
+  // (adjusted dates if any), Guide otherwise. An explicit prior choice always
+  // wins, even if the date no longer supports it: this only ever fires once,
+  // on a state that has never had a view chosen.
+  function effectiveViewMode(data, state, nowIso) {
+    if (state.viewMode === 'type' || state.viewMode === 'day' || state.viewMode === 'today') return state.viewMode;
+    var now = nowIso || todayIso();
+    var range = effectiveDates(data, state);
+    return (now >= range.from && now <= range.to) ? 'today' : 'type';
   }
 
   function keyForDisplayedDate(data, state, secId, iso) {
@@ -2771,10 +2871,98 @@ var CityOps = (function () {
     };
   }
 
-  function toggleSection(state, secId) {
+  // A guide's "open tasks" home, if it has one: a section whose id or label
+  // marks it as a task/to-do list (Tirana's real guide calls it "tasks" /
+  // "Open items": packing, errands, "book the train", never a place to eat
+  // or see). Matched loosely (id or label containing "task") rather than a
+  // single fixed id, since schema v1 does not reserve a section id for this;
+  // most guides have no such section at all, and that is fine: todayModel's
+  // tasks bucket is simply empty for them, not filled with every undated
+  // restaurant recommendation in the guide.
+  function isTaskSection(sec) {
+    return !!sec && (sec.id === 'tasks' || /task/i.test(sec.label || ''));
+  }
+
+  // Phase 3, feature 4: the "what matters today" view. Three buckets, all
+  // sourced from the same viewModel() the Guide and Calendar views already
+  // use, so a reorder or a status change shows up identically everywhere:
+  //   - today: every active item whose displayed day is today, from any
+  //     section (an itinerary stop and a dinner reservation both count).
+  //   - tasks: active, UNDATED, status-plan items from the guide's tasks
+  //     section (see isTaskSection above). NOT every undated recommendation
+  //     in the guide: a 106-item guide has dozens of undated restaurant
+  //     picks that are not to-dos, and dumping all of them into "Today"
+  //     would recreate the very wall-of-cards problem this view exists to
+  //     fix.
+  //   - upNext: the same today-style bucket for tomorrow, kept small (no
+  //     status controls are shown for it in the renderer) since it is a
+  //     preview, not a worklist.
+  // nowIso is an injection point for tests; real callers omit it.
+  function todayModel(data, state, nowIso) {
+    var today = nowIso || todayIso();
+    var tomorrow = addDaysIso(today, 1);
+    var vms = viewModel(data, state);
+    var todays = [], tasks = [], upNext = [];
+    vms.forEach(function (sv) {
+      sv.days.forEach(function (d) {
+        if (d.iso === today) {
+          d.items.forEach(function (it) { todays.push({ sec: sv.section, it: it, status: effectiveStatus(it, state) }); });
+        } else if (d.iso === tomorrow) {
+          d.items.forEach(function (it) { upNext.push({ sec: sv.section, it: it, status: effectiveStatus(it, state) }); });
+        }
+      });
+      if (isTaskSection(sv.section)) {
+        sv.undated.forEach(function (it) {
+          if (effectiveStatus(it, state) === 'plan') tasks.push({ sec: sv.section, it: it, status: 'plan' });
+        });
+      }
+    });
+    var range = effectiveDates(data, state);
+    return {
+      todayIso: today,
+      inRange: today >= range.from && today <= range.to,
+      today: todays, tasks: tasks, upNext: upNext
+    };
+  }
+
+  // Phase 3, feature 2: large guides (the 106-item Tirana guide that prompted
+  // this work) render as one endless column unless sections start collapsed.
+  // `totalItems` is the GUIDE's total item count (data.items.length), not the
+  // section's own count: "more than about 30 items" describes the whole
+  // guide, so a small guide never auto-collapses even if all its items sit in
+  // one section. The 'base' section is the one exception (it is small and
+  // holds the accommodation, so it stays open by default regardless of guide
+  // size). `totalItems` is optional so every existing caller (and the
+  // existing unit test) that never passed it keeps the old small-guide
+  // default of "open".
+  var SECTION_AUTOCOLLAPSE_THRESHOLD = 30;
+
+  function defaultSectionCollapsed(secId, totalItems) {
+    if (secId === 'base') return false;
+    return (typeof totalItems === 'number') && totalItems > SECTION_AUTOCOLLAPSE_THRESHOLD;
+  }
+
+  // Tri-state read: an explicit true/false in collapsedSections always wins
+  // (the traveler's own choice, remembered); absent falls back to the
+  // computed default above.
+  function isSectionCollapsed(state, secId, totalItems) {
+    var explicit = state.collapsedSections ? state.collapsedSections[secId] : undefined;
+    if (explicit === true || explicit === false) return explicit;
+    return defaultSectionCollapsed(secId, totalItems);
+  }
+
+  // Flips the EFFECTIVE state (default included) and stores the result
+  // explicitly, EXCEPT when the new value matches the computed default again,
+  // in which case the key is dropped so collapsedSections only ever grows
+  // with genuine overrides. That last case is also what keeps the original
+  // small-guide test (`toggleSection(st, 'dinner')` collapses, toggling
+  // again deletes the key) passing unchanged: with no totalItems, the
+  // default is always "open", so toggling twice returns to no override.
+  function toggleSection(state, secId, totalItems) {
     state.collapsedSections = state.collapsedSections || {};
-    if (state.collapsedSections[secId]) delete state.collapsedSections[secId];
-    else state.collapsedSections[secId] = true;
+    var next = !isSectionCollapsed(state, secId, totalItems);
+    if (next === defaultSectionCollapsed(secId, totalItems)) delete state.collapsedSections[secId];
+    else state.collapsedSections[secId] = next;
     return state;
   }
 
@@ -3644,6 +3832,14 @@ var CityOps = (function () {
   var pendingPromote = null; // item id whose promote day-picker is open (session-only UI state)
   var pendingMove = null;    // item id whose move day-picker is open
   var pendingEdit = null;    // item id whose title editor is open
+  // Phase 3, feature 1: which cards are tap-expanded. Session-only (like the
+  // three pending* vars above), reset on every boot(): a fresh page load
+  // starts every card collapsed, which is what "compact by default" means.
+  // Deliberately NOT part of the persisted state object; expanding a card to
+  // read it is not a planning decision worth remembering across visits, and
+  // keeping it session-only avoids growing collapsedSections-style storage
+  // for something this transient.
+  var expandedItems = {};
 
   function promoteTo(it, iso) {
     var st = ctx.store.load();
@@ -3689,7 +3885,32 @@ var CityOps = (function () {
     return frag;
   }
 
-  function itemBody(it, status, showWhen, withDayPicker) {
+  // Phase 3, feature 1: the collapsed card header. Always just the name (with
+  // the done checkmark) and the tags row, per the spec: everything else lives
+  // in the expanded detail panel. It is a <button> (not a div with a click
+  // handler) so it is keyboard-reachable and gets a native aria-expanded.
+  function cardHeaderBtn(it, status, expanded) {
+    var btn = el('button', 'card-hd');
+    btn.type = 'button';
+    btn.setAttribute('aria-expanded', String(expanded));
+    var tname = el('span', 'tname');
+    if (status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
+    tname.appendChild(document.createTextNode(effectiveName(it, curState)));
+    btn.appendChild(tname);
+    if (it.tags && it.tags.length) {
+      var tp = el('span', 'card-hd-tags');
+      it.tags.forEach(function (t) { tp.appendChild(el('span', 'tag', t)); });
+      btn.appendChild(tp);
+    }
+    btn.appendChild(el('span', 'card-hd-chev', expanded ? '▾' : '▸'));
+    return btn;
+  }
+
+  // Everything that used to live in the card unconditionally now lives here,
+  // shown ONLY when the card is expanded: price, note, intel, links/hours,
+  // and the status controls. Renaming is the one exception carried over
+  // unchanged: it replaces this whole panel while pendingEdit names this item.
+  function itemDetailBody(it, status, showWhen, withDayPicker) {
     var frag = document.createDocumentFragment();
     if (pendingEdit === it.id) {
       frag.appendChild(el('p', 'when-line', 'Rename this item'));
@@ -3726,19 +3947,8 @@ var CityOps = (function () {
       setTimeout(function () { try { focusLater.focus(); focusLater.select(); } catch (e) {} }, 0);
       return frag;
     }
-    var h3 = el('h3');
-    var tname = el('span', 'tname');
-    if (status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
-    tname.appendChild(document.createTextNode(effectiveName(it, curState)));
-    h3.appendChild(tname);
-    if (it.price) h3.appendChild(el('span', 'price', it.price.text));
-    frag.appendChild(h3);
+    if (it.price) frag.appendChild(el('p', 'price-line', it.price.text));
     if (showWhen && it.when) frag.appendChild(el('p', 'when-line', it.when));
-    if (it.tags && it.tags.length) {
-      var tp = el('p');
-      it.tags.forEach(function (t) { tp.appendChild(el('span', 'tag', t)); });
-      frag.appendChild(tp);
-    }
     if (it.note) frag.appendChild(el('p', null, it.note));
     if (it.intel) {
       var strip = intelStrip(it.intel);
@@ -3761,9 +3971,15 @@ var CityOps = (function () {
       return frag;
     }
     var ctl = el('div', 'ctl-row');
+    // Icon buttons (feature 5): the icon is the whole visible label except on
+    // Archive, which also keeps a text label because it is destructive.
+    // aria-label and title both carry the same wording so screen readers and
+    // mouse-hover tooltips agree.
     (TRANSITIONS[status] || []).forEach(function (t) {
-      var b = el('button', 'ctl to-' + t.to, t.label);
+      var b = el('button', 'ctl icon-btn to-' + t.to, t.label ? (t.icon + ' ' + t.label) : t.icon);
       b.type = 'button';
+      b.setAttribute('aria-label', t.aria);
+      b.title = t.aria;
       if (t.to === 'plan' && status === 'backup' && withDayPicker) {
         b.onclick = function () { pendingPromote = it.id; rerender(); };
       } else {
@@ -3772,15 +3988,18 @@ var CityOps = (function () {
       ctl.appendChild(b);
     });
     if (withDayPicker && (status === 'plan' || status === 'done')) {
-      var mv = el('button', 'ctl', '⇄ Day');
+      var mv = el('button', 'ctl icon-btn', '⇄ Day');
       mv.type = 'button';
+      mv.setAttribute('aria-label', 'Move to a different day');
+      mv.title = 'Move to a different day';
       mv.onclick = function () { pendingMove = it.id; rerender(); };
       ctl.appendChild(mv);
     }
     if (status !== 'archived') {
-      var ed = el('button', 'ctl', '✎');
+      var ed = el('button', 'ctl icon-btn', '✎');
       ed.type = 'button';
       ed.setAttribute('aria-label', 'Rename');
+      ed.title = 'Rename';
       ed.onclick = function () { pendingEdit = it.id; rerender(); };
       ctl.appendChild(ed);
     }
@@ -3788,9 +4007,39 @@ var CityOps = (function () {
     return frag;
   }
 
+  function toggleExpand(id) {
+    if (expandedItems[id]) delete expandedItems[id];
+    else expandedItems[id] = true;
+    rerender();
+  }
+
+  // Appends the header button plus the detail panel into an existing
+  // card/bd container. Shared by every place a card renders (planner cards,
+  // day-card bodies, calendar entries), so the tap-to-expand behavior and the
+  // "only the expanded card shows controls" rule apply everywhere uniformly.
+  //
+  // The detail panel is always BUILT, but only visible (CSS: .collapsed >
+  // .card-detail{display:none}) when the container carries the collapsed
+  // class. Two reasons, both deliberate: a display:none subtree is out of the
+  // tab order and the accessibility tree, so a collapsed card's status
+  // buttons are genuinely unreachable (not just visually hidden) exactly as
+  // the spec asks; and the print stylesheet can force every detail open with
+  // one rule, so a printed guide still shows everything even though the
+  // on-screen app defaults every card to collapsed.
+  function appendCard(container, it, status, showWhen, withDayPicker) {
+    var expanded = !!expandedItems[it.id] || pendingEdit === it.id;
+    container.classList.add(expanded ? 'expanded' : 'collapsed');
+    var hd = cardHeaderBtn(it, status, expanded);
+    hd.onclick = function () { toggleExpand(it.id); };
+    container.appendChild(hd);
+    var detail = el('div', 'card-detail');
+    detail.appendChild(itemDetailBody(it, status, showWhen, withDayPicker));
+    container.appendChild(detail);
+  }
+
   function renderCard(it, status, withDayPicker) {
     var card = el('div', 'card' + (status === 'done' ? ' item-done' : ''));
-    card.appendChild(itemBody(it, status, true, withDayPicker));
+    appendCard(card, it, status, true, withDayPicker);
     return card;
   }
 
@@ -3810,7 +4059,7 @@ var CityOps = (function () {
     day.items.forEach(function (it) {
       var status = effectiveStatus(it, state);
       var bd = el('div', 'bd' + (status === 'done' ? ' item-done' : ''));
-      bd.appendChild(itemBody(it, status, day.items.length > 1, true));
+      appendCard(bd, it, status, day.items.length > 1, true);
       dc.appendChild(bd);
     });
     return dc;
@@ -3834,24 +4083,48 @@ var CityOps = (function () {
     document.title = c.name + ' Guide · ' + fmtRange(dates);
   }
 
-  function renderSection(sv, state) {
+  // Phase 3, feature 2: total item count plus a done/open split, "if cheap"
+  // meaning: derived from the lists renderSection already has in hand, no
+  // extra pass over the whole guide. total counts every item in the section
+  // regardless of status (matches what the collapsed count used to show);
+  // open/done only cover the active (dayed + undated) items, since backups
+  // and archived items are neither.
+  function sectionCounts(sv, state) {
+    var active = sv.undated.length;
+    var done = 0;
+    function tally(it) { if (effectiveStatus(it, state) === 'done') done++; }
+    sv.days.forEach(function (d) { active += d.items.length; d.items.forEach(tally); });
+    sv.undated.forEach(tally);
+    var total = active + sv.backups.length + sv.archived.length;
+    return { total: total, done: done, open: active - done };
+  }
+
+  function sectionCountText(counts) {
+    var s = String(counts.total) + (counts.total === 1 ? ' item' : ' items');
+    // Only worth a second number when the split is actually informative: all
+    // open (nothing done yet) or all done both collapse to noise.
+    if (counts.done > 0 && counts.open > 0) s += ' · ' + counts.open + ' open';
+    return '(' + s + ')';
+  }
+
+  function renderSection(sv, state, totalItems) {
     var frag = document.createDocumentFragment();
-    var collapsed = !!(state.collapsedSections && state.collapsedSections[sv.section.id]);
+    var collapsed = isSectionCollapsed(state, sv.section.id, totalItems);
     var h2 = el('h2', collapsed ? 'collapsed' : null);
+    // Anchor target for the sticky section-nav chips (feature 3): stable
+    // regardless of collapse state, so a chip tap always has something to
+    // scroll to.
+    h2.id = 'sec-' + sv.section.id;
     var tbtn = el('button', 'sec-toggle');
     tbtn.type = 'button';
     tbtn.setAttribute('aria-expanded', String(!collapsed));
     tbtn.appendChild(el('span', 'chev', collapsed ? '▸' : '▾'));
     if (sv.section.icon) tbtn.appendChild(el('span', 'ic', sv.section.icon));
-    tbtn.appendChild(document.createTextNode(' ' + sv.section.label));
-    if (collapsed) {
-      var n = sv.undated.length + sv.backups.length + sv.archived.length;
-      sv.days.forEach(function (d) { n += d.items.length; });
-      tbtn.appendChild(el('span', 'sec-count', n + (n === 1 ? ' item' : ' items')));
-    }
+    tbtn.appendChild(document.createTextNode(' ' + sv.section.label + ' '));
+    tbtn.appendChild(el('span', 'sec-count', sectionCountText(sectionCounts(sv, state))));
     tbtn.onclick = function () {
       var st = ctx.store.load();
-      toggleSection(st, sv.section.id);
+      toggleSection(st, sv.section.id, totalItems);
       ctx.store.save(st);
       rerender();
     };
@@ -3879,6 +4152,36 @@ var CityOps = (function () {
       frag.appendChild(det);
     }
     return frag;
+  }
+
+  // Phase 3, feature 3: the sticky chip row. Reads the SAME viewModel array
+  // rerender() already built for the section list, so this never disagrees
+  // with what is actually on the page. Hidden entirely (rather than left
+  // empty) when there is only one section, or in a view where "jump to
+  // section" does not apply (Calendar groups by date, Today is not
+  // section-organized at all): an empty sticky bar is still visual clutter.
+  function renderSectionNav(vms, state, totalItems, mode) {
+    var nav = document.getElementById('secnav');
+    if (!nav) return; // standalone/older shells without the marker: no-op
+    nav.innerHTML = '';
+    if (mode !== 'type' || vms.length < 2) { nav.hidden = true; return; }
+    nav.hidden = false;
+    vms.forEach(function (sv) {
+      var chip = el('button', 'secnav-chip',
+        (sv.section.icon ? sv.section.icon + ' ' : '') + sv.section.label);
+      chip.type = 'button';
+      chip.onclick = function () {
+        var st = ctx.store.load();
+        if (isSectionCollapsed(st, sv.section.id, totalItems)) {
+          toggleSection(st, sv.section.id, totalItems);
+          ctx.store.save(st);
+        }
+        rerender();
+        var target = document.getElementById('sec-' + sv.section.id);
+        if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      };
+      nav.appendChild(chip);
+    });
   }
 
   function saveDayOrder(sec, keys, focusKey) {
@@ -4073,7 +4376,7 @@ var CityOps = (function () {
       d.entries.forEach(function (e) {
         var bd = el('div', 'bd' + (e.status === 'done' ? ' item-done' : ''));
         bd.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
-        bd.appendChild(itemBody(e.it, e.status, true, true));
+        appendCard(bd, e.it, e.status, true, true);
         dc.appendChild(bd);
       });
       main.appendChild(dc);
@@ -4083,7 +4386,7 @@ var CityOps = (function () {
       cm.undated.forEach(function (e) {
         var card = el('div', 'card' + (e.status === 'done' ? ' item-done' : ''));
         card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
-        card.appendChild(itemBody(e.it, e.status, true, true));
+        appendCard(card, e.it, e.status, true, true);
         main.appendChild(card);
       });
     }
@@ -4103,6 +4406,45 @@ var CityOps = (function () {
     });
   }
 
+  // Phase 3, feature 4: the Today view. Reads todayModel() (pure, tested on
+  // its own) and renders three groups: what is on for today, open undated
+  // tasks, and a one-line peek at tomorrow. Falls back to a plain message
+  // when nothing qualifies, so an empty trip day is never a blank screen.
+  function renderToday(data, state) {
+    var tm = todayModel(data, state);
+    var main = document.getElementById('main');
+    main.innerHTML = '';
+    if (!tm.inRange) {
+      main.appendChild(el('p', 'when-line',
+        'Today (' + dayLabel(tm.todayIso) + ') is outside this trip\'s dates (' +
+        fmtRange(effectiveDates(data, state)) + '). Showing anything dated today anyway.'));
+    }
+    main.appendChild(el('h2', null, 'Today · ' + dayLabel(tm.todayIso)));
+    if (!tm.today.length) {
+      main.appendChild(el('p', 'when-line', 'Nothing on the itinerary for today.'));
+    } else {
+      tm.today.forEach(function (e) {
+        var card = el('div', 'card today-card' + (e.status === 'done' ? ' item-done' : ''));
+        card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
+        appendCard(card, e.it, e.status, true, true);
+        main.appendChild(card);
+      });
+    }
+    if (tm.tasks.length) {
+      main.appendChild(el('h2', null, 'Open tasks'));
+      tm.tasks.forEach(function (e) {
+        var card = el('div', 'card today-card');
+        card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
+        appendCard(card, e.it, e.status, true, true);
+        main.appendChild(card);
+      });
+    }
+    if (tm.upNext.length) {
+      var names = tm.upNext.map(function (e) { return effectiveName(e.it, state); }).join(', ');
+      main.appendChild(el('p', 'up-next', '→ Up next tomorrow: ' + names));
+    }
+  }
+
   function rerender() {
     // Any in-flight drag references nodes from the previous render's #main;
     // drop it so a stray window pointerup after a rerender is a no-op.
@@ -4110,16 +4452,24 @@ var CityOps = (function () {
     var state = ctx.store.load();
     curState = state;
     var data = effectiveData(ctx.base, state);
+    var totalItems = Array.isArray(data.items) ? data.items.length : 0;
+    var mode = effectiveViewMode(data, state);
     renderHeader(data, state);
-    renderToolbar(data, state);
+    renderToolbar(data, state, mode);
+    var vms = viewModel(data, state);
+    // 'share' is not a real viewMode; it just tells the nav to hide (share is
+    // its own read-only layout, not section-organized the way Guide is).
+    renderSectionNav(vms, state, totalItems, shareOn ? 'share' : mode);
     if (shareOn) {
       renderShare();
-    } else if (state.viewMode === 'day') {
+    } else if (mode === 'day') {
       renderCalendar(data, state);
+    } else if (mode === 'today') {
+      renderToday(data, state);
     } else {
       var main = document.getElementById('main');
       main.innerHTML = '';
-      viewModel(data, state).forEach(function (sv) { main.appendChild(renderSection(sv, state)); });
+      vms.forEach(function (sv) { main.appendChild(renderSection(sv, state, totalItems)); });
       attachReorder();
     }
     var foot = document.getElementById('foot');
@@ -4300,7 +4650,37 @@ var CityOps = (function () {
     ta.focus();
   }
 
-  function renderToolbar(data, state) {
+  // Phase 3, feature 4: the three-way view switch. A segmented control (not a
+  // single cycling button) so all three destinations are visible and
+  // reachable in one tap, and so the current one is legible via aria-pressed
+  // without reading a label that changes.
+  var VIEW_TABS = [
+    { mode: 'today', label: 'Today' },
+    { mode: 'type', label: 'Guide' },
+    { mode: 'day', label: 'Calendar' }
+  ];
+
+  function renderViewSwitch(tb, mode) {
+    var seg = el('div', 'viewseg');
+    seg.setAttribute('role', 'tablist');
+    VIEW_TABS.forEach(function (tab) {
+      var active = tab.mode === mode;
+      var b = el('button', 'viewtab' + (active ? ' active' : ''), tab.label);
+      b.type = 'button';
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', String(active));
+      b.onclick = function () {
+        var st = ctx.store.load();
+        setViewMode(st, tab.mode);
+        ctx.store.save(st);
+        rerender();
+      };
+      seg.appendChild(b);
+    });
+    tb.appendChild(seg);
+  }
+
+  function renderToolbar(data, state, mode) {
     var tb = document.getElementById('toolbar');
     tb.innerHTML = '';
     var share = el('button', null, shareOn ? 'Back to planner' : 'Share view');
@@ -4313,15 +4693,7 @@ var CityOps = (function () {
     };
     tb.appendChild(share);
     if (!shareOn) {
-      var vw = el('button', null, state.viewMode === 'day' ? 'By type' : 'Calendar');
-      vw.type = 'button';
-      vw.onclick = function () {
-        var st = ctx.store.load();
-        setViewMode(st, st.viewMode === 'day' ? 'type' : 'day');
-        ctx.store.save(st);
-        rerender();
-      };
-      tb.appendChild(vw);
+      renderViewSwitch(tb, mode);
       var exp = el('button', null, 'Export JSON');
       exp.type = 'button';
       exp.id = 'btn-export';
@@ -4398,6 +4770,7 @@ var CityOps = (function () {
     pendingPromote = null;
     pendingMove = null;
     pendingEdit = null;
+    expandedItems = {};
     drag = null;
     if (typeof document !== 'undefined' && document.body) document.body.classList.remove('share');
     if (!listenersBound && typeof window !== 'undefined' && window && window.addEventListener) {
@@ -4452,7 +4825,11 @@ var CityOps = (function () {
     normalizeState: normalizeState, effectiveDates: effectiveDates,
     setStayDates: setStayDates, toggleSection: toggleSection,
     effectiveName: effectiveName, setTitle: setTitle, setViewMode: setViewMode,
-    keyForDisplayedDate: keyForDisplayedDate, calendarModel: calendarModel
+    keyForDisplayedDate: keyForDisplayedDate, calendarModel: calendarModel,
+    // Phase 3 additions, all pure and unit-tested on their own.
+    todayModel: todayModel, effectiveViewMode: effectiveViewMode,
+    todayIso: todayIso, isSectionCollapsed: isSectionCollapsed,
+    defaultSectionCollapsed: defaultSectionCollapsed, isTaskSection: isTaskSection
   };
 })();
 CityOps.init();

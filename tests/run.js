@@ -1517,5 +1517,100 @@ test('writeCanonicalJson writes cities/<city>.json next to the .md source', () =
   fs.rmSync(dir, { recursive: true });
 });
 
+// ---- Phase 3: compact cards, section defaults, Today view, icon controls ----
+
+test('emptyState has an unset viewMode; normalizeState preserves "never chosen"', () => {
+  assert.equal(C.emptyState().viewMode, null);
+  assert.equal(C.normalizeState({ itemStatus: {} }).viewMode, null); // key absent entirely
+  assert.equal(C.normalizeState({ itemStatus: {}, viewMode: null }).viewMode, null); // sentinel round-trips
+});
+test('setViewMode accepts today, type and day; rejects anything else', () => {
+  const st = C.emptyState();
+  C.setViewMode(st, 'today');
+  assert.equal(st.viewMode, 'today');
+  C.setViewMode(st, 'day');
+  assert.equal(st.viewMode, 'day');
+  assert.throws(() => C.setViewMode(st, 'week'));
+});
+test('effectiveViewMode: Today inside the stay, Guide outside it, unless already chosen', () => {
+  const st = C.emptyState();
+  assert.equal(C.effectiveViewMode(GOOD, st, '2026-08-10'), 'today'); // inside 08-08..08-15
+  assert.equal(C.effectiveViewMode(GOOD, st, '2026-09-01'), 'type');  // outside the stay
+  C.setViewMode(st, 'day');
+  assert.equal(C.effectiveViewMode(GOOD, st, '2026-08-10'), 'day'); // an explicit choice always wins
+});
+test('toggleSection: sections default collapsed only past ~30 items; base is the one exception', () => {
+  const st = C.emptyState();
+  assert.equal(C.isSectionCollapsed(st, 'dinner', 10), false); // small guide: open by default
+  assert.equal(C.isSectionCollapsed(st, 'dinner', 40), true);  // large guide: collapsed by default
+  assert.equal(C.isSectionCollapsed(st, 'base', 40), false);   // base never auto-collapses
+  C.toggleSection(st, 'dinner', 40);                           // opens it: explicit override
+  assert.equal(C.isSectionCollapsed(st, 'dinner', 40), false);
+  assert.equal(st.collapsedSections.dinner, false);
+  C.toggleSection(st, 'dinner', 40);                           // back to the (collapsed) default
+  assert.ok(!('dinner' in st.collapsedSections));               // override dropped, not just flipped
+  assert.equal(C.isSectionCollapsed(st, 'dinner', 40), true);
+});
+test('todayModel groups items dated today; GOOD has no tasks section so tasks stays empty', () => {
+  const st = C.emptyState();
+  const tm = C.todayModel(GOOD, st, '2026-08-10');
+  assert.equal(tm.todayIso, '2026-08-10');
+  assert.equal(tm.inRange, true);
+  assert.deepEqual(tm.today.map(e => e.it.id), ['tanini']); // dinner item dated 08-10
+  // nord (coffee, undated, status plan) is NOT a task: coffee is a normal
+  // recommendation section, not a to-do list, so it must not show up here.
+  assert.deepEqual(tm.tasks, []);
+  assert.deepEqual(tm.upNext, []); // nothing dated 08-11 in GOOD
+});
+test('todayModel previews tomorrow\'s itinerary item as upNext', () => {
+  const st = C.emptyState();
+  const tm = C.todayModel(GOOD, st, '2026-08-12'); // tomorrow = 08-13, brasserie's day
+  assert.deepEqual(tm.upNext.map(e => e.it.id), ['brasserie']);
+  assert.deepEqual(tm.today, []); // nothing dated 08-12
+});
+test('todayModel: inRange is false outside the stay', () => {
+  const st = C.emptyState();
+  const tm = C.todayModel(GOOD, st, '2026-09-01');
+  assert.equal(tm.inRange, false);
+});
+test('todayModel never surfaces backup or archived items in the today bucket', () => {
+  const st = C.emptyState();
+  C.setStatus(st, 'sisters', 'plan'); // would otherwise land in dinner's day slots
+  const tm = C.todayModel(GOOD, st, '2026-08-10');
+  assert.equal(tm.today.some(e => e.it.id === 'sisters'), false); // still undated, not on today
+});
+// A dedicated fixture with a real tasks section (Tirana's actual convention:
+// id "tasks", label "Open items"), since GOOD has no such section.
+const WITH_TASKS = clone(GOOD);
+WITH_TASKS.sections.push({ id: 'tasks', label: 'Open items', icon: '☑' });
+WITH_TASKS.items.push(
+  { id: 'buy-adapter', section: 'tasks', status: 'plan', name: 'Buy a plug adapter', links: [], place_id: null, verified: null },
+  { id: 'book-train', section: 'tasks', status: 'plan', name: 'Book the overnight train', links: [], place_id: null, verified: null },
+  { id: 'old-errand', section: 'tasks', status: 'done', name: 'Already handled', links: [], place_id: null, verified: null }
+);
+test('todayModel surfaces undated, open items from a guide\'s tasks section', () => {
+  const st = C.emptyState();
+  const tm = C.todayModel(WITH_TASKS, st, '2026-08-10');
+  assert.deepEqual(tm.tasks.map(e => e.it.id).sort(), ['book-train', 'buy-adapter']);
+  // nord (coffee) still never counts as a task, even alongside a real one.
+  assert.ok(!tm.tasks.some(e => e.it.id === 'nord'));
+});
+test('isTaskSection matches by id "tasks" or a "task" label, not any arbitrary section', () => {
+  assert.equal(C.isTaskSection({ id: 'tasks', label: 'Open items' }), true);
+  assert.equal(C.isTaskSection({ id: 'errands', label: 'To-do / tasks' }), true);
+  assert.equal(C.isTaskSection({ id: 'coffee', label: 'Coffee' }), false);
+  assert.equal(C.isTaskSection(null), false);
+});
+test('TRANSITIONS keeps the same to-state semantics under icon-only presentation', () => {
+  assert.deepEqual(C.TRANSITIONS.plan.map(t => t.to), ['done', 'backup', 'archived']);
+  assert.deepEqual(C.TRANSITIONS.backup.map(t => t.to), ['plan', 'archived']);
+  assert.deepEqual(C.TRANSITIONS.done.map(t => t.to), ['plan']);
+  assert.deepEqual(C.TRANSITIONS.archived.map(t => t.to), ['backup']);
+  // Archive is the one destructive transition that keeps a visible text label.
+  assert.equal(C.TRANSITIONS.plan.find(t => t.to === 'archived').label, 'Archive');
+  assert.equal(C.TRANSITIONS.plan.find(t => t.to === 'done').label, undefined);
+  assert.ok(C.TRANSITIONS.plan.every(t => typeof t.aria === 'string' && t.aria.length));
+});
+
 console.log(pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);
