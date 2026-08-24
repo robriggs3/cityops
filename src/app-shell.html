@@ -109,6 +109,7 @@
   <header id="hdr"></header>
   <div id="citybar"></div>
   <div class="toolbar" id="toolbar"></div>
+  <nav class="tabbar" id="tabbar" aria-label="Guide sections" hidden></nav>
   <nav class="secnav" id="secnav" aria-label="Jump to section" hidden></nav>
   <main id="main"></main>
   <div class="foot" id="foot"></div>
@@ -367,8 +368,9 @@
     }
   }
 
-  // Renders (or clears) the dropdown panel: city list + Remove city. Add city
-  // now lives in the header chip, so the panel's own action row only has Remove.
+  // Renders (or clears) the dropdown panel: the city list plus + Add city
+  // (and Load example / Sync, when applicable). Remove city lives in the
+  // More action sheet now (Phase 4 nav cleanup), not here.
   function renderPanel() {
     var bar = document.getElementById('citybar');
     bar.innerHTML = '';
@@ -408,10 +410,9 @@
     add.type = 'button';
     add.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); openAddModal(); };
     acts.appendChild(add);
-    var rm = el('button', null, 'Remove city');
-    rm.type = 'button';
-    rm.onclick = function () { panelOpen = false; updateHeaderExpanded(); renderPanel(); openRemoveModal(); };
-    acts.appendChild(rm);
+    // Phase 4, item 7: Remove city moved to the More action sheet (nav
+    // cleanup groups every utility action in one place); no row for it here
+    // anymore.
     if (!exVisible) {
       var exb = el('button', null, 'Load example');
       exb.type = 'button';
@@ -974,23 +975,26 @@
       'In-app research is planned for a future version.'));
   }
 
-  // Appended to the engine's toolbar on every render (app context only).
-  function toolbarExtras(tb) {
-    var b = el('button', null, 'Enrich');
-    b.type = 'button';
-    b.id = 'btn-enrich';
-    b.onclick = openEnrichModal;
-    tb.appendChild(b);
+  // Phase 4: rows appended to the engine's More action sheet (app context
+  // only), replacing the old toolbarExtras + the standalone Export-guide
+  // button + Remove city's old home inside the city-switcher panel. Returns
+  // [{label, onClick, cls}]; the engine renders each as a sheet row.
+  function moreActions() {
+    var actions = [];
+    actions.push({ label: 'Enrich', onClick: openEnrichModal });
     // Phase 2: Edit reopens the Add/Edit city form for the ACTIVE city,
     // pre-filled with its saved form values (see openAddModal's editCityId
     // param), so a traveler can tweak the header and regenerate.
     if (activeId && has(store.cities, activeId)) {
-      var ed = el('button', null, 'Edit city');
-      ed.type = 'button';
-      ed.id = 'btn-edit-city';
-      ed.onclick = function () { openAddModal(activeId); };
-      tb.appendChild(ed);
+      actions.push({ label: 'Edit city', onClick: function () { openAddModal(activeId); } });
     }
+    actions.push({ label: 'Export guide', onClick: exportStandalone });
+    // Phase 4, item 7: Remove city moves here from the city-switcher panel,
+    // keeping its existing type-to-confirm modal unchanged.
+    if (activeId && has(store.cities, activeId)) {
+      actions.push({ label: 'Remove city', onClick: openRemoveModal, cls: 'danger' });
+    }
+    return actions;
   }
 
   // ---- Phase 2: in-app Claude generation (transport only; no SDK) ----
@@ -2364,8 +2368,9 @@
     setTimeout(function () { URL.revokeObjectURL(freeUrl); }, 4000);
   }
 
-  // Set before the first boot so the engine's toolbar picks up the app-only button.
-  window.CityOpsApp = { exportStandalone: exportStandalone, toolbarExtras: toolbarExtras };
+  // Set before the first boot so the engine's More sheet picks up the
+  // app-only rows.
+  window.CityOpsApp = { exportStandalone: exportStandalone, moreActions: moreActions };
 
   // Re-decorate the header and re-render the panel on every engine state
   // change (not just on city switch, which activateCity already triggers via
