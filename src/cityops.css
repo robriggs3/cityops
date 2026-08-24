@@ -190,7 +190,13 @@
   .icon-btn{min-width:36px; text-align:center;}
 
   /* --- Phase 3: section header counts + sticky section nav --- */
-  #secnav{position:sticky; top:0; z-index:20; display:flex; gap:8px; overflow-x:auto;
+  /* top is the rendered #tabbar height (Phase 4), kept in sync by
+     updateTabbarHeightVar() in the engine so the two sticky bars stack
+     instead of overlapping; 0px is the safe fallback before that JS runs (or
+     on a shell that predates the tab bar). z-index stays below #tabbar's 26
+     so #tabbar is always the one on top if a scroll ever puts them in the
+     same few pixels. */
+  #secnav{position:sticky; top:var(--tabbar-h, 0px); z-index:20; display:flex; gap:8px; overflow-x:auto;
     -webkit-overflow-scrolling:touch; background:var(--bg); padding:8px 0 10px; margin:0 0 6px;}
   #secnav[hidden]{display:none;}
   .secnav-chip{flex:0 0 auto; font:inherit; font-size:.78rem; font-weight:700; color:var(--accent-hover);
@@ -231,11 +237,69 @@
     .viewtab{padding:5px 10px; font-size:.75rem;}
   }
   @media print{
-    .toolbar, .ctl-row, .grip, .reorderbar, #notice, #secnav{display:none !important;}
+    .toolbar, .ctl-row, .grip, .reorderbar, #notice, #secnav, #tabbar{display:none !important;}
     body{background:#fff;}
     .daycard, .card{box-shadow:none; break-inside:avoid;}
     header{background:var(--accent-hover) !important; -webkit-print-color-adjust:exact;}
     /* Print is a "here is everything" artifact: force every card open so a
        printed guide is not full of collapsed headers with nothing under them. */
     .card-detail{display:block !important;}
+  }
+
+  /* --- Phase 4: tab bar (replaces the Today/Guide/Calendar view switch) --- */
+  /* Sticky, horizontally scrollable, phone-first: at 375px five chips plus
+     More do not all fit without scrolling, and that is fine (a native
+     horizontal scroller reads better on a phone than wrapped rows of chips
+     eating vertical space). 44px min-height keeps every chip a comfortable
+     tap target. */
+  #tabbar{position:sticky; top:0; z-index:26; display:flex; gap:6px; overflow-x:auto;
+    -webkit-overflow-scrolling:touch; background:var(--bg); padding:8px 0 10px; margin:0 0 10px;
+    border-bottom:1px solid var(--border-light);}
+  #tabbar[hidden]{display:none;}
+  .tabchip{flex:0 0 auto; font:inherit; font-size:.82rem; font-weight:700; color:var(--accent-hover);
+    background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
+    padding:8px 14px; cursor:pointer; white-space:nowrap; min-height:44px;
+    display:flex; align-items:center;}
+  .tabchip:hover{border-color:var(--accent);}
+  .tabchip.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .tab-more{font-weight:800; padding:8px 12px; min-width:44px; justify-content:center; margin-left:auto;}
+
+  /* A small date pill on a flat item card (Eat & Drink / Do / Services /
+     Info) once that item has been assigned to a day: the visible result of
+     "Add to a day", and the reason a traveler can tell at a glance an item
+     already lives somewhere on the Plan tab. */
+  .daychip{font-size:.72rem; font-weight:700; color:var(--accent-hover); background:var(--accent-soft);
+    border-radius:20px; padding:2px 9px; white-space:nowrap;}
+
+  /* --- Phase 4: Info tab reference block --- */
+  /* One card per section, every undated item's name (bold) then its note,
+     stacked: no accordion, no status controls, since these are facts, not
+     todos (item 6 of the spec). */
+  .info-card h3{font-size:1rem; margin-bottom:2px;}
+  .info-item{font-size:.9rem; color:var(--text-3); margin-top:12px;}
+  .info-item:first-of-type{margin-top:10px;}
+  .info-item strong{display:block; color:var(--text); margin-bottom:2px; font-size:.94rem;}
+
+  /* --- Phase 4: Plan tab open tasks --- */
+  .task-row{padding:10px 0; border-bottom:1px solid var(--border-light);}
+  .task-row:last-child{border-bottom:none;}
+  .task-check{display:flex; align-items:center; gap:10px; font-size:.95rem; font-weight:600;
+    color:var(--text); cursor:pointer; min-height:44px;}
+  .task-check input[type="checkbox"]{width:20px; height:20px; flex:0 0 auto; cursor:pointer;}
+  .task-note{font-size:.85rem; color:var(--text-3); margin:2px 0 0 30px;}
+  .task-row.item-done .task-check{opacity:.55; text-decoration:line-through;}
+
+  /* --- Phase 4: the More action sheet (every utility action, one place) --- */
+  .sheet-list{display:flex; flex-direction:column; margin-top:6px;}
+  .sheet-row{font:inherit; font-size:.95rem; font-weight:600; color:var(--text); background:none;
+    border:none; border-bottom:1px solid var(--border-light); text-align:left; padding:14px 4px;
+    cursor:pointer; min-height:44px;}
+  .sheet-row:last-child{border-bottom:none;}
+  .sheet-row:hover{color:var(--accent-hover);}
+  .sheet-row.danger{color:var(--accent-hover); font-weight:800;}
+
+  @media (max-width: 430px){
+    #tabbar{gap:4px;}
+    .tabchip{padding:7px 11px; font-size:.76rem; min-height:40px;}
+    .tab-more{padding:7px 10px;}
   }
