@@ -190,7 +190,13 @@
   .icon-btn{min-width:36px; text-align:center;}
 
   /* --- Phase 3: section header counts + sticky section nav --- */
-  #secnav{position:sticky; top:0; z-index:20; display:flex; gap:8px; overflow-x:auto;
+  /* top is the rendered #tabbar height (Phase 4), kept in sync by
+     updateTabbarHeightVar() in the engine so the two sticky bars stack
+     instead of overlapping; 0px is the safe fallback before that JS runs (or
+     on a shell that predates the tab bar). z-index stays below #tabbar's 26
+     so #tabbar is always the one on top if a scroll ever puts them in the
+     same few pixels. */
+  #secnav{position:sticky; top:var(--tabbar-h, 0px); z-index:20; display:flex; gap:8px; overflow-x:auto;
     -webkit-overflow-scrolling:touch; background:var(--bg); padding:8px 0 10px; margin:0 0 6px;}
   #secnav[hidden]{display:none;}
   .secnav-chip{flex:0 0 auto; font:inherit; font-size:.78rem; font-weight:700; color:var(--accent-hover);

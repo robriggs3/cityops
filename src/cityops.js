@@ -2590,6 +2590,24 @@ var CityOps = (function () {
     host.appendChild(wrap);
   }
 
+  // QA fix (Phase 4): #secnav is ALSO position:sticky top:0, so on a tab with
+  // 2+ mapped sections (Eat & Drink and Services both hit this on the real
+  // Tirana data) it would scroll up underneath #tabbar and disappear (both
+  // pinned to the same top:0, #tabbar's z-index winning). #secnav's CSS reads
+  // its offset from the --tabbar-h custom property instead of a bare 0; this
+  // keeps that property in sync with the tab bar's actual rendered height, so
+  // the two bars stack instead of overlapping. Recomputed on every tab-bar
+  // render (font-size/padding changes at the narrow-phone breakpoint change
+  // the height) and on window resize (a rotation or a browser chrome change
+  // can cross that breakpoint without a rerender happening on its own).
+  function updateTabbarHeightVar() {
+    var bar = document.getElementById('tabbar');
+    var root = (typeof document !== 'undefined' && document) ? document.documentElement : null;
+    if (!bar || !root || !root.style || typeof root.style.setProperty !== 'function') return;
+    var h = (typeof bar.offsetHeight === 'number') ? bar.offsetHeight : 0;
+    root.style.setProperty('--tabbar-h', h + 'px');
+  }
+
   // Phase 4: the sticky tab bar (Plan, Eat & Drink, Do, Services, Info) plus
   // the More overflow chip, replacing the old Today/Guide/Calendar segmented
   // control. Hidden while Share is on: share is a clean, printable read-only
@@ -2600,7 +2618,11 @@ var CityOps = (function () {
     var bar = document.getElementById('tabbar');
     if (!bar) return; // standalone/older shells without the marker: no-op
     bar.innerHTML = '';
-    if (shareOn) { bar.hidden = true; return; }
+    if (shareOn) {
+      bar.hidden = true;
+      updateTabbarHeightVar(); // hidden collapses to 0 height: #secnav's offset must follow
+      return;
+    }
     bar.hidden = false;
     bar.setAttribute('role', 'tablist');
     TABS.forEach(function (t) {
@@ -2623,6 +2645,7 @@ var CityOps = (function () {
     more.title = 'More actions';
     more.onclick = openMoreSheet;
     bar.appendChild(more);
+    updateTabbarHeightVar();
   }
 
   // What is left of the old toolbar once every action moved into More: the
@@ -2684,6 +2707,10 @@ var CityOps = (function () {
       window.addEventListener('pointermove', onDragPointerMove, { passive: false });
       window.addEventListener('pointerup', onDragPointerEnd);
       window.addEventListener('pointercancel', onDragPointerEnd);
+      // QA fix: a rotation or a browser-chrome change can cross the
+      // narrow-phone breakpoint (which changes #tabbar's padding/height)
+      // without any rerender happening on its own; keep --tabbar-h honest.
+      window.addEventListener('resize', updateTabbarHeightVar);
       listenersBound = true;
     }
     rerender();
