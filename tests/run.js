@@ -1784,5 +1784,32 @@ test('planModel: a dated task item shows in its day, not in openTasks (no double
   assert.deepEqual(pm.days.find(d => d.iso === '2026-08-09').items.map(e => e.it.id), ['buy-adapter']);
 });
 
+// QA follow-up: an integration guard against the real Tirana dataset (the
+// freeform-schema fixture the tab mapping has to handle), so a future
+// section id added to that guide can never silently orphan into no tab at
+// all. tabForSection() always returns a string default ('info'), so the
+// interesting failure mode is not "throws": it's a typo'd or renamed TABS id
+// this test would catch by checking membership in the real, exported list.
+test('tabForSection resolves every real Tirana section (and so every item) to one of the five tabs', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const tirana = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'cities', 'tirana.json'), 'utf8'));
+  const tabIds = C.TABS.map(t => t.id);
+  const secById = {};
+  tirana.sections.forEach(s => { secById[s.id] = s; });
+  tirana.sections.forEach(s => {
+    const tab = C.tabForSection(s);
+    assert.ok(tabIds.indexOf(tab) !== -1,
+      `section "${s.id}" (${s.label}) resolved to "${tab}", not one of ${tabIds.join('/')}`);
+  });
+  tirana.items.forEach(it => {
+    const sec = secById[it.section];
+    assert.ok(sec, `item "${it.id}" references unknown section "${it.section}"`);
+    const tab = C.tabForSection(sec);
+    assert.ok(tabIds.indexOf(tab) !== -1,
+      `item "${it.id}" (section "${it.section}") resolved to "${tab}", not one of ${tabIds.join('/')}`);
+  });
+});
+
 console.log(pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);
