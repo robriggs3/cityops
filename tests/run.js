@@ -908,6 +908,70 @@ test('RETRY_INSTRUCTION is the shared re-ask message the CLI and the app both sh
   assert.ok(/reply with the full city guide as a single/.test(C.RETRY_INSTRUCTION));
 });
 
+// ---- No-paste import: isJsonSyntaxError + fetchTextToCity (pure) ----
+test('isJsonSyntaxError is true only for a lone JSON-parse error', () => {
+  assert.equal(C.isJsonSyntaxError(C.parse('{ nope').errors), true);
+  const bad = clone(GOOD);
+  bad.schema = 2;
+  assert.equal(C.isJsonSyntaxError(C.parse(JSON.stringify(bad)).errors), false); // schema errors, not a syntax error
+  assert.equal(C.isJsonSyntaxError([]), false);
+  assert.equal(C.isJsonSyntaxError(null), false);
+});
+test('fetchTextToCity: direct valid JSON succeeds with kind ok', () => {
+  const res = C.fetchTextToCity(JSON.stringify(GOOD));
+  assert.equal(res.kind, 'ok');
+  assert.equal(res.data.city.name, 'Batumi');
+  assert.deepEqual(res.errors, []);
+});
+test('fetchTextToCity: valid JSON that fails schema is kind invalid, no fence fallback attempted', () => {
+  const bad = clone(GOOD);
+  bad.schema = 2;
+  const res = C.fetchTextToCity(JSON.stringify(bad));
+  assert.equal(res.kind, 'invalid');
+  assert.equal(res.data, null);
+  assert.ok(res.errors.some((e) => /schema must be 1/.test(e)));
+});
+test('fetchTextToCity: not JSON at all, and no fenced JSON either, is kind not-json', () => {
+  const res = C.fetchTextToCity('Sorry, I ran out of room. Ask me again.');
+  assert.equal(res.kind, 'not-json');
+  assert.equal(res.data, null);
+});
+test('fetchTextToCity: a raw .md guide falls back to the fenced JSON block and succeeds', () => {
+  const md = 'Here is your guide:\n\n```json\n' + JSON.stringify(GOOD) + '\n```\n';
+  const res = C.fetchTextToCity(md);
+  assert.equal(res.kind, 'ok');
+  assert.equal(res.data.city.name, 'Batumi');
+});
+test('fetchTextToCity: a fenced block that parses but fails schema is kind invalid', () => {
+  const bad = clone(GOOD);
+  bad.items[0].status = 'someday';
+  const md = 'notes before\n```json\n' + JSON.stringify(bad) + '\n```\nnotes after';
+  const res = C.fetchTextToCity(md);
+  assert.equal(res.kind, 'invalid');
+  assert.ok(res.errors.some((e) => /bad status/.test(e)));
+});
+test('fetchTextToCity: empty text is not-json, not a thrown error', () => {
+  const res = C.fetchTextToCity('');
+  assert.equal(res.kind, 'not-json');
+  assert.equal(res.data, null);
+});
+test('cities/index.json lists every bundled city, each file present and valid', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const root = path.join(__dirname, '..');
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'cities', 'index.json'), 'utf8'));
+  assert.ok(Array.isArray(manifest.cities) && manifest.cities.length >= 3);
+  const bundled = fs.readdirSync(path.join(root, 'cities')).filter((f) => f.endsWith('.json') && f !== 'index.json');
+  assert.deepEqual(manifest.cities.map((c) => c.file).sort(), bundled.sort());
+  manifest.cities.forEach((c) => {
+    assert.ok(c.name && typeof c.name === 'string');
+    assert.ok(c.dates && typeof c.dates === 'string');
+    const res = C.parse(fs.readFileSync(path.join(root, 'cities', c.file), 'utf8'));
+    assert.deepEqual(res.errors, []);
+    assert.equal(res.data.city.name, c.name, c.file + ' manifest name must match the city JSON');
+  });
+});
+
 // ---- Phase 2, Feature 3: example-city visibility ----
 test('appStore.exampleVisible shows the example when there are no real cities yet', () => {
   assert.equal(C.appStore.exampleVisible([], 'example-seed', false), true);

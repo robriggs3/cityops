@@ -163,6 +163,7 @@
   .empty-day .free-day{padding:6px 16px 10px; font-size:.8rem; color:var(--text-3); font-style:italic;}
   .date-field{font:inherit; font-size:.85rem; padding:6px 10px; border:1px solid var(--border-light);
     border-radius:8px; background:#fff; color:var(--text);}
+  .link-field{flex:1 1 220px; min-width:0;}
   .intel{margin-top:8px;}
   .intel summary{font-size:.72rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
     color:var(--text-3); cursor:pointer; padding:4px 0;}
@@ -1576,6 +1577,43 @@ var CityOps = (function () {
     'Ask the chat to reply again with: "reply with the full city guide as a ' +
     'single ```json code block and nothing else after it."';
 
+  // True only when parse() failed for exactly one reason: the text was not
+  // valid JSON at all. Schema errors (bad status, unknown section, etc.)
+  // produce a different, longer errors list and are never mistaken for this.
+  // Shared by the paste path (better failure copy) and fetchTextToCity below,
+  // so both classify a syntax failure the same way.
+  function isJsonSyntaxError(errors) {
+    return Array.isArray(errors) && errors.length === 1 && /^JSON parse error:/.test(errors[0]);
+  }
+
+  // Turns arbitrary fetched text into a city, same contract as parse() plus a
+  // `kind` tag the caller uses to pick failure copy. Two entry transports feed
+  // this: a URL pointing straight at city JSON, and a URL pointing at a raw
+  // .md guide (JSON wrapped in a ```json fence, same shape Claude/ChatGPT
+  // replies produce). Try the direct parse first since that is the common
+  // case (this site's own cities/<file>.json); only fall back to fence
+  // extraction when the direct parse failed on JSON syntax specifically, so a
+  // schema error on a well-formed JSON file is never masked by a fence search.
+  // kind is one of:
+  //   'ok'       - data is a valid city, ready for commitFromForm
+  //   'not-json' - no parseable JSON found, direct or fenced
+  //   'invalid'  - JSON parsed fine but failed schema validation
+  function fetchTextToCity(text) {
+    var direct = parse(text);
+    if (direct.data) return { data: direct.data, errors: [], kind: 'ok' };
+    if (!isJsonSyntaxError(direct.errors)) {
+      return { data: null, errors: direct.errors, kind: 'invalid' };
+    }
+    var block = extractJsonBlock(text);
+    if (block === null) return { data: null, errors: direct.errors, kind: 'not-json' };
+    // extractJsonBlock only ever returns a fence body that already parsed as
+    // JSON once (see its own try/catch), so parse() here can only still fail
+    // on schema, never on syntax.
+    var viaFence = parse(block);
+    if (viaFence.data) return { data: viaFence.data, errors: [], kind: 'ok' };
+    return { data: null, errors: viaFence.errors, kind: 'invalid' };
+  }
+
   // ---- sync helpers (pure) ----
   // Every network call, session store and piece of sync UI lives in the app
   // shell (src/app-shell.html). Only decision logic lives here, so it is unit
@@ -2768,6 +2806,7 @@ var CityOps = (function () {
       buildIntelPassPrompt: buildIntelPassPrompt
     },
     extractJsonBlock: extractJsonBlock, RETRY_INSTRUCTION: RETRY_INSTRUCTION,
+    isJsonSyntaxError: isJsonSyntaxError, fetchTextToCity: fetchTextToCity,
     syncKit: {
       EPOCH: EPOCH_ISO, decide: decideSync, plan: planSync, buildRows: buildRows,
       parseAuthHash: parseAuthHash, sessionExpiringSoon: sessionExpiringSoon
@@ -2957,6 +2996,7 @@ CityOps.init();
   .empty-day .free-day{padding:6px 16px 10px; font-size:.8rem; color:var(--text-3); font-style:italic;}
   .date-field{font:inherit; font-size:.85rem; padding:6px 10px; border:1px solid var(--border-light);
     border-radius:8px; background:#fff; color:var(--text);}
+  .link-field{flex:1 1 220px; min-width:0;}
   .intel{margin-top:8px;}
   .intel summary{font-size:.72rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
     color:var(--text-3); cursor:pointer; padding:4px 0;}
@@ -4278,6 +4318,43 @@ var CityOps = (function () {
     'Ask the chat to reply again with: "reply with the full city guide as a ' +
     'single ```json code block and nothing else after it."';
 
+  // True only when parse() failed for exactly one reason: the text was not
+  // valid JSON at all. Schema errors (bad status, unknown section, etc.)
+  // produce a different, longer errors list and are never mistaken for this.
+  // Shared by the paste path (better failure copy) and fetchTextToCity below,
+  // so both classify a syntax failure the same way.
+  function isJsonSyntaxError(errors) {
+    return Array.isArray(errors) && errors.length === 1 && /^JSON parse error:/.test(errors[0]);
+  }
+
+  // Turns arbitrary fetched text into a city, same contract as parse() plus a
+  // `kind` tag the caller uses to pick failure copy. Two entry transports feed
+  // this: a URL pointing straight at city JSON, and a URL pointing at a raw
+  // .md guide (JSON wrapped in a ```json fence, same shape Claude/ChatGPT
+  // replies produce). Try the direct parse first since that is the common
+  // case (this site's own cities/<file>.json); only fall back to fence
+  // extraction when the direct parse failed on JSON syntax specifically, so a
+  // schema error on a well-formed JSON file is never masked by a fence search.
+  // kind is one of:
+  //   'ok'       - data is a valid city, ready for commitFromForm
+  //   'not-json' - no parseable JSON found, direct or fenced
+  //   'invalid'  - JSON parsed fine but failed schema validation
+  function fetchTextToCity(text) {
+    var direct = parse(text);
+    if (direct.data) return { data: direct.data, errors: [], kind: 'ok' };
+    if (!isJsonSyntaxError(direct.errors)) {
+      return { data: null, errors: direct.errors, kind: 'invalid' };
+    }
+    var block = extractJsonBlock(text);
+    if (block === null) return { data: null, errors: direct.errors, kind: 'not-json' };
+    // extractJsonBlock only ever returns a fence body that already parsed as
+    // JSON once (see its own try/catch), so parse() here can only still fail
+    // on schema, never on syntax.
+    var viaFence = parse(block);
+    if (viaFence.data) return { data: viaFence.data, errors: [], kind: 'ok' };
+    return { data: null, errors: viaFence.errors, kind: 'invalid' };
+  }
+
   // ---- sync helpers (pure) ----
   // Every network call, session store and piece of sync UI lives in the app
   // shell (src/app-shell.html). Only decision logic lives here, so it is unit
@@ -5470,6 +5547,7 @@ var CityOps = (function () {
       buildIntelPassPrompt: buildIntelPassPrompt
     },
     extractJsonBlock: extractJsonBlock, RETRY_INSTRUCTION: RETRY_INSTRUCTION,
+    isJsonSyntaxError: isJsonSyntaxError, fetchTextToCity: fetchTextToCity,
     syncKit: {
       EPOCH: EPOCH_ISO, decide: decideSync, plan: planSync, buildRows: buildRows,
       parseAuthHash: parseAuthHash, sessionExpiringSoon: sessionExpiringSoon
@@ -7176,9 +7254,107 @@ ignored.
     }
     genBtn.onclick = runGenerate;
 
+    // ---- On this site (no-paste import, part 1): cities already hosted
+    // alongside the app. cities/index.json is a committed manifest, fetched
+    // same-origin; a phone never touches its clipboard for these. This is a
+    // convenience layered on top of the modal, never a requirement: any
+    // fetch failure (offline, 404, opened from file://) leaves onSiteWrap
+    // empty and the rest of the modal is unaffected.
+    var onSiteWrap = document.createElement('div');
+    box.appendChild(onSiteWrap);
+    fetch('cities/index.json').then(function (r) {
+      if (!r.ok) throw new Error('index.json ' + r.status);
+      return r.json();
+    }).then(function (manifest) {
+      if (!manifest || !Array.isArray(manifest.cities) || !manifest.cities.length) return;
+      var onSiteRow = el('div', 'mrow');
+      manifest.cities.forEach(function (c) {
+        if (!c || !c.file || !c.name) return;
+        var btn = el('button', 'ctl', 'Load ' + c.name);
+        btn.type = 'button';
+        btn.title = c.dates || '';
+        btn.onclick = function () {
+          btn.disabled = true;
+          fetch('cities/' + c.file).then(function (r2) {
+            if (!r2.ok) throw new Error('cities/' + c.file + ' ' + r2.status);
+            return r2.text();
+          }).then(function (text) {
+            var res = CityOps.fetchTextToCity(text);
+            if (!res.data) {
+              btn.disabled = false;
+              msg.textContent = 'Could not load ' + c.name + ': ' + res.errors.join('\n');
+              return;
+            }
+            // Same funnel as paste and Generate: duplicate detection (Replace
+            // / Keep both) still runs if this city is already saved.
+            commitFromForm(res.data);
+          }).catch(function () {
+            btn.disabled = false;
+            msg.textContent = 'Could not load ' + c.name + ' right now.';
+          });
+        };
+        onSiteRow.appendChild(btn);
+      });
+      if (onSiteRow.children.length) {
+        onSiteWrap.appendChild(el('p', 'diff', 'On this site:'));
+        onSiteWrap.appendChild(onSiteRow);
+      }
+    }).catch(function () { /* offline, no manifest, or blocked: hide silently */ });
+
     box.appendChild(el('p', 'diff', 'Or paste schema v1 city JSON (the output of PROMPT.md). ' + whereItGoes));
     var ta = document.createElement('textarea');
     box.appendChild(ta);
+
+    // ---- Load from link (no-paste import, part 2): fetch a URL instead of
+    // pasting. Covers both a direct cities/<file>.json link and a raw .md
+    // guide URL (JSON wrapped in a ```json fence, the shape PROMPT.md output
+    // takes), via CityOps.fetchTextToCity's parse-then-extract fallback.
+    var linkInput = document.createElement('input');
+    linkInput.type = 'url';
+    linkInput.className = 'date-field link-field';
+    linkInput.placeholder = 'https://example.com/city.json';
+    linkInput.setAttribute('aria-label', 'City JSON URL');
+    var linkBtn = el('button', 'ctl', 'Load from link');
+    linkBtn.type = 'button';
+    linkBtn.disabled = true; // never a dead click: only live once the field has text
+    linkInput.oninput = function () { linkBtn.disabled = !trim(linkInput.value); };
+    function setLinkLoading(on) {
+      linkBtn.disabled = on || !trim(linkInput.value);
+      linkBtn.textContent = on ? 'Loading...' : 'Load from link';
+    }
+    linkBtn.onclick = function () {
+      var url = trim(linkInput.value);
+      if (!url) return;
+      setLinkLoading(true);
+      fetch(url).then(function (r) {
+        if (!r.ok) throw new Error('link ' + r.status);
+        return r.text();
+      }).then(function (text) {
+        setLinkLoading(false);
+        var res = CityOps.fetchTextToCity(text);
+        if (res.kind === 'not-json') {
+          msg.textContent = 'That link is not JSON. Paste the JSON directly above, or point the link straight at a .json file.';
+          return;
+        }
+        if (res.kind === 'invalid') {
+          msg.textContent = 'That link is JSON, but not a valid city guide:\n- ' + res.errors.join('\n- ');
+          return;
+        }
+        commitFromForm(res.data);
+      }).catch(function () {
+        setLinkLoading(false);
+        // The one failure mode fetchTextToCity cannot see: the network call
+        // itself never completed (offline, DNS, or the server's CORS policy
+        // blocked the read from this origin).
+        msg.textContent = 'That site does not allow apps to read it; download the file and use a link from this site instead.';
+      });
+    };
+    box.appendChild(el('p', 'diff', 'Or load from a link: a URL to a hosted city JSON file, or a page with one in a ```json block.'));
+    var linkRow = el('div', 'mrow');
+    linkRow.appendChild(linkInput);
+    linkRow.appendChild(linkBtn);
+    box.appendChild(linkRow);
+
     var msg = el('div', 'diff', '');
     box.appendChild(msg);
     var row = el('div', 'mrow');
@@ -7282,7 +7458,18 @@ ignored.
     apply.type = 'button';
     apply.onclick = function () {
       var res = CityOps.parse(ta.value);
-      if (!res.data) { msg.textContent = 'Invalid:\n' + res.errors.join('\n'); return; }
+      if (!res.data) {
+        var text = 'Invalid:\n' + res.errors.join('\n');
+        if (CityOps.isJsonSyntaxError(res.errors)) {
+          // A syntax error (as opposed to a schema error) on a large paste is
+          // the phone-clipboard-truncation symptom this whole feature exists
+          // for. Point at the alternatives right when it happens.
+          text += '\n\nPhone clipboards often mangle large files. If this city is ' +
+            'hosted on this site, use the On this site buttons or Load from link above instead.';
+        }
+        msg.textContent = text;
+        return;
+      }
       commitFromForm(res.data);
     };
     var cancel = el('button', 'ctl', 'Cancel');
