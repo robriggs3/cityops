@@ -1738,14 +1738,14 @@ test('normalizeState defaults tab to null (never chosen) and corrects a bogus st
   assert.equal(C.normalizeState({ itemStatus: {}, tab: 'services' }).tab, 'services');
   assert.deepEqual(C.emptyState().collapsedPlanDays, {});
 });
-test('isPlanDayCollapsed/togglePlanDay: every remaining day starts collapsed; toggling twice clears the override', () => {
+test('isPlanDayCollapsed/togglePlanDay: every remaining day starts expanded; toggling twice clears the override', () => {
   const st = C.emptyState();
+  assert.equal(C.isPlanDayCollapsed(st, '2026-08-11'), false);
+  C.togglePlanDay(st, '2026-08-11');
   assert.equal(C.isPlanDayCollapsed(st, '2026-08-11'), true);
+  assert.equal(st.collapsedPlanDays['2026-08-11'], true);
   C.togglePlanDay(st, '2026-08-11');
   assert.equal(C.isPlanDayCollapsed(st, '2026-08-11'), false);
-  assert.equal(st.collapsedPlanDays['2026-08-11'], false);
-  C.togglePlanDay(st, '2026-08-11');
-  assert.equal(C.isPlanDayCollapsed(st, '2026-08-11'), true);
   assert.ok(!('2026-08-11' in st.collapsedPlanDays)); // override dropped, not just flipped
 });
 test('planModel: today groups every dated-today item across sections, same as todayModel', () => {

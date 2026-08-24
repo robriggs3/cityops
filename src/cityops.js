@@ -553,21 +553,21 @@ var CityOps = (function () {
     return (state && state.tab && TAB_IDS.indexOf(state.tab) !== -1) ? state.tab : 'plan';
   }
 
-  // Phase 4: per-day collapse in the Plan tab's "remaining days" list. Same
-  // tri-state read as isSectionCollapsed (explicit override wins, otherwise a
-  // computed default), but the default here is always collapsed: today has
-  // its own block above this list, so every day IN this list starts closed
-  // until the traveler opens one.
+  // Per-day collapse in the Plan tab's "remaining days" list. Same tri-state
+  // read as isSectionCollapsed (explicit override wins, otherwise a computed
+  // default). Owner feedback 2026-08-25: every day now defaults to EXPANDED
+  // on page load (was collapsed); the traveler's own explicit choice, once
+  // made, still sticks (that's what collapsedPlanDays persists).
   function isPlanDayCollapsed(state, iso) {
     var explicit = state.collapsedPlanDays ? state.collapsedPlanDays[iso] : undefined;
     if (explicit === true || explicit === false) return explicit;
-    return true;
+    return false;
   }
 
   function togglePlanDay(state, iso) {
     state.collapsedPlanDays = state.collapsedPlanDays || {};
     var next = !isPlanDayCollapsed(state, iso);
-    if (next === true) delete state.collapsedPlanDays[iso]; // back to the default
+    if (next === false) delete state.collapsedPlanDays[iso]; // back to the default (expanded)
     else state.collapsedPlanDays[iso] = next;
     return state;
   }
@@ -2266,9 +2266,10 @@ var CityOps = (function () {
 
   // Phase 4: the Plan tab, the new default landing tab and the home of every
   // date. Reads planModel() (pure, tested on its own): today first, then
-  // every other day of the stay in order (collapsed by default; a day with
-  // nothing assigned says so instead of rendering an empty card), then open
-  // tasks with done ones sunk below, collapsed.
+  // every other day of the stay in order (expanded by default so the whole
+  // stay reads top to bottom on page load; a day with nothing assigned says
+  // so instead of rendering an empty card), then open tasks with done ones
+  // sunk below, collapsed.
   function renderPlanTab(data, state) {
     var pm = planModel(data, state);
     var main = document.getElementById('main');
