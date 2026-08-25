@@ -2098,19 +2098,30 @@ var CityOps = (function () {
   // else.
   function orderDayItems(entries, order) {
     var list = entries || [];
-    if (!order || !order.length || list.length < 2) return list.slice();
-    var byId = {};
-    list.forEach(function (e) { byId[e.it.id] = e; });
-    var out = [];
-    var taken = {};
-    order.forEach(function (id) {
-      if (Object.prototype.hasOwnProperty.call(byId, id) && !taken[id]) {
-        taken[id] = 1;
-        out.push(byId[id]);
-      }
-    });
-    list.forEach(function (e) { if (!taken[e.it.id]) out.push(e); });
-    return out;
+    var out;
+    if (!order || !order.length || list.length < 2) {
+      out = list.slice();
+    } else {
+      var byId = Object.create(null);
+      list.forEach(function (e) { byId[e.it.id] = e; });
+      out = [];
+      var taken = Object.create(null);
+      order.forEach(function (id) {
+        if (Object.prototype.hasOwnProperty.call(byId, id) && !taken[id]) {
+          taken[id] = 1;
+          out.push(byId[id]);
+        }
+      });
+      list.forEach(function (e) { if (!taken[e.it.id]) out.push(e); });
+    }
+    // Done items sink to the bottom of their day so the top of a day is
+    // always what is still to do. The partition is stable on both sides:
+    // drag order is preserved within each band, and un-marking done returns
+    // an item to its ordered place among the active ones.
+    var active = [];
+    var done = [];
+    out.forEach(function (e) { (e.status === 'done' ? done : active).push(e); });
+    return active.concat(done);
   }
 
   // Writes one day's arrangement. Duplicates and non-strings are dropped (a

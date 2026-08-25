@@ -2188,5 +2188,23 @@ test('PROMPT.md forbids the packed per-day item, inside the sliced item contract
   assert.ok(/own `day`/.test(block));
 });
 
+test('orderDayItems sinks done items below active, stable both sides', () => {
+  const mk = (id, status) => ({ it: { id: id }, sec: {}, status: status });
+  const entries = [mk('a', 'done'), mk('b', 'plan'), mk('c', 'done'), mk('d', 'plan')];
+  assert.deepEqual(C.orderDayItems(entries, null).map(e => e.it.id), ['b', 'd', 'a', 'c']);
+  // custom order applies within the bands: order lists c,b,a,d
+  assert.deepEqual(C.orderDayItems(entries, ['c', 'b', 'a', 'd']).map(e => e.it.id), ['b', 'd', 'c', 'a']);
+  // un-done returns to its ordered place
+  const undone = entries.map(e => e.it.id === 'a' ? mk('a', 'plan') : e);
+  assert.deepEqual(C.orderDayItems(undone, ['c', 'b', 'a', 'd']).map(e => e.it.id), ['b', 'a', 'd', 'c']);
+});
+test('orderDayItems maps are prototype-safe', () => {
+  const mk = (id, status) => ({ it: { id: id }, sec: {}, status: status });
+  const entries = [mk('__proto__', 'plan'), mk('valueOf', 'plan'), mk('x', 'plan')];
+  const out = C.orderDayItems(entries, ['valueOf', '__proto__']);
+  assert.deepEqual(out.map(e => e.it.id), ['valueOf', '__proto__', 'x']);
+  assert.equal(({}).it, undefined);
+});
+
 console.log(pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);
