@@ -1811,5 +1811,83 @@ test('tabForSection resolves every real Tirana section (and so every item) to on
   });
 });
 
+// --- Plan tab per-item day moves: the picker's pure model ---
+// The move mechanism itself (setDay + keyForDisplayedDate) already had
+// coverage; what was missing is the model that tells the renderer which day
+// the item is ALREADY on, so that day can be shown but not offered as a tap
+// that cannot change anything.
+test('dayMoveOptions covers the whole stay and marks the day the item is on', () => {
+  const st = C.emptyState();
+  const brasserie = GOOD.items.find(i => i.id === 'brasserie'); // day 2026-08-13
+  const m = C.dayMoveOptions(GOOD, st, brasserie);
+  assert.equal(m.options.length, 8); // every date of the stay
+  assert.equal(m.hasDay, true);
+  assert.equal(m.currentIso, '2026-08-13');
+  assert.ok(/\b13\b/.test(m.currentLabel), 'currentLabel should name the date: ' + m.currentLabel);
+  const current = m.options.filter(o => o.current);
+  assert.equal(current.length, 1);
+  assert.equal(current[0].iso, '2026-08-13');
+  // Every other date stays a live target.
+  assert.equal(m.options.filter(o => !o.current).length, 7);
+});
+test('dayMoveOptions has no current day for an item with no day assigned', () => {
+  const st = C.emptyState();
+  const sisters = GOOD.items.find(i => i.id === 'sisters'); // backup, no day
+  const m = C.dayMoveOptions(GOOD, st, sisters);
+  assert.equal(m.hasDay, false);
+  assert.equal(m.currentIso, null);
+  assert.equal(m.currentLabel, null);
+  assert.equal(m.options.filter(o => o.current).length, 0);
+});
+test('dayMoveOptions marks the DISPLAYED day, not the stored key, after a reorder', () => {
+  // brasserie's stored day is Aug 13, but the reorder puts its group in the
+  // Aug 10 slot: the traveler sees the card under Aug 10, so that is the day
+  // the picker must call "current".
+  const st = C.emptyState();
+  st.dayOrder.dinner = ['2026-08-13', '2026-08-10'];
+  const brasserie = GOOD.items.find(i => i.id === 'brasserie');
+  const m = C.dayMoveOptions(GOOD, st, brasserie);
+  assert.equal(m.currentIso, '2026-08-10');
+  assert.equal(m.options.find(o => o.iso === '2026-08-10').key, '2026-08-13');
+  assert.equal(m.options.filter(o => o.current).length, 1);
+});
+test('dayMoveOptions tracks an in-app move (state override beats the data day)', () => {
+  const st = C.emptyState();
+  const brasserie = GOOD.items.find(i => i.id === 'brasserie');
+  C.setDay(st, 'brasserie', '2026-08-09');
+  const m = C.dayMoveOptions(GOOD, st, brasserie);
+  assert.equal(m.currentIso, '2026-08-09');
+  assert.equal(m.options.filter(o => o.current).length, 1);
+});
+test('dayMoveOptions respects an adjusted stay range', () => {
+  const st = C.emptyState();
+  C.setStayDates(st, '2026-08-09', '2026-08-11');
+  const brasserie = GOOD.items.find(i => i.id === 'brasserie'); // Aug 13, now outside
+  const m = C.dayMoveOptions(GOOD, st, brasserie);
+  assert.equal(m.options.length, 3);
+  assert.equal(m.hasDay, true);
+  assert.equal(m.currentIso, null); // its day is off the shortened stay: nothing to mark
+});
+// Integration guard on the real trip data this feature was built for: every
+// dated Tirana item must offer exactly one marked current day and seven live
+// targets, whatever section it lives in.
+test('dayMoveOptions works for every dated item in the real Tirana guide', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const tirana = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'cities', 'tirana.json'), 'utf8'));
+  const st = C.emptyState();
+  const dated = tirana.items.filter(i => i.day && (i.status === 'plan' || i.status === 'done'));
+  assert.ok(dated.length > 0);
+  dated.forEach(it => {
+    const m = C.dayMoveOptions(tirana, st, it);
+    assert.equal(m.options.length, 8, `${it.id}: expected the 8-day stay`);
+    assert.equal(m.hasDay, true, `${it.id}: should read as dated`);
+    assert.equal(m.options.filter(o => o.current).length, 1,
+      `${it.id}: expected exactly one current day, got ${m.options.filter(o => o.current).length}`);
+    assert.equal(m.currentIso, it.day, `${it.id}: current day should be its own date`);
+    assert.equal(m.options.filter(o => !o.current).length, 7, `${it.id}: expected 7 live targets`);
+  });
+});
+
 console.log(pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);
