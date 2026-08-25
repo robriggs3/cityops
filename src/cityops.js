@@ -2686,8 +2686,14 @@ var CityOps = (function () {
         'Today (' + dayLabel(pm.todayIso) + ') is outside this trip\'s dates (' +
         fmtRange(effectiveDates(data, state)) + '). Showing anything dated today anyway.'));
     }
+    // Today wears the same visual language as the wheres tracker's
+    // you-are-here banner: accent frame, corner badge, elevated. Without it
+    // the pinned group reads as a day sorted out of order rather than a
+    // deliberate "you are here". The badge carries the word TODAY, so the
+    // heading only needs the date.
     var todayGroup = planDayGroup(pm.todayIso);
-    todayGroup.appendChild(el('h2', null, 'Today · ' + dayLabel(pm.todayIso)));
+    todayGroup.className += ' planday-today';
+    todayGroup.appendChild(el('h2', null, dayLabel(pm.todayIso)));
     todayGroup.appendChild(planDayList(pm.todayIso, pm.today));
     main.appendChild(todayGroup);
     pm.days.forEach(function (d) {
