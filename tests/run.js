@@ -1182,7 +1182,7 @@ const DELTA = {
 test('mergeDelta adds new items and new sections and counts them', () => {
   const r = C.mergeDelta(GOOD, clone(DELTA));
   assert.deepEqual(r.errors, []);
-  assert.deepEqual(r.summary, { added: 2, skipped: 0, sectionsAdded: 1, intelApplied: 1, intelSkipped: 0 });
+  assert.deepEqual(r.summary, { added: 2, skipped: 0, sectionsAdded: 1, intelApplied: 1, intelSkipped: 0, ratingsApplied: 0, ratingsSkipped: 0 });
   assert.equal(r.data.sections.length, 3);
   assert.equal(r.data.sections[2].id, 'interests');   // appended, never reordered
   assert.equal(r.data.items.length, GOOD.items.length + 2);
@@ -1212,7 +1212,7 @@ test('mergeDelta applied twice is a no-op: everything is already there', () => {
   const second = C.mergeDelta(first.data, clone(DELTA));
   assert.deepEqual(second.errors, []);
   assert.deepEqual(second.summary,
-    { added: 0, skipped: 2, sectionsAdded: 0, intelApplied: 1, intelSkipped: 0 });
+    { added: 0, skipped: 2, sectionsAdded: 0, intelApplied: 1, intelSkipped: 0, ratingsApplied: 0, ratingsSkipped: 0 });
   assert.deepEqual(second.data, first.data);
 });
 
@@ -1265,7 +1265,7 @@ test('mergeDelta rejects a bad envelope, unknown section, done status and bad in
   assert.equal(bad({ sections: 'nope' }).data, null);
   // A rejected delta reports a zeroed summary: nothing partial ever happened.
   assert.deepEqual(bad({ schema: 2 }).summary,
-    { added: 0, skipped: 0, sectionsAdded: 0, intelApplied: 0, intelSkipped: 0 });
+    { added: 0, skipped: 0, sectionsAdded: 0, intelApplied: 0, intelSkipped: 0, ratingsApplied: 0, ratingsSkipped: 0 });
 });
 
 test('mergeDelta applies intel to existing ids and counts unknown ids as skipped', () => {
@@ -1413,7 +1413,11 @@ const FAKE_RERUN = [
   '',
   '<' + '!-- RERUN:INTEL -->',
   'Research the items listed below, by id.',
-  '<' + '!-- /RERUN:INTEL -->'
+  '<' + '!-- /RERUN:INTEL -->',
+  '',
+  '<' + '!-- RERUN:RATINGS -->',
+  'Look up the CURRENT Google Maps rating for each item listed below.',
+  '<' + '!-- /RERUN:RATINGS -->'
 ].join('\n');
 
 const PROFILE = { interests: ['climbing gyms', 'live jazz'], avoid: ['nightclubs'], notes: 'Vegetarian most days.' };
@@ -1496,7 +1500,7 @@ test('the real PROMPT.md carries every landmark the builders slice', () => {
   const fs = require('fs');
   const path = require('path');
   const prompt = fs.readFileSync(path.join(__dirname, '..', 'PROMPT.md'), 'utf8');
-  ['RULES:INTEL', 'CONTRACT:ITEM', 'RERUN:INTERESTS', 'RERUN:INTEL'].forEach((name) => {
+  ['RULES:INTEL', 'CONTRACT:ITEM', 'RERUN:INTERESTS', 'RERUN:INTEL', 'RERUN:RATINGS'].forEach((name) => {
     assert.ok(prompt.indexOf('<' + '!-- ' + name + ' -->') !== -1, 'missing open ' + name);
     assert.ok(prompt.indexOf('<' + '!-- /' + name + ' -->') !== -1, 'missing close ' + name);
   });
@@ -2220,6 +2224,286 @@ test('orderDayItems defaults to chronological, drag order still overrides', () =
   const day = [mk('work', 'PM'), mk('fish', 'Eve, seafood'), mk('coffee', 'AM, crawl'), mk('bus', 'leave 08:45')];
   assert.deepEqual(C.orderDayItems(day, null).map(e => e.it.id), ['bus', 'coffee', 'work', 'fish']);
   assert.deepEqual(C.orderDayItems(day, ['fish', 'work']).map(e => e.it.id), ['fish', 'work', 'bus', 'coffee']);
+});
+
+// ---- structured ratings ----
+// The rating is the one field the traveler reads at a glance to choose
+// between two places, so every entry path (whole guide, new delta item,
+// ratings map) is held to the same bar and the bad shapes are named.
+test('validate accepts a well-formed rating and every optional field', () => {
+  const ok = clone(GOOD);
+  ok.items[0].rating = { stars: 4.8, count: 5545, source: 'Google Maps, Aug 2026', checked: '2026-08-25' };
+  ok.items[1].rating = { stars: 5 };                       // stars alone is enough
+  ok.items[2].rating = { stars: 0, count: 0, source: null, checked: null };
+  assert.deepEqual(C.validate(ok), []);
+});
+
+test('validate rejects every bad rating shape by name', () => {
+  function errsFor(rating) {
+    const bad = clone(GOOD);
+    bad.items[0].rating = rating;
+    return C.validate(bad);
+  }
+  assert.ok(errsFor([4.8]).some((e) => /rating: must be an object/.test(e)));
+  assert.ok(errsFor('4.8 stars').some((e) => /rating: must be an object/.test(e)));
+  assert.ok(errsFor({}).some((e) => /rating: stars must be a number from 0 to 5/.test(e)));
+  assert.ok(errsFor({ stars: '4.8' }).some((e) => /stars must be a number from 0 to 5/.test(e)));
+  assert.ok(errsFor({ stars: 5.4 }).some((e) => /stars must be a number from 0 to 5/.test(e)));
+  assert.ok(errsFor({ stars: -1 }).some((e) => /stars must be a number from 0 to 5/.test(e)));
+  assert.ok(errsFor({ stars: NaN }).some((e) => /stars must be a number from 0 to 5/.test(e)));
+  assert.ok(errsFor({ stars: 4.8, count: 12.5 }).some((e) => /count must be a whole number, 0 or more/.test(e)));
+  assert.ok(errsFor({ stars: 4.8, count: '442' }).some((e) => /count must be a whole number, 0 or more/.test(e)));
+  assert.ok(errsFor({ stars: 4.8, count: -3 }).some((e) => /count must be a whole number, 0 or more/.test(e)));
+  assert.ok(errsFor({ stars: 4.8, source: 12 }).some((e) => /rating: source must be a string/.test(e)));
+  assert.ok(errsFor({ stars: 4.8, checked: 'Aug 2026' }).some((e) => /rating: checked must be YYYY-MM-DD/.test(e)));
+  // The error names the item, exactly like every other item-level error.
+  assert.ok(errsFor({ stars: 9 }).some((e) => /^items\[0\] \(brasserie\) rating:/.test(e)));
+  // null and absent are both "no rating", never an error.
+  assert.deepEqual(errsFor(null), []);
+});
+
+test('mergeDelta accepts a rating on a new item, held to the same bar', () => {
+  const delta = { schema: 1, delta: true, items: [
+    { id: 'nova', section: 'dinner', status: 'plan', name: 'Nova', links: [],
+      rating: { stars: 4.6, count: 210, source: 'Google Maps, Aug 2026', checked: '2026-08-25' } }
+  ] };
+  const r = C.mergeDelta(GOOD, delta);
+  assert.deepEqual(r.errors, []);
+  assert.deepEqual(r.data.items[4].rating,
+    { stars: 4.6, count: 210, source: 'Google Maps, Aug 2026', checked: '2026-08-25' });
+  const badItem = { schema: 1, delta: true, items: [
+    { id: 'nova', section: 'dinner', status: 'plan', name: 'Nova', links: [], rating: { stars: 7 } }
+  ] };
+  const bad = C.mergeDelta(GOOD, badItem);
+  assert.equal(bad.data, null);
+  assert.ok(bad.errors.some((e) => /items\[0\] \(nova\) rating: stars must be a number from 0 to 5/.test(e)));
+});
+
+test('mergeDelta ratings map applies to existing items and counts unknown ids as skipped', () => {
+  const delta = { schema: 1, delta: true, ratings: {
+    brasserie: { stars: 4.8, count: 1216, source: 'Google Maps, Aug 2026', checked: '2026-08-25' },
+    nord: { stars: 4.4 },
+    'vanished-place': { stars: 4.9, count: 12 }
+  } };
+  const r = C.mergeDelta(GOOD, delta);
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.summary.ratingsApplied, 2);
+  assert.equal(r.summary.ratingsSkipped, 1);
+  const byId = {};
+  r.data.items.forEach((i) => { byId[i.id] = i; });
+  assert.equal(byId.brasserie.rating.count, 1216);
+  assert.equal(byId.nord.rating.stars, 4.4);
+  assert.equal(byId.tanini.rating, undefined);
+  // Nothing else on the item moved: a ratings pass touches `rating` only.
+  assert.equal(byId.brasserie.note, GOOD.items[0].note);
+  assert.equal(byId.brasserie.price.text, GOOD.items[0].price.text);
+  // Pure: the input city is untouched and the map is deep-copied, not aliased.
+  assert.equal(GOOD.items[0].rating, undefined);
+  delta.ratings.brasserie.stars = 1;
+  assert.equal(byId.brasserie.rating.stars, 4.8);
+});
+
+test('mergeDelta ratings applied twice REPLACES and counts as applied, not skipped', () => {
+  // A rating is a reading taken on a date. Re-running the pass is how the
+  // number stays current, so the second run must overwrite the first and
+  // report the work it did; skipped is reserved for ids this guide lacks.
+  const first = C.mergeDelta(GOOD, { schema: 1, delta: true,
+    ratings: { brasserie: { stars: 4.8, count: 1216, checked: '2026-07-01' } } });
+  const second = C.mergeDelta(first.data, { schema: 1, delta: true,
+    ratings: { brasserie: { stars: 4.6, count: 1290, checked: '2026-08-25' } } });
+  assert.deepEqual(second.errors, []);
+  assert.equal(second.summary.ratingsApplied, 1);
+  assert.equal(second.summary.ratingsSkipped, 0);
+  assert.deepEqual(second.data.items[0].rating, { stars: 4.6, count: 1290, checked: '2026-08-25' });
+  // Replacement, not a field-by-field merge: last month's count cannot
+  // survive next to this month's stars.
+  const third = C.mergeDelta(second.data, { schema: 1, delta: true,
+    ratings: { brasserie: { stars: 4.7 } } });
+  assert.deepEqual(third.data.items[0].rating, { stars: 4.7 });
+});
+
+test('mergeDelta ratings map is prototype-safe and rejects bad shapes', () => {
+  // JSON.parse, not an object literal: a literal `__proto__:` key SETS the
+  // prototype instead of creating an own property, so a literal would test
+  // nothing. A pasted delta arrives through JSON.parse, and that is the
+  // route that really does hand mergeDelta an own "__proto__" key.
+  const hostile = C.mergeDelta(GOOD, JSON.parse('{"schema":1,"delta":true,"ratings":' +
+    '{"__proto__":{"stars":5},"constructor":{"stars":5},"hasOwnProperty":{"stars":5},' +
+    '"brasserie":{"stars":4.1}}}'));
+  assert.deepEqual(hostile.errors, []);
+  // No reserved key reaches an item, and nothing is painted onto Object.
+  assert.equal(hostile.summary.ratingsApplied, 1);
+  assert.equal(hostile.summary.ratingsSkipped, 3);
+  assert.equal(({}).rating, undefined);
+  assert.equal(({}).stars, undefined);
+  hostile.data.items.forEach((it) => {
+    if (it.id !== 'brasserie') assert.equal(it.rating, undefined);
+  });
+  const arr = C.mergeDelta(GOOD, { schema: 1, delta: true, ratings: [{ stars: 4 }] });
+  assert.equal(arr.data, null);
+  assert.ok(arr.errors.some((e) => /ratings must be an object keyed by item id/.test(e)));
+  const badEntry = C.mergeDelta(GOOD, { schema: 1, delta: true, ratings: { nord: { stars: 'nine' } } });
+  assert.equal(badEntry.data, null);
+  assert.ok(badEntry.errors.some((e) => /ratings\["nord"\]: stars must be a number from 0 to 5/.test(e)));
+  // Errors mean NO merge at all, ratings included.
+  assert.deepEqual(badEntry.summary, { added: 0, skipped: 0, sectionsAdded: 0, intelApplied: 0,
+    intelSkipped: 0, ratingsApplied: 0, ratingsSkipped: 0 });
+});
+
+test('mergeDelta applies intel and ratings in one payload without either disturbing the other', () => {
+  const r = C.mergeDelta(GOOD, { schema: 1, delta: true,
+    intel: { brasserie: { verdicts: [{ tier: 'must', text: 'The duck' }] } },
+    ratings: { brasserie: { stars: 4.8 }, nowhere: { stars: 4.0 } } });
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.summary.intelApplied, 1);
+  assert.equal(r.summary.intelSkipped, 0);
+  assert.equal(r.summary.ratingsApplied, 1);
+  assert.equal(r.summary.ratingsSkipped, 1);
+  assert.equal(r.data.items[0].intel.verdicts[0].text, 'The duck');
+  assert.equal(r.data.items[0].rating.stars, 4.8);
+});
+
+test('buildRatingsPassPrompt lists the items still in play and nothing else', () => {
+  const city = clone(GOOD);
+  city.items.push({ id: 'gone', section: 'dinner', status: 'archived', name: 'Closed Place', links: [] });
+  city.items.push({ id: 'eaten', section: 'dinner', status: 'done', name: 'Already Been', links: [] });
+  const out = C.promptKit.buildRatingsPassPrompt(FAKE_RERUN, city);
+  assert.ok(out.startsWith('You are refreshing the Google Maps ratings on an existing CityOps city guide.'));
+  assert.ok(out.includes('- **City:** Batumi'));
+  assert.ok(out.includes('Look up the CURRENT Google Maps rating for each item listed below.'));
+  assert.equal(out.indexOf('RERUN:RATINGS'), -1);
+  assert.ok(out.includes('## Items'));
+  assert.ok(out.includes('- brasserie | dinner | Brasserie 1900'));   // plan
+  assert.ok(out.includes('- sisters | dinner | At the Sisters'));     // backup
+  assert.equal(out.indexOf('- gone | dinner | Closed Place'), -1);    // archived
+  assert.equal(out.indexOf('- eaten | dinner | Already Been'), -1);   // done
+  assert.ok(out.includes('Every line above is `id | section | name`.'));
+  // Not an intel pass and not an interests pass: neither block belongs here.
+  assert.equal(out.indexOf('## Intel quality rules'), -1);
+  assert.equal(out.indexOf('## Traveler interests'), -1);
+  // Pure, like its two siblings.
+  const snap = JSON.stringify(city);
+  C.promptKit.buildRatingsPassPrompt(FAKE_RERUN, city);
+  assert.equal(JSON.stringify(city), snap);
+  assert.throws(() => C.promptKit.buildRatingsPassPrompt('# nothing here', GOOD), /no RERUN:RATINGS block/);
+});
+
+test('the real PROMPT.md builds a ratings pass that says look it up, never guess', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const prompt = fs.readFileSync(path.join(__dirname, '..', 'PROMPT.md'), 'utf8');
+  const out = C.promptKit.buildRatingsPassPrompt(prompt, GOOD);
+  assert.ok(out.includes('Never guess, never carry a number forward from memory.'));
+  assert.ok(out.includes('Omit any item you cannot verify.'));
+  assert.ok(out.includes('"ratings": {'));
+  assert.ok(out.includes('- brasserie | dinner | Brasserie 1900'));
+  // The generation contract must tell the AI to emit `rating` rather than
+  // bury the number in the note, or the badge is empty on every new guide.
+  const contract = prompt.slice(prompt.indexOf('<' + '!-- CONTRACT:ITEM -->'),
+    prompt.indexOf('<' + '!-- /CONTRACT:ITEM -->'));
+  assert.ok(/`rating` is optional on any item and is the ONLY place a rating belongs/.test(contract),
+    'the rating rule must live INSIDE CONTRACT:ITEM so the delta prompts carry it too');
+});
+
+// ---- tools/extract-ratings.js: prose to structured data ----
+// Every case below is a real note shape from cities/tirana.json,
+// cities/yerevan.json or cities/batumi.json.
+test('extractRating reads every rating shape the shipped guides actually use', () => {
+  const { extractRating } = require('../tools/extract-ratings');
+  function r(note) { return extractRating(note).rating; }
+  assert.deepEqual(r('4.8 stars across 442 reviews, the highest-rated place nearby.'),
+    { stars: 4.8, count: 442, source: 'from generation research' });
+  assert.equal(r('4.5 stars, 252 reviews. Air conditioning.').count, 252);
+  assert.equal(r('4.6★ across 5,545 reviews - the broadest menu.').count, 5545);
+  assert.equal(r('Rruga e Bogdaneve 25 · 4.9★ (38).').count, 38);
+  assert.equal(r('Dropped, 3.6★ on only 7 reviews.').count, 7);
+  assert.equal(r('4.9 stars but only 76 reviews, so treat that as soft.').count, 76);
+  assert.equal(r('4.5 stars across roughly 1,000 reviews.').count, 1000);
+  assert.equal(r('4.5 stars across about 405 reviews.').count, 405);
+  assert.equal(r('4.6 stars across 250 ratings.').count, 250);
+  assert.equal(r('4.5 stars and 1,833 reviews for the park, 4.6 and 607 for the statue.').count, 1833);
+  // The FIRST rating wins when a note compares two sources or two branches.
+  assert.deepEqual(r('4.5 stars across 370 Google reviews and 4.9 across 177 Yandex ratings.'),
+    { stars: 4.5, count: 370, source: 'from generation research' });
+  // Stars with no count at all: the count key is simply absent.
+  assert.deepEqual(r('Drop-off dry cleaning. 4.5 stars. Opens 09:00.'),
+    { stars: 4.5, source: 'from generation research' });
+  assert.deepEqual(r("Was Plan A in v1; it's 4.2★ and has become a tourist cafe."),
+    { stars: 4.2, source: 'from generation research' });
+});
+
+test('extractRating never guesses an ambiguous reading', () => {
+  const { extractRating } = require('../tools/extract-ratings');
+  // A star RANGE gives no rating at all: picking one end invents precision.
+  assert.equal(extractRating('About 4.5 to 4.6 stars across roughly 140 Google reviews.').rating, null);
+  // A count range gives the stars and drops the count.
+  assert.deepEqual(extractRating('5.0 stars across roughly 230 to 250 reviews, the best nearby.').rating,
+    { stars: 5, source: 'from generation research' });
+  // Nothing rating-shaped in the note, and no note at all.
+  assert.equal(extractRating('Opens 08:00, runs to 02:00. 40 Pushkin.').rating, null);
+  assert.equal(extractRating('').rating, null);
+  assert.equal(extractRating(undefined).rating, null);
+  assert.equal(extractRating(null).rating, null);
+});
+
+test('extractRating only edits the note when the clause is a whole sentence', () => {
+  const { extractRating } = require('../tools/extract-ratings');
+  // Whole sentence, first: it goes, and the note starts at the real content.
+  const lead = extractRating('4.7 stars across 801 reviews. Armenian crossed with Lebanese.');
+  assert.equal(lead.removed, true);
+  assert.equal(lead.note, 'Armenian crossed with Lebanese.');
+  // Whole sentence, in the middle: the sentences either side close up.
+  const mid = extractRating('Drop-off dry cleaning, returned folded. 4.5 stars. Opens 09:00.');
+  assert.equal(mid.removed, true);
+  assert.equal(mid.note, 'Drop-off dry cleaning, returned folded. Opens 09:00.');
+  // The sentence says something else too: not one character is touched.
+  const rich = '4.8 stars across 442 reviews, the highest-rated substantial restaurant nearby.';
+  const kept = extractRating(rich);
+  assert.equal(kept.removed, false);
+  assert.equal(kept.note, rich);
+  assert.equal(kept.rating.stars, 4.8);
+  // Mid-sentence clause, same rule: rating extracted, prose left alone.
+  const inline = 'A real self-service laundromat, open 24 hours, 5.0 stars. The wash caps at an hour.';
+  assert.equal(extractRating(inline).removed, false);
+  assert.equal(extractRating(inline).note, inline);
+  // A note that was ONLY the rating leaves no empty string behind.
+  const only = extractRating('4.5 stars.');
+  assert.equal(only.removed, true);
+  assert.equal(only.note, null);
+});
+
+test('splitSentences round-trips byte for byte, decimals and all', () => {
+  const { splitSentences } = require('../tools/extract-ratings');
+  const notes = [
+    '4.7 stars across 801 reviews. Armenian crossed with Lebanese and Syrian. 16 min walk.',
+    'Opens 08:00 and runs to 02:00. 4.6 stars across 479 Google reviews, but Tripadvisor sits at 3.4.',
+    'No terminator at the end',
+    'Two branches, Hanrapetutyan 2nd Lane 17/1 and Mashtots 5/9. Carry both!'
+  ];
+  notes.forEach((n) => { assert.equal(splitSentences(n).join(''), n); });
+  assert.equal(splitSentences('4.7 stars across 801 reviews. Armenian food.').length, 2);
+});
+
+test('the shipped cities carry structured ratings for the badge to render', () => {
+  const fs = require('fs');
+  const path = require('path');
+  ['tirana', 'yerevan', 'batumi'].forEach((name) => {
+    const city = JSON.parse(fs.readFileSync(
+      path.join(__dirname, '..', 'cities', name + '.json'), 'utf8'));
+    const rated = city.items.filter((it) => it.rating);
+    assert.ok(rated.length > 0, name + ' has no structured ratings');
+    // Whatever the extractor wrote has to pass the same validator the app
+    // runs on every entry path, or the guide will not open at all.
+    assert.deepEqual(C.validate(city), []);
+    rated.forEach((it) => {
+      assert.equal(typeof it.rating.stars, 'number');
+      assert.ok(it.rating.stars > 0 && it.rating.stars <= 5, name + '/' + it.id + ' stars out of range');
+      // A rating lifted out of prose says where it came from and does NOT
+      // claim a check date nobody performed.
+      assert.equal(typeof it.rating.source, 'string');
+      assert.equal(it.rating.checked, undefined);
+    });
+  });
 });
 
 console.log(pass + ' passed, ' + fail + ' failed');

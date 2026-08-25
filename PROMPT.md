@@ -181,10 +181,13 @@ unusable links and missed real risks. Follow them exactly.
   either on the specific place or in the Practical section if it's a
   citywide pattern. Don't invent a risk that isn't backed by what you
   found; don't soften one that reviews clearly support.
-- **Ratings and review counts in the note where they matter.** A rating
-  with a real review count (e.g. `4.8 stars, 5,545 reviews`) is useful
-  signal; include it in the `note` field when you have it. Don't
-  round up or guess a count.
+- **Ratings go in the `rating` field, never buried in the note.** A rating
+  with a real review count is useful signal, and the app renders it as a
+  badge on the card, so emit it as structured data:
+  `"rating": {"stars": 4.8, "count": 5545, "source": "Google Maps, Aug
+  2026"}`. Do not also write "4.8 stars, 5,545 reviews" into `note`; the
+  note is for what the number does not say. Don't round up, don't guess a
+  count, and omit `rating` entirely for a place you could not look up.
 
 ### Intel
 
@@ -251,6 +254,15 @@ block, nothing outside the fence. The JSON must be valid against schema v1
   - `tips`: array of short non-empty strings.
   - `source`: one line of provenance.
   Include `intel` only where reviews support it; omit otherwise.
+- `rating` is optional on any item and is the ONLY place a rating belongs
+  (never prose in `note`). When present it is an object with any of:
+  - `stars`: required, a number from 0 to 5, one decimal (`4.8`).
+  - `count`: the review count as a whole number, no separators (`5545`).
+    Omit it rather than guess or round one.
+  - `source`: where the number came from and roughly when
+    (`"Google Maps, Aug 2026"`).
+  - `checked`: the date you looked it up, `YYYY-MM-DD`.
+  Omit `rating` entirely for a place whose rating you could not verify.
 - Every item's `section` matches one of the section ids you defined.
 - Every item has a unique `id` (a short slug, e.g. `"brasserie"`), a
   `name`, and a `links` array. Place items must have at least a `map`
@@ -301,7 +313,8 @@ to copy.
     "when": "Old Town office day",
     "name": "Brasserie 1900",
     "price": {"text": "~80-120 GEL / $30-44"},
-    "note": "4.8 stars ... reserve.",
+    "note": "The room everyone books for a last night; reserve.",
+    "rating": {"stars": 4.8, "count": 1216, "source": "Google Maps, Aug 2026"},
     "hours": {"text": "12:00-23:00 daily", "class": "late"},
     "tags": ["Book ahead"],
     "links": [
@@ -335,6 +348,11 @@ Field notes:
 - `city.accommodation.lat`/`lng` should be your best estimate for the
   accommodation address given above, not left at 0. Approximate from the
   address is fine; this doesn't need to be survey-precise.
+- `rating`, when you have it, sits alongside `note` on the item and is
+  where every rating belongs: `stars` (0-5), optional `count`, optional
+  `source`, optional `checked` date. The app shows it as a badge on the
+  card, so a rating written into the note instead is a rating the traveler
+  cannot see at a glance.
 - `intel`, when you have it, sits alongside `note` on the item:
 
 ```json
@@ -357,7 +375,7 @@ only the JSON.
 
 ## Re-run prompts
 
-These two prompts run against a city you already have. They return a PARTIAL
+These three prompts run against a city you already have. They return a PARTIAL
 payload (a delta) that gets merged into the existing guide, so the traveler's
 progress, renames and day arrangement all survive. The app builds them for
 you from the Enrich button; by hand, copy the block you want, paste the trip
@@ -478,3 +496,55 @@ Respond with only a JSON code block in this shape, no prose:
 Keys of `intel` are existing item ids. Anything else in the payload is
 ignored.
 <!-- /RERUN:INTEL -->
+
+### Ratings refresh
+
+Refreshes the `rating` block (stars, review count, source, date checked) on
+items the guide already holds. It changes nothing else about them, and it is
+the pass to run when the guide is a few weeks old and you are choosing
+between two places tonight.
+
+<!-- RERUN:RATINGS -->
+A delta is never a whole guide. Never re-list an item that already exists,
+never restate `city` or `dates`, and never emit `"status": "done"` or
+`"archived"`.
+
+For each item listed below, look up its CURRENT Google Maps rating and review
+count, and return them keyed by the item's id. Rules:
+
+- **Look it up. Never guess, never carry a number forward from memory.** The
+  whole value of this pass is that the number is current.
+- **Omit any item you cannot verify.** A short payload of real ratings is the
+  correct answer; a complete one with invented numbers is worthless and
+  actively misleading, because the traveler chooses where to eat with it.
+- **Match the right place.** These are specific venues in one city, and
+  chains and same-name places in other districts are the usual way this goes
+  wrong. If you cannot tell which branch the item means, leave it out.
+- `stars` is a number from 0 to 5 with one decimal (`4.8`). `count` is the
+  review count as a whole number with no separators (`5545`); omit `count`
+  rather than round or estimate one.
+- `source` names where the number came from and when, e.g.
+  `"Google Maps, Aug 2026"`. `checked` is today's date as `YYYY-MM-DD`.
+- Do not return new items, and do not rewrite names, notes, prices, hours or
+  links. Do not return anything for an id that is not in the list.
+
+Respond with only a JSON code block in this shape, no prose:
+
+```json
+{
+  "schema": 1,
+  "delta": true,
+  "ratings": {
+    "item-id-from-the-list": {
+      "stars": 4.8,
+      "count": 5545,
+      "source": "Google Maps, Aug 2026",
+      "checked": "2026-08-25"
+    }
+  }
+}
+```
+
+Keys of `ratings` are existing item ids. Anything else in the payload is
+ignored.
+<!-- /RERUN:RATINGS -->

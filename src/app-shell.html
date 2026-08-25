@@ -769,6 +769,12 @@
     if (s.sectionsAdded) parts.push(s.sectionsAdded + (s.sectionsAdded === 1 ? ' section' : ' sections'));
     if (s.intelApplied) parts.push(s.intelApplied + ' intel applied');
     if (s.intelSkipped) parts.push(s.intelSkipped + ' intel skipped');
+    // Applied counts a rating written onto an item the guide has, including
+    // a re-run that writes the same numbers again (a rating is a reading
+    // taken on a date; re-taking it is work done, not work skipped).
+    // Skipped counts only ids this guide does not have.
+    if (s.ratingsApplied) parts.push(s.ratingsApplied + ' ratings applied');
+    if (s.ratingsSkipped) parts.push(s.ratingsSkipped + ' ratings skipped');
     return parts.length ? parts.join(', ') : 'nothing new';
   }
 
@@ -835,9 +841,9 @@
         return null;
       }
       try {
-        return (kind === 'intel')
-          ? CityOps.promptKit.buildIntelPassPrompt(tpl, currentData())
-          : CityOps.promptKit.buildInterestsDeltaPrompt(tpl, currentData(), store.profile);
+        if (kind === 'intel') return CityOps.promptKit.buildIntelPassPrompt(tpl, currentData());
+        if (kind === 'ratings') return CityOps.promptKit.buildRatingsPassPrompt(tpl, currentData());
+        return CityOps.promptKit.buildInterestsDeltaPrompt(tpl, currentData(), store.profile);
       } catch (e) {
         msg.textContent = e.message;
         return null;
@@ -927,8 +933,15 @@
       'already holds, from what reviewers say repeatedly.'));
     m.box.appendChild(promptRow('intel', 'intel-pass.md', null));
 
-    m.box.appendChild(el('p', 'diff', 'Paste what your AI returns here. It is a partial payload: only new items ' +
-      'and intel, never a whole guide.'));
+    // Third builder: the numbers go stale in a way the rest of a guide does
+    // not, so this is the one pass worth re-running on a guide that is
+    // otherwise finished. It touches nothing but `rating`.
+    m.box.appendChild(el('p', 'diff', 'Ratings refresh: current Google Maps stars and review counts ' +
+      'for the places still in play (plan and backup), as a badge on each card.'));
+    m.box.appendChild(promptRow('ratings', 'ratings-refresh.md', null));
+
+    m.box.appendChild(el('p', 'diff', 'Paste what your AI returns here. It is a partial payload: only new items, ' +
+      'intel and ratings, never a whole guide.'));
     var ta = document.createElement('textarea');
     ta.setAttribute('aria-label', 'Delta JSON from your AI');
     m.box.appendChild(ta);

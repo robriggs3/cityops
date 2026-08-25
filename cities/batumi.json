@@ -84,7 +84,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.6,
+        "count": 5545,
+        "source": "from generation research"
+      }
     },
     {
       "id": "tanini",
@@ -115,7 +120,11 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.6,
+        "source": "from generation research"
+      }
     },
     {
       "id": "blue-wave",
@@ -182,7 +191,11 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.8,
+        "source": "from generation research"
+      }
     },
     {
       "id": "brasserie-1900",
@@ -220,7 +233,11 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.8,
+        "source": "from generation research"
+      }
     },
     {
       "id": "adjarian-khachapuri",
@@ -279,7 +296,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.7,
+        "count": 790,
+        "source": "from generation research"
+      }
     },
     {
       "id": "sat-15-departure-day",
@@ -306,7 +328,12 @@
       "tags": [],
       "links": [],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.8,
+        "count": 1169,
+        "source": "from generation research"
+      }
     },
     {
       "id": "savane",
@@ -320,7 +347,11 @@
       "tags": [],
       "links": [],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.8,
+        "source": "from generation research"
+      }
     },
     {
       "id": "retro-gogebashvili",
@@ -334,7 +365,11 @@
       "tags": [],
       "links": [],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.3,
+        "source": "from generation research"
+      }
     },
     {
       "id": "ponte",
@@ -348,7 +383,11 @@
       "tags": [],
       "links": [],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.8,
+        "source": "from generation research"
+      }
     },
     {
       "id": "lavanda",
@@ -373,7 +412,11 @@
       "tags": [],
       "links": [],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.8,
+        "source": "from generation research"
+      }
     },
     {
       "id": "european-square-restaurant",
@@ -434,7 +477,11 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.8,
+        "source": "from generation research"
+      }
     },
     {
       "id": "urban-roastery",
@@ -480,7 +527,11 @@
       "tags": [],
       "links": [],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.2,
+        "source": "from generation research"
+      }
     },
     {
       "id": "thone-bakeries",
@@ -527,7 +578,11 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.8,
+        "source": "from generation research"
+      }
     },
     {
       "id": "lendspace",
@@ -773,7 +828,11 @@
       "tags": [],
       "links": [],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.8,
+        "source": "from generation research"
+      }
     },
     {
       "id": "breakwater-pier",
@@ -839,7 +898,11 @@
       "tags": [],
       "links": [],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.5,
+        "source": "from generation research"
+      }
     },
     {
       "id": "harmony-laundry",
@@ -887,7 +950,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.9,
+        "count": 511,
+        "source": "from generation research"
+      }
     },
     {
       "id": "siam-massage",
@@ -911,7 +979,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 5,
+        "count": 427,
+        "source": "from generation research"
+      }
     },
     {
       "id": "barber-karalidze",
@@ -933,7 +1006,11 @@
       "tags": [],
       "links": [],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.8,
+        "source": "from generation research"
+      }
     },
     {
       "id": "willmart",
@@ -944,7 +1021,11 @@
       "tags": [],
       "links": [],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.3,
+        "source": "from generation research"
+      }
     },
     {
       "id": "grooming-yerevan",

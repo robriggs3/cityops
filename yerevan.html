@@ -31,7 +31,7 @@
     display:flex; align-items:center; gap:8px;}
   h2 .ic{font-size:1.1rem}
   .card{background:var(--bg-card); border:1px solid var(--border-light); border-radius:14px;
-    padding:14px 16px; margin-bottom:12px; box-shadow:0 1px 2px rgba(0,0,0,.03);}
+    padding:10px 14px; margin-bottom:8px; box-shadow:0 1px 2px rgba(0,0,0,.03);}
   .card h3{font-size:1.02rem; display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap;}
   .card h3 .price{font-size:.82rem; color:var(--text-3); font-weight:600; white-space:nowrap;}
   .card p{font-size:.9rem; color:var(--text-3); margin-top:5px;}
@@ -135,7 +135,7 @@
   /* --- cityops additions --- */
   /* neutral badge when no class given */
   .hours:not(.late):not(.day):not(.eve){background:var(--bg-softer); color:var(--text-3);}
-  .ctl-row{display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;}
+  .ctl-row{display:flex; align-items:center; gap:5px; margin-top:6px; flex-wrap:wrap;}
   .ctl{font:inherit; font-size:.74rem; font-weight:700; color:var(--accent-hover);
     background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
     padding:4px 11px; cursor:pointer;}
@@ -183,8 +183,6 @@
   body.share .sec-toggle{pointer-events:none;}
   body.share .sec-toggle .chev{display:none;}
   .daycard .bd + .bd{border-top:1px dashed var(--border-light);}
-  .sec-meta{font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.4px;
-    color:var(--accent); margin-bottom:2px;}
   .title-edit{width:100%; font:inherit; font-size:1rem; font-weight:600; padding:8px 10px;
     border:1.5px solid var(--accent); border-radius:8px; margin-top:4px;}
   .empty-day .hd{border-bottom:none;}
@@ -213,7 +211,7 @@
     display:flex; align-items:baseline; justify-content:flex-start; gap:8px; flex-wrap:wrap;}
   .card-hd-tags{display:flex; gap:6px; flex-wrap:wrap; margin-left:2px;}
   .card-hd-chev{font-size:.78rem; color:var(--text-3); margin-left:auto; flex:0 0 auto; padding-left:8px;}
-  .card-detail{margin-top:8px;}
+  .card-detail{margin-top:5px;}
   /* Always in the DOM (see appendCard's comment); hidden, not just visual,
      when the card is collapsed: display:none also drops it from the tab
      order and the accessibility tree. */
@@ -275,7 +273,7 @@
     header h1{font-size:1.35rem;}
     .facts{gap:6px; margin-top:10px;}
     .chip{padding:4px 9px; font-size:.75rem;}
-    .card{padding:12px 12px; border-radius:12px;}
+    .card{padding:8px 10px; margin-bottom:6px; border-radius:12px;}
     .daycard{border-radius:12px;}
     .daycard .hd{padding:8px 12px;}
     .card.dragrow{padding-left:50px;}
@@ -284,8 +282,11 @@
     .callout, .warn, .errcard{padding:12px 12px;}
     .toolbar{gap:6px;}
     .toolbar button{padding:5px 10px; font-size:.75rem;}
-    h2{margin:20px 0 10px;}
-    .card-hd{font-size:.96rem;}
+    h2{margin:16px 0 8px;}
+    .card-hd{font-size:.96rem; gap:6px;}
+    .ctl-row{gap:4px;}
+    .ctl{padding:4px 9px;}
+    .planday-today{padding:26px 8px 10px; margin:0 0 18px;}
     #secnav{gap:6px;}
     .secnav-chip{padding:4px 10px; font-size:.74rem;}
     .viewtab{padding:5px 10px; font-size:.75rem;}
@@ -357,6 +358,73 @@
     .tabchip{padding:7px 11px; font-size:.76rem; min-height:40px;}
     .tab-more{padding:7px 10px;}
   }
+
+  /* --- Density pass: fit more of the stay on one phone screen --- */
+  /* Owner ask, mid-trip in Tirana: "minimize vertical space so we can fit
+     more on screen". A collapsed Plan-tab card is now exactly two rows, the
+     title row and the control row, and everything that used to have a line of
+     its own (the section label, the `when` hint, the link pills) either
+     joined one of those two rows or went behind the existing expander. */
+
+  /* The section icon in front of the title, replacing the old .sec-meta line
+     above the card. The label it used to spell out is on the icon as both
+     title and aria-label, so nothing is lost to a screen reader or a hover. */
+  .sec-ic{flex:0 0 auto; font-size:1rem; line-height:1.2;}
+  /* The fallback for a guide whose sections have no icons: the old
+     .sec-meta wording and colour, inline in the title row instead of on a
+     line of its own. Accent, not the rating badge's neutral, so the two
+     never read as the same kind of thing. */
+  .sec-lab{flex:0 0 auto; font-size:.64rem; font-weight:800; text-transform:uppercase;
+    letter-spacing:.4px; color:var(--accent); white-space:nowrap;}
+
+  /* Ratings are INFORMATION, not action: muted neutral tokens, never the
+     accent, and nothing here is tappable. Provenance rides in the tooltip. */
+  .rating{flex:0 0 auto; font-size:.76rem; font-weight:700; color:var(--text-2);
+    background:var(--bg-softer); border-radius:5px; padding:1px 6px; white-space:nowrap;}
+  .rcount{font-weight:600; color:var(--text-3); margin-left:4px;}
+
+  /* The `when` hint, inline after the title. nowrap plus a flexible basis is
+     what makes it sit on the title row when it fits and drop to its own line
+     when it does not; the ellipsis and max-width are the guarantee that a
+     long one can never widen the page into a horizontal scroll. */
+  .when-hint{flex:0 1 auto; min-width:0; max-width:100%; font-size:.78rem; font-weight:400;
+    color:var(--text-3); font-style:italic; white-space:nowrap; overflow:hidden;
+    text-overflow:ellipsis;}
+
+  /* Map / web / call, in the control row rather than on a row of their own.
+     They keep their pill colouring (these NAVIGATE; the outlined buttons
+     beside them MUTATE the plan) and lose only their text, which becomes the
+     tooltip and the accessible name. Declared after .maplink/.weblink/
+     .phonelink so the compact geometry wins. */
+  .ctl-link{display:inline-flex; align-items:center; justify-content:center; gap:0;
+    min-width:36px; padding:4px 9px; font-size:.86rem; line-height:1.1;
+    border-radius:20px; text-decoration:none;}
+  .ctl-link + .ctl{margin-left:5px;}
+  /* The pin, the globe and the handset are COLOUR emoji: they paint their own
+     red, blue and black and cannot inherit a foreground colour. .maplink is
+     white-on-accent, so once the word "Map" went away the red pin landed on
+     red and the control read as a blank circle. The label used to carry it;
+     with the label gone the container is what has to change. The compact map
+     link therefore takes the same white ground its two siblings already have
+     and keeps the accent border that says NAVIGATE, still distinct from the
+     grey-bordered buttons beside it that MUTATE the plan. */
+  .ctl-link.maplink{background:#fff; color:var(--accent-hover);
+    border:1.5px solid var(--accent);}
+  .ctl-link.maplink:active{background:var(--accent-soft);}
+
+  /* Archive and Rename wait for the card to be expanded. display:none, not
+     visibility, so they are out of the tab order and the accessibility tree
+     on a collapsed card, exactly like the detail panel above them. */
+  .collapsed > .ctl-row > .ctl-more{display:none;}
+
+  /* Coarse pointers get the 36px minimum on every control in the row; a mouse
+     gets the tighter geometry, since a cursor does not need a thumb's worth
+     of target. */
+  @media (pointer: coarse){
+    .ctl, .ctl-link{min-height:36px;}
+    .ctl{display:inline-flex; align-items:center; justify-content:center;}
+  }
+
 </style>
 </head>
 <body>
@@ -512,6 +580,11 @@
           "Typical visit is about 45 minutes, so it does not eat the evening before the 21:00 fountains"
         ],
         "source": "Yandex Maps dish-level review tallies plus Google review aggregates on Wanderlog, read Aug 2026"
+      },
+      "rating": {
+        "stars": 4.8,
+        "count": 442,
+        "source": "from generation research"
       }
     },
     {
@@ -524,7 +597,7 @@
       "price": {
         "text": "~4,000-16,000 AMD / $11-44"
       },
-      "note": "4.7 stars across 801 reviews. Armenian crossed with Lebanese and Syrian, which in practice means hummus, fattoush, cig kofte, manti and lahmajun rather than a plate of meat: exactly the not-heavy-late order you want on a Monday. 16 min walk. Closes 23:00.",
+      "note": "Armenian crossed with Lebanese and Syrian, which in practice means hummus, fattoush, cig kofte, manti and lahmajun rather than a plate of meat: exactly the not-heavy-late order you want on a Monday. 16 min walk. Closes 23:00.",
       "hours": {
         "text": "12:00-23:00 daily · closes 23:00",
         "class": "eve"
@@ -573,6 +646,11 @@
           "Reviewers report being seated where the room wants them even when it is empty, so state a preference on arrival"
         ],
         "source": "Yandex Maps reviews, TripAdvisor and Wanderlog Google-review aggregates, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.7,
+        "count": 801,
+        "source": "from generation research"
       }
     },
     {
@@ -628,6 +706,11 @@
           "Waiting time scores 71 percent across 199 reviews, so order everything at once rather than in courses"
         ],
         "source": "Yandex Maps dish-level review tallies plus TripAdvisor and Wanderlog aggregates, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.6,
+        "count": 2521,
+        "source": "from generation research"
       }
     },
     {
@@ -659,7 +742,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.3,
+        "count": 165,
+        "source": "from generation research"
+      }
     },
     {
       "id": "gata-tavern",
@@ -671,7 +759,7 @@
       "price": {
         "text": "~4,000-14,000 AMD / $11-38"
       },
-      "note": "4.7 stars across 1,441 reviews. Khorovats and kebab done properly, an on-site bakery making gata where you can watch it, and a lot of reviewers specifically praising the staff. Two warnings, both from the reviews rather than from me: there is live music every night, so this is not a quiet room, and the portions are enormous, so order less than feels right.",
+      "note": "Khorovats and kebab done properly, an on-site bakery making gata where you can watch it, and a lot of reviewers specifically praising the staff. Two warnings, both from the reviews rather than from me: there is live music every night, so this is not a quiet room, and the portions are enormous, so order less than feels right.",
       "hours": {
         "text": "10:00-00:00 daily",
         "class": "late"
@@ -720,6 +808,11 @@
           "Live music runs every night, so this is not the quiet table"
         ],
         "source": "Yandex Maps dish-level review tallies plus TripAdvisor review text, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.7,
+        "count": 1441,
+        "source": "from generation research"
       }
     },
     {
@@ -783,6 +876,11 @@
           "Air conditioning gets run hard: reviewers describe the room as cold, which in August is a feature but bring a layer"
         ],
         "source": "Yandex Maps dish-level review tallies (4,102 ratings) plus TripAdvisor and Wanderlog aggregates, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.6,
+        "count": 5058,
+        "source": "from generation research"
       }
     },
     {
@@ -826,7 +924,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.9,
+        "count": 189,
+        "source": "from generation research"
+      }
     },
     {
       "id": "artashi-mot",
@@ -881,6 +984,11 @@
           "Staff scores 53 percent across 151 reviews and waiting time 47 percent across 53, so this is a sit-down-and-be-patient place"
         ],
         "source": "Yandex Maps dish-level review tallies plus TripAdvisor review text, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.2,
+        "count": 404,
+        "source": "from generation research"
       }
     },
     {
@@ -931,6 +1039,11 @@
           "Late in the evening reviewers report parts of the menu already unavailable, so order the thing you came for first"
         ],
         "source": "Yandex Maps dish tallies for Tavern Yerevan (chain data, mostly the Amiryan branch, not the Khorenatsi one) plus Wanderlog aggregates, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.7,
+        "count": 1077,
+        "source": "from generation research"
       }
     },
     {
@@ -941,7 +1054,7 @@
       "price": {
         "text": "~6,000-16,000 AMD / $16-44"
       },
-      "note": "4.5 stars across 297 reviews. Contemporary Georgian, and specifically the parts of Georgian food that worked for you: crispy eggplant, hummus with a twist, Georgian salad, achma, which is the layered cheese bread and a far lighter way to eat cheese and dough than khinkali. Reviewers call the service fast and friendly. To 00:00, and 01:00 on Friday and Saturday.",
+      "note": "Contemporary Georgian, and specifically the parts of Georgian food that worked for you: crispy eggplant, hummus with a twist, Georgian salad, achma, which is the layered cheese bread and a far lighter way to eat cheese and dough than khinkali. Reviewers call the service fast and friendly. To 00:00, and 01:00 on Friday and Saturday.",
       "hours": {
         "text": "Sun-Thu 10:00-00:00 · Fri-Sat to 01:00"
       },
@@ -964,7 +1077,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.5,
+        "count": 297,
+        "source": "from generation research"
+      }
     },
     {
       "id": "frank-by-basta",
@@ -1018,6 +1136,11 @@
           "It is priced high for Yerevan, which is the recurring complaint even in positive reviews"
         ],
         "source": "Yandex Maps review analysis (1,296 ratings, 452 reviews) plus TripAdvisor, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.7,
+        "count": 566,
+        "source": "from generation research"
       }
     },
     {
@@ -1067,6 +1190,11 @@
           "Hookah is a big part of the room and reviewers praise it, which is another way of saying the air is smoky"
         ],
         "source": "Yandex Maps reviews plus Wanderlog Google-review aggregate, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.7,
+        "count": 3658,
+        "source": "from generation research"
       }
     },
     {
@@ -1117,6 +1245,11 @@
           "Typical visit is about 45 minutes and service slows noticeably at peak, so it is a late-night answer rather than a long evening"
         ],
         "source": "Wanderlog Google-review aggregate plus TripAdvisor review text, Aug 2026 read. Note two TripAdvisor listings exist for this name; this is the Hanrapetutyan St one"
+      },
+      "rating": {
+        "stars": 4.2,
+        "count": 1387,
+        "source": "from generation research"
       }
     },
     {
@@ -1166,6 +1299,11 @@
           "Reviewers describe the inside as hot, which at midnight in August is worth knowing before you sit down"
         ],
         "source": "Yandex Maps dish-level review tallies plus TripAdvisor, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4,
+        "count": 1864,
+        "source": "from generation research"
       }
     },
     {
@@ -1194,7 +1332,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.9,
+        "count": 76,
+        "source": "from generation research"
+      }
     },
     {
       "id": "dolmama",
@@ -1219,7 +1362,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.2,
+        "count": 859,
+        "source": "from generation research"
+      }
     },
     {
       "id": "on-tipping",
@@ -1281,6 +1429,11 @@
           "Waiting time is the weakest score on the listing, so take the pastry from the counter rather than ordering a cooked plate on a work morning"
         ],
         "source": "Yandex Maps dish-level review split plus TripAdvisor (Abovyan branch, 172 reviews), Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.1,
+        "count": 590,
+        "source": "from generation research"
       }
     },
     {
@@ -1368,7 +1521,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.5,
+        "count": 370,
+        "source": "from generation research"
+      }
     },
     {
       "id": "baguette-and-co",
@@ -1478,6 +1636,11 @@
           "It can sell out: reviewers advise arriving well before the 18:30 close, and food comes in 5 to 7 minutes once you order"
         ],
         "source": "Yandex Maps reviews plus TripAdvisor and Wanderlog Google-review aggregates, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.9,
+        "count": 811,
+        "source": "from generation research"
       }
     },
     {
@@ -1668,6 +1831,11 @@
           "Kunefe is the dessert reviewers name, if you are still there for one"
         ],
         "source": "Yandex Maps reviews (252 ratings) plus Wanderlog Google-review aggregate, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.5,
+        "count": 1000,
+        "source": "from generation research"
       }
     },
     {
@@ -1678,7 +1846,7 @@
       "price": {
         "text": "Price band not published"
       },
-      "note": "4.5 stars across about 405 reviews. Lahmajun thrown into a belt-fed wood oven in front of you, and the cheese lahmajo is what reviewers single out. 10:00 to midnight daily, 20 min out, and it shares an address with Lavash Restaurant and Tumanyan's Khinkali, so if one is full you are already standing outside the other two. Reviewers also rate its breakfast, which makes it the fallback if you want lahmajun before noon. The consistent knock is the room: plain, and noisy inside.",
+      "note": "Lahmajun thrown into a belt-fed wood oven in front of you, and the cheese lahmajo is what reviewers single out. 10:00 to midnight daily, 20 min out, and it shares an address with Lavash Restaurant and Tumanyan's Khinkali, so if one is full you are already standing outside the other two. Reviewers also rate its breakfast, which makes it the fallback if you want lahmajun before noon. The consistent knock is the room: plain, and noisy inside.",
       "hours": {
         "text": "10:00-00:00 daily",
         "class": "late"
@@ -1718,6 +1886,11 @@
           "The basement hall is cramped and the outdoor seating is tight, so this is a 20-minute lunch not a sit-down"
         ],
         "source": "Yandex Maps review analysis plus TripAdvisor, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.5,
+        "count": 405,
+        "source": "from generation research"
       }
     },
     {
@@ -1752,7 +1925,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.6,
+        "count": 296,
+        "source": "from generation research"
+      }
     },
     {
       "id": "tumanyan-shaurma",
@@ -1825,7 +2003,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.4,
+        "count": 256,
+        "source": "from generation research"
+      }
     },
     {
       "id": "work-space",
@@ -1849,7 +2032,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 5,
+        "count": 317,
+        "source": "from generation research"
+      }
     },
     {
       "id": "lumen-coffee",
@@ -1859,7 +2047,7 @@
       "price": {
         "text": "~1,200-1,800 AMD / $3-5 a coffee"
       },
-      "note": "3A Teryan. The city's benchmark roaster: in-house Giesen, single-origin Ethiopia, Colombia and Brazil, and reportedly some experimental Armenian-grown lots. 4.7 stars across 522 reviews. Quiet courtyard, non-smoking, outlets, reliable wifi. It opens 08:30 rather than 08:00 and the food is cake rather than breakfast, so this is the coffee-first morning, not the eat-first one. Air conditioning unconfirmed.",
+      "note": "3A Teryan. The city's benchmark roaster: in-house Giesen, single-origin Ethiopia, Colombia and Brazil, and reportedly some experimental Armenian-grown lots. Quiet courtyard, non-smoking, outlets, reliable wifi. It opens 08:30 rather than 08:00 and the food is cake rather than breakfast, so this is the coffee-first morning, not the eat-first one. Air conditioning unconfirmed.",
       "hours": {
         "text": "08:30-22:30 daily",
         "class": "late"
@@ -1880,7 +2068,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.7,
+        "count": 522,
+        "source": "from generation research"
+      }
     },
     {
       "id": "nono",
@@ -1925,7 +2118,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.6,
+        "count": 479,
+        "source": "from generation research"
+      }
     },
     {
       "id": "green-bean",
@@ -1950,7 +2148,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.5,
+        "count": 578,
+        "source": "from generation research"
+      }
     },
     {
       "id": "lumen-1936",
@@ -1970,7 +2173,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.6,
+        "count": 400,
+        "source": "from generation research"
+      }
     },
     {
       "id": "coffee-late-openers",
@@ -1991,7 +2199,7 @@
       "price": {
         "text": "4,500 AMD / $12 day pass · 60,000-65,000 monthly"
       },
-      "note": "3 Moskovyan, and the only genuinely 24/7 coworking in the capital, seven days a week. That one fact makes it the answer for Sat 15, Sun 16 and Sat 22, when nearly everything else is shut or reduced. 4.5 stars, 252 reviews. Air conditioning, phone and Skype booths, a meeting room, lockers, free coffee, printing, and a lounge with ping pong and a piano. 28 min walk, straight north of you. Two sources give two different phone numbers so I am publishing neither: reach them through Facebook or Instagram, and message the day before rather than assuming you can walk in.",
+      "note": "3 Moskovyan, and the only genuinely 24/7 coworking in the capital, seven days a week. That one fact makes it the answer for Sat 15, Sun 16 and Sat 22, when nearly everything else is shut or reduced. Air conditioning, phone and Skype booths, a meeting room, lockers, free coffee, printing, and a lounge with ping pong and a piano. 28 min walk, straight north of you. Two sources give two different phone numbers so I am publishing neither: reach them through Facebook or Instagram, and message the day before rather than assuming you can walk in.",
       "hours": {
         "text": "Open 24/7 including weekends",
         "class": "late"
@@ -2008,7 +2216,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.5,
+        "count": 252,
+        "source": "from generation research"
+      }
     },
     {
       "id": "impact-hub",
@@ -2018,7 +2231,7 @@
       "price": {
         "text": "5,000 AMD / $14 day pass · meeting room 5,000/hr"
       },
-      "note": "80/1 Tigran Mets, the nearest coworking to your side of town at about 25 min, and 115m from Zoravar Andranik metro. 4.9 stars but only 31 reviews. THE CATCH: the day pass explicitly buys access until 19:00, Monday to Friday. Their own FAQ says the hub is open 24 hours including weekends, but that applies to the monthly membership tiers, not to a day pass, and one directory lists them as closed Saturday and Sunday outright. Email before you count on a weekend. Book through the form on their site; they publish no phone number anywhere.",
+      "note": "80/1 Tigran Mets, the nearest coworking to your side of town at about 25 min, and 115m from Zoravar Andranik metro. THE CATCH: the day pass explicitly buys access until 19:00, Monday to Friday. Their own FAQ says the hub is open 24 hours including weekends, but that applies to the monthly membership tiers, not to a day pass, and one directory lists them as closed Saturday and Sunday outright. Email before you count on a weekend. Book through the form on their site; they publish no phone number anywhere.",
       "hours": {
         "text": "Day pass Mon-Fri 09:00-19:00 · weekends NOT reliable",
         "class": "day"
@@ -2040,7 +2253,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.9,
+        "count": 31,
+        "source": "from generation research"
+      }
     },
     {
       "id": "becoworker",
@@ -2142,7 +2360,7 @@
       "price": {
         "text": "Free to walk"
       },
-      "note": "4.5 stars, 6,035 reviews. Nominally open daily 10:00-18:00, but it is only actually a market on Saturday and Sunday: on a weekday, especially Monday, a large share of the stalls simply are not there, and Sunday is the fullest day. It closes at 18:00, so it is the one thing in this guide that cannot wait for the evening, which is exactly why it sits on a Sunday. Closest major sight to your door, 15 min walk.",
+      "note": "Nominally open daily 10:00-18:00, but it is only actually a market on Saturday and Sunday: on a weekday, especially Monday, a large share of the stalls simply are not there, and Sunday is the fullest day. It closes at 18:00, so it is the one thing in this guide that cannot wait for the evening, which is exactly why it sits on a Sunday. Closest major sight to your door, 15 min walk.",
       "hours": {
         "text": "10:00-18:00 · DAYTIME · weekends only in practice",
         "class": "day"
@@ -2180,6 +2398,11 @@
           "Go early for the widest selection: the good stalls thin out as the day runs"
         ],
         "source": "TripAdvisor reviews and the 4stogo Vernissage shopping guide, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.5,
+        "count": 6035,
+        "source": "from generation research"
       }
     },
     {
@@ -2192,7 +2415,7 @@
       "price": {
         "text": "Free"
       },
-      "note": "4.8 stars, 10,535 reviews. The light-and-music show runs late May to October, so August is fine. Sources split on the start time between 20:00 and 21:00, so be there by 20:45 and you cannot miss it. CLOSED TUESDAYS for cleaning, which is why this is not on Tue 18. 22 min walk, and it pairs with Vernissage as a single trip into the centre.",
+      "note": "The light-and-music show runs late May to October, so August is fine. Sources split on the start time between 20:00 and 21:00, so be there by 20:45 and you cannot miss it. CLOSED TUESDAYS for cleaning, which is why this is not on Tue 18. 22 min walk, and it pairs with Vernissage as a single trip into the centre.",
       "hours": {
         "text": "Show ~21:00-23:00 · not Tuesdays",
         "class": "late"
@@ -2221,6 +2444,11 @@
           "Tuesday is the weekly clean and there is no show at all"
         ],
         "source": "TripAdvisor Republic Square and Dancing Fountains reviews, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.8,
+        "count": 10535,
+        "source": "from generation research"
       }
     },
     {
@@ -2275,6 +2503,11 @@
           "It is two compact floors: without a guide you can be back out in fifteen minutes, so do not build the whole afternoon around it alone"
         ],
         "source": "TripAdvisor reviews, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.7,
+        "count": 913,
+        "source": "from generation research"
       }
     },
     {
@@ -2307,7 +2540,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.8,
+        "count": 2114,
+        "source": "from generation research"
+      }
     },
     {
       "id": "garni-geghard",
@@ -2379,7 +2617,7 @@
       "price": {
         "text": "2,000 AMD / $5 · foreign-language tour 5,000"
       },
-      "note": "4.7 stars, 772 reviews. Tue-Sat 10:00-17:50, closed Sunday AND Monday, which is why it lands on Thursday. This one is tight: finish at 14:00, GG straight there, and you get a clean two hours. Illuminated manuscripts going back to the fifth century, in a bunker of a building at the top of Mashtots. Walk back down Mashtots afterwards; the Blue Mosque is on the way and so is Lumen 1936.",
+      "note": "Tue-Sat 10:00-17:50, closed Sunday AND Monday, which is why it lands on Thursday. This one is tight: finish at 14:00, GG straight there, and you get a clean two hours. Illuminated manuscripts going back to the fifth century, in a bunker of a building at the top of Mashtots. Walk back down Mashtots afterwards; the Blue Mosque is on the way and so is Lumen 1936.",
       "hours": {
         "text": "Tue-Sat 10:00-17:50 · DAYTIME · go straight after work",
         "class": "day"
@@ -2418,6 +2656,11 @@
           "Weekdays are noticeably quieter than the weekend per reviewers"
         ],
         "source": "TripAdvisor reviews and Wanderlog aggregate, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.7,
+        "count": 772,
+        "source": "from generation research"
       }
     },
     {
@@ -2430,7 +2673,7 @@
       "price": {
         "text": "Free"
       },
-      "note": "4.5 stars, 1,815 reviews. An eighteenth-century Persian mosque with a tiled courtyard, and the quietest place in central Yerevan. Reported hours are 10:00-13:00 and 15:00-18:00, but it is an active religious site and visitors regularly arrive to find it shut around prayer times. Treat it as a twenty minute bonus on the Mashtots walk, never as the plan.",
+      "note": "An eighteenth-century Persian mosque with a tiled courtyard, and the quietest place in central Yerevan. Reported hours are 10:00-13:00 and 15:00-18:00, but it is an active religious site and visitors regularly arrive to find it shut around prayer times. Treat it as a twenty minute bonus on the Mashtots walk, never as the plan.",
       "hours": {
         "text": "~10:00-13:00, 15:00-18:00 · often shut without notice",
         "class": "day"
@@ -2444,7 +2687,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.5,
+        "count": 1815,
+        "source": "from generation research"
+      }
     },
     {
       "id": "cascade-cafesjian",
@@ -2509,6 +2757,11 @@
           "July and August are the peak crowd months on the steps, so early evening beats mid-evening"
         ],
         "source": "TripAdvisor Cafesjian Center reviews plus current visitor guides, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.7,
+        "count": 11869,
+        "source": "from generation research"
       }
     },
     {
@@ -2538,7 +2791,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.5,
+        "count": 1833,
+        "source": "from generation research"
+      }
     },
     {
       "id": "circular-park",
@@ -2624,7 +2882,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.7,
+        "count": 2068,
+        "source": "from generation research"
+      }
     },
     {
       "id": "echmiadzin-grape-blessing",
@@ -2668,7 +2931,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.4,
+        "count": 1385,
+        "source": "from generation research"
+      }
     },
     {
       "id": "lake-sevan",
@@ -2773,7 +3041,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.6,
+        "count": 1013,
+        "source": "from generation research"
+      }
     },
     {
       "id": "khor-virap-noravank",
@@ -2850,7 +3123,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 5,
+        "count": 1157,
+        "source": "from generation research"
+      }
     },
     {
       "id": "level-barbershop",
@@ -2860,7 +3138,7 @@
       "price": {
         "text": "6,000-13,000 AMD / $16-36 by barber tier"
       },
-      "note": "The step up if you would rather it were done properly than cheaply, and even the top tier is under forty dollars. 5.0 stars across 363 reviews. The standalone beard price is not published anywhere, only combo packages, so ask when you book. About 20 min walk north of you, which makes it the closest good barber after True Cost.",
+      "note": "The step up if you would rather it were done properly than cheaply, and even the top tier is under forty dollars. The standalone beard price is not published anywhere, only combo packages, so ask when you book. About 20 min walk north of you, which makes it the closest good barber after True Cost.",
       "hours": {
         "text": "10:00-22:00 daily",
         "class": "late"
@@ -2886,7 +3164,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 5,
+        "count": 363,
+        "source": "from generation research"
+      }
     },
     {
       "id": "laundry-point",
@@ -2910,7 +3193,11 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 5,
+        "source": "from generation research"
+      }
     },
     {
       "id": "yerevan-city-nearest",
@@ -2920,7 +3207,7 @@
       "price": {
         "text": "Supermarket prices"
       },
-      "note": "Three minutes from your door, effectively your pantry. 4.6 stars across 250 ratings. NOT 24 hours despite what some listings claim: Yandex shows it shut overnight and opening 08:30, and the local business directory contradicts itself on the same page. Treat it as roughly 08:30-23:00 and use Tigran Mets for anything later than that.",
+      "note": "Three minutes from your door, effectively your pantry. NOT 24 hours despite what some listings claim: Yandex shows it shut overnight and opening 08:30, and the local business directory contradicts itself on the same page. Treat it as roughly 08:30-23:00 and use Tigran Mets for anything later than that.",
       "hours": {
         "text": "~08:30-23:00 · not 24h",
         "class": "late"
@@ -2928,7 +3215,12 @@
       "tags": [],
       "links": [],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.6,
+        "count": 250,
+        "source": "from generation research"
+      }
     },
     {
       "id": "body-soft-massage",
@@ -2954,7 +3246,11 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 5,
+        "source": "from generation research"
+      }
     },
     {
       "id": "thai-spa",
@@ -2988,7 +3284,7 @@
       "section": "services",
       "status": "backup",
       "name": "TOPGUN Barbershop, Moskovyan 37",
-      "note": "5.0 stars across 179 reviews. The third option if True Cost and Level are both booked out. Further north, near the Cascade end of town, and no prices are published.",
+      "note": "The third option if True Cost and Level are both booked out. Further north, near the Cascade end of town, and no prices are published.",
       "tags": [],
       "links": [
         {
@@ -2998,14 +3294,19 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 5,
+        "count": 179,
+        "source": "from generation research"
+      }
     },
     {
       "id": "selena-dry-clean",
       "section": "services",
       "status": "backup",
       "name": "Selena Service, Zaqyan 4",
-      "note": "Drop-off dry cleaning and laundry, returned folded, usually overnight. 4.5 stars. Opens 09:00. The 1,000 AMD per kilo figure floating around online is from 2022, so expect more than that. Use this instead of Laundry Point if you would rather it were done for you than sit with it.",
+      "note": "Drop-off dry cleaning and laundry, returned folded, usually overnight. Opens 09:00. The 1,000 AMD per kilo figure floating around online is from 2022, so expect more than that. Use this instead of Laundry Point if you would rather it were done for you than sit with it.",
       "hours": {
         "text": "From 09:00"
       },
@@ -3023,7 +3324,11 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.5,
+        "source": "from generation research"
+      }
     },
     {
       "id": "late-grocery-pharmacy",
@@ -3244,6 +3549,37 @@ var CityOps = (function () {
     }
   }
 
+  // Structured ratings, validated in one place for the same reason intel is:
+  // validate() (whole guide) and mergeDelta() (both new items and the ratings
+  // map) have to agree byte for byte on what a rating is. `ref` is the
+  // caller's prefix, already ending in its separator, e.g.
+  // "items[3] (nord) rating:" or 'ratings["nord"]:'.
+  //
+  // stars is the only required field. count, source and checked are optional
+  // and each may be omitted or null: a rating carried over from generation
+  // research has a source but no checked date, and a rating a traveler has
+  // only half of is still worth showing.
+  function validateRating(r, ref, errors) {
+    if (!r || typeof r !== 'object' || Array.isArray(r)) {
+      errors.push(ref + ' must be an object');
+      return;
+    }
+    if (typeof r.stars !== 'number' || !isFinite(r.stars) || r.stars < 0 || r.stars > 5) {
+      errors.push(ref + ' stars must be a number from 0 to 5');
+    }
+    if (r.count !== undefined && r.count !== null) {
+      if (typeof r.count !== 'number' || !isFinite(r.count) || r.count < 0 || Math.floor(r.count) !== r.count) {
+        errors.push(ref + ' count must be a whole number, 0 or more');
+      }
+    }
+    if (r.source !== undefined && r.source !== null && typeof r.source !== 'string') {
+      errors.push(ref + ' source must be a string');
+    }
+    if (r.checked !== undefined && r.checked !== null && !isIso(r.checked)) {
+      errors.push(ref + ' checked must be YYYY-MM-DD');
+    }
+  }
+
   // The per-item rules, shared by validate() and mergeDelta() for exactly the
   // same reason. `statuses` is the allowed status list (a whole guide allows
   // all four; a delta may only introduce plan and backup, since done and
@@ -3265,6 +3601,7 @@ var CityOps = (function () {
     }
     if (it.day && !/^\d{4}-\d{2}-\d{2}$/.test(it.day)) errors.push(ref + ' day must be YYYY-MM-DD');
     if (it.intel !== undefined && it.intel !== null) validateIntel(it.intel, ref + ' intel:', errors);
+    if (it.rating !== undefined && it.rating !== null) validateRating(it.rating, ref + ' rating:', errors);
   }
 
   function validate(data) {
@@ -3327,13 +3664,22 @@ var CityOps = (function () {
   //   the merge (existing or just added); an unknown id is counted in
   //   intelSkipped, not treated as an error, because an AI naming an item the
   //   traveler has since removed is expected, not broken.
+  // - delta.ratings works exactly like delta.intel, one map entry per item id,
+  //   replacing the whole rating block. Replacement (not merge) is what makes
+  //   a ratings refresh mean anything: a rating is a reading taken on a date,
+  //   and half of last month's reading mixed with half of this month's is a
+  //   number nobody took. Re-applying the SAME rating therefore replaces it
+  //   and counts as applied, not skipped: ratingsSkipped counts only ids the
+  //   merged guide does not have.
   // - city, city.dates and every other field of every existing item are never
-  //   touched. intel is the ONE field an existing item can gain here.
+  //   touched. intel and rating are the only two fields an existing item can
+  //   gain here.
   var DELTA_STATUSES = ['plan', 'backup'];
   var DELTA_STATUS_HINT = ' (a delta may only add plan or backup items)';
 
   function emptyDeltaSummary() {
-    return { added: 0, skipped: 0, sectionsAdded: 0, intelApplied: 0, intelSkipped: 0 };
+    return { added: 0, skipped: 0, sectionsAdded: 0, intelApplied: 0, intelSkipped: 0,
+      ratingsApplied: 0, ratingsSkipped: 0 };
   }
 
   function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
@@ -3409,6 +3755,18 @@ var CityOps = (function () {
       }
     }
 
+    var ratingsMap = null;
+    if (delta.ratings !== undefined && delta.ratings !== null) {
+      if (typeof delta.ratings !== 'object' || Array.isArray(delta.ratings)) {
+        errors.push('ratings must be an object keyed by item id');
+      } else {
+        ratingsMap = delta.ratings;
+        Object.keys(ratingsMap).forEach(function (id) {
+          validateRating(ratingsMap[id], 'ratings["' + id + '"]:', errors);
+        });
+      }
+    }
+
     if (errors.length) return { data: null, summary: emptyDeltaSummary(), errors: errors };
 
     var summary = emptyDeltaSummary();
@@ -3437,14 +3795,27 @@ var CityOps = (function () {
       summary.added++;
     });
 
-    if (intelMap) {
+    // One id map for both passes. Object.create(null) plus an own-property
+    // check is what closes the prototype-pollution vector a hostile delta
+    // keyed "__proto__" would otherwise open (it would paint content onto
+    // every card); the ratings map is held to the identical bar.
+    if (intelMap || ratingsMap) {
       var byId = Object.create(null);
       out.items.forEach(function (it) { if (it && it.id) byId[it.id] = it; });
-      Object.keys(intelMap).forEach(function (id) {
-        if (!Object.prototype.hasOwnProperty.call(byId, id)) { summary.intelSkipped++; return; }
-        byId[id].intel = deepClone(intelMap[id]);
-        summary.intelApplied++;
-      });
+      if (intelMap) {
+        Object.keys(intelMap).forEach(function (id) {
+          if (!Object.prototype.hasOwnProperty.call(byId, id)) { summary.intelSkipped++; return; }
+          byId[id].intel = deepClone(intelMap[id]);
+          summary.intelApplied++;
+        });
+      }
+      if (ratingsMap) {
+        Object.keys(ratingsMap).forEach(function (id) {
+          if (!Object.prototype.hasOwnProperty.call(byId, id)) { summary.ratingsSkipped++; return; }
+          byId[id].rating = deepClone(ratingsMap[id]);
+          summary.ratingsApplied++;
+        });
+      }
     }
 
     return { data: out, summary: summary, errors: [] };
@@ -4655,6 +5026,30 @@ var CityOps = (function () {
     return out.join('\n');
   }
 
+  // Assembly order, top to bottom:
+  //   1. one header line saying what this run is
+  //   2. the city block
+  //   3. the RERUN:RATINGS instructions, verbatim from PROMPT.md
+  //   4. the item list, PLAN and BACKUP items only
+  // Done and archived items are left out on purpose: a rating refresh exists
+  // to help the traveler choose between places still in play, and neither a
+  // meal already eaten nor a place already put away is one of those.
+  function buildRatingsPassPrompt(templateText, cityData) {
+    var rerun = sliceLandmark(templateText, 'RERUN:RATINGS');
+    var items = (cityData && Array.isArray(cityData.items) ? cityData.items : [])
+      .filter(function (it) { return it && (it.status === 'plan' || it.status === 'backup'); });
+    var out = ['You are refreshing the Google Maps ratings on an existing CityOps city guide.', ''];
+    out = out.concat(cityHeaderLines(cityData));
+    out.push('## What I need', '', rerun, '');
+    out.push('## Items', '');
+    out = out.concat(itemListLines(items));
+    out.push('');
+    out.push('Every line above is `id | section | name`. Return a rating only ' +
+      'for the ones you can actually look up: an omitted item is the correct ' +
+      'answer, an invented number is not.', '');
+    return out.join('\n');
+  }
+
   // ---- AI response parsing (pure) ----
   // Ported from tools/city-input.js so the CLI's .md-ingest path and the
   // in-app "generate with Claude" path (Phase 2) share one rule for finding
@@ -4924,13 +5319,63 @@ var CityOps = (function () {
     return div;
   }
 
+  function linkIcon(kind) {
+    return kind === 'map' ? '📍' : (kind === 'web' ? '🌐' : '📞');
+  }
+
+  function linkClass(kind) {
+    return kind === 'map' ? 'maplink' : (kind === 'web' ? 'weblink' : 'phonelink');
+  }
+
   function linkPill(l) {
     var a = document.createElement('a');
     a.href = l.href;
-    if (l.kind === 'map') { a.className = 'maplink'; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = '📍 ' + l.label; }
-    else if (l.kind === 'web') { a.className = 'weblink'; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = '🌐 ' + l.label; }
-    else { a.className = 'phonelink'; a.textContent = '📞 ' + l.label; }
+    a.className = linkClass(l.kind);
+    if (l.kind !== 'tel') { a.target = '_blank'; a.rel = 'noopener noreferrer'; }
+    a.textContent = linkIcon(l.kind) + ' ' + l.label;
     return a;
+  }
+
+  // The same link, sized to sit in the control row beside the status icons
+  // (density pass): icon only, control height, pill colouring kept so it
+  // still reads as a thing that NAVIGATES rather than a thing that changes
+  // the plan. The label the pill used to show becomes the tooltip and the
+  // accessible name, exactly like every other icon control here.
+  function linkCtl(l) {
+    var a = document.createElement('a');
+    a.href = l.href;
+    a.className = 'ctl-link ' + linkClass(l.kind);
+    if (l.kind !== 'tel') { a.target = '_blank'; a.rel = 'noopener noreferrer'; }
+    a.textContent = linkIcon(l.kind);
+    a.setAttribute('aria-label', l.label);
+    a.title = l.label;
+    return a;
+  }
+
+  // A rating as one compact badge: "4.8★" plus a muted "(442)" when the
+  // count is there. Information, not action, so it wears neutral/muted
+  // tokens and never the accent: nothing on this badge is tappable.
+  // Provenance (source, checked date) rides in the tooltip rather than on
+  // the card, since it is what you check when the number surprises you and
+  // noise the rest of the time. `starsOnly` is the Share view.
+  function fmtCount(n) {
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  function ratingBadge(rating, starsOnly) {
+    if (!rating || typeof rating.stars !== 'number' || !isFinite(rating.stars)) return null;
+    var span = el('span', 'rating');
+    span.appendChild(document.createTextNode(rating.stars.toFixed(1) + '★'));
+    if (!starsOnly && typeof rating.count === 'number' && isFinite(rating.count)) {
+      span.appendChild(el('span', 'rcount', '(' + fmtCount(rating.count) + ')'));
+    }
+    if (!starsOnly) {
+      var t = [];
+      if (rating.source) t.push(rating.source);
+      if (rating.checked) t.push('checked ' + rating.checked);
+      if (t.length) span.title = t.join(' · ');
+    }
+    return span;
   }
 
   function onStatus(id, to) {
@@ -5082,14 +5527,44 @@ var CityOps = (function () {
   // rendered flat outside its own day grouping (every tab but Plan): it is
   // what lets "Add to a day" have a visible result on the card it was set
   // from, per the Phase 4 spec's populate-Plan-from-other-tabs feature.
-  function cardHeaderBtn(it, status, expanded, dayChip) {
+  // Density pass: the title row now carries what used to be three separate
+  // lines. `sec` (Plan tab only, where cards from every section sit mixed in
+  // one day) prefixes the title with the section's icon INSTEAD of the old
+  // standalone .sec-meta line above the card; the label it used to spell out
+  // survives as the icon's tooltip and accessible name. The rating badge and
+  // the `when` hint follow the title on the same line, wrapping to their own
+  // line only when they genuinely do not fit.
+  function cardHeaderBtn(it, status, expanded, dayChip, sec, showWhen) {
     var btn = el('button', 'card-hd');
     btn.type = 'button';
     btn.setAttribute('aria-expanded', String(expanded));
+    if (sec && sec.icon) {
+      var ic = el('span', 'sec-ic', sec.icon);
+      ic.setAttribute('role', 'img');
+      ic.setAttribute('aria-label', sec.label || '');
+      ic.title = sec.label || '';
+      btn.appendChild(ic);
+    } else if (sec && sec.label) {
+      // Not every guide has section icons: the real Tirana guide's fifteen
+      // sections carry none at all, and with no fallback the section would
+      // simply vanish from its cards when .sec-meta went away. The label
+      // itself becomes the prefix instead, set small and inline, so the
+      // information survives without costing back the line it just saved.
+      var lb = el('span', 'sec-lab', sec.label);
+      lb.title = sec.label;
+      btn.appendChild(lb);
+    }
     var tname = el('span', 'tname');
     if (status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
     tname.appendChild(document.createTextNode(effectiveName(it, curState)));
     btn.appendChild(tname);
+    var badge = ratingBadge(it.rating, false);
+    if (badge) btn.appendChild(badge);
+    if (showWhen && it.when) {
+      var wh = el('span', 'when-hint', it.when);
+      wh.title = it.when;
+      btn.appendChild(wh);
+    }
     if (dayChip) btn.appendChild(el('span', 'daychip', dayChip));
     if (it.tags && it.tags.length) {
       var tp = el('span', 'card-hd-tags');
@@ -5100,11 +5575,25 @@ var CityOps = (function () {
     return btn;
   }
 
-  // Everything that used to live in the card unconditionally now lives here,
-  // shown ONLY when the card is expanded: price, note, intel, links/hours,
-  // and the status controls. Renaming is the one exception carried over
-  // unchanged: it replaces this whole panel while pendingEdit names this item.
-  function itemDetailBody(it, status, showWhen, withDayPicker) {
+  // True exactly when itemDetailBody below takes the panel over with an
+  // editor or a day picker instead of rendering the normal detail. The
+  // control row is suppressed in that case (the picker carries its own
+  // Cancel), so appendCard has to be able to ask the same question without
+  // duplicating the conditions.
+  function itemPanelTakenOver(it, status, withDayPicker) {
+    if (pendingEdit === it.id) return true;
+    if (status === 'backup' && withDayPicker && pendingPromote === it.id) return true;
+    return pendingMove === it.id;
+  }
+
+  // What the expander hides: price, note, intel and hours. Shown ONLY when
+  // the card is expanded. The `when` hint and the links moved up to the
+  // title row and the control row respectively in the density pass, and the
+  // control row itself is no longer built here (see itemControlRow), so a
+  // collapsed card is still a card you can act on. Renaming and the day
+  // pickers are the exceptions carried over unchanged: each replaces this
+  // whole panel while it names this item.
+  function itemDetailBody(it, status, withDayPicker) {
     var frag = document.createDocumentFragment();
     if (pendingEdit === it.id) {
       frag.appendChild(el('p', 'when-line', 'Rename this item'));
@@ -5142,7 +5631,6 @@ var CityOps = (function () {
       return frag;
     }
     if (it.price) frag.appendChild(el('p', 'price-line', it.price.text));
-    if (showWhen && it.when) frag.appendChild(el('p', 'when-line', it.when));
     if (it.note) frag.appendChild(el('p', null, it.note));
     if (it.intel) {
       var strip = intelStrip(it.intel);
@@ -5150,7 +5638,6 @@ var CityOps = (function () {
     }
     var row = el('div', 'row');
     if (it.hours) row.appendChild(el('span', 'hours' + (it.hours.class ? ' ' + it.hours.class : ''), it.hours.text));
-    (it.links || []).forEach(function (l) { row.appendChild(linkPill(l)); });
     if (row.children.length) frag.appendChild(row);
     if (status === 'backup' && withDayPicker && pendingPromote === it.id) {
       frag.appendChild(dayPickerRow(it, 'Promote to which day?',
@@ -5164,13 +5651,43 @@ var CityOps = (function () {
         function () { pendingMove = null; rerender(); }, 'move'));
       return frag;
     }
+    return frag;
+  }
+
+  // The card's one row of controls, which the density pass moved OUT of the
+  // collapsed-away detail panel: on a phone the whole point of a Plan-tab
+  // card is to open the map or tick it done, and having to expand the card
+  // first cost a tap and a screenful on every single item.
+  //
+  // Order is the owner's: the links that NAVIGATE come first, left of Done,
+  // because they are what a card is for while you are standing in the
+  // street; the controls that MUTATE the plan follow. The two groups stay
+  // visually distinct (pill colouring vs outlined buttons) so a thumb never
+  // confuses "open in maps" with "archive".
+  //
+  // Two of them, Archive and Rename, carry .ctl-more and are hidden by CSS
+  // while the card is collapsed. Measured at 390px: the full six controls
+  // plus one map link need ~348px against 290px of card width, so with all
+  // six always visible EVERY card's control row wrapped to a second line,
+  // which is the opposite of what this pass is for. Archive and Rename are
+  // the two to hide because they are housekeeping (mid-trip you open a map
+  // and tick things off; you archive and rename sitting down) and because
+  // Archive's text label, which stays, is most of the width. display:none
+  // also takes them out of the tab order on a collapsed card, the same rule
+  // the collapsed detail panel has always followed.
+  function itemControlRow(it, status, withDayPicker) {
     var ctl = el('div', 'ctl-row');
+    (it.links || []).forEach(function (l) { ctl.appendChild(linkCtl(l)); });
     // Icon buttons (feature 5): the icon is the whole visible label except on
     // Archive, which also keeps a text label because it is destructive.
     // aria-label and title both carry the same wording so screen readers and
-    // mouse-hover tooltips agree.
+    // mouse-hover tooltips agree. Archiving is the one transition that waits
+    // for the card to be expanded; every other transition (including
+    // RESTORING from archived, which is a recovery, not a destruction) is
+    // there on the collapsed card.
     (TRANSITIONS[status] || []).forEach(function (t) {
-      var b = el('button', 'ctl icon-btn to-' + t.to, t.label ? (t.icon + ' ' + t.label) : t.icon);
+      var b = el('button', 'ctl icon-btn to-' + t.to + (t.to === 'archived' ? ' ctl-more' : ''),
+        t.label ? (t.icon + ' ' + t.label) : t.icon);
       b.type = 'button';
       b.setAttribute('aria-label', t.aria);
       b.title = t.aria;
@@ -5207,15 +5724,14 @@ var CityOps = (function () {
       ctl.appendChild(mv);
     }
     if (status !== 'archived') {
-      var ed = el('button', 'ctl icon-btn', '✎');
+      var ed = el('button', 'ctl icon-btn ctl-more', '✎');
       ed.type = 'button';
       ed.setAttribute('aria-label', 'Rename');
       ed.title = 'Rename';
       ed.onclick = function () { pendingEdit = it.id; rerender(); };
       ctl.appendChild(ed);
     }
-    if (ctl.children.length) frag.appendChild(ctl);
-    return frag;
+    return ctl.children.length ? ctl : null;
   }
 
   // Flips the EFFECTIVE expand state (default included) and stores the
@@ -5251,21 +5767,35 @@ var CityOps = (function () {
   // read fine); a done item defaults collapsed (it has sunk out of the way
   // on purpose). An explicit tap during this session always overrides that
   // default, in either direction, via itemExpandOverride above.
-  function appendCard(container, it, status, showWhen, withDayPicker, dayChip) {
+  function appendCard(container, it, status, showWhen, withDayPicker, dayChip, sec) {
     var expanded;
-    if (pendingEdit === it.id) expanded = true; // renaming must show the editor
+    // Renaming and both day pickers replace the detail panel, and that panel
+    // is display:none while the card is collapsed. Since the density pass the
+    // control row is suppressed at the same moment (itemPanelTakenOver), so a
+    // collapsed card in that state would render a title and nothing else: no
+    // picker, no Cancel, no way back except tapping the title. Forcing the
+    // card open is what keeps every one of those three states reachable from
+    // the collapsed card the control row now lives on.
+    if (itemPanelTakenOver(it, status, withDayPicker)) expanded = true;
     else if (Object.prototype.hasOwnProperty.call(itemExpandOverride, it.id)) expanded = itemExpandOverride[it.id];
     else expanded = defaultExpanded(status);
     container.classList.add(expanded ? 'expanded' : 'collapsed');
     // Stamped on every card everywhere, so revealJustMoved() can find a card
     // again after a re-render relocated it, in any tab.
     container.setAttribute('data-item-id', it.id);
-    var hd = cardHeaderBtn(it, status, expanded, dayChip);
+    var hd = cardHeaderBtn(it, status, expanded, dayChip, sec, showWhen);
     hd.onclick = function () { toggleExpand(it.id, status); };
     container.appendChild(hd);
     var detail = el('div', 'card-detail');
-    detail.appendChild(itemDetailBody(it, status, showWhen, withDayPicker));
+    detail.appendChild(itemDetailBody(it, status, withDayPicker));
     container.appendChild(detail);
+    // Last, so a card reads title, then what it is, then what you can do
+    // about it, and so the collapsed card is exactly two rows: the title row
+    // and this one.
+    if (!itemPanelTakenOver(it, status, withDayPicker)) {
+      var ctl = itemControlRow(it, status, withDayPicker);
+      if (ctl) container.appendChild(ctl);
+    }
   }
 
   function renderCard(it, status, withDayPicker, dayChip) {
@@ -5826,6 +6356,8 @@ var CityOps = (function () {
         if (e.status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
         tname.appendChild(document.createTextNode(effectiveName(e.it, state)));
         h3.appendChild(tname);
+        var shareBadge = ratingBadge(e.it.rating, true);
+        if (shareBadge) h3.appendChild(shareBadge);
         if (e.it.price) h3.appendChild(el('span', 'price', e.it.price.text));
         bd.appendChild(h3);
         var meta = (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label + (e.it.when ? ' · ' + e.it.when : '');
@@ -5853,6 +6385,8 @@ var CityOps = (function () {
         if (e.status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
         tname.appendChild(document.createTextNode(effectiveName(e.it, state)));
         h3.appendChild(tname);
+        var undatedBadge = ratingBadge(e.it.rating, true);
+        if (undatedBadge) h3.appendChild(undatedBadge);
         if (e.it.price) h3.appendChild(el('span', 'price', e.it.price.text));
         card.appendChild(h3);
         card.appendChild(el('p', 'when-line', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
@@ -5905,8 +6439,12 @@ var CityOps = (function () {
     entries.forEach(function (e) {
       var card = el('div', 'card dragrow' + (e.status === 'done' ? ' item-done' : ''));
       card.appendChild(planGrip(e.it));
-      card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
-      appendCard(card, e.it, e.status, true, 'labeled');
+      // The section used to be a whole line of its own above the title
+      // (.sec-meta). It is now the icon in front of the title, with the
+      // label kept as that icon's tooltip and accessible name: on a phone
+      // that line was 20-odd pixels per card spent restating something the
+      // icon already says.
+      appendCard(card, e.it, e.status, true, 'labeled', null, e.sec);
       list.appendChild(card);
     });
     return list;
@@ -6414,7 +6952,8 @@ var CityOps = (function () {
       buildCityPrompt: buildCityPrompt, INTERESTS_SECTION: INTERESTS_SECTION,
       COPY_LINE: PROMPT_COPY_LINE,
       buildInterestsDeltaPrompt: buildInterestsDeltaPrompt,
-      buildIntelPassPrompt: buildIntelPassPrompt
+      buildIntelPassPrompt: buildIntelPassPrompt,
+      buildRatingsPassPrompt: buildRatingsPassPrompt
     },
     extractJsonBlock: extractJsonBlock, RETRY_INSTRUCTION: RETRY_INSTRUCTION,
     isJsonSyntaxError: isJsonSyntaxError, fetchTextToCity: fetchTextToCity,

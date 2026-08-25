@@ -138,6 +138,11 @@
           "Typical visit is about 45 minutes, so it does not eat the evening before the 21:00 fountains"
         ],
         "source": "Yandex Maps dish-level review tallies plus Google review aggregates on Wanderlog, read Aug 2026"
+      },
+      "rating": {
+        "stars": 4.8,
+        "count": 442,
+        "source": "from generation research"
       }
     },
     {
@@ -150,7 +155,7 @@
       "price": {
         "text": "~4,000-16,000 AMD / $11-44"
       },
-      "note": "4.7 stars across 801 reviews. Armenian crossed with Lebanese and Syrian, which in practice means hummus, fattoush, cig kofte, manti and lahmajun rather than a plate of meat: exactly the not-heavy-late order you want on a Monday. 16 min walk. Closes 23:00.",
+      "note": "Armenian crossed with Lebanese and Syrian, which in practice means hummus, fattoush, cig kofte, manti and lahmajun rather than a plate of meat: exactly the not-heavy-late order you want on a Monday. 16 min walk. Closes 23:00.",
       "hours": {
         "text": "12:00-23:00 daily · closes 23:00",
         "class": "eve"
@@ -199,6 +204,11 @@
           "Reviewers report being seated where the room wants them even when it is empty, so state a preference on arrival"
         ],
         "source": "Yandex Maps reviews, TripAdvisor and Wanderlog Google-review aggregates, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.7,
+        "count": 801,
+        "source": "from generation research"
       }
     },
     {
@@ -254,6 +264,11 @@
           "Waiting time scores 71 percent across 199 reviews, so order everything at once rather than in courses"
         ],
         "source": "Yandex Maps dish-level review tallies plus TripAdvisor and Wanderlog aggregates, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.6,
+        "count": 2521,
+        "source": "from generation research"
       }
     },
     {
@@ -285,7 +300,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.3,
+        "count": 165,
+        "source": "from generation research"
+      }
     },
     {
       "id": "gata-tavern",
@@ -297,7 +317,7 @@
       "price": {
         "text": "~4,000-14,000 AMD / $11-38"
       },
-      "note": "4.7 stars across 1,441 reviews. Khorovats and kebab done properly, an on-site bakery making gata where you can watch it, and a lot of reviewers specifically praising the staff. Two warnings, both from the reviews rather than from me: there is live music every night, so this is not a quiet room, and the portions are enormous, so order less than feels right.",
+      "note": "Khorovats and kebab done properly, an on-site bakery making gata where you can watch it, and a lot of reviewers specifically praising the staff. Two warnings, both from the reviews rather than from me: there is live music every night, so this is not a quiet room, and the portions are enormous, so order less than feels right.",
       "hours": {
         "text": "10:00-00:00 daily",
         "class": "late"
@@ -346,6 +366,11 @@
           "Live music runs every night, so this is not the quiet table"
         ],
         "source": "Yandex Maps dish-level review tallies plus TripAdvisor review text, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.7,
+        "count": 1441,
+        "source": "from generation research"
       }
     },
     {
@@ -409,6 +434,11 @@
           "Air conditioning gets run hard: reviewers describe the room as cold, which in August is a feature but bring a layer"
         ],
         "source": "Yandex Maps dish-level review tallies (4,102 ratings) plus TripAdvisor and Wanderlog aggregates, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.6,
+        "count": 5058,
+        "source": "from generation research"
       }
     },
     {
@@ -452,7 +482,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.9,
+        "count": 189,
+        "source": "from generation research"
+      }
     },
     {
       "id": "artashi-mot",
@@ -507,6 +542,11 @@
           "Staff scores 53 percent across 151 reviews and waiting time 47 percent across 53, so this is a sit-down-and-be-patient place"
         ],
         "source": "Yandex Maps dish-level review tallies plus TripAdvisor review text, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.2,
+        "count": 404,
+        "source": "from generation research"
       }
     },
     {
@@ -557,6 +597,11 @@
           "Late in the evening reviewers report parts of the menu already unavailable, so order the thing you came for first"
         ],
         "source": "Yandex Maps dish tallies for Tavern Yerevan (chain data, mostly the Amiryan branch, not the Khorenatsi one) plus Wanderlog aggregates, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.7,
+        "count": 1077,
+        "source": "from generation research"
       }
     },
     {
@@ -567,7 +612,7 @@
       "price": {
         "text": "~6,000-16,000 AMD / $16-44"
       },
-      "note": "4.5 stars across 297 reviews. Contemporary Georgian, and specifically the parts of Georgian food that worked for you: crispy eggplant, hummus with a twist, Georgian salad, achma, which is the layered cheese bread and a far lighter way to eat cheese and dough than khinkali. Reviewers call the service fast and friendly. To 00:00, and 01:00 on Friday and Saturday.",
+      "note": "Contemporary Georgian, and specifically the parts of Georgian food that worked for you: crispy eggplant, hummus with a twist, Georgian salad, achma, which is the layered cheese bread and a far lighter way to eat cheese and dough than khinkali. Reviewers call the service fast and friendly. To 00:00, and 01:00 on Friday and Saturday.",
       "hours": {
         "text": "Sun-Thu 10:00-00:00 · Fri-Sat to 01:00"
       },
@@ -590,7 +635,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.5,
+        "count": 297,
+        "source": "from generation research"
+      }
     },
     {
       "id": "frank-by-basta",
@@ -644,6 +694,11 @@
           "It is priced high for Yerevan, which is the recurring complaint even in positive reviews"
         ],
         "source": "Yandex Maps review analysis (1,296 ratings, 452 reviews) plus TripAdvisor, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.7,
+        "count": 566,
+        "source": "from generation research"
       }
     },
     {
@@ -693,6 +748,11 @@
           "Hookah is a big part of the room and reviewers praise it, which is another way of saying the air is smoky"
         ],
         "source": "Yandex Maps reviews plus Wanderlog Google-review aggregate, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.7,
+        "count": 3658,
+        "source": "from generation research"
       }
     },
     {
@@ -743,6 +803,11 @@
           "Typical visit is about 45 minutes and service slows noticeably at peak, so it is a late-night answer rather than a long evening"
         ],
         "source": "Wanderlog Google-review aggregate plus TripAdvisor review text, Aug 2026 read. Note two TripAdvisor listings exist for this name; this is the Hanrapetutyan St one"
+      },
+      "rating": {
+        "stars": 4.2,
+        "count": 1387,
+        "source": "from generation research"
       }
     },
     {
@@ -792,6 +857,11 @@
           "Reviewers describe the inside as hot, which at midnight in August is worth knowing before you sit down"
         ],
         "source": "Yandex Maps dish-level review tallies plus TripAdvisor, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4,
+        "count": 1864,
+        "source": "from generation research"
       }
     },
     {
@@ -820,7 +890,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.9,
+        "count": 76,
+        "source": "from generation research"
+      }
     },
     {
       "id": "dolmama",
@@ -845,7 +920,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.2,
+        "count": 859,
+        "source": "from generation research"
+      }
     },
     {
       "id": "on-tipping",
@@ -907,6 +987,11 @@
           "Waiting time is the weakest score on the listing, so take the pastry from the counter rather than ordering a cooked plate on a work morning"
         ],
         "source": "Yandex Maps dish-level review split plus TripAdvisor (Abovyan branch, 172 reviews), Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.1,
+        "count": 590,
+        "source": "from generation research"
       }
     },
     {
@@ -994,7 +1079,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.5,
+        "count": 370,
+        "source": "from generation research"
+      }
     },
     {
       "id": "baguette-and-co",
@@ -1104,6 +1194,11 @@
           "It can sell out: reviewers advise arriving well before the 18:30 close, and food comes in 5 to 7 minutes once you order"
         ],
         "source": "Yandex Maps reviews plus TripAdvisor and Wanderlog Google-review aggregates, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.9,
+        "count": 811,
+        "source": "from generation research"
       }
     },
     {
@@ -1294,6 +1389,11 @@
           "Kunefe is the dessert reviewers name, if you are still there for one"
         ],
         "source": "Yandex Maps reviews (252 ratings) plus Wanderlog Google-review aggregate, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.5,
+        "count": 1000,
+        "source": "from generation research"
       }
     },
     {
@@ -1304,7 +1404,7 @@
       "price": {
         "text": "Price band not published"
       },
-      "note": "4.5 stars across about 405 reviews. Lahmajun thrown into a belt-fed wood oven in front of you, and the cheese lahmajo is what reviewers single out. 10:00 to midnight daily, 20 min out, and it shares an address with Lavash Restaurant and Tumanyan's Khinkali, so if one is full you are already standing outside the other two. Reviewers also rate its breakfast, which makes it the fallback if you want lahmajun before noon. The consistent knock is the room: plain, and noisy inside.",
+      "note": "Lahmajun thrown into a belt-fed wood oven in front of you, and the cheese lahmajo is what reviewers single out. 10:00 to midnight daily, 20 min out, and it shares an address with Lavash Restaurant and Tumanyan's Khinkali, so if one is full you are already standing outside the other two. Reviewers also rate its breakfast, which makes it the fallback if you want lahmajun before noon. The consistent knock is the room: plain, and noisy inside.",
       "hours": {
         "text": "10:00-00:00 daily",
         "class": "late"
@@ -1344,6 +1444,11 @@
           "The basement hall is cramped and the outdoor seating is tight, so this is a 20-minute lunch not a sit-down"
         ],
         "source": "Yandex Maps review analysis plus TripAdvisor, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.5,
+        "count": 405,
+        "source": "from generation research"
       }
     },
     {
@@ -1378,7 +1483,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.6,
+        "count": 296,
+        "source": "from generation research"
+      }
     },
     {
       "id": "tumanyan-shaurma",
@@ -1451,7 +1561,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.4,
+        "count": 256,
+        "source": "from generation research"
+      }
     },
     {
       "id": "work-space",
@@ -1475,7 +1590,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 5,
+        "count": 317,
+        "source": "from generation research"
+      }
     },
     {
       "id": "lumen-coffee",
@@ -1485,7 +1605,7 @@
       "price": {
         "text": "~1,200-1,800 AMD / $3-5 a coffee"
       },
-      "note": "3A Teryan. The city's benchmark roaster: in-house Giesen, single-origin Ethiopia, Colombia and Brazil, and reportedly some experimental Armenian-grown lots. 4.7 stars across 522 reviews. Quiet courtyard, non-smoking, outlets, reliable wifi. It opens 08:30 rather than 08:00 and the food is cake rather than breakfast, so this is the coffee-first morning, not the eat-first one. Air conditioning unconfirmed.",
+      "note": "3A Teryan. The city's benchmark roaster: in-house Giesen, single-origin Ethiopia, Colombia and Brazil, and reportedly some experimental Armenian-grown lots. Quiet courtyard, non-smoking, outlets, reliable wifi. It opens 08:30 rather than 08:00 and the food is cake rather than breakfast, so this is the coffee-first morning, not the eat-first one. Air conditioning unconfirmed.",
       "hours": {
         "text": "08:30-22:30 daily",
         "class": "late"
@@ -1506,7 +1626,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.7,
+        "count": 522,
+        "source": "from generation research"
+      }
     },
     {
       "id": "nono",
@@ -1551,7 +1676,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.6,
+        "count": 479,
+        "source": "from generation research"
+      }
     },
     {
       "id": "green-bean",
@@ -1576,7 +1706,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.5,
+        "count": 578,
+        "source": "from generation research"
+      }
     },
     {
       "id": "lumen-1936",
@@ -1596,7 +1731,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.6,
+        "count": 400,
+        "source": "from generation research"
+      }
     },
     {
       "id": "coffee-late-openers",
@@ -1617,7 +1757,7 @@
       "price": {
         "text": "4,500 AMD / $12 day pass · 60,000-65,000 monthly"
       },
-      "note": "3 Moskovyan, and the only genuinely 24/7 coworking in the capital, seven days a week. That one fact makes it the answer for Sat 15, Sun 16 and Sat 22, when nearly everything else is shut or reduced. 4.5 stars, 252 reviews. Air conditioning, phone and Skype booths, a meeting room, lockers, free coffee, printing, and a lounge with ping pong and a piano. 28 min walk, straight north of you. Two sources give two different phone numbers so I am publishing neither: reach them through Facebook or Instagram, and message the day before rather than assuming you can walk in.",
+      "note": "3 Moskovyan, and the only genuinely 24/7 coworking in the capital, seven days a week. That one fact makes it the answer for Sat 15, Sun 16 and Sat 22, when nearly everything else is shut or reduced. Air conditioning, phone and Skype booths, a meeting room, lockers, free coffee, printing, and a lounge with ping pong and a piano. 28 min walk, straight north of you. Two sources give two different phone numbers so I am publishing neither: reach them through Facebook or Instagram, and message the day before rather than assuming you can walk in.",
       "hours": {
         "text": "Open 24/7 including weekends",
         "class": "late"
@@ -1634,7 +1774,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.5,
+        "count": 252,
+        "source": "from generation research"
+      }
     },
     {
       "id": "impact-hub",
@@ -1644,7 +1789,7 @@
       "price": {
         "text": "5,000 AMD / $14 day pass · meeting room 5,000/hr"
       },
-      "note": "80/1 Tigran Mets, the nearest coworking to your side of town at about 25 min, and 115m from Zoravar Andranik metro. 4.9 stars but only 31 reviews. THE CATCH: the day pass explicitly buys access until 19:00, Monday to Friday. Their own FAQ says the hub is open 24 hours including weekends, but that applies to the monthly membership tiers, not to a day pass, and one directory lists them as closed Saturday and Sunday outright. Email before you count on a weekend. Book through the form on their site; they publish no phone number anywhere.",
+      "note": "80/1 Tigran Mets, the nearest coworking to your side of town at about 25 min, and 115m from Zoravar Andranik metro. THE CATCH: the day pass explicitly buys access until 19:00, Monday to Friday. Their own FAQ says the hub is open 24 hours including weekends, but that applies to the monthly membership tiers, not to a day pass, and one directory lists them as closed Saturday and Sunday outright. Email before you count on a weekend. Book through the form on their site; they publish no phone number anywhere.",
       "hours": {
         "text": "Day pass Mon-Fri 09:00-19:00 · weekends NOT reliable",
         "class": "day"
@@ -1666,7 +1811,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.9,
+        "count": 31,
+        "source": "from generation research"
+      }
     },
     {
       "id": "becoworker",
@@ -1768,7 +1918,7 @@
       "price": {
         "text": "Free to walk"
       },
-      "note": "4.5 stars, 6,035 reviews. Nominally open daily 10:00-18:00, but it is only actually a market on Saturday and Sunday: on a weekday, especially Monday, a large share of the stalls simply are not there, and Sunday is the fullest day. It closes at 18:00, so it is the one thing in this guide that cannot wait for the evening, which is exactly why it sits on a Sunday. Closest major sight to your door, 15 min walk.",
+      "note": "Nominally open daily 10:00-18:00, but it is only actually a market on Saturday and Sunday: on a weekday, especially Monday, a large share of the stalls simply are not there, and Sunday is the fullest day. It closes at 18:00, so it is the one thing in this guide that cannot wait for the evening, which is exactly why it sits on a Sunday. Closest major sight to your door, 15 min walk.",
       "hours": {
         "text": "10:00-18:00 · DAYTIME · weekends only in practice",
         "class": "day"
@@ -1806,6 +1956,11 @@
           "Go early for the widest selection: the good stalls thin out as the day runs"
         ],
         "source": "TripAdvisor reviews and the 4stogo Vernissage shopping guide, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.5,
+        "count": 6035,
+        "source": "from generation research"
       }
     },
     {
@@ -1818,7 +1973,7 @@
       "price": {
         "text": "Free"
       },
-      "note": "4.8 stars, 10,535 reviews. The light-and-music show runs late May to October, so August is fine. Sources split on the start time between 20:00 and 21:00, so be there by 20:45 and you cannot miss it. CLOSED TUESDAYS for cleaning, which is why this is not on Tue 18. 22 min walk, and it pairs with Vernissage as a single trip into the centre.",
+      "note": "The light-and-music show runs late May to October, so August is fine. Sources split on the start time between 20:00 and 21:00, so be there by 20:45 and you cannot miss it. CLOSED TUESDAYS for cleaning, which is why this is not on Tue 18. 22 min walk, and it pairs with Vernissage as a single trip into the centre.",
       "hours": {
         "text": "Show ~21:00-23:00 · not Tuesdays",
         "class": "late"
@@ -1847,6 +2002,11 @@
           "Tuesday is the weekly clean and there is no show at all"
         ],
         "source": "TripAdvisor Republic Square and Dancing Fountains reviews, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.8,
+        "count": 10535,
+        "source": "from generation research"
       }
     },
     {
@@ -1901,6 +2061,11 @@
           "It is two compact floors: without a guide you can be back out in fifteen minutes, so do not build the whole afternoon around it alone"
         ],
         "source": "TripAdvisor reviews, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.7,
+        "count": 913,
+        "source": "from generation research"
       }
     },
     {
@@ -1933,7 +2098,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.8,
+        "count": 2114,
+        "source": "from generation research"
+      }
     },
     {
       "id": "garni-geghard",
@@ -2005,7 +2175,7 @@
       "price": {
         "text": "2,000 AMD / $5 · foreign-language tour 5,000"
       },
-      "note": "4.7 stars, 772 reviews. Tue-Sat 10:00-17:50, closed Sunday AND Monday, which is why it lands on Thursday. This one is tight: finish at 14:00, GG straight there, and you get a clean two hours. Illuminated manuscripts going back to the fifth century, in a bunker of a building at the top of Mashtots. Walk back down Mashtots afterwards; the Blue Mosque is on the way and so is Lumen 1936.",
+      "note": "Tue-Sat 10:00-17:50, closed Sunday AND Monday, which is why it lands on Thursday. This one is tight: finish at 14:00, GG straight there, and you get a clean two hours. Illuminated manuscripts going back to the fifth century, in a bunker of a building at the top of Mashtots. Walk back down Mashtots afterwards; the Blue Mosque is on the way and so is Lumen 1936.",
       "hours": {
         "text": "Tue-Sat 10:00-17:50 · DAYTIME · go straight after work",
         "class": "day"
@@ -2044,6 +2214,11 @@
           "Weekdays are noticeably quieter than the weekend per reviewers"
         ],
         "source": "TripAdvisor reviews and Wanderlog aggregate, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.7,
+        "count": 772,
+        "source": "from generation research"
       }
     },
     {
@@ -2056,7 +2231,7 @@
       "price": {
         "text": "Free"
       },
-      "note": "4.5 stars, 1,815 reviews. An eighteenth-century Persian mosque with a tiled courtyard, and the quietest place in central Yerevan. Reported hours are 10:00-13:00 and 15:00-18:00, but it is an active religious site and visitors regularly arrive to find it shut around prayer times. Treat it as a twenty minute bonus on the Mashtots walk, never as the plan.",
+      "note": "An eighteenth-century Persian mosque with a tiled courtyard, and the quietest place in central Yerevan. Reported hours are 10:00-13:00 and 15:00-18:00, but it is an active religious site and visitors regularly arrive to find it shut around prayer times. Treat it as a twenty minute bonus on the Mashtots walk, never as the plan.",
       "hours": {
         "text": "~10:00-13:00, 15:00-18:00 · often shut without notice",
         "class": "day"
@@ -2070,7 +2245,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.5,
+        "count": 1815,
+        "source": "from generation research"
+      }
     },
     {
       "id": "cascade-cafesjian",
@@ -2135,6 +2315,11 @@
           "July and August are the peak crowd months on the steps, so early evening beats mid-evening"
         ],
         "source": "TripAdvisor Cafesjian Center reviews plus current visitor guides, Aug 2026 read"
+      },
+      "rating": {
+        "stars": 4.7,
+        "count": 11869,
+        "source": "from generation research"
       }
     },
     {
@@ -2164,7 +2349,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.5,
+        "count": 1833,
+        "source": "from generation research"
+      }
     },
     {
       "id": "circular-park",
@@ -2250,7 +2440,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.7,
+        "count": 2068,
+        "source": "from generation research"
+      }
     },
     {
       "id": "echmiadzin-grape-blessing",
@@ -2294,7 +2489,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.4,
+        "count": 1385,
+        "source": "from generation research"
+      }
     },
     {
       "id": "lake-sevan",
@@ -2399,7 +2599,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.6,
+        "count": 1013,
+        "source": "from generation research"
+      }
     },
     {
       "id": "khor-virap-noravank",
@@ -2476,7 +2681,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 5,
+        "count": 1157,
+        "source": "from generation research"
+      }
     },
     {
       "id": "level-barbershop",
@@ -2486,7 +2696,7 @@
       "price": {
         "text": "6,000-13,000 AMD / $16-36 by barber tier"
       },
-      "note": "The step up if you would rather it were done properly than cheaply, and even the top tier is under forty dollars. 5.0 stars across 363 reviews. The standalone beard price is not published anywhere, only combo packages, so ask when you book. About 20 min walk north of you, which makes it the closest good barber after True Cost.",
+      "note": "The step up if you would rather it were done properly than cheaply, and even the top tier is under forty dollars. The standalone beard price is not published anywhere, only combo packages, so ask when you book. About 20 min walk north of you, which makes it the closest good barber after True Cost.",
       "hours": {
         "text": "10:00-22:00 daily",
         "class": "late"
@@ -2512,7 +2722,12 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 5,
+        "count": 363,
+        "source": "from generation research"
+      }
     },
     {
       "id": "laundry-point",
@@ -2536,7 +2751,11 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 5,
+        "source": "from generation research"
+      }
     },
     {
       "id": "yerevan-city-nearest",
@@ -2546,7 +2765,7 @@
       "price": {
         "text": "Supermarket prices"
       },
-      "note": "Three minutes from your door, effectively your pantry. 4.6 stars across 250 ratings. NOT 24 hours despite what some listings claim: Yandex shows it shut overnight and opening 08:30, and the local business directory contradicts itself on the same page. Treat it as roughly 08:30-23:00 and use Tigran Mets for anything later than that.",
+      "note": "Three minutes from your door, effectively your pantry. NOT 24 hours despite what some listings claim: Yandex shows it shut overnight and opening 08:30, and the local business directory contradicts itself on the same page. Treat it as roughly 08:30-23:00 and use Tigran Mets for anything later than that.",
       "hours": {
         "text": "~08:30-23:00 · not 24h",
         "class": "late"
@@ -2554,7 +2773,12 @@
       "tags": [],
       "links": [],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.6,
+        "count": 250,
+        "source": "from generation research"
+      }
     },
     {
       "id": "body-soft-massage",
@@ -2580,7 +2804,11 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 5,
+        "source": "from generation research"
+      }
     },
     {
       "id": "thai-spa",
@@ -2614,7 +2842,7 @@
       "section": "services",
       "status": "backup",
       "name": "TOPGUN Barbershop, Moskovyan 37",
-      "note": "5.0 stars across 179 reviews. The third option if True Cost and Level are both booked out. Further north, near the Cascade end of town, and no prices are published.",
+      "note": "The third option if True Cost and Level are both booked out. Further north, near the Cascade end of town, and no prices are published.",
       "tags": [],
       "links": [
         {
@@ -2624,14 +2852,19 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 5,
+        "count": 179,
+        "source": "from generation research"
+      }
     },
     {
       "id": "selena-dry-clean",
       "section": "services",
       "status": "backup",
       "name": "Selena Service, Zaqyan 4",
-      "note": "Drop-off dry cleaning and laundry, returned folded, usually overnight. 4.5 stars. Opens 09:00. The 1,000 AMD per kilo figure floating around online is from 2022, so expect more than that. Use this instead of Laundry Point if you would rather it were done for you than sit with it.",
+      "note": "Drop-off dry cleaning and laundry, returned folded, usually overnight. Opens 09:00. The 1,000 AMD per kilo figure floating around online is from 2022, so expect more than that. Use this instead of Laundry Point if you would rather it were done for you than sit with it.",
       "hours": {
         "text": "From 09:00"
       },
@@ -2649,7 +2882,11 @@
         }
       ],
       "place_id": null,
-      "verified": null
+      "verified": null,
+      "rating": {
+        "stars": 4.5,
+        "source": "from generation research"
+      }
     },
     {
       "id": "late-grocery-pharmacy",

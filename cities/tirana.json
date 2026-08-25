@@ -124,7 +124,12 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=Heart+Of+Tirana+Apartments&query_place_id=ChIJt106p2cxUBMR_s0BenjOEaw"
         }
-      ]
+      ],
+      "rating": {
+        "stars": 4.9,
+        "count": 38,
+        "source": "from generation research"
+      }
     },
     {
       "id": "base-02",
@@ -2024,7 +2029,12 @@
       "meta": {
         "source": "first draft"
       },
-      "note": "Dropped, 3.6★ on only 7 reviews, recent non-functional-sauna report and management turnover."
+      "note": "Dropped, 3.6★ on only 7 reviews, recent non-functional-sauna report and management turnover.",
+      "rating": {
+        "stars": 3.6,
+        "count": 7,
+        "source": "from generation research"
+      }
     },
     {
       "id": "corrections-04",
