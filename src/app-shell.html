@@ -97,6 +97,26 @@
     padding:0; cursor:pointer; flex:0 0 auto;}
   .factor-row button:hover{background:var(--accent-soft); color:var(--accent-hover);}
   .key-field{flex:1 1 100%; min-width:0;}
+
+  /* Sync alert: amber, not red. Nothing is lost when sync stops (the device
+     keeps every edit), so this is a "you should know" rather than an error.
+     Full width above the header, stacked on a phone. */
+  .syncalert{background:var(--amber-soft); border:1px solid var(--amber);
+    border-left:4px solid var(--amber); border-radius:10px; padding:11px 13px;
+    margin:0 0 12px; font-size:.82rem; line-height:1.45; color:var(--text);}
+  .syncalert-txt{display:block;}
+  .syncalert-acts{display:flex; gap:8px; flex-wrap:wrap; margin-top:9px;}
+  .syncalert-acts .ctl{font-size:.78rem;}
+
+  /* Section leads inside the Profile modal: the modal now holds Account, the
+     interest profile and the Claude key, and a reader needs to see where one
+     ends and the next begins. */
+  .modal .section-lead{font-weight:800; font-size:.86rem; color:var(--text);
+    margin:16px 0 4px; padding-top:12px; border-top:1px solid var(--border-light);}
+  /* Signed out is the state that costs the traveler something, so it does not
+     look like the rest of the muted helper text. */
+  .modal .acct-off{color:var(--amber-ink); background:var(--amber-soft);
+    border-radius:8px; padding:8px 10px; font-weight:600;}
   @media (max-width: 430px){
     .hdr-actions{top:17px; right:14px; gap:4px;}
     .hdr-chip{padding:4px 9px; font-size:.7rem;}
@@ -106,6 +126,10 @@
 <body>
 <div class="wrap">
   <div id="notice"></div>
+  <!-- App-owned and never touched by the engine (which rewrites #notice on
+       every render): the one place a stopped sync can say so and still be
+       there after the next tap. -->
+  <div id="syncalert"></div>
   <header id="hdr"></header>
   <div id="citybar"></div>
   <div class="toolbar" id="toolbar"></div>
@@ -143,20 +167,28 @@
   var SYNC_KEY = 'cityops.sync.v1';   // {lastSync}
   var DEV_KEY = 'cityops.supa.dev';   // testing override: {"url":"...","anon":"..."}
 
-  // Phase 2: Claude API key for the in-app generator. Deliberately its OWN
-  // localStorage key, never folded into `store` or `profile`: those two sync
-  // to Supabase (see pushProfileNow/pushNow below), and this key must never
-  // ride along in that traffic. It stays on this device, read only at the
-  // moment a generation request is made.
+  // Claude API key for the in-app generator. It keeps its own localStorage
+  // key (the working copy this device reads at generation time) and is NEVER
+  // folded into `store` or `store.profile`: normalizeProfile() rebuilds a
+  // profile from a fixed field list, so keeping the key outside it is what
+  // guarantees it cannot reach an exported guide, a city row, genmeta or any
+  // prompt the app builds.
+  //
+  // Changed 2026-08-25 (Rob): the key now ALSO rides in the profile sync row,
+  // as a stamped sidecar beside the profile (see syncKit.buildProfileRow), so
+  // clearing this browser's cache no longer loses it. It travels only in that
+  // one RLS-protected row, and only while signed in.
   var CLAUDE_KEY = 'cityops.claude.apikey.v1';
+  var CLAUDE_KEY_AT = 'cityops.claude.apikey.updated.v1';  // ISO stamp for the reconcile
 
-  // Phase 2: the Add/Edit city form fields that are NOT part of schema v1
+  // The Add/Edit city form fields that are NOT part of schema v1
   // (accommodation address, transport, free-text trip notes) exist only to
   // build a prompt; the city JSON itself never carries them. They are saved
-  // here, keyed by cityId, purely so Edit can reopen the form pre-filled.
-  // Local-only by design (no sync table for this): losing it just means a
-  // re-edit starts from the city's own data instead of the original form.
+  // here, keyed by cityId, purely so Edit can reopen the form pre-filled, and
+  // (since 2026-08-25) ride in the profile row as a second stamped sidecar so
+  // an Edit opened on the phone shows what was typed on the laptop.
   var GENMETA_KEY = 'cityops.genmeta.v1';
+  var GENMETA_AT = 'cityops.genmeta.updated.v1';           // ISO stamp for the reconcile
 
   // Bundled first-run city: the same example block standalone template.html ships
   // with, so a stranger opening the app sees a working guide immediately.
@@ -271,33 +303,71 @@
     if (LS) { try { LS.setItem(APP_KEY, JSON.stringify(s)); } catch (e) {} }
   }
 
-  // ---- Claude API key (Phase 2, own storage, never synced) ----
-  function loadApiKey() {
-    if (!LS) return '';
-    try { return LS.getItem(CLAUDE_KEY) || ''; } catch (e) { return ''; }
+  function readLS(k) {
+    if (!LS) return null;
+    try { return LS.getItem(k); } catch (e) { return null; }
   }
-  function saveApiKey(k) {
+  function writeLS(k, v) {
     if (!LS) return;
-    try {
-      if (k) LS.setItem(CLAUDE_KEY, k);
-      else LS.removeItem(CLAUDE_KEY);
-    } catch (e) {}
+    try { if (v === null) LS.removeItem(k); else LS.setItem(k, v); } catch (e) {}
   }
 
-  // ---- generation-form metadata (Phase 2, own storage, local only) ----
+  // ---- Claude API key (local working copy + a stamp for the sync reconcile) ----
+  function loadApiKey() {
+    return readLS(CLAUDE_KEY) || '';
+  }
+
+  // A key saved before key sync existed has no stamp of its own. Give it the
+  // epoch rather than null: that makes it PUSHABLE (a device with a key beats
+  // an account with none) while losing to any explicit change made anywhere
+  // since. Returns null only when this device has never had or cleared a key,
+  // which is the one state that must not overwrite the account's key.
+  function apiKeyStamp() {
+    var at = readLS(CLAUDE_KEY_AT);
+    if (at) return at;
+    return loadApiKey() ? CityOps.syncKit.EPOCH : null;
+  }
+
+  // Writes both halves without touching sync: the pull path uses this to adopt
+  // the account's key (keeping the REMOTE stamp, exactly like a pulled city).
+  function writeApiKey(k, iso) {
+    writeLS(CLAUDE_KEY, k ? k : null);
+    writeLS(CLAUDE_KEY_AT, iso || null);
+  }
+
+  // A deliberate local change: stamp it now and queue the profile row. An
+  // empty k is a CLEAR, which is a real edit too (it must propagate), so it
+  // still gets a stamp rather than reverting this device to "never had one".
+  function saveApiKey(k) {
+    writeApiKey(k, new Date().toISOString());
+    schedulePush('profile');
+  }
+
+  // ---- generation-form metadata (local working copy + its own stamp) ----
   function loadGenMeta() {
-    if (!LS) return {};
-    var raw = null;
-    try { raw = LS.getItem(GENMETA_KEY); } catch (e) { return {}; }
+    var raw = readLS(GENMETA_KEY);
     if (!raw) return {};
-    try { var m = JSON.parse(raw); return (m && typeof m === 'object') ? m : {}; }
-    catch (e2) { return {}; }
+    try { var m = JSON.parse(raw); return (m && typeof m === 'object' && !Array.isArray(m)) ? m : {}; }
+    catch (e) { return {}; }
+  }
+  function genMetaStamp() {
+    var at = readLS(GENMETA_AT);
+    if (at) return at;
+    // Same migration rule as the key: metadata that predates genmeta sync is
+    // pushable but loses to any explicit edit made since.
+    var all = loadGenMeta();
+    for (var k in all) { if (has(all, k)) return CityOps.syncKit.EPOCH; }
+    return null;
+  }
+  function writeGenMeta(all, iso) {
+    writeLS(GENMETA_KEY, JSON.stringify(all || {}));
+    writeLS(GENMETA_AT, iso || null);
   }
   function saveGenMetaFor(cityId, meta) {
-    if (!LS) return;
     var all = loadGenMeta();
     all[cityId] = meta;
-    try { LS.setItem(GENMETA_KEY, JSON.stringify(all)); } catch (e) {}
+    writeGenMeta(all, new Date().toISOString());
+    schedulePush('profile');
   }
 
   function el(tag, cls, text) {
@@ -420,21 +490,11 @@
       acts.appendChild(exb);
     }
     // Feature 7: Profile moved to a top-level header chip (decorateHeader
-    // below), since it is one profile for every city, not a per-city
-    // setting. No row for it here anymore.
-    // Sync control: absent entirely when no project is configured, so an
-    // unconfigured build shows no sign-in affordance it cannot honour.
-    if (syncOn()) {
-      var sy = el('button', null, session ? ('Sync: ' + (syncEmail || 'signed in')) : 'Sign in to sync');
-      sy.type = 'button';
-      sy.onclick = function () {
-        panelOpen = false;
-        updateHeaderExpanded();
-        renderPanel();
-        if (session) openSyncModal(); else openSignInModal();
-      };
-      acts.appendChild(sy);
-    }
+    // below), since it is one profile for every city, not a per-city setting.
+    // Sync moved there too (2026-08-25, Rob): signing in is an ACCOUNT action,
+    // not a city action, and burying the signed-out state one tap inside a
+    // city menu is how a dropped session went unnoticed. Profile now owns it,
+    // and #syncalert says so on the page when sync stops.
     panel.appendChild(acts);
     bar.appendChild(panel);
 
@@ -623,8 +683,72 @@
     return { get: function () { return items; } };
   }
 
+  // The account block, at the TOP of Profile (2026-08-25, Rob). Sync used to
+  // live one tap inside the city switcher, where "signed out" was invisible;
+  // a session that gets dropped stops syncing silently, and the traveler sees
+  // stale data with no warning. Here the state is the first thing Profile
+  // says, in the words that matter to the reader: is my work reaching my
+  // other devices or not.
+  function accountBlock(box) {
+    box.appendChild(el('p', 'section-lead', 'Account'));
+    if (!syncOn()) {
+      box.appendChild(el('p', 'diff', 'Sync is not configured in this build. ' +
+        'Everything you do is saved in this browser only.'));
+      return;
+    }
+    var signedIn = !!(session && session.access_token);
+    var line = el('p', signedIn ? 'diff' : 'diff acct-off',
+      signedIn
+        ? ('Sync is on. Signed in as ' + (syncEmail || 'your account') + '.')
+        : 'Sync is off: you are not signed in. Everything is saved on this device only, ' +
+          'and nothing here reaches your other devices.');
+    box.appendChild(line);
+    var when = el('p', 'diff', lastSyncLine());
+    box.appendChild(when);
+
+    var row = el('div', 'mrow');
+    if (!signedIn) {
+      var inb = el('button', 'ctl to-done', 'Sign in to sync');
+      inb.type = 'button';
+      inb.onclick = function () { closeModalOf(box); openSignInModal(); };
+      row.appendChild(inb);
+    } else {
+      var now = el('button', 'ctl', 'Sync now');
+      now.type = 'button';
+      now.onclick = function () {
+        now.disabled = true;
+        now.textContent = 'Syncing...';
+        pullAll(true).then(function (ok) {
+          now.textContent = 'Sync now';
+          now.disabled = false;
+          when.textContent = ok ? lastSyncLine()
+            : 'Could not reach the sync service. Your work is saved on this device.';
+        });
+      };
+      var out = el('button', 'ctl to-archived', 'Sign out');
+      out.type = 'button';
+      out.onclick = function () {
+        signOut();
+        closeModalOf(box);
+        showSyncNotice('Signed out. This device keeps everything it already has.');
+      };
+      row.appendChild(now);
+      row.appendChild(out);
+    }
+    box.appendChild(row);
+  }
+
+  // Closes the modal that owns `box`. The account buttons live inside the
+  // Profile modal but are built by a helper that has no handle on it.
+  function closeModalOf(box) {
+    var wrap = box.parentNode;
+    if (wrap && wrap.remove) wrap.remove();
+  }
+
   function openProfileModal() {
-    var m = modalShell('Your interest profile');
+    var m = modalShell('Profile');
+    accountBlock(m.box);
+    m.box.appendChild(el('p', 'section-lead', 'Your interests'));
     m.box.appendChild(el('p', 'diff', 'What you seek out in a new city, and what you never want suggested. ' +
       'Build my prompt hands this to your own AI so it finds places that match you. ' +
       'Keep it short: 5 to 12 interests research better than 30.'));
@@ -658,15 +782,26 @@
 
     m.box.appendChild(el('p', 'diff', (session && session.access_token)
       ? 'Saved to your account.'
-      : 'Saved in this browser. Sign in to sync (city menu) to carry your profile across devices.'));
+      : 'Saved in this browser. Sign in above to carry your profile across devices.'));
 
-    // Phase 2: the Claude API key. Its own storage (never store.profile, never
-    // synced) and saved immediately on blur, independent of the profile Save
-    // button below, so leaving the modal by any path never loses it and it
-    // never rides along in a profile push.
-    m.box.appendChild(el('p', 'diff', 'Claude API key: used only by "Generate with Claude" when adding or ' +
-      'editing a city. This key stays in this browser. It is never synced and never sent anywhere except ' +
-      'Anthropic\'s API, directly from your device.'));
+    // The Claude API key. Saved immediately on blur, independent of the
+    // profile Save button below, so leaving the modal by any path never loses
+    // it. It keeps its own storage (never store.profile), and since
+    // 2026-08-25 it also rides in the profile sync row so a cache clear no
+    // longer means typing it again. It never enters a city, an export, a
+    // prompt or any other sync row.
+    m.box.appendChild(el('p', 'section-lead', 'Claude API key'));
+    function keyStatusText() {
+      var hasKey = !!loadApiKey();
+      if (!hasKey) return 'No key saved yet.';
+      return (session && session.access_token)
+        ? 'Key saved and synced to your account.'
+        : 'Key saved on this device. Sign in above to carry it to your other devices.';
+    }
+    m.box.appendChild(el('p', 'diff', 'Used only by "Generate with Claude" when adding or editing a city. ' +
+      'It is sent to Anthropic\'s API directly from your device, and, while you are signed in, stored in ' +
+      'your own account so a cleared browser does not lose it. It never travels with a city, an exported ' +
+      'guide or a prompt.'));
     m.box.appendChild(el('p', 'diff', 'One profile and one key for all your cities.'));
     var keyRow = el('div', 'mrow');
     var keyInp = document.createElement('input');
@@ -677,17 +812,19 @@
     keyInp.value = loadApiKey();
     keyInp.setAttribute('aria-label', 'Claude API key');
     keyRow.appendChild(keyInp);
-    var keyMsg = el('span', 'diff', loadApiKey() ? 'Key saved on this device.' : 'No key saved yet.');
+    var keyMsg = el('span', 'diff', keyStatusText());
     keyInp.onblur = function () {
-      saveApiKey(trim(keyInp.value));
-      keyMsg.textContent = trim(keyInp.value) ? 'Key saved on this device.' : 'No key saved yet.';
+      // Only a real change is a change: re-blurring an untouched field must
+      // not stamp a new time and win a reconcile against a newer device.
+      if (trim(keyInp.value) !== loadApiKey()) saveApiKey(trim(keyInp.value));
+      keyMsg.textContent = keyStatusText();
     };
     var keyClear = el('button', 'ctl', 'Clear key');
     keyClear.type = 'button';
     keyClear.onclick = function () {
       keyInp.value = '';
-      saveApiKey('');
-      keyMsg.textContent = 'No key saved yet.';
+      if (loadApiKey()) saveApiKey('');
+      keyMsg.textContent = keyStatusText();
     };
     keyRow.appendChild(keyClear);
     m.box.appendChild(keyRow);
@@ -1125,7 +1262,7 @@
       : 'Start blank now and fill it with generated data later, generate it here with Claude, or paste ready-made city JSON below.'));
     var whereItGoes = (session && session.access_token)
       ? 'New cities save to your account and sync to your other devices.'
-      : 'Saved in this browser. Sign in to sync (city menu) to carry cities across devices.';
+      : 'Saved in this browser. Sign in to sync (Profile) to carry cities across devices.';
 
     var brow = el('div', 'mrow');
     var bn = document.createElement('input');
@@ -1260,7 +1397,8 @@
     var apiKey = loadApiKey();
     box.appendChild(el('p', 'diff', apiKey
       ? 'Generate with Claude runs the same prompt against your own Claude API key, right here, and adds the result to your cities when it finishes.'
-      : 'Generate with Claude needs an API key first. Add one in Profile (top of the app): it stays in your browser only.'));
+      : 'Generate with Claude needs an API key first. Add one in Profile (top of the app): it is stored on ' +
+        'this device, and in your own account while you are signed in.'));
     var genRow = el('div', 'mrow');
     var genBtn = el('button', 'ctl to-done', 'Generate with Claude');
     genBtn.type = 'button';
@@ -1484,6 +1622,12 @@
       // A pasted, replaced, blank or generated city is a local data edit:
       // queue the upsert.
       schedulePush('data', res.cityId);
+      // Clearing the override rewrote this city's STATE too, and activateCity
+      // just took that write as the new baseline, so noteStateChange will
+      // never report it. Queue it explicitly: otherwise the other device keeps
+      // showing the replaced data (masked by its own stale override) until
+      // some later pull happens to reconcile the stamps.
+      if (clearOverride) schedulePush('state', res.cityId);
       if (afterCommitFn) afterCommitFn(res.cityId);
     }
 
@@ -1663,6 +1807,13 @@
   var refreshInFlight = null;
   var pullInFlight = false;
   var lastPullAt = 0;
+  // True once this device knows what the account's profile row currently holds
+  // in its sidecars. A PostgREST upsert replaces the whole row, so pushing
+  // before we know that would silently delete the account's Claude key or its
+  // form metadata. pushProfileNow refuses to push until this is true and reads
+  // the row first (see profilePreflight).
+  var sidecarsKnown = false;
+  var refreshTrouble = 0;      // consecutive non-fatal token refresh failures
 
   function syncOn() {
     return !!(SUPA.url && SUPA.anon && typeof fetch === 'function');
@@ -1735,17 +1886,110 @@
   }
 
   // The one path that signs a user out on its own: a refresh token the server
-  // refuses. Everything transient (offline, 5xx) keeps the session. Once
-  // dropped, ensureToken returns null forever after, so nothing can loop.
+  // refuses. Everything transient (offline, 5xx, a project problem) keeps the
+  // session. Once dropped, ensureToken returns null forever after, so nothing
+  // can loop.
   function dropSession(msg) {
     saveSession(null);
-    stateStamp = {};
+    // NOT cleared: the state baselines. Emptying them makes noteStateChange
+    // spend the next real edit on taking a fresh baseline instead of pushing
+    // it. Re-seed from what is on disk instead, which is the correct baseline
+    // for whoever signs in next (the pull reconcile reads stamps itself).
+    stateStamp = seedStateStamps();
     pushQueueData = {};
     pushQueueState = {};
     pushQueueProfile = false;
+    sidecarsKnown = false;
     if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
     if (msg) showSyncNotice(msg);
+    raiseSyncAlert('signedout');
     renderPanel();
+  }
+
+  // ---- the persistent sync alert ----
+  // A transient notice is not enough for "sync stopped": the engine rewrites
+  // #notice on the next render, so a dropped session would go back to being
+  // invisible within one tap. This bar lives in the app's own #syncalert,
+  // which nothing else touches, and survives reloads until the traveler signs
+  // in again or dismisses it.
+  var SYNC_ALERT_KEY = 'cityops.sync.alert.v1';   // {kind, at}
+  var alertHiddenForNow = false;                   // "Not now": this page life only
+
+  function readSyncAlert() {
+    var raw = readLS(SYNC_ALERT_KEY);
+    if (!raw) return null;
+    try {
+      var a = JSON.parse(raw);
+      return (a && typeof a.kind === 'string') ? a : null;
+    } catch (e) { return null; }
+  }
+
+  function raiseSyncAlert(kind) {
+    var cur = readSyncAlert();
+    // An existing alert keeps its original timestamp: "nothing has synced
+    // since" must name when sync actually stopped, not the last time we
+    // noticed.
+    var at = (cur && cur.at) ? cur.at : (lastSyncIso || new Date().toISOString());
+    writeLS(SYNC_ALERT_KEY, JSON.stringify({ kind: kind, at: at }));
+    alertHiddenForNow = false;
+    renderSyncAlert();
+  }
+
+  function clearSyncAlert() {
+    writeLS(SYNC_ALERT_KEY, null);
+    refreshTrouble = 0;
+    renderSyncAlert();
+  }
+
+  function renderSyncAlert() {
+    var host = document.getElementById('syncalert');
+    if (!host) return;
+    host.innerHTML = '';
+    var a = readSyncAlert();
+    if (!a || alertHiddenForNow || !syncOn()) return;
+    // Signed back in already: the alert has served its purpose.
+    if (session && session.access_token && a.kind === 'signedout') { clearSyncAlert(); return; }
+    var when = '';
+    try { when = a.at ? new Date(a.at).toLocaleString() : ''; } catch (e) {}
+    var bar = el('div', 'syncalert');
+    bar.setAttribute('role', 'status');
+    bar.appendChild(el('span', 'syncalert-txt', a.kind === 'signedout'
+      ? ('Sync stopped: your sign-in expired' + (when ? ', so nothing has reached your other devices since ' + when : '') +
+        '. Everything you have done is still saved on this device.')
+      : ('Sync is not reaching your account right now. Everything you have done is still saved on this ' +
+        'device, and will go up when it reconnects.')));
+    var acts = el('span', 'syncalert-acts');
+    if (a.kind === 'signedout') {
+      var go = el('button', 'ctl to-done', 'Sign in');
+      go.type = 'button';
+      go.onclick = openSignInModal;
+      acts.appendChild(go);
+    } else {
+      var prof = el('button', 'ctl', 'Open Profile');
+      prof.type = 'button';
+      prof.onclick = openProfileModal;
+      acts.appendChild(prof);
+    }
+    var no = el('button', 'ctl', 'Not now');
+    no.type = 'button';
+    no.title = 'Hide this until the next time you open the app';
+    no.onclick = function () { alertHiddenForNow = true; renderSyncAlert(); };
+    acts.appendChild(no);
+    bar.appendChild(acts);
+    host.appendChild(bar);
+  }
+
+  // A refresh that failed for a reason that is NOT a dead token keeps the
+  // session, but three in a row means sync has stopped working in a way the
+  // traveler should hear about rather than discover on the next device.
+  function noteRefreshTrouble() {
+    refreshTrouble++;
+    if (refreshTrouble >= 3) raiseSyncAlert('stuck');
+  }
+
+  function noteSyncWorking() {
+    refreshTrouble = 0;
+    if (readSyncAlert()) clearSyncAlert();
   }
 
   // The engine owns #notice and rewrites it on every render (empty, or the
@@ -1793,6 +2037,9 @@
     cleanHash();
     if (!s) return 'That sign-in link was incomplete. Send yourself a new one.';
     saveSession(s);
+    // Whatever stopped sync is over: take the alert down rather than leave a
+    // "sync stopped" bar sitting above a freshly signed-in app.
+    clearSyncAlert();
     fetchUserEmail();
     return 'Signed in. Syncing your cities.';
   }
@@ -1811,12 +2058,30 @@
       headers: { 'apikey': SUPA.anon, 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: session.refresh_token })
     }).then(function (r) {
-      if (r.status === 400 || r.status === 401 || r.status === 403) return 'dead';
-      if (!r.ok) throw new Error('http ' + r.status);
-      return r.json();
-    }).then(function (j) {
-      if (j === 'dead' || !j || !j.access_token || !j.refresh_token) {
-        dropSession('Sync signed out. Sign in again to resume syncing.');
+      if (r.ok) return r.json().then(function (j) { return { ok: true, body: j }; });
+      // The STATUS alone does not say whether the grant is dead: GoTrue
+      // answers a revoked or already-used refresh token and a project-level
+      // problem with the same 4xx family, and only the body distinguishes
+      // them. syncKit.refreshFailure() owns that reading (and its tests).
+      return r.text().then(
+        function (t) { return { ok: false, status: r.status, text: t }; },
+        function () { return { ok: false, status: r.status, text: '' }; });
+    }).then(function (res) {
+      if (!res.ok) {
+        if (CityOps.syncKit.refreshFailure(res.status, res.text) === 'dead') {
+          dropSession('Sync signed out: your sign-in expired. Open Profile to sign in again.');
+          return null;
+        }
+        // Not a dead grant: keep the session and the refresh token. Throwing
+        // them away over a 403 or a paused project would force a re-sign-in
+        // for a problem that fixes itself.
+        warn('token refresh rejected (session kept), http ' + res.status);
+        noteRefreshTrouble();
+        return null;
+      }
+      var j = res.body;
+      if (!j || !j.access_token || !j.refresh_token) {
+        dropSession('Sync signed out: your sign-in expired. Open Profile to sign in again.');
         return null;
       }
       saveSession({
@@ -1826,10 +2091,11 @@
         expires_at: j.expires_at || (Math.floor(Date.now() / 1000) + (j.expires_in || 3600)),
         email: (j.user && j.user.email) || syncEmail || ''
       });
+      noteSyncWorking();
       return session.access_token;
     }).catch(function (e) {
       // Offline or a transient server problem: keep the session, skip this
-      // round. Only an explicit rejection above signs the user out.
+      // round. Only an explicitly dead grant signs the user out.
       warn('token refresh failed', e);
       return null;
     }).then(function (tok) { refreshInFlight = null; return tok; });
@@ -1885,6 +2151,18 @@
     return (st && typeof st.updated === 'string') ? st.updated : null;
   }
 
+  // Baselines for EVERY city this device holds, not just the active one.
+  // noteStateChange only pushes when the stamp moved past a baseline it
+  // already had, and takes one silently when it does not, so a city with no
+  // baseline spends the traveler's first real edit on bookkeeping. Only the
+  // active city can be edited in practice, but seeding all of them makes that
+  // invariant true by construction rather than by luck of the render order.
+  function seedStateStamps() {
+    var out = {};
+    store.order.forEach(function (id) { out[id] = readStateStamp(id); });
+    return out;
+  }
+
   // Writes a pulled state verbatim, keeping the remote `updated` stamp.
   // makeStore().save() re-stamps with now, which would make a pull look like a
   // local edit and push it straight back, so the pull path never uses it. The
@@ -1915,22 +2193,95 @@
       .catch(function (e) { warn('push ' + kind + ' failed', e); });
   }
 
+  // This device's sidecars, in the shape syncKit.buildProfileRow expects. A
+  // null block means "this device has no opinion", and buildProfileRow leaves
+  // the field out entirely rather than writing an empty one.
+  function localSidecars() {
+    var keyAt = apiKeyStamp();
+    var gmAt = genMetaStamp();
+    return {
+      apiKey: keyAt ? { value: loadApiKey(), updated: keyAt } : null,
+      genmeta: gmAt ? { value: loadGenMeta(), updated: gmAt } : null
+    };
+  }
+
+  // Takes whatever the account's row says about the sidecars, newer wins, same
+  // rule as everything else. Returns the list of things that actually changed
+  // here, so the caller can say so. Marks the sidecars known either way: an
+  // answered read is what makes a later push safe.
+  function adoptSidecars(rowData) {
+    sidecarsKnown = true;
+    var remote = CityOps.syncKit.readSidecars(rowData);
+    var changed = [];
+    if (remote.apiKey && CityOps.syncKit.decide(apiKeyStamp(), remote.apiKey.updated) === 'pull') {
+      // Keep the REMOTE stamp: this is not a local edit, and stamping it now
+      // would make this device win the next reconcile against the device that
+      // actually made the change.
+      writeApiKey(remote.apiKey.value, remote.apiKey.updated);
+      changed.push('Claude API key');
+    }
+    if (remote.genmeta && CityOps.syncKit.decide(genMetaStamp(), remote.genmeta.updated) === 'pull') {
+      writeGenMeta(remote.genmeta.value, remote.genmeta.updated);
+      changed.push('city form details');
+    }
+    return changed;
+  }
+
+  // Reads the profile row for its sidecars alone, so a push can carry them
+  // forward instead of deleting them. Resolves true only when the row was
+  // actually read: a failed preflight must NOT fall through to a push, or the
+  // upsert would replace the account's key with nothing. Local stays newer
+  // than the server, so the next pull's reconcile pushes it instead.
+  function profilePreflight() {
+    return api('/rest/v1/profile?select=data,updated_at').then(function (rows) {
+      if (!Array.isArray(rows)) return false;
+      if (rows.length) {
+        adoptSidecars(rows[0] && rows[0].data);
+        // Take the account's profile too if it is newer. The push that
+        // follows replaces the whole row, so a device that has a key but has
+        // not applied the account's profile yet (a fresh sign-in, key typed
+        // in the 2s before the startup pull landed) would otherwise blank the
+        // profile until the next round put it back.
+        adoptProfileRow(rows[0]);
+      } else {
+        sidecarsKnown = true;   // no row yet: there is nothing to preserve
+      }
+      return true;
+    }).catch(function (e) {
+      noteProfileTable(e);
+      warn('profile preflight failed', e);
+      return false;
+    });
+  }
+
   // The profile is one row per user, keyed by user_id alone, so it needs no
-  // city id and no buildRows: one payload, one stamp. A profile that was never
-  // edited on this device has a null stamp and is never pushed (that would
-  // overwrite a real profile on the server with this device's empty one).
+  // city id and no buildRows: one payload, one stamp. The row also carries the
+  // Claude key and the Add/Edit form metadata as stamped sidecars, each
+  // reconciled on its own stamp; row.updated_at stays the PROFILE's stamp so a
+  // key change cannot make a stale profile win.
   function pushProfileNow() {
     if (!syncOn() || !session || profileTableMissing) return;
-    var p = CityOps.profile.normalize(store.profile);
-    if (!p.updated) return;
+    if (!sidecarsKnown) {
+      profilePreflight().then(function (ok) { if (ok) pushProfileRow(); });
+      return;
+    }
+    pushProfileRow();
+  }
+
+  function pushProfileRow() {
+    if (!syncOn() || !session || profileTableMissing) return;
+    var row = CityOps.syncKit.buildProfileRow(store.profile, localSidecars());
+    // Nothing this device has ever set: pushing an empty profile with no
+    // sidecars would overwrite a real one with this device's blank.
+    if (!row.data.updated && !row.data.apiKey && !row.data.genmeta) return;
     api('/rest/v1/profile?on_conflict=user_id', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Prefer': 'resolution=merge-duplicates,return=minimal'
       },
-      body: JSON.stringify([{ data: p, updated_at: p.updated }])
-    }).then(function () { stampSync(); })
+      body: JSON.stringify([row])
+    }).then(function () { stampSync(); noteSyncWorking(); })
       .catch(function (e) { noteProfileTable(e); warn('push profile failed', e); });
   }
 
@@ -2030,11 +2381,20 @@
       if (!res || !Array.isArray(res[0]) || !Array.isArray(res[1])) return false;
       applyPull(res[0], res[1], res[2]);
       stampSync();
+      noteSyncWorking();
       return true;
     }).catch(function (e) {
       warn('pull failed', e);
       return false;
-    }).then(function (ok) { pullInFlight = false; return ok; });
+    }).then(function (ok) {
+      pullInFlight = false;
+      // The throttle exists to stop a chatty tab, not to make a FAILED pull
+      // wait out a minute. A phone that woke with no signal and reconnected
+      // ten seconds later would otherwise show stale data for the rest of the
+      // minute with no way to ask again.
+      if (!ok) lastPullAt = 0;
+      return ok;
+    });
   }
 
   function stampMap(rows, byId) {
@@ -2048,26 +2408,65 @@
   }
 
   // Third row kind, same newer-wins reconcile as cities and state, decided by
-  // syncKit.decide(local profile.updated, remote updated_at). Returns true when
-  // the remote profile was taken, so the caller can say so in the notice.
-  // Non-array rows mean "no usable answer": leave both sides alone.
+  // syncKit.decide(local profile.updated, remote updated_at), plus one
+  // independent reconcile per sidecar on its own stamp. Non-array rows mean
+  // "no usable answer": leave every side alone. Returns the human-readable
+  // list of what this pull actually changed on this device ([] when nothing
+  // did), so the caller can name it in the notice.
   function applyProfilePull(rows) {
-    if (!Array.isArray(rows)) return false;
+    if (!Array.isArray(rows)) return [];
     var row = rows.length ? rows[0] : null;
-    var localP = CityOps.profile.normalize(store.profile);
+    var changed = [];
+    // The sidecars reconcile on their OWN stamps, independently of the
+    // profile's: a key changed on the phone must arrive here even when this
+    // device holds the newer interest profile. Runs first, and on every pull,
+    // so the row's sidecars are known before any push can replace them.
+    if (row) changed = adoptSidecars(row.data);
+    else sidecarsKnown = true;   // an answered read with no row: nothing to preserve
+
+    if (adoptProfileRow(row)) changed.push('profile');
+    // The sidecar check runs on EVERY outcome, not only when the profile
+    // itself wants pushing: a key this device holds and the account does not
+    // (the common case the first time a device upgrades to key sync) has to go
+    // up even when the profile is in sync or the profile just came down.
+    // 'push' itself can only happen when this device has a stamp, so a
+    // never-edited profile is never sent.
+    var localIso = CityOps.profile.normalize(store.profile).updated;
     var remoteIso = (row && typeof row.updated_at === 'string') ? row.updated_at : null;
-    var d = CityOps.syncKit.decide(localP.updated, remoteIso);
-    if (d === 'pull') {
-      if (!row || !row.data || typeof row.data !== 'object') return false;
-      var p = CityOps.profile.normalize(row.data);
-      p.updated = remoteIso || p.updated;   // keep the REMOTE stamp: this is not a local edit
-      store.profile = p;
-      saveStore(store);
-      return true;
+    if (CityOps.syncKit.decide(localIso, remoteIso) === 'push' || sidecarNewerHere(row)) {
+      pushProfileNow();
     }
-    // 'push' can only happen when this device has a stamp, so the never-edited
-    // profile (null stamp) is never sent; decide() returns pull or noop there.
-    if (d === 'push') pushProfileNow();
+    return changed;
+  }
+
+  // Newer-wins for the profile half of the row alone. Returns true when the
+  // account's profile replaced this device's.
+  function adoptProfileRow(row) {
+    if (!row || !row.data || typeof row.data !== 'object') return false;
+    var localP = CityOps.profile.normalize(store.profile);
+    var remoteIso = (typeof row.updated_at === 'string') ? row.updated_at : null;
+    if (CityOps.syncKit.decide(localP.updated, remoteIso) !== 'pull') return false;
+    // normalizeProfile rebuilds from a fixed field list, so the sidecars
+    // cannot follow the key or the form metadata into store.profile (and from
+    // there into a prompt or an export). That is by construction, and the
+    // unit tests pin it.
+    var p = CityOps.profile.normalize(row.data);
+    p.updated = remoteIso || p.updated;   // keep the REMOTE stamp: this is not a local edit
+    store.profile = p;
+    saveStore(store);
+    return true;
+  }
+
+  // True when a sidecar on this device beats (or is missing from) the row, so
+  // a profile that is otherwise in sync still has something to send up. This
+  // is what carries a key typed before key sync existed up to the account.
+  function sidecarNewerHere(row) {
+    var remote = CityOps.syncKit.readSidecars(row && row.data);
+    var mine = localSidecars();
+    if (mine.apiKey && CityOps.syncKit.decide(mine.apiKey.updated,
+      remote.apiKey ? remote.apiKey.updated : null) === 'push') return true;
+    if (mine.genmeta && CityOps.syncKit.decide(mine.genmeta.updated,
+      remote.genmeta ? remote.genmeta.updated : null) === 'push') return true;
     return false;
   }
 
@@ -2156,8 +2555,9 @@
     if (pulledNames.length) {
       showSyncNotice('Synced: ' + pulledNames.join(', ') + ' updated from your other device');
     }
-    if (applyProfilePull(profileRows)) {
-      showSyncNotice('Synced: profile updated from your other device');
+    var profileChanged = applyProfilePull(profileRows);
+    if (profileChanged.length) {
+      showSyncNotice('Synced: ' + profileChanged.join(', ') + ' updated from your other device');
     }
   }
 
@@ -2206,15 +2606,23 @@
       } catch (e) {}
     }
     saveSession(null);
-    stateStamp = {};
+    // Same reasoning as dropSession: re-seed rather than empty, so the next
+    // real edit pushes instead of being spent on a baseline.
+    stateStamp = seedStateStamps();
     pushQueueData = {};
     pushQueueState = {};
     pushQueueProfile = false;
+    sidecarsKnown = false;
     if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
     // The last-sync record is meaningless once signed out (and stale once
     // signed back in as someone else), so it goes with the session.
     lastSyncIso = null;
     if (LS) { try { LS.removeItem(SYNC_KEY); } catch (e) {} }
+    // Signing out is a decision, not a failure: no alert for it. The Claude
+    // key and the form metadata stay on this device untouched (losing the key
+    // on sign-out would recreate exactly the annoyance key sync fixes); they
+    // simply stop being pushed.
+    clearSyncAlert();
     renderPanel();
   }
 
@@ -2289,34 +2697,9 @@
     inp.focus();
   }
 
-  function openSyncModal() {
-    var m = modalShell('Sync');
-    m.box.appendChild(el('p', 'diff', syncEmail ? ('Signed in as ' + syncEmail + '.') : 'Signed in.'));
-    var when = el('p', 'diff', lastSyncLine());
-    m.box.appendChild(when);
-    var row = el('div', 'mrow');
-    var now = el('button', 'ctl', 'Sync now');
-    now.type = 'button';
-    now.onclick = function () {
-      now.disabled = true;
-      now.textContent = 'Syncing...';
-      pullAll(true).then(function (ok) {
-        now.textContent = 'Sync now';
-        now.disabled = false;
-        when.textContent = ok ? lastSyncLine() : 'Could not reach the sync service. Your work is saved on this device.';
-      });
-    };
-    var out = el('button', 'ctl to-archived', 'Sign out');
-    out.type = 'button';
-    out.onclick = function () { signOut(); m.close(); };
-    var close = el('button', 'ctl', 'Close');
-    close.type = 'button';
-    close.onclick = m.close;
-    row.appendChild(now);
-    row.appendChild(out);
-    row.appendChild(close);
-    m.box.appendChild(row);
-  }
+  // (The standalone Sync modal is gone: Sync now and Sign out live in the
+  // Profile modal's account block, so there is one place that answers "is my
+  // work reaching my other devices" instead of two.)
 
   // ---- wiring ----
   function startSync() {
@@ -2326,8 +2709,10 @@
       var stored = loadSession();
       if (stored) { session = stored; syncEmail = stored.email || ''; }
     }
-    if (!session) return;
-    if (!syncEmail) fetchUserEmail();
+    // Bound unconditionally, above the no-session return: pullAll and
+    // flushPendingPush both no-op without a session, and binding them only
+    // when a session happened to exist at load is how a listener goes missing
+    // for the rest of the page's life.
     window.addEventListener('online', function () { pullAll(true); });
     // Mobile tab resume pulls; going hidden or away flushes any pending
     // debounced push immediately rather than risking the 2s timer never
@@ -2337,6 +2722,17 @@
       else if (document.visibilityState === 'hidden') flushPendingPush();
     });
     window.addEventListener('pagehide', flushPendingPush);
+    // A phone resumed after hours must pull promptly: visibilitychange fires
+    // on resume and the 60s throttle has long since expired, so the
+    // unforced pull above goes out. pageshow covers the back/forward cache,
+    // where no visibilitychange fires at all.
+    window.addEventListener('pageshow', function (e) { if (e && e.persisted) pullAll(true); });
+    // The alert outlives a reload, so it has to be drawn at startup, not only
+    // at the moment sync breaks.
+    renderSyncAlert();
+    if (!session) return;
+    if (!syncEmail) fetchUserEmail();
+    stateStamp = seedStateStamps();
     pullAll(true);
   }
 

