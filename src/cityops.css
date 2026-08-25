@@ -114,6 +114,13 @@
   .ctl:hover{border-color:var(--accent);}
   .ctl.to-done:hover{border-color:var(--green); color:var(--green);}
   .ctl.to-archived:hover{border-color:var(--accent); color:var(--accent);}
+  /* The day the item is already on: shown so the picker states where things
+     stand, but not a tap target, since moving an item to its own day is an
+     action that cannot succeed. */
+  .ctl.is-current{background:var(--accent-soft); border-color:var(--accent);
+    color:var(--accent-hover); cursor:default;}
+  .ctl:disabled{cursor:default;}
+  .ctl:disabled:hover{border-color:var(--accent);}
   .item-done{opacity:.55;}
   .donemark{color:var(--green); font-weight:800; margin-right:6px;}
   .arch-details{margin:2px 0 22px;}

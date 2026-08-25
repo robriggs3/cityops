@@ -463,6 +463,37 @@ var CityOps = (function () {
     return iso;
   }
 
+  // The pure model behind the per-item day picker: every date of the stay,
+  // each carrying the section slot key a move would actually write (the same
+  // keyForDisplayedDate indirection the picker has always used), plus a
+  // `current` flag on the date this item already sits on.
+  //
+  // `current` exists so the renderer can take that one date OUT of the tap
+  // targets. Tapping the day you are already on is an action that cannot
+  // succeed: it rewrites the same value, re-renders, and looks exactly like
+  // a control that did nothing. On a phone, where there is no hover tooltip
+  // to explain the icon in the first place, one such no-op tap is enough to
+  // conclude the whole feature is broken. Matching on KEY (not iso) is
+  // deliberate: after a slot reorder an item's stored day-key can differ
+  // from the date it renders under, and "the day you are on" means the one
+  // you SEE it under.
+  function dayMoveOptions(data, state, it) {
+    var cur = effectiveDay(it, state);
+    var currentIso = null;
+    var options = stayDates(effectiveDates(data, state)).map(function (iso) {
+      var key = keyForDisplayedDate(data, state, it.section, iso);
+      var isCurrent = !!cur && key === cur;
+      if (isCurrent) currentIso = iso;
+      return { iso: iso, label: dayLabel(iso), key: key, current: isCurrent };
+    });
+    return {
+      options: options,
+      currentIso: currentIso,
+      currentLabel: currentIso ? dayLabel(currentIso) : null,
+      hasDay: !!cur
+    };
+  }
+
   function calendarModel(data, state) {
     var byIso = {};
     var undated = [];
@@ -1636,21 +1667,44 @@ var CityOps = (function () {
     rerender();
   }
 
-  function dayPickerRow(hint, onPick, onCancel) {
+  // The shared day picker, used by both "move to another day" and "promote a
+  // backup onto a day". `mode` is 'move' or 'promote':
+  //   - move: the item's current day is shown but not tappable (see
+  //     dayMoveOptions), and "No day" only appears when there is an
+  //     assignment to clear. Neither of those taps can change anything, and
+  //     a control that cannot succeed should not be offered.
+  //   - promote: every day stays live, because picking the current day still
+  //     does real work there (it flips the status out of backup), and "No
+  //     day" is always a valid promote target.
+  function dayPickerRow(it, hint, onPick, onCancel, mode) {
     var frag = document.createDocumentFragment();
-    frag.appendChild(el('p', 'when-line', hint));
-    var pick = el('div', 'ctl-row');
     var pst = ctx.store.load();
-    stayDates(effectiveDates(effectiveData(ctx.base, pst), pst)).forEach(function (iso) {
-      var db = el('button', 'ctl', dayLabel(iso));
+    var model = dayMoveOptions(effectiveData(ctx.base, pst), pst, it);
+    var isMove = mode !== 'promote';
+    // Naming the current day turns the picker into its own explanation: the
+    // traveler sees where the item is now and where it can go, in one line.
+    frag.appendChild(el('p', 'when-line',
+      hint + (isMove && model.currentLabel ? ' Now on ' + model.currentLabel + '.' : '')));
+    var pick = el('div', 'ctl-row');
+    model.options.forEach(function (o) {
+      var isCurrent = o.current && isMove;
+      var db = el('button', 'ctl' + (isCurrent ? ' is-current' : ''), o.label);
       db.type = 'button';
-      db.onclick = function () { onPick(iso); };
+      if (isCurrent) {
+        db.disabled = true;
+        db.setAttribute('aria-current', 'true');
+        db.title = 'Already on ' + o.label;
+      } else {
+        db.onclick = function () { onPick(o.iso); };
+      }
       pick.appendChild(db);
     });
-    var nd = el('button', 'ctl', 'No day');
-    nd.type = 'button';
-    nd.onclick = function () { onPick(null); };
-    pick.appendChild(nd);
+    if (!isMove || model.hasDay) {
+      var nd = el('button', 'ctl', 'No day');
+      nd.type = 'button';
+      nd.onclick = function () { onPick(null); };
+      pick.appendChild(nd);
+    }
     var cancel = el('button', 'ctl to-archived', 'Cancel');
     cancel.type = 'button';
     cancel.onclick = onCancel;
@@ -1738,15 +1792,15 @@ var CityOps = (function () {
     (it.links || []).forEach(function (l) { row.appendChild(linkPill(l)); });
     if (row.children.length) frag.appendChild(row);
     if (status === 'backup' && withDayPicker && pendingPromote === it.id) {
-      frag.appendChild(dayPickerRow('Promote to which day?',
+      frag.appendChild(dayPickerRow(it, 'Promote to which day?',
         function (iso) { promoteTo(it, iso); },
-        function () { pendingPromote = null; rerender(); }));
+        function () { pendingPromote = null; rerender(); }, 'promote'));
       return frag;
     }
     if (pendingMove === it.id) {
-      frag.appendChild(dayPickerRow('Move to which day?',
+      frag.appendChild(dayPickerRow(it, 'Move to which day?',
         function (iso) { moveTo(it, iso); },
-        function () { pendingMove = null; rerender(); }));
+        function () { pendingMove = null; rerender(); }, 'move'));
       return frag;
     }
     var ctl = el('div', 'ctl-row');
@@ -2769,7 +2823,9 @@ var CityOps = (function () {
     // Phase 4 additions: tabs (replaces the Today/Guide/Calendar view switch)
     // and the Plan tab's own model, all pure and unit-tested on their own.
     TABS: TABS, tabForSection: tabForSection, setTab: setTab, effectiveTab: effectiveTab,
-    planModel: planModel, isPlanDayCollapsed: isPlanDayCollapsed, togglePlanDay: togglePlanDay
+    planModel: planModel, isPlanDayCollapsed: isPlanDayCollapsed, togglePlanDay: togglePlanDay,
+    // Plan-tab per-item day moves: the picker's own pure model.
+    dayMoveOptions: dayMoveOptions
   };
 })();
 CityOps.init();
