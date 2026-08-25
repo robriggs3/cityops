@@ -54,6 +54,37 @@ var CityOps = (function () {
     }
   }
 
+  // Structured ratings, validated in one place for the same reason intel is:
+  // validate() (whole guide) and mergeDelta() (both new items and the ratings
+  // map) have to agree byte for byte on what a rating is. `ref` is the
+  // caller's prefix, already ending in its separator, e.g.
+  // "items[3] (nord) rating:" or 'ratings["nord"]:'.
+  //
+  // stars is the only required field. count, source and checked are optional
+  // and each may be omitted or null: a rating carried over from generation
+  // research has a source but no checked date, and a rating a traveler has
+  // only half of is still worth showing.
+  function validateRating(r, ref, errors) {
+    if (!r || typeof r !== 'object' || Array.isArray(r)) {
+      errors.push(ref + ' must be an object');
+      return;
+    }
+    if (typeof r.stars !== 'number' || !isFinite(r.stars) || r.stars < 0 || r.stars > 5) {
+      errors.push(ref + ' stars must be a number from 0 to 5');
+    }
+    if (r.count !== undefined && r.count !== null) {
+      if (typeof r.count !== 'number' || !isFinite(r.count) || r.count < 0 || Math.floor(r.count) !== r.count) {
+        errors.push(ref + ' count must be a whole number, 0 or more');
+      }
+    }
+    if (r.source !== undefined && r.source !== null && typeof r.source !== 'string') {
+      errors.push(ref + ' source must be a string');
+    }
+    if (r.checked !== undefined && r.checked !== null && !isIso(r.checked)) {
+      errors.push(ref + ' checked must be YYYY-MM-DD');
+    }
+  }
+
   // The per-item rules, shared by validate() and mergeDelta() for exactly the
   // same reason. `statuses` is the allowed status list (a whole guide allows
   // all four; a delta may only introduce plan and backup, since done and
@@ -75,6 +106,7 @@ var CityOps = (function () {
     }
     if (it.day && !/^\d{4}-\d{2}-\d{2}$/.test(it.day)) errors.push(ref + ' day must be YYYY-MM-DD');
     if (it.intel !== undefined && it.intel !== null) validateIntel(it.intel, ref + ' intel:', errors);
+    if (it.rating !== undefined && it.rating !== null) validateRating(it.rating, ref + ' rating:', errors);
   }
 
   function validate(data) {
@@ -137,13 +169,22 @@ var CityOps = (function () {
   //   the merge (existing or just added); an unknown id is counted in
   //   intelSkipped, not treated as an error, because an AI naming an item the
   //   traveler has since removed is expected, not broken.
+  // - delta.ratings works exactly like delta.intel, one map entry per item id,
+  //   replacing the whole rating block. Replacement (not merge) is what makes
+  //   a ratings refresh mean anything: a rating is a reading taken on a date,
+  //   and half of last month's reading mixed with half of this month's is a
+  //   number nobody took. Re-applying the SAME rating therefore replaces it
+  //   and counts as applied, not skipped: ratingsSkipped counts only ids the
+  //   merged guide does not have.
   // - city, city.dates and every other field of every existing item are never
-  //   touched. intel is the ONE field an existing item can gain here.
+  //   touched. intel and rating are the only two fields an existing item can
+  //   gain here.
   var DELTA_STATUSES = ['plan', 'backup'];
   var DELTA_STATUS_HINT = ' (a delta may only add plan or backup items)';
 
   function emptyDeltaSummary() {
-    return { added: 0, skipped: 0, sectionsAdded: 0, intelApplied: 0, intelSkipped: 0 };
+    return { added: 0, skipped: 0, sectionsAdded: 0, intelApplied: 0, intelSkipped: 0,
+      ratingsApplied: 0, ratingsSkipped: 0 };
   }
 
   function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
@@ -219,6 +260,18 @@ var CityOps = (function () {
       }
     }
 
+    var ratingsMap = null;
+    if (delta.ratings !== undefined && delta.ratings !== null) {
+      if (typeof delta.ratings !== 'object' || Array.isArray(delta.ratings)) {
+        errors.push('ratings must be an object keyed by item id');
+      } else {
+        ratingsMap = delta.ratings;
+        Object.keys(ratingsMap).forEach(function (id) {
+          validateRating(ratingsMap[id], 'ratings["' + id + '"]:', errors);
+        });
+      }
+    }
+
     if (errors.length) return { data: null, summary: emptyDeltaSummary(), errors: errors };
 
     var summary = emptyDeltaSummary();
@@ -247,14 +300,27 @@ var CityOps = (function () {
       summary.added++;
     });
 
-    if (intelMap) {
+    // One id map for both passes. Object.create(null) plus an own-property
+    // check is what closes the prototype-pollution vector a hostile delta
+    // keyed "__proto__" would otherwise open (it would paint content onto
+    // every card); the ratings map is held to the identical bar.
+    if (intelMap || ratingsMap) {
       var byId = Object.create(null);
       out.items.forEach(function (it) { if (it && it.id) byId[it.id] = it; });
-      Object.keys(intelMap).forEach(function (id) {
-        if (!Object.prototype.hasOwnProperty.call(byId, id)) { summary.intelSkipped++; return; }
-        byId[id].intel = deepClone(intelMap[id]);
-        summary.intelApplied++;
-      });
+      if (intelMap) {
+        Object.keys(intelMap).forEach(function (id) {
+          if (!Object.prototype.hasOwnProperty.call(byId, id)) { summary.intelSkipped++; return; }
+          byId[id].intel = deepClone(intelMap[id]);
+          summary.intelApplied++;
+        });
+      }
+      if (ratingsMap) {
+        Object.keys(ratingsMap).forEach(function (id) {
+          if (!Object.prototype.hasOwnProperty.call(byId, id)) { summary.ratingsSkipped++; return; }
+          byId[id].rating = deepClone(ratingsMap[id]);
+          summary.ratingsApplied++;
+        });
+      }
     }
 
     return { data: out, summary: summary, errors: [] };
@@ -1465,6 +1531,30 @@ var CityOps = (function () {
     return out.join('\n');
   }
 
+  // Assembly order, top to bottom:
+  //   1. one header line saying what this run is
+  //   2. the city block
+  //   3. the RERUN:RATINGS instructions, verbatim from PROMPT.md
+  //   4. the item list, PLAN and BACKUP items only
+  // Done and archived items are left out on purpose: a rating refresh exists
+  // to help the traveler choose between places still in play, and neither a
+  // meal already eaten nor a place already put away is one of those.
+  function buildRatingsPassPrompt(templateText, cityData) {
+    var rerun = sliceLandmark(templateText, 'RERUN:RATINGS');
+    var items = (cityData && Array.isArray(cityData.items) ? cityData.items : [])
+      .filter(function (it) { return it && (it.status === 'plan' || it.status === 'backup'); });
+    var out = ['You are refreshing the Google Maps ratings on an existing CityOps city guide.', ''];
+    out = out.concat(cityHeaderLines(cityData));
+    out.push('## What I need', '', rerun, '');
+    out.push('## Items', '');
+    out = out.concat(itemListLines(items));
+    out.push('');
+    out.push('Every line above is `id | section | name`. Return a rating only ' +
+      'for the ones you can actually look up: an omitted item is the correct ' +
+      'answer, an invented number is not.', '');
+    return out.join('\n');
+  }
+
   // ---- AI response parsing (pure) ----
   // Ported from tools/city-input.js so the CLI's .md-ingest path and the
   // in-app "generate with Claude" path (Phase 2) share one rule for finding
@@ -1734,13 +1824,63 @@ var CityOps = (function () {
     return div;
   }
 
+  function linkIcon(kind) {
+    return kind === 'map' ? '📍' : (kind === 'web' ? '🌐' : '📞');
+  }
+
+  function linkClass(kind) {
+    return kind === 'map' ? 'maplink' : (kind === 'web' ? 'weblink' : 'phonelink');
+  }
+
   function linkPill(l) {
     var a = document.createElement('a');
     a.href = l.href;
-    if (l.kind === 'map') { a.className = 'maplink'; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = '📍 ' + l.label; }
-    else if (l.kind === 'web') { a.className = 'weblink'; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = '🌐 ' + l.label; }
-    else { a.className = 'phonelink'; a.textContent = '📞 ' + l.label; }
+    a.className = linkClass(l.kind);
+    if (l.kind !== 'tel') { a.target = '_blank'; a.rel = 'noopener noreferrer'; }
+    a.textContent = linkIcon(l.kind) + ' ' + l.label;
     return a;
+  }
+
+  // The same link, sized to sit in the control row beside the status icons
+  // (density pass): icon only, control height, pill colouring kept so it
+  // still reads as a thing that NAVIGATES rather than a thing that changes
+  // the plan. The label the pill used to show becomes the tooltip and the
+  // accessible name, exactly like every other icon control here.
+  function linkCtl(l) {
+    var a = document.createElement('a');
+    a.href = l.href;
+    a.className = 'ctl-link ' + linkClass(l.kind);
+    if (l.kind !== 'tel') { a.target = '_blank'; a.rel = 'noopener noreferrer'; }
+    a.textContent = linkIcon(l.kind);
+    a.setAttribute('aria-label', l.label);
+    a.title = l.label;
+    return a;
+  }
+
+  // A rating as one compact badge: "4.8★" plus a muted "(442)" when the
+  // count is there. Information, not action, so it wears neutral/muted
+  // tokens and never the accent: nothing on this badge is tappable.
+  // Provenance (source, checked date) rides in the tooltip rather than on
+  // the card, since it is what you check when the number surprises you and
+  // noise the rest of the time. `starsOnly` is the Share view.
+  function fmtCount(n) {
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  function ratingBadge(rating, starsOnly) {
+    if (!rating || typeof rating.stars !== 'number' || !isFinite(rating.stars)) return null;
+    var span = el('span', 'rating');
+    span.appendChild(document.createTextNode(rating.stars.toFixed(1) + '★'));
+    if (!starsOnly && typeof rating.count === 'number' && isFinite(rating.count)) {
+      span.appendChild(el('span', 'rcount', '(' + fmtCount(rating.count) + ')'));
+    }
+    if (!starsOnly) {
+      var t = [];
+      if (rating.source) t.push(rating.source);
+      if (rating.checked) t.push('checked ' + rating.checked);
+      if (t.length) span.title = t.join(' · ');
+    }
+    return span;
   }
 
   function onStatus(id, to) {
@@ -1892,14 +2032,44 @@ var CityOps = (function () {
   // rendered flat outside its own day grouping (every tab but Plan): it is
   // what lets "Add to a day" have a visible result on the card it was set
   // from, per the Phase 4 spec's populate-Plan-from-other-tabs feature.
-  function cardHeaderBtn(it, status, expanded, dayChip) {
+  // Density pass: the title row now carries what used to be three separate
+  // lines. `sec` (Plan tab only, where cards from every section sit mixed in
+  // one day) prefixes the title with the section's icon INSTEAD of the old
+  // standalone .sec-meta line above the card; the label it used to spell out
+  // survives as the icon's tooltip and accessible name. The rating badge and
+  // the `when` hint follow the title on the same line, wrapping to their own
+  // line only when they genuinely do not fit.
+  function cardHeaderBtn(it, status, expanded, dayChip, sec, showWhen) {
     var btn = el('button', 'card-hd');
     btn.type = 'button';
     btn.setAttribute('aria-expanded', String(expanded));
+    if (sec && sec.icon) {
+      var ic = el('span', 'sec-ic', sec.icon);
+      ic.setAttribute('role', 'img');
+      ic.setAttribute('aria-label', sec.label || '');
+      ic.title = sec.label || '';
+      btn.appendChild(ic);
+    } else if (sec && sec.label) {
+      // Not every guide has section icons: the real Tirana guide's fifteen
+      // sections carry none at all, and with no fallback the section would
+      // simply vanish from its cards when .sec-meta went away. The label
+      // itself becomes the prefix instead, set small and inline, so the
+      // information survives without costing back the line it just saved.
+      var lb = el('span', 'sec-lab', sec.label);
+      lb.title = sec.label;
+      btn.appendChild(lb);
+    }
     var tname = el('span', 'tname');
     if (status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
     tname.appendChild(document.createTextNode(effectiveName(it, curState)));
     btn.appendChild(tname);
+    var badge = ratingBadge(it.rating, false);
+    if (badge) btn.appendChild(badge);
+    if (showWhen && it.when) {
+      var wh = el('span', 'when-hint', it.when);
+      wh.title = it.when;
+      btn.appendChild(wh);
+    }
     if (dayChip) btn.appendChild(el('span', 'daychip', dayChip));
     if (it.tags && it.tags.length) {
       var tp = el('span', 'card-hd-tags');
@@ -1910,11 +2080,25 @@ var CityOps = (function () {
     return btn;
   }
 
-  // Everything that used to live in the card unconditionally now lives here,
-  // shown ONLY when the card is expanded: price, note, intel, links/hours,
-  // and the status controls. Renaming is the one exception carried over
-  // unchanged: it replaces this whole panel while pendingEdit names this item.
-  function itemDetailBody(it, status, showWhen, withDayPicker) {
+  // True exactly when itemDetailBody below takes the panel over with an
+  // editor or a day picker instead of rendering the normal detail. The
+  // control row is suppressed in that case (the picker carries its own
+  // Cancel), so appendCard has to be able to ask the same question without
+  // duplicating the conditions.
+  function itemPanelTakenOver(it, status, withDayPicker) {
+    if (pendingEdit === it.id) return true;
+    if (status === 'backup' && withDayPicker && pendingPromote === it.id) return true;
+    return pendingMove === it.id;
+  }
+
+  // What the expander hides: price, note, intel and hours. Shown ONLY when
+  // the card is expanded. The `when` hint and the links moved up to the
+  // title row and the control row respectively in the density pass, and the
+  // control row itself is no longer built here (see itemControlRow), so a
+  // collapsed card is still a card you can act on. Renaming and the day
+  // pickers are the exceptions carried over unchanged: each replaces this
+  // whole panel while it names this item.
+  function itemDetailBody(it, status, withDayPicker) {
     var frag = document.createDocumentFragment();
     if (pendingEdit === it.id) {
       frag.appendChild(el('p', 'when-line', 'Rename this item'));
@@ -1952,7 +2136,6 @@ var CityOps = (function () {
       return frag;
     }
     if (it.price) frag.appendChild(el('p', 'price-line', it.price.text));
-    if (showWhen && it.when) frag.appendChild(el('p', 'when-line', it.when));
     if (it.note) frag.appendChild(el('p', null, it.note));
     if (it.intel) {
       var strip = intelStrip(it.intel);
@@ -1960,7 +2143,6 @@ var CityOps = (function () {
     }
     var row = el('div', 'row');
     if (it.hours) row.appendChild(el('span', 'hours' + (it.hours.class ? ' ' + it.hours.class : ''), it.hours.text));
-    (it.links || []).forEach(function (l) { row.appendChild(linkPill(l)); });
     if (row.children.length) frag.appendChild(row);
     if (status === 'backup' && withDayPicker && pendingPromote === it.id) {
       frag.appendChild(dayPickerRow(it, 'Promote to which day?',
@@ -1974,13 +2156,43 @@ var CityOps = (function () {
         function () { pendingMove = null; rerender(); }, 'move'));
       return frag;
     }
+    return frag;
+  }
+
+  // The card's one row of controls, which the density pass moved OUT of the
+  // collapsed-away detail panel: on a phone the whole point of a Plan-tab
+  // card is to open the map or tick it done, and having to expand the card
+  // first cost a tap and a screenful on every single item.
+  //
+  // Order is the owner's: the links that NAVIGATE come first, left of Done,
+  // because they are what a card is for while you are standing in the
+  // street; the controls that MUTATE the plan follow. The two groups stay
+  // visually distinct (pill colouring vs outlined buttons) so a thumb never
+  // confuses "open in maps" with "archive".
+  //
+  // Two of them, Archive and Rename, carry .ctl-more and are hidden by CSS
+  // while the card is collapsed. Measured at 390px: the full six controls
+  // plus one map link need ~348px against 290px of card width, so with all
+  // six always visible EVERY card's control row wrapped to a second line,
+  // which is the opposite of what this pass is for. Archive and Rename are
+  // the two to hide because they are housekeeping (mid-trip you open a map
+  // and tick things off; you archive and rename sitting down) and because
+  // Archive's text label, which stays, is most of the width. display:none
+  // also takes them out of the tab order on a collapsed card, the same rule
+  // the collapsed detail panel has always followed.
+  function itemControlRow(it, status, withDayPicker) {
     var ctl = el('div', 'ctl-row');
+    (it.links || []).forEach(function (l) { ctl.appendChild(linkCtl(l)); });
     // Icon buttons (feature 5): the icon is the whole visible label except on
     // Archive, which also keeps a text label because it is destructive.
     // aria-label and title both carry the same wording so screen readers and
-    // mouse-hover tooltips agree.
+    // mouse-hover tooltips agree. Archiving is the one transition that waits
+    // for the card to be expanded; every other transition (including
+    // RESTORING from archived, which is a recovery, not a destruction) is
+    // there on the collapsed card.
     (TRANSITIONS[status] || []).forEach(function (t) {
-      var b = el('button', 'ctl icon-btn to-' + t.to, t.label ? (t.icon + ' ' + t.label) : t.icon);
+      var b = el('button', 'ctl icon-btn to-' + t.to + (t.to === 'archived' ? ' ctl-more' : ''),
+        t.label ? (t.icon + ' ' + t.label) : t.icon);
       b.type = 'button';
       b.setAttribute('aria-label', t.aria);
       b.title = t.aria;
@@ -2017,15 +2229,14 @@ var CityOps = (function () {
       ctl.appendChild(mv);
     }
     if (status !== 'archived') {
-      var ed = el('button', 'ctl icon-btn', '✎');
+      var ed = el('button', 'ctl icon-btn ctl-more', '✎');
       ed.type = 'button';
       ed.setAttribute('aria-label', 'Rename');
       ed.title = 'Rename';
       ed.onclick = function () { pendingEdit = it.id; rerender(); };
       ctl.appendChild(ed);
     }
-    if (ctl.children.length) frag.appendChild(ctl);
-    return frag;
+    return ctl.children.length ? ctl : null;
   }
 
   // Flips the EFFECTIVE expand state (default included) and stores the
@@ -2061,21 +2272,35 @@ var CityOps = (function () {
   // read fine); a done item defaults collapsed (it has sunk out of the way
   // on purpose). An explicit tap during this session always overrides that
   // default, in either direction, via itemExpandOverride above.
-  function appendCard(container, it, status, showWhen, withDayPicker, dayChip) {
+  function appendCard(container, it, status, showWhen, withDayPicker, dayChip, sec) {
     var expanded;
-    if (pendingEdit === it.id) expanded = true; // renaming must show the editor
+    // Renaming and both day pickers replace the detail panel, and that panel
+    // is display:none while the card is collapsed. Since the density pass the
+    // control row is suppressed at the same moment (itemPanelTakenOver), so a
+    // collapsed card in that state would render a title and nothing else: no
+    // picker, no Cancel, no way back except tapping the title. Forcing the
+    // card open is what keeps every one of those three states reachable from
+    // the collapsed card the control row now lives on.
+    if (itemPanelTakenOver(it, status, withDayPicker)) expanded = true;
     else if (Object.prototype.hasOwnProperty.call(itemExpandOverride, it.id)) expanded = itemExpandOverride[it.id];
     else expanded = defaultExpanded(status);
     container.classList.add(expanded ? 'expanded' : 'collapsed');
     // Stamped on every card everywhere, so revealJustMoved() can find a card
     // again after a re-render relocated it, in any tab.
     container.setAttribute('data-item-id', it.id);
-    var hd = cardHeaderBtn(it, status, expanded, dayChip);
+    var hd = cardHeaderBtn(it, status, expanded, dayChip, sec, showWhen);
     hd.onclick = function () { toggleExpand(it.id, status); };
     container.appendChild(hd);
     var detail = el('div', 'card-detail');
-    detail.appendChild(itemDetailBody(it, status, showWhen, withDayPicker));
+    detail.appendChild(itemDetailBody(it, status, withDayPicker));
     container.appendChild(detail);
+    // Last, so a card reads title, then what it is, then what you can do
+    // about it, and so the collapsed card is exactly two rows: the title row
+    // and this one.
+    if (!itemPanelTakenOver(it, status, withDayPicker)) {
+      var ctl = itemControlRow(it, status, withDayPicker);
+      if (ctl) container.appendChild(ctl);
+    }
   }
 
   function renderCard(it, status, withDayPicker, dayChip) {
@@ -2636,6 +2861,8 @@ var CityOps = (function () {
         if (e.status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
         tname.appendChild(document.createTextNode(effectiveName(e.it, state)));
         h3.appendChild(tname);
+        var shareBadge = ratingBadge(e.it.rating, true);
+        if (shareBadge) h3.appendChild(shareBadge);
         if (e.it.price) h3.appendChild(el('span', 'price', e.it.price.text));
         bd.appendChild(h3);
         var meta = (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label + (e.it.when ? ' · ' + e.it.when : '');
@@ -2663,6 +2890,8 @@ var CityOps = (function () {
         if (e.status === 'done') tname.appendChild(el('span', 'donemark', '✓'));
         tname.appendChild(document.createTextNode(effectiveName(e.it, state)));
         h3.appendChild(tname);
+        var undatedBadge = ratingBadge(e.it.rating, true);
+        if (undatedBadge) h3.appendChild(undatedBadge);
         if (e.it.price) h3.appendChild(el('span', 'price', e.it.price.text));
         card.appendChild(h3);
         card.appendChild(el('p', 'when-line', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
@@ -2715,8 +2944,12 @@ var CityOps = (function () {
     entries.forEach(function (e) {
       var card = el('div', 'card dragrow' + (e.status === 'done' ? ' item-done' : ''));
       card.appendChild(planGrip(e.it));
-      card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
-      appendCard(card, e.it, e.status, true, 'labeled');
+      // The section used to be a whole line of its own above the title
+      // (.sec-meta). It is now the icon in front of the title, with the
+      // label kept as that icon's tooltip and accessible name: on a phone
+      // that line was 20-odd pixels per card spent restating something the
+      // icon already says.
+      appendCard(card, e.it, e.status, true, 'labeled', null, e.sec);
       list.appendChild(card);
     });
     return list;
@@ -3224,7 +3457,8 @@ var CityOps = (function () {
       buildCityPrompt: buildCityPrompt, INTERESTS_SECTION: INTERESTS_SECTION,
       COPY_LINE: PROMPT_COPY_LINE,
       buildInterestsDeltaPrompt: buildInterestsDeltaPrompt,
-      buildIntelPassPrompt: buildIntelPassPrompt
+      buildIntelPassPrompt: buildIntelPassPrompt,
+      buildRatingsPassPrompt: buildRatingsPassPrompt
     },
     extractJsonBlock: extractJsonBlock, RETRY_INSTRUCTION: RETRY_INSTRUCTION,
     isJsonSyntaxError: isJsonSyntaxError, fetchTextToCity: fetchTextToCity,

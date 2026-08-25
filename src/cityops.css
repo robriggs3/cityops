@@ -24,7 +24,7 @@
     display:flex; align-items:center; gap:8px;}
   h2 .ic{font-size:1.1rem}
   .card{background:var(--bg-card); border:1px solid var(--border-light); border-radius:14px;
-    padding:14px 16px; margin-bottom:12px; box-shadow:0 1px 2px rgba(0,0,0,.03);}
+    padding:10px 14px; margin-bottom:8px; box-shadow:0 1px 2px rgba(0,0,0,.03);}
   .card h3{font-size:1.02rem; display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap;}
   .card h3 .price{font-size:.82rem; color:var(--text-3); font-weight:600; white-space:nowrap;}
   .card p{font-size:.9rem; color:var(--text-3); margin-top:5px;}
@@ -128,7 +128,7 @@
   /* --- cityops additions --- */
   /* neutral badge when no class given */
   .hours:not(.late):not(.day):not(.eve){background:var(--bg-softer); color:var(--text-3);}
-  .ctl-row{display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;}
+  .ctl-row{display:flex; align-items:center; gap:5px; margin-top:6px; flex-wrap:wrap;}
   .ctl{font:inherit; font-size:.74rem; font-weight:700; color:var(--accent-hover);
     background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
     padding:4px 11px; cursor:pointer;}
@@ -176,8 +176,6 @@
   body.share .sec-toggle{pointer-events:none;}
   body.share .sec-toggle .chev{display:none;}
   .daycard .bd + .bd{border-top:1px dashed var(--border-light);}
-  .sec-meta{font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.4px;
-    color:var(--accent); margin-bottom:2px;}
   .title-edit{width:100%; font:inherit; font-size:1rem; font-weight:600; padding:8px 10px;
     border:1.5px solid var(--accent); border-radius:8px; margin-top:4px;}
   .empty-day .hd{border-bottom:none;}
@@ -206,7 +204,7 @@
     display:flex; align-items:baseline; justify-content:flex-start; gap:8px; flex-wrap:wrap;}
   .card-hd-tags{display:flex; gap:6px; flex-wrap:wrap; margin-left:2px;}
   .card-hd-chev{font-size:.78rem; color:var(--text-3); margin-left:auto; flex:0 0 auto; padding-left:8px;}
-  .card-detail{margin-top:8px;}
+  .card-detail{margin-top:5px;}
   /* Always in the DOM (see appendCard's comment); hidden, not just visual,
      when the card is collapsed: display:none also drops it from the tab
      order and the accessibility tree. */
@@ -268,7 +266,7 @@
     header h1{font-size:1.35rem;}
     .facts{gap:6px; margin-top:10px;}
     .chip{padding:4px 9px; font-size:.75rem;}
-    .card{padding:12px 12px; border-radius:12px;}
+    .card{padding:8px 10px; margin-bottom:6px; border-radius:12px;}
     .daycard{border-radius:12px;}
     .daycard .hd{padding:8px 12px;}
     .card.dragrow{padding-left:50px;}
@@ -277,8 +275,11 @@
     .callout, .warn, .errcard{padding:12px 12px;}
     .toolbar{gap:6px;}
     .toolbar button{padding:5px 10px; font-size:.75rem;}
-    h2{margin:20px 0 10px;}
-    .card-hd{font-size:.96rem;}
+    h2{margin:16px 0 8px;}
+    .card-hd{font-size:.96rem; gap:6px;}
+    .ctl-row{gap:4px;}
+    .ctl{padding:4px 9px;}
+    .planday-today{padding:26px 8px 10px; margin:0 0 18px;}
     #secnav{gap:6px;}
     .secnav-chip{padding:4px 10px; font-size:.74rem;}
     .viewtab{padding:5px 10px; font-size:.75rem;}
@@ -350,3 +351,70 @@
     .tabchip{padding:7px 11px; font-size:.76rem; min-height:40px;}
     .tab-more{padding:7px 10px;}
   }
+
+  /* --- Density pass: fit more of the stay on one phone screen --- */
+  /* Owner ask, mid-trip in Tirana: "minimize vertical space so we can fit
+     more on screen". A collapsed Plan-tab card is now exactly two rows, the
+     title row and the control row, and everything that used to have a line of
+     its own (the section label, the `when` hint, the link pills) either
+     joined one of those two rows or went behind the existing expander. */
+
+  /* The section icon in front of the title, replacing the old .sec-meta line
+     above the card. The label it used to spell out is on the icon as both
+     title and aria-label, so nothing is lost to a screen reader or a hover. */
+  .sec-ic{flex:0 0 auto; font-size:1rem; line-height:1.2;}
+  /* The fallback for a guide whose sections have no icons: the old
+     .sec-meta wording and colour, inline in the title row instead of on a
+     line of its own. Accent, not the rating badge's neutral, so the two
+     never read as the same kind of thing. */
+  .sec-lab{flex:0 0 auto; font-size:.64rem; font-weight:800; text-transform:uppercase;
+    letter-spacing:.4px; color:var(--accent); white-space:nowrap;}
+
+  /* Ratings are INFORMATION, not action: muted neutral tokens, never the
+     accent, and nothing here is tappable. Provenance rides in the tooltip. */
+  .rating{flex:0 0 auto; font-size:.76rem; font-weight:700; color:var(--text-2);
+    background:var(--bg-softer); border-radius:5px; padding:1px 6px; white-space:nowrap;}
+  .rcount{font-weight:600; color:var(--text-3); margin-left:4px;}
+
+  /* The `when` hint, inline after the title. nowrap plus a flexible basis is
+     what makes it sit on the title row when it fits and drop to its own line
+     when it does not; the ellipsis and max-width are the guarantee that a
+     long one can never widen the page into a horizontal scroll. */
+  .when-hint{flex:0 1 auto; min-width:0; max-width:100%; font-size:.78rem; font-weight:400;
+    color:var(--text-3); font-style:italic; white-space:nowrap; overflow:hidden;
+    text-overflow:ellipsis;}
+
+  /* Map / web / call, in the control row rather than on a row of their own.
+     They keep their pill colouring (these NAVIGATE; the outlined buttons
+     beside them MUTATE the plan) and lose only their text, which becomes the
+     tooltip and the accessible name. Declared after .maplink/.weblink/
+     .phonelink so the compact geometry wins. */
+  .ctl-link{display:inline-flex; align-items:center; justify-content:center; gap:0;
+    min-width:36px; padding:4px 9px; font-size:.86rem; line-height:1.1;
+    border-radius:20px; text-decoration:none;}
+  .ctl-link + .ctl{margin-left:5px;}
+  /* The pin, the globe and the handset are COLOUR emoji: they paint their own
+     red, blue and black and cannot inherit a foreground colour. .maplink is
+     white-on-accent, so once the word "Map" went away the red pin landed on
+     red and the control read as a blank circle. The label used to carry it;
+     with the label gone the container is what has to change. The compact map
+     link therefore takes the same white ground its two siblings already have
+     and keeps the accent border that says NAVIGATE, still distinct from the
+     grey-bordered buttons beside it that MUTATE the plan. */
+  .ctl-link.maplink{background:#fff; color:var(--accent-hover);
+    border:1.5px solid var(--accent);}
+  .ctl-link.maplink:active{background:var(--accent-soft);}
+
+  /* Archive and Rename wait for the card to be expanded. display:none, not
+     visibility, so they are out of the tab order and the accessibility tree
+     on a collapsed card, exactly like the detail panel above them. */
+  .collapsed > .ctl-row > .ctl-more{display:none;}
+
+  /* Coarse pointers get the 36px minimum on every control in the row; a mouse
+     gets the tighter geometry, since a cursor does not need a thumb's worth
+     of target. */
+  @media (pointer: coarse){
+    .ctl, .ctl-link{min-height:36px;}
+    .ctl{display:inline-flex; align-items:center; justify-content:center;}
+  }
+
