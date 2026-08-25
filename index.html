@@ -734,8 +734,9 @@ var CityOps = (function () {
   var VIEW_MODES = ['type', 'day', 'today'];
 
   function emptyState() {
-    return { itemStatus: {}, itemDay: {}, itemTitle: {}, dayOrder: {}, collapsedSections: {},
-      collapsedPlanDays: {}, viewMode: null, tab: null, dataOverride: null, stayOverride: null, updated: null };
+    return { itemStatus: {}, itemDay: {}, itemTitle: {}, dayOrder: {}, dayItemOrder: {},
+      collapsedSections: {}, collapsedPlanDays: {}, viewMode: null, tab: null,
+      dataOverride: null, stayOverride: null, updated: null };
   }
 
   function normalizeState(st) {
@@ -743,6 +744,11 @@ var CityOps = (function () {
     st.itemStatus = st.itemStatus || {};
     st.itemDay = st.itemDay || {};
     st.dayOrder = st.dayOrder || {};
+    // Per-item order WITHIN one Plan-tab day (see the dayItemOrder block
+    // below). Absent in every state written before this feature shipped, so
+    // it is filled in here exactly like the maps above: an old state simply
+    // reads as "no day has been arranged by hand yet".
+    st.dayItemOrder = st.dayItemOrder || {};
     st.collapsedSections = st.collapsedSections || {};
     // Phase 4: per-day collapse state for the Plan tab's "remaining days" list,
     // the same tri-state pattern as collapsedSections (explicit true/false
@@ -1052,6 +1058,68 @@ var CityOps = (function () {
     return state;
   }
 
+  // ---- Plan tab: the order of the items INSIDE one day ----
+  // state.dayItemOrder maps a DISPLAYED date to the item ids sitting on it, in
+  // the order the traveler dragged them into. Keyed by date, not by a
+  // section's day-key, because the Plan tab groups by date ACROSS sections: a
+  // real Tirana Monday mixes a cowork block, a nail appointment, a barber and
+  // a dinner, and the order that matters is the order of the DAY, not the
+  // order of any one section. (state.dayOrder, the older map, is a different
+  // thing entirely: it arranges whole day SLOTS inside one section.)
+  //
+  // Not baked into buildExport on purpose; see the note there.
+  function dayItemOrderFor(state, iso) {
+    var m = state && state.dayItemOrder;
+    var list = (m && Object.prototype.hasOwnProperty.call(m, iso)) ? m[iso] : null;
+    return Array.isArray(list) ? list : [];
+  }
+
+  // Pure. `entries` are one day's {sec, it, status} rows in their default
+  // order (section order, then the guide's own item order); `order` is that
+  // day's saved id list. Ids the saved order names come first, in that order;
+  // anything it has never heard of (an item just assigned to this day from
+  // another tab, or a brand new guide item) keeps its default position at the
+  // end rather than jumping to the top.
+  //
+  // Ids in `order` that are not on this day are ignored, not pruned: an item
+  // dragged away, deleted from the guide, or archived leaves its id behind,
+  // and a day the traveler arranged weeks ago must not lose that arrangement
+  // because one of its items left. Stale ids cost one array scan and nothing
+  // else.
+  function orderDayItems(entries, order) {
+    var list = entries || [];
+    if (!order || !order.length || list.length < 2) return list.slice();
+    var byId = {};
+    list.forEach(function (e) { byId[e.it.id] = e; });
+    var out = [];
+    var taken = {};
+    order.forEach(function (id) {
+      if (Object.prototype.hasOwnProperty.call(byId, id) && !taken[id]) {
+        taken[id] = 1;
+        out.push(byId[id]);
+      }
+    });
+    list.forEach(function (e) { if (!taken[e.it.id]) out.push(e); });
+    return out;
+  }
+
+  // Writes one day's arrangement. Duplicates and non-strings are dropped (a
+  // DOM read is the caller in practice, and a duplicated id there would
+  // silently drop an item from the day). An empty result deletes the key
+  // rather than storing [], so dayItemOrder only ever holds real arrangements
+  // and a day reset by hand goes back to the guide's own order.
+  function setDayItemOrder(state, iso, ids) {
+    if (!isIso(iso)) throw new Error('bad day "' + iso + '"');
+    state.dayItemOrder = state.dayItemOrder || {};
+    var clean = [];
+    (ids || []).forEach(function (id) {
+      if (typeof id === 'string' && id && clean.indexOf(id) === -1) clean.push(id);
+    });
+    if (clean.length) state.dayItemOrder[iso] = clean;
+    else delete state.dayItemOrder[iso];
+    return state;
+  }
+
   // The Plan tab's model: today's day-assigned items (any section), every
   // other day of the stay in chronological order with whatever is assigned
   // to it (also any section: a dinner reservation and an itinerary stop both
@@ -1074,7 +1142,8 @@ var CityOps = (function () {
     });
     var stayIsos = stayDates(range);
     var otherDays = stayIsos.filter(function (iso) { return iso !== today; }).map(function (iso) {
-      return { iso: iso, label: dayLabel(iso), items: byIso[iso] || [] };
+      return { iso: iso, label: dayLabel(iso),
+        items: orderDayItems(byIso[iso] || [], dayItemOrderFor(state, iso)) };
     });
     var openTasks = [], doneTasks = [];
     vms.forEach(function (sv) {
@@ -1088,7 +1157,9 @@ var CityOps = (function () {
     return {
       todayIso: today,
       inRange: today >= range.from && today <= range.to,
-      today: byIso[today] || [],
+      // Today is a day like any other here: it is the one the traveler
+      // rearranges most, so it reads its own saved order too.
+      today: orderDayItems(byIso[today] || [], dayItemOrderFor(state, today)),
       days: otherDays,
       openTasks: openTasks,
       doneTasks: doneTasks
@@ -2939,6 +3010,23 @@ var CityOps = (function () {
     return ctx ? ctx.store.load() : null;
   }
 
+  // Deliberately does NOT bake state.dayItemOrder (the Plan tab's within-day
+  // item order) into the exported item positions. The export's item array is
+  // SECTION-major: rank is handed out section by section, then day by day
+  // inside each section, so two items on the same date but in different
+  // sections are never adjacent in the array. A Plan-tab day order routinely
+  // interleaves sections (cowork, nails, barber, dinner), and array position
+  // simply cannot express it: baking would encode a partial, per-section
+  // shadow of the arrangement and quietly lose the rest, which is worse than
+  // not encoding it at all. It would also put a second, disagreeing source of
+  // truth next to dayItemOrder itself.
+  //
+  // Nothing is lost by leaving it out: dayItemOrder lives in the state object,
+  // which is what syncs between the traveler's devices (syncKit pushes the
+  // whole state as one payload), so a day arranged on the phone reads the same
+  // on the laptop. What an exported guide.json carries is the guide, plus
+  // status/day/title decisions that belong to the data; how one day's cards
+  // are stacked is a device-side view preference, like a collapsed section.
   function buildExport(data, state) {
     var out = JSON.parse(JSON.stringify(data));
     out.city.dates = JSON.parse(JSON.stringify(effectiveDates(data, state)));
@@ -3334,6 +3422,9 @@ var CityOps = (function () {
     // and the Plan tab's own model, all pure and unit-tested on their own.
     TABS: TABS, tabForSection: tabForSection, setTab: setTab, effectiveTab: effectiveTab,
     planModel: planModel, isPlanDayCollapsed: isPlanDayCollapsed, togglePlanDay: togglePlanDay,
+    // Plan-tab within-day item order (drag to reorder), pure and unit-tested.
+    orderDayItems: orderDayItems, setDayItemOrder: setDayItemOrder,
+    dayItemOrderFor: dayItemOrderFor,
     // Plan-tab per-item day moves: the picker's own pure model.
     dayMoveOptions: dayMoveOptions
   };
@@ -3986,8 +4077,9 @@ var CityOps = (function () {
   var VIEW_MODES = ['type', 'day', 'today'];
 
   function emptyState() {
-    return { itemStatus: {}, itemDay: {}, itemTitle: {}, dayOrder: {}, collapsedSections: {},
-      collapsedPlanDays: {}, viewMode: null, tab: null, dataOverride: null, stayOverride: null, updated: null };
+    return { itemStatus: {}, itemDay: {}, itemTitle: {}, dayOrder: {}, dayItemOrder: {},
+      collapsedSections: {}, collapsedPlanDays: {}, viewMode: null, tab: null,
+      dataOverride: null, stayOverride: null, updated: null };
   }
 
   function normalizeState(st) {
@@ -3995,6 +4087,11 @@ var CityOps = (function () {
     st.itemStatus = st.itemStatus || {};
     st.itemDay = st.itemDay || {};
     st.dayOrder = st.dayOrder || {};
+    // Per-item order WITHIN one Plan-tab day (see the dayItemOrder block
+    // below). Absent in every state written before this feature shipped, so
+    // it is filled in here exactly like the maps above: an old state simply
+    // reads as "no day has been arranged by hand yet".
+    st.dayItemOrder = st.dayItemOrder || {};
     st.collapsedSections = st.collapsedSections || {};
     // Phase 4: per-day collapse state for the Plan tab's "remaining days" list,
     // the same tri-state pattern as collapsedSections (explicit true/false
@@ -4304,6 +4401,68 @@ var CityOps = (function () {
     return state;
   }
 
+  // ---- Plan tab: the order of the items INSIDE one day ----
+  // state.dayItemOrder maps a DISPLAYED date to the item ids sitting on it, in
+  // the order the traveler dragged them into. Keyed by date, not by a
+  // section's day-key, because the Plan tab groups by date ACROSS sections: a
+  // real Tirana Monday mixes a cowork block, a nail appointment, a barber and
+  // a dinner, and the order that matters is the order of the DAY, not the
+  // order of any one section. (state.dayOrder, the older map, is a different
+  // thing entirely: it arranges whole day SLOTS inside one section.)
+  //
+  // Not baked into buildExport on purpose; see the note there.
+  function dayItemOrderFor(state, iso) {
+    var m = state && state.dayItemOrder;
+    var list = (m && Object.prototype.hasOwnProperty.call(m, iso)) ? m[iso] : null;
+    return Array.isArray(list) ? list : [];
+  }
+
+  // Pure. `entries` are one day's {sec, it, status} rows in their default
+  // order (section order, then the guide's own item order); `order` is that
+  // day's saved id list. Ids the saved order names come first, in that order;
+  // anything it has never heard of (an item just assigned to this day from
+  // another tab, or a brand new guide item) keeps its default position at the
+  // end rather than jumping to the top.
+  //
+  // Ids in `order` that are not on this day are ignored, not pruned: an item
+  // dragged away, deleted from the guide, or archived leaves its id behind,
+  // and a day the traveler arranged weeks ago must not lose that arrangement
+  // because one of its items left. Stale ids cost one array scan and nothing
+  // else.
+  function orderDayItems(entries, order) {
+    var list = entries || [];
+    if (!order || !order.length || list.length < 2) return list.slice();
+    var byId = {};
+    list.forEach(function (e) { byId[e.it.id] = e; });
+    var out = [];
+    var taken = {};
+    order.forEach(function (id) {
+      if (Object.prototype.hasOwnProperty.call(byId, id) && !taken[id]) {
+        taken[id] = 1;
+        out.push(byId[id]);
+      }
+    });
+    list.forEach(function (e) { if (!taken[e.it.id]) out.push(e); });
+    return out;
+  }
+
+  // Writes one day's arrangement. Duplicates and non-strings are dropped (a
+  // DOM read is the caller in practice, and a duplicated id there would
+  // silently drop an item from the day). An empty result deletes the key
+  // rather than storing [], so dayItemOrder only ever holds real arrangements
+  // and a day reset by hand goes back to the guide's own order.
+  function setDayItemOrder(state, iso, ids) {
+    if (!isIso(iso)) throw new Error('bad day "' + iso + '"');
+    state.dayItemOrder = state.dayItemOrder || {};
+    var clean = [];
+    (ids || []).forEach(function (id) {
+      if (typeof id === 'string' && id && clean.indexOf(id) === -1) clean.push(id);
+    });
+    if (clean.length) state.dayItemOrder[iso] = clean;
+    else delete state.dayItemOrder[iso];
+    return state;
+  }
+
   // The Plan tab's model: today's day-assigned items (any section), every
   // other day of the stay in chronological order with whatever is assigned
   // to it (also any section: a dinner reservation and an itinerary stop both
@@ -4326,7 +4485,8 @@ var CityOps = (function () {
     });
     var stayIsos = stayDates(range);
     var otherDays = stayIsos.filter(function (iso) { return iso !== today; }).map(function (iso) {
-      return { iso: iso, label: dayLabel(iso), items: byIso[iso] || [] };
+      return { iso: iso, label: dayLabel(iso),
+        items: orderDayItems(byIso[iso] || [], dayItemOrderFor(state, iso)) };
     });
     var openTasks = [], doneTasks = [];
     vms.forEach(function (sv) {
@@ -4340,7 +4500,9 @@ var CityOps = (function () {
     return {
       todayIso: today,
       inRange: today >= range.from && today <= range.to,
-      today: byIso[today] || [],
+      // Today is a day like any other here: it is the one the traveler
+      // rearranges most, so it reads its own saved order too.
+      today: orderDayItems(byIso[today] || [], dayItemOrderFor(state, today)),
       days: otherDays,
       openTasks: openTasks,
       doneTasks: doneTasks
@@ -6191,6 +6353,23 @@ var CityOps = (function () {
     return ctx ? ctx.store.load() : null;
   }
 
+  // Deliberately does NOT bake state.dayItemOrder (the Plan tab's within-day
+  // item order) into the exported item positions. The export's item array is
+  // SECTION-major: rank is handed out section by section, then day by day
+  // inside each section, so two items on the same date but in different
+  // sections are never adjacent in the array. A Plan-tab day order routinely
+  // interleaves sections (cowork, nails, barber, dinner), and array position
+  // simply cannot express it: baking would encode a partial, per-section
+  // shadow of the arrangement and quietly lose the rest, which is worse than
+  // not encoding it at all. It would also put a second, disagreeing source of
+  // truth next to dayItemOrder itself.
+  //
+  // Nothing is lost by leaving it out: dayItemOrder lives in the state object,
+  // which is what syncs between the traveler's devices (syncKit pushes the
+  // whole state as one payload), so a day arranged on the phone reads the same
+  // on the laptop. What an exported guide.json carries is the guide, plus
+  // status/day/title decisions that belong to the data; how one day's cards
+  // are stacked is a device-side view preference, like a collapsed section.
   function buildExport(data, state) {
     var out = JSON.parse(JSON.stringify(data));
     out.city.dates = JSON.parse(JSON.stringify(effectiveDates(data, state)));
@@ -6586,6 +6765,9 @@ var CityOps = (function () {
     // and the Plan tab's own model, all pure and unit-tested on their own.
     TABS: TABS, tabForSection: tabForSection, setTab: setTab, effectiveTab: effectiveTab,
     planModel: planModel, isPlanDayCollapsed: isPlanDayCollapsed, togglePlanDay: togglePlanDay,
+    // Plan-tab within-day item order (drag to reorder), pure and unit-tested.
+    orderDayItems: orderDayItems, setDayItemOrder: setDayItemOrder,
+    dayItemOrderFor: dayItemOrderFor,
     // Plan-tab per-item day moves: the picker's own pure model.
     dayMoveOptions: dayMoveOptions
   };
