@@ -1889,5 +1889,219 @@ test('dayMoveOptions works for every dated item in the real Tirana guide', () =>
   });
 });
 
+// --- Composite daily-plan split (tools/split-plans.js) ---
+// The transform that turned Tirana's eight "one item per day, everything
+// packed into the note" entries into individually movable items. The tool is
+// a one-off, but its two pure pieces are what a future city (or a re-run
+// after an Enrich pass reintroduces a composite) would lean on, and the
+// completeness check below is the standing proof that no fragment of the
+// original plan was dropped on the floor.
+const SPLIT = require('../tools/split-plans');
+
+test('parseFragments splits a composite note on the separator and keeps the phase', () => {
+  const f = SPLIT.parseFragments('AM: Coolab day pass · PM: Barber 919 · Eve: Era Blloku');
+  assert.equal(f.length, 3);
+  assert.deepEqual(f[0], { phase: 'AM', text: 'Coolab day pass' });
+  assert.deepEqual(f[1], { phase: 'PM', text: 'Barber 919' });
+  assert.deepEqual(f[2], { phase: 'Eve', text: 'Era Blloku' });
+});
+
+// The real notes only prefix the FIRST fragment of a run, so an unprefixed
+// fragment belongs to the phase before it, not to no phase at all. Getting
+// this wrong would silently drop "laundry" out of Tuesday afternoon.
+test('parseFragments carries the phase forward across unprefixed fragments', () => {
+  const f = SPLIT.parseFragments('AM: market run · PM: Work block · laundry · Eve: dinner');
+  assert.deepEqual(f.map(x => x.phase), ['AM', 'PM', 'PM', 'Eve']);
+  assert.deepEqual(f.map(x => x.text), ['market run', 'Work block', 'laundry', 'dinner']);
+});
+
+test('parseFragments leaves a leading unphased fragment unphased, and drops blanks', () => {
+  const f = SPLIT.parseFragments('  wander  ·   · PM: nap ·  ');
+  assert.deepEqual(f, [{ phase: null, text: 'wander' }, { phase: 'PM', text: 'nap' }]);
+});
+
+test('parseFragments tolerates a missing or non-string note', () => {
+  assert.deepEqual(SPLIT.parseFragments(''), []);
+  assert.deepEqual(SPLIT.parseFragments(undefined), []);
+  assert.deepEqual(SPLIT.parseFragments(null), []);
+  assert.deepEqual(SPLIT.parseFragments(42), []);
+});
+
+const SPLIT_SPEC = {
+  dissolve: ['tanini'],
+  merge: [{ id: 'brasserie', when: 'Eve', noteAppend: 'Fallback: Tanini.' },
+    { id: 'nord', day: '2026-08-11', when: 'AM' }],
+  create: [{ item: { id: 'work-block', section: 'coffee', status: 'plan', name: 'Work block', day: '2026-08-11' } }]
+};
+
+test('applySplit dissolves, merges and creates in one pass', () => {
+  const out = SPLIT.applySplit(GOOD, SPLIT_SPEC);
+  assert.equal(out.items.find(i => i.id === 'tanini'), undefined, 'composite should be gone');
+  const br = out.items.find(i => i.id === 'brasserie');
+  assert.equal(br.when, 'Eve');
+  assert.ok(br.note.endsWith('Fallback: Tanini.'), br.note);
+  const nord = out.items.find(i => i.id === 'nord');
+  assert.equal(nord.day, '2026-08-11'); // gained a day it did not have
+  const wb = out.items.find(i => i.id === 'work-block');
+  assert.equal(wb.name, 'Work block');
+  assert.equal(out.items.length, GOOD.items.length); // minus one, plus one
+});
+
+// The surviving items are the ones the traveler's local state is keyed to.
+// A merge that renamed or re-slugged an id would silently orphan their
+// statuses, renames and day moves.
+test('applySplit never changes a surviving item id, and leaves the input alone', () => {
+  const before = JSON.stringify(GOOD);
+  const out = SPLIT.applySplit(GOOD, SPLIT_SPEC);
+  assert.equal(JSON.stringify(GOOD), before, 'input must not be mutated');
+  ['brasserie', 'sisters', 'nord'].forEach(id => {
+    assert.ok(out.items.some(i => i.id === id), id + ' should survive with its id');
+  });
+});
+
+test('applySplit does not append the same note twice when re-run', () => {
+  const once = SPLIT.applySplit(GOOD, SPLIT_SPEC);
+  const twice = SPLIT.applySplit(once, { merge: SPLIT_SPEC.merge });
+  const n = twice.items.find(i => i.id === 'brasserie').note;
+  assert.equal(n.split('Fallback: Tanini.').length - 1, 1, n);
+});
+
+test('applySplit refuses a spec that has drifted from the data', () => {
+  assert.throws(() => SPLIT.applySplit(GOOD, { dissolve: ['nope'] }), /dissolve target not found/);
+  assert.throws(() => SPLIT.applySplit(GOOD, { merge: [{ id: 'nope', when: 'AM' }] }), /merge target not found/);
+  assert.throws(() => SPLIT.applySplit(GOOD, {
+    create: [{ item: { id: 'nord', section: 'coffee', status: 'plan', name: 'Dup' } }]
+  }), /collides with an existing item/);
+  assert.throws(() => SPLIT.applySplit(GOOD, {
+    create: [{ item: { id: 'x', section: 'nosuch', status: 'plan', name: 'X' } }]
+  }), /unknown section/);
+});
+
+// Completeness: every fragment of the eight original composite notes has to
+// map onto a disposition in the spec. Fragments outnumber nothing here, but
+// spec rows outnumber fragments, because several fragments chained more than
+// one stop behind an arrow or a "then" and were split further.
+test('every fragment of the original Tirana composites has a disposition in the spec', () => {
+  const spec = SPLIT.TIRANA;
+  const rows = [].concat(spec.merge, spec.create, spec.covered)
+    .filter(r => r.fragment.indexOf('(day ') !== 0);
+  const norm = s => s.toLowerCase().replace(/[^a-z0-9#]+/g, ' ').trim();
+  const specTexts = rows.map(r => norm(r.fragment.replace(/^(AM|PM|Eve):\s*/i, '')));
+  let fragments = 0;
+  spec.originalNotes.forEach(note => {
+    SPLIT.parseFragments(note).forEach(f => {
+      fragments++;
+      const n = norm(f.text);
+      assert.ok(specTexts.some(t => t === n || t.indexOf(n) !== -1 || n.indexOf(t) !== -1),
+        'no disposition for fragment: ' + f.text);
+    });
+  });
+  assert.equal(fragments, 32);
+  assert.equal(rows.length, 36);
+  assert.equal(spec.merge.length + spec.create.length + spec.covered.length, 38); // + 2 day-level notes
+});
+
+// --- The split applied: the real guide after the transform ---
+function tiranaData() {
+  const fs = require('fs');
+  const path = require('path');
+  return JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'cities', 'tirana.json'), 'utf8'));
+}
+
+// The tell of a composite is not the separator (a plain address line uses it
+// too) but the AM/PM/Eve phase markers: two or more in one note means the
+// item is carrying a schedule instead of being one entry in one.
+test('no composite daily-plan item survives in the shipped Tirana guide', () => {
+  tiranaData().items.forEach(it => {
+    const phases = SPLIT.parseFragments(it.note).filter(f => f.phase).length;
+    assert.ok(phases < 2,
+      `item ${it.id} still packs ${phases} phases into one note: ${it.name}`);
+    assert.ok(!/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{4}-\d{2}-\d{2}$/.test(it.name),
+      `item ${it.id} is still named after a whole day: ${it.name}`);
+  });
+});
+
+// The traveler's actual ask, as a test: Monday is four separate cards, and
+// moving one of them moves exactly one.
+test('Mon 2026-08-24 is individually controlled items, one per stop', () => {
+  const data = tiranaData();
+  const pm = C.planModel(data, C.emptyState(), '2026-08-20');
+  const mon = pm.days.find(d => d.iso === '2026-08-24');
+  const names = mon.items.map(e => e.it.name);
+  ['Coolab', 'Ira Shehaj Nails & Podology', 'Barber 919', 'Era Blloku'].forEach(n => {
+    assert.ok(names.indexOf(n) !== -1, 'Mon should list ' + n + ', got: ' + names.join(' | '));
+  });
+  // Distinct items, not one card mentioning four places.
+  assert.equal(new Set(mon.items.map(e => e.it.id)).size, mon.items.length);
+});
+
+test('moving Barber 919 to another day moves nothing else', () => {
+  const data = tiranaData();
+  const st = C.emptyState();
+  const before = C.planModel(data, st, '2026-08-20');
+  const monBefore = before.days.find(d => d.iso === '2026-08-24').items.map(e => e.it.id).sort();
+  C.setDay(st, 'services-04', '2026-08-25');
+  const after = C.planModel(data, st, '2026-08-20');
+  const monAfter = after.days.find(d => d.iso === '2026-08-24').items.map(e => e.it.id).sort();
+  const tueAfter = after.days.find(d => d.iso === '2026-08-25').items.map(e => e.it.id);
+  assert.deepEqual(monAfter, monBefore.filter(id => id !== 'services-04'));
+  assert.ok(tueAfter.indexOf('services-04') !== -1, 'Barber should land on Tue 25');
+  // Every other day is byte-identical to before.
+  before.days.filter(d => d.iso !== '2026-08-24' && d.iso !== '2026-08-25').forEach(d => {
+    const now = after.days.find(x => x.iso === d.iso);
+    assert.deepEqual(now.items.map(e => e.it.id), d.items.map(e => e.it.id), d.iso + ' should be untouched');
+  });
+});
+
+test('Wed 2026-08-26 lists Bunk\'Art 1, Dajti and Mullixhiu as three items', () => {
+  const pm = C.planModel(tiranaData(), C.emptyState(), '2026-08-20');
+  const wed = pm.days.find(d => d.iso === '2026-08-26');
+  const ids = wed.items.map(e => e.it.id);
+  ['activities-01', 'activities-02', 'restaurants-03'].forEach(id => {
+    assert.ok(ids.indexOf(id) !== -1, 'Wed should list ' + id + ', got: ' + ids.join(','));
+  });
+});
+
+// A place that appears in the plan must appear ONCE. The whole point of
+// merging rather than creating was that Era Blloku is not both a restaurant
+// card and a plan card.
+// Keyed on name AND day: a recurring chore legitimately repeats across days
+// (two work blocks, two ATM pulls), but the same name twice on the same day
+// is the duplicate this transform existed to avoid.
+test('no venue is duplicated between the plan and its own section', () => {
+  const data = tiranaData();
+  const seen = {};
+  data.items.forEach(it => {
+    const key = it.name.toLowerCase().trim() + '@' + (it.day || '-');
+    assert.ok(!seen[key],
+      'duplicate item "' + it.name + '" on ' + (it.day || 'no day') + ': ' + seen[key] + ' and ' + it.id);
+    seen[key] = it.id;
+  });
+});
+
+// The open-tasks checklist is a separate surface with its own semantics; the
+// split was not allowed to disturb it.
+test('the Open items checklist is untouched by the split', () => {
+  const data = tiranaData();
+  const tasks = data.items.filter(i => i.section === 'tasks');
+  assert.equal(tasks.length, 9);
+  tasks.forEach(t => assert.equal(t.day, undefined, t.id + ' should stay undated'));
+  const pm = C.planModel(data, C.emptyState(), '2026-08-20');
+  assert.equal(pm.openTasks.length, 9);
+});
+
+// The pipeline half of the fix: a future city has to arrive pre-split.
+test('PROMPT.md forbids the packed per-day item, inside the sliced item contract', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const prompt = fs.readFileSync(path.join(__dirname, '..', 'PROMPT.md'), 'utf8');
+  const block = C.promptKit.sliceLandmark
+    ? C.promptKit.sliceLandmark(prompt, 'CONTRACT:ITEM')
+    : prompt.split('CONTRACT:ITEM')[1];
+  assert.ok(/One item is one thing the traveler does/.test(block),
+    'the no-composite rule must live INSIDE CONTRACT:ITEM so the delta prompts carry it too');
+  assert.ok(/own `day`/.test(block));
+});
+
 console.log(pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);

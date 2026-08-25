@@ -471,7 +471,9 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=OSL+EXCHANGE&query_place_id=ChIJZRDaAb4xUBMRvAUUrq7MSR0"
         }
-      ]
+      ],
+      "day": "2026-08-23",
+      "when": "AM, only if the cash pull came up short"
     },
     {
       "id": "money-11",
@@ -668,102 +670,80 @@
       "note": "Where cards work and where they don't."
     },
     {
-      "id": "itinerary-01",
+      "id": "itinerary-atm-pull-1",
       "section": "itinerary",
-      "name": "Sat 2026-08-22",
       "status": "plan",
-      "body": "AM: Arrive TIA 14:30 → taxi app to base · PM: ATM pull #1 · groceries · settle in · Eve: Jarna Traditional Restaurant (4 min walk) or Oda",
-      "meta": {
-        "date": "2026-08-22"
-      },
-      "note": "AM: Arrive TIA 14:30 → taxi app to base · PM: ATM pull #1 · groceries · settle in · Eve: Jarna Traditional Restaurant (4 min walk) or Oda",
-      "day": "2026-08-22"
+      "name": "ATM pull #1",
+      "day": "2026-08-22",
+      "when": "PM",
+      "note": "40,000 ALL. Union Bank ATM at Ring Center is the cheapest, 500 L flat fee."
     },
     {
-      "id": "itinerary-02",
+      "id": "itinerary-groceries",
       "section": "itinerary",
-      "name": "Sun 2026-08-23",
       "status": "plan",
-      "body": "AM: Coffee at Streha · OSL Exchange open 10:00 if needed · PM: Skanderbeg Sq → National History Museum mosaic → Bunk'Art 2 · Eve: Pyramid at sunset, then Komiteti for raki",
-      "meta": {
-        "date": "2026-08-23",
-        "note": "Ira Shehaj and most exchange offices closed Sundays. Barber 919 IS open."
-      },
-      "note": "AM: Coffee at Streha · OSL Exchange open 10:00 if needed · PM: Skanderbeg Sq → National History Museum mosaic → Bunk'Art 2 · Eve: Pyramid at sunset, then Komiteti for raki",
-      "day": "2026-08-23"
+      "name": "Groceries",
+      "day": "2026-08-22",
+      "when": "PM"
     },
     {
-      "id": "itinerary-03",
+      "id": "itinerary-settle-in",
       "section": "itinerary",
-      "name": "Mon 2026-08-24",
       "status": "plan",
-      "body": "AM: Coolab day pass · PM: Ira Shehaj podology pedicure · Barber 919 · Eve: Era Blloku, arrive 18:00 sharp or queue",
-      "meta": {
-        "date": "2026-08-24"
-      },
-      "note": "AM: Coolab day pass · PM: Ira Shehaj podology pedicure · Barber 919 · Eve: Era Blloku, arrive 18:00 sharp or queue",
-      "day": "2026-08-24"
+      "name": "Settle in",
+      "day": "2026-08-22",
+      "when": "PM"
     },
     {
-      "id": "itinerary-04",
+      "id": "itinerary-work-block-25",
       "section": "itinerary",
-      "name": "Tue 2026-08-25",
       "status": "plan",
-      "body": "AM: Pazari i Ri market run · PM: Work block · laundry (in-unit washer, air dry) · Eve: The Kitchen Blloku (tapas)",
-      "meta": {
-        "date": "2026-08-25"
-      },
-      "note": "AM: Pazari i Ri market run · PM: Work block · laundry (in-unit washer, air dry) · Eve: The Kitchen Blloku (tapas)",
-      "day": "2026-08-25"
+      "name": "Work block",
+      "day": "2026-08-25",
+      "when": "PM"
     },
     {
-      "id": "itinerary-05",
+      "id": "itinerary-laundry-25",
       "section": "itinerary",
-      "name": "Wed 2026-08-26",
       "status": "plan",
-      "body": "AM: Ride to Bunk'Art 1 (2 hrs, 16°C inside) · PM: Dajti Ekspres cable car, 200 m away, same trip · Eve: Mullixhiu, reserve in advance",
-      "meta": {
-        "date": "2026-08-26",
-        "constraint": "Dajti Ekspres is CLOSED TUESDAYS. Wed is the slot."
-      },
-      "note": "AM: Ride to Bunk'Art 1 (2 hrs, 16°C inside) · PM: Dajti Ekspres cable car, 200 m away, same trip · Eve: Mullixhiu, reserve in advance",
-      "day": "2026-08-26"
+      "name": "Laundry load",
+      "day": "2026-08-25",
+      "when": "PM",
+      "note": "In-unit washer, air dry. Cycle guide is on the washer card under Services."
     },
     {
-      "id": "itinerary-06",
+      "id": "itinerary-work-block-27",
       "section": "itinerary",
-      "name": "Thu 2026-08-27",
       "status": "plan",
-      "body": "AM: Coffee crawl: The Back Room → Frut'za · PM: Work block · House of Leaves · Eve: Taverna Peshkatari (seafood)",
-      "meta": {
-        "date": "2026-08-27"
-      },
-      "note": "AM: Coffee crawl: The Back Room → Frut'za · PM: Work block · House of Leaves · Eve: Taverna Peshkatari (seafood)",
-      "day": "2026-08-27"
+      "name": "Work block",
+      "day": "2026-08-27",
+      "when": "PM"
     },
     {
-      "id": "itinerary-07",
+      "id": "itinerary-atm-pull-2",
       "section": "itinerary",
-      "name": "Fri 2026-08-28",
       "status": "plan",
-      "body": "AM: Grand Park / lake loop walk · PM: ATM pull #2 · deep tissue massage (Thai or Bliss) · pack · Eve: Sky Club rotating bar at sunset, or repeat a favorite",
-      "meta": {
-        "date": "2026-08-28"
-      },
-      "note": "AM: Grand Park / lake loop walk · PM: ATM pull #2 · deep tissue massage (Thai or Bliss) · pack · Eve: Sky Club rotating bar at sunset, or repeat a favorite",
-      "day": "2026-08-28"
+      "name": "ATM pull #2",
+      "day": "2026-08-28",
+      "when": "PM",
+      "note": "Before Aug 29. Ksamil ATMs run dry in peak August."
     },
     {
-      "id": "itinerary-08",
+      "id": "itinerary-massage-28",
       "section": "itinerary",
-      "name": "Sat 2026-08-29",
       "status": "plan",
-      "body": "AM: Ride booked, leave 08:45 → bus terminal · PM: 09:45 Tisa Travel → Sarandë, arrive 14:00 · Eve: 15:00 Trans Butrinti → Ksamil",
-      "meta": {
-        "date": "2026-08-29"
-      },
-      "note": "AM: Ride booked, leave 08:45 → bus terminal · PM: 09:45 Tisa Travel → Sarandë, arrive 14:00 · Eve: 15:00 Trans Butrinti → Ksamil",
-      "day": "2026-08-29"
+      "name": "Deep tissue massage",
+      "day": "2026-08-28",
+      "when": "PM",
+      "note": "90 minutes. Thai Massage Tirana or Bliss Spa, whichever confirms a rate. Both are on the Services tab."
+    },
+    {
+      "id": "itinerary-pack-28",
+      "section": "itinerary",
+      "status": "plan",
+      "name": "Pack",
+      "day": "2026-08-28",
+      "when": "PM"
     },
     {
       "id": "restaurants-01",
@@ -783,12 +763,13 @@
         "cash_only": true,
         "budget_all": "1,500–2,000"
       },
-      "note": "Multiple reviews are specifically first-night-in-Tirana reviews. Order fërgesë, fresh oven bread, kërnacka, pllaqi.",
+      "note": "Multiple reviews are specifically first-night-in-Tirana reviews. Order fërgesë, fresh oven bread, kërnacka, pllaqi. Fallback: Oda.",
       "tags": [
         "4 min walk",
         "Cash only"
       ],
-      "day": "2026-08-22"
+      "day": "2026-08-22",
+      "when": "Eve"
     },
     {
       "id": "restaurants-02",
@@ -832,7 +813,8 @@
           "href": "https://www.google.com/maps/search/?api=1&query=Mullixhiu&query_place_id=ChIJtU6qmvwwUBMRmQMszz1aCac"
         }
       ],
-      "day": "2026-08-26"
+      "day": "2026-08-26",
+      "when": "Eve, reserve in advance"
     },
     {
       "id": "restaurants-04",
@@ -855,7 +837,8 @@
           "href": "https://www.google.com/maps/search/?api=1&query=Taverna+Peshkatari&query_place_id=ChIJ8W6QhWkxUBMRcwGiAs5K5-I"
         }
       ],
-      "day": "2026-08-27"
+      "day": "2026-08-27",
+      "when": "Eve, seafood"
     },
     {
       "id": "restaurants-05",
@@ -900,7 +883,8 @@
           "href": "https://www.google.com/maps/search/?api=1&query=Era+Blloku&query_place_id=ChIJIxwHRAIxUBMRVC_DEyTXYgA"
         }
       ],
-      "day": "2026-08-24"
+      "day": "2026-08-24",
+      "when": "Eve, arrive 18:00 sharp"
     },
     {
       "id": "restaurants-07",
@@ -950,7 +934,8 @@
           "href": "https://www.google.com/maps/search/?api=1&query=The+Kitchen+blloku&query_place_id=ChIJ7ar4lpExUBMRyVK8Jzank-U"
         }
       ],
-      "day": "2026-08-25"
+      "day": "2026-08-25",
+      "when": "Eve, tapas"
     },
     {
       "id": "restaurants-09",
@@ -1047,7 +1032,8 @@
           "href": "https://www.google.com/maps/search/?api=1&query=Streha+Coffee+Community&query_place_id=ChIJJ110YQAxUBMRT--Ia1i_dBs"
         }
       ],
-      "day": "2026-08-23"
+      "day": "2026-08-23",
+      "when": "AM"
     },
     {
       "id": "coffee-02",
@@ -1114,7 +1100,8 @@
           "href": "https://www.google.com/maps/search/?api=1&query=The+Back+Room+Specialty+Coffee&query_place_id=ChIJ9anxYJIxUBMRwSKQChSnYf0"
         }
       ],
-      "day": "2026-08-27"
+      "day": "2026-08-27",
+      "when": "AM, coffee crawl 1 of 2"
     },
     {
       "id": "coffee-05",
@@ -1137,7 +1124,8 @@
           "href": "https://www.google.com/maps/search/?api=1&query=Frutza+Blloku&query_place_id=ChIJq7VMVlQxUBMRfLuE4G-K2-o"
         }
       ],
-      "day": "2026-08-27"
+      "day": "2026-08-27",
+      "when": "AM, coffee crawl 2 of 2"
     },
     {
       "id": "coffee-06",
@@ -1265,7 +1253,8 @@
           "href": "https://www.google.com/maps/search/?api=1&query=Komiteti+Kafe+Muzeum&query_place_id=ChIJOYWBuxsxUBMRCpjsacARfuY"
         }
       ],
-      "day": "2026-08-23"
+      "day": "2026-08-23",
+      "when": "Eve, raki"
     },
     {
       "id": "bars-02",
@@ -1279,7 +1268,7 @@
         "rating_count": 2233,
         "maps_url": "https://www.google.com/maps/search/?api=1&query=Sky+Club+Tirana&query_place_id=ChIJK1CMo_sxUBMRAPyHhSO2xmg"
       },
-      "note": "Largest rotating bar in the Balkans, full turn takes an hour. Go for sunset. Drinks yes, dinner no, the restaurant is at the base with no view and weak reviews.",
+      "note": "Largest rotating bar in the Balkans, full turn takes an hour. Go for sunset. Drinks yes, dinner no, the restaurant is at the base with no view and weak reviews. Or skip it and repeat a favorite.",
       "links": [
         {
           "kind": "map",
@@ -1287,7 +1276,8 @@
           "href": "https://www.google.com/maps/search/?api=1&query=Sky+Club+Tirana&query_place_id=ChIJK1CMo_sxUBMRAPyHhSO2xmg"
         }
       ],
-      "day": "2026-08-28"
+      "day": "2026-08-28",
+      "when": "Eve, at sunset"
     },
     {
       "id": "bars-03",
@@ -1332,7 +1322,8 @@
           "href": "https://www.google.com/maps/search/?api=1&query=BunkArt+1&query_place_id=ChIJWefPqAE0UBMRe5lBduTNzf4"
         }
       ],
-      "day": "2026-08-26"
+      "day": "2026-08-26",
+      "when": "AM, ride out"
     },
     {
       "id": "activities-02",
@@ -1358,7 +1349,8 @@
           "href": "https://www.google.com/maps/search/?api=1&query=Dajti+Ekspres&query_place_id=ChIJ-0qSJQI0UBMRxurnvQkJw_E"
         }
       ],
-      "day": "2026-08-26"
+      "day": "2026-08-26",
+      "when": "PM, 200 m from Bunk'Art 1, same trip"
     },
     {
       "id": "activities-03",
@@ -1383,7 +1375,8 @@
           "href": "https://www.google.com/maps/search/?api=1&query=House+of+Leaves+Museum&query_place_id=ChIJS-JbDQUxUBMRJpTxxW-ELEU"
         }
       ],
-      "day": "2026-08-27"
+      "day": "2026-08-27",
+      "when": "PM"
     },
     {
       "id": "activities-04",
@@ -1408,7 +1401,8 @@
           "href": "https://www.google.com/maps/search/?api=1&query=BunkArt+2&query_place_id=ChIJ9UMspBoxUBMRfwKKAxuMsQg"
         }
       ],
-      "day": "2026-08-23"
+      "day": "2026-08-23",
+      "when": "PM"
     },
     {
       "id": "activities-05",
@@ -1431,7 +1425,8 @@
           "href": "https://www.google.com/maps/search/?api=1&query=Pyramid+of+Tirana&query_place_id=ChIJ13HJcBsxUBMRg0s9vq3gwuA"
         }
       ],
-      "day": "2026-08-23"
+      "day": "2026-08-23",
+      "when": "Eve, at sunset"
     },
     {
       "id": "activities-06",
@@ -1456,7 +1451,8 @@
           "href": "https://www.google.com/maps/search/?api=1&query=Skanderbeg+Square&query_place_id=ChIJObkn_A8xUBMRFY95E3CdgpE"
         }
       ],
-      "day": "2026-08-23"
+      "day": "2026-08-23",
+      "when": "PM"
     },
     {
       "id": "activities-07",
@@ -1484,7 +1480,8 @@
           "href": "https://www.google.com/maps/search/?api=1&query=Tirana+Lake+Park&query_place_id=ChIJz-mqoOYwUBMRl40WII0892I"
         }
       ],
-      "day": "2026-08-28"
+      "day": "2026-08-28",
+      "when": "AM, lake loop walk"
     },
     {
       "id": "activities-08",
@@ -1512,7 +1509,8 @@
           "href": "https://www.google.com/maps/search/?api=1&query=Pazari+i+Ri&query_place_id=ChIJw_xRNRExUBMRf68YulV8sPo"
         }
       ],
-      "day": "2026-08-25"
+      "day": "2026-08-25",
+      "when": "AM, market run"
     },
     {
       "id": "activities-09",
@@ -1535,7 +1533,8 @@
           "href": "https://www.google.com/maps/search/?api=1&query=National+Historical+Museum+Tirana&query_place_id=ChIJ8UCauA8xUBMRnbaL_o6uAXc"
         }
       ],
-      "day": "2026-08-23"
+      "day": "2026-08-23",
+      "when": "PM, the exterior mosaic is the point"
     },
     {
       "id": "activities-10",
@@ -1624,7 +1623,9 @@
       "note": "Podology = medical foot care, not polish. Better fit than a spa pedicure given heavy walking and two coastal weeks ahead. Book Mon or Tue.",
       "tags": [
         "3 min walk"
-      ]
+      ],
+      "day": "2026-08-24",
+      "when": "PM, podology pedicure"
     },
     {
       "id": "services-04",
@@ -1654,7 +1655,9 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=Barber+919&query_place_id=ChIJybwFAFgxUBMRCYEHiR2f2dk"
         }
-      ]
+      ],
+      "day": "2026-08-24",
+      "when": "PM"
     },
     {
       "id": "services-05",
@@ -1724,7 +1727,9 @@
           "label": "Map",
           "href": "https://www.google.com/maps/search/?api=1&query=Coolab&query_place_id=ChIJRe8mejwxUBMRTkpvKxqZJYQ"
         }
-      ]
+      ],
+      "day": "2026-08-24",
+      "when": "AM, day pass"
     },
     {
       "id": "services-08",
