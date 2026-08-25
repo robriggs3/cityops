@@ -45,6 +45,13 @@
     color:var(--text-3); background:#fff; border:1.5px solid var(--border-light);
     padding:4px 11px; border-radius:20px; text-decoration:none;}
   .phonelink:active{background:var(--bg-softer);}
+  /* A guide link whose address used a scheme the app refuses to make live
+     (see safeHref): the label still shows, so the traveler can see what the
+     guide claimed, but it must not look tappable. Declared after the three
+     link classes so the muted treatment wins over whichever one it carries. */
+  .deadlink{color:var(--text-3); background:var(--bg-softer); border:1.5px dashed var(--border-light);
+    text-decoration:line-through; cursor:default; opacity:.75;}
+  .deadlink:active{background:var(--bg-softer);}
   .nosite{font-size:.74rem; color:var(--text-3); font-style:italic;}
   .callout{background:var(--amber-soft); border:1px solid var(--amber); border-left:4px solid var(--amber);
     border-radius:10px; padding:14px 16px; margin:4px 0 20px; font-size:.9rem;}
@@ -404,6 +411,12 @@
   .ctl-link.maplink{background:#fff; color:var(--accent-hover);
     border:1.5px solid var(--accent);}
   .ctl-link.maplink:active{background:var(--accent-soft);}
+  /* Same override for the compact form of a refused link: .ctl-link.maplink
+     above is more specific than .deadlink on its own, so the muted treatment
+     has to be restated at that specificity or a dead map control would still
+     wear the live accent border. */
+  .ctl-link.deadlink{background:var(--bg-softer); color:var(--text-3);
+    border:1.5px dashed var(--border-light); text-decoration:none; opacity:.75;}
 
   /* Archive and Rename wait for the card to be expanded. display:none, not
      visibility, so they are out of the tab order and the accessibility tree
