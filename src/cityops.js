@@ -637,8 +637,48 @@ var CityOps = (function () {
   // and a day the traveler arranged weeks ago must not lose that arrangement
   // because one of its items left. Stale ids cost one array scan and nothing
   // else.
+  // Where an item sits in its day, as minutes-of-day, derived ONLY from the
+  // `when` field (never the note or hours text: those describe the venue's
+  // schedule, not the traveler's). An explicit clock time in `when` wins
+  // ("leave 08:45" -> 525); otherwise the daypart word maps to a nominal
+  // hour: am/morning/breakfast 09:00, midday/lunch/noon 12:00, unknown
+  // 13:00 (mid-afternoon default keeps unhinted items between lunch and
+  // the evening), pm/afternoon 15:00, eve/evening/dinner/night 19:30.
+  var DAYPART_RANKS = [
+    { re: /\b(?:am|morning|breakfast)\b/, min: 540 },
+    { re: /\b(?:midday|lunch|noon)\b/, min: 720 },
+    { re: /\b(?:pm|afternoon)\b/, min: 900 },
+    { re: /\b(?:eve|evening|dinner|night|sunset)\b/, min: 1170 }
+  ];
+
+  function whenClock(when) {
+    if (typeof when !== 'string' || !when) return 780;
+    var w = when.toLowerCase();
+    var t = w.match(/\b(\d{1,2}):(\d{2})\b/);
+    if (t) {
+      var h = parseInt(t[1], 10);
+      var m = parseInt(t[2], 10);
+      if (h >= 0 && h < 24 && m >= 0 && m < 60) return h * 60 + m;
+    }
+    for (var i = 0; i < DAYPART_RANKS.length; i++) {
+      if (DAYPART_RANKS[i].re.test(w)) return DAYPART_RANKS[i].min;
+    }
+    return 780;
+  }
+
   function orderDayItems(entries, order) {
     var list = entries || [];
+    // The DEFAULT order of a day is chronological: a stable sort on the
+    // items' whenClock, so AM coffee precedes the PM work block precedes
+    // the Eve table. A custom drag order (below) still overrides entirely;
+    // this only decides where things sit before the traveler rearranges.
+    var indexed = (entries || []).map(function (e, i) { return { e: e, i: i }; });
+    indexed.sort(function (a, b) {
+      var ca = whenClock(a.e.it && a.e.it.when);
+      var cb = whenClock(b.e.it && b.e.it.when);
+      return ca === cb ? a.i - b.i : ca - cb;
+    });
+    list = indexed.map(function (x) { return x.e; });
     var out;
     if (!order || !order.length || list.length < 2) {
       out = list.slice();
@@ -3211,7 +3251,7 @@ var CityOps = (function () {
     TABS: TABS, tabForSection: tabForSection, setTab: setTab, effectiveTab: effectiveTab,
     planModel: planModel, isPlanDayCollapsed: isPlanDayCollapsed, togglePlanDay: togglePlanDay,
     // Plan-tab within-day item order (drag to reorder), pure and unit-tested.
-    orderDayItems: orderDayItems, setDayItemOrder: setDayItemOrder,
+    orderDayItems: orderDayItems, setDayItemOrder: setDayItemOrder, whenClock: whenClock,
     dayItemOrderFor: dayItemOrderFor,
     // Plan-tab per-item day moves: the picker's own pure model.
     dayMoveOptions: dayMoveOptions
