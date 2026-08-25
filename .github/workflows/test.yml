@@ -20,3 +20,5 @@ jobs:
         run: |
           node tests/validate-city.js cities/batumi.json
           node tests/validate-city.js cities/yerevan.json
+          node tests/validate-city.js cities/tirana.json
+          node tests/validate-city.js cities/ksamil.json
