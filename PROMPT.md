@@ -255,6 +255,22 @@ block, nothing outside the fence. The JSON must be valid against schema v1
 - Every item has a unique `id` (a short slug, e.g. `"brasserie"`), a
   `name`, and a `links` array. Place items must have at least a `map`
   link. Practical-section note items may have an empty array.
+- **One item is one thing the traveler does.** Never emit a per-day
+  summary item that packs a whole day into one note (`"name": "Mon
+  2026-08-24"`, `"note": "AM: coworking day pass · PM: pedicure · barber
+  · Eve: dinner at Era"`). The app plans by moving individual items
+  between days, so a packed day is one immovable block: rescheduling the
+  barber means retyping a sentence, and everything else in that sentence
+  moves with it. Split it instead:
+  - Each stop that is a place gets its own item in its own section
+    (dinner, coffee, activities, services) carrying the `day`. Reference
+    a place from at most one item; never repeat a place as both a venue
+    item and a plan entry.
+  - Each stop that is not a place (a work block, a laundry load, a cash
+    withdrawal, a market run, packing) gets its own small item with its
+    own `day`, in whichever section fits, or `practical` if none does.
+  - Use `when` for the slot inside the day (`"AM"`, `"PM, arrive 18:00
+    sharp"`), which is what the AM/PM/Eve prefixes were doing.
 <!-- /CONTRACT:ITEM -->
 
 ### Schema v1 shape reference
@@ -306,7 +322,9 @@ Field notes:
 - `city.notes` is a short list of chip-worthy facts (ride app that works,
   distance from center, cash vs card norm) surfaced in the guide header.
 - `when` is optional, free text tying an item to the day's plan (what it
-  follows or precedes). Use it for dinner plan picks.
+  follows or precedes, or the slot inside the day: `"AM"`, `"Eve, reserve
+  in advance"`). Use it for dinner plan picks and for anything whose
+  position inside a day matters.
 - `price` is optional but should be included whenever you have real
   price information, in the `text` field, in the local-currency-plus-USD
   format described above.
