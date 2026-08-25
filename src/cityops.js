@@ -1724,6 +1724,10 @@ var CityOps = (function () {
   // happened" or, worse, "I just deleted that". This is what makes the
   // result of the tap visible.
   var justMoved = null;
+  // Item id whose drag grip should hold focus after the next render. A
+  // keyboard reorder rebuilds every node, so without this the second arrow
+  // press would land on the page instead of on the item being moved.
+  var focusGripItem = null;
 
   function defaultExpanded(status) { return status !== 'done'; }
 
@@ -2241,130 +2245,323 @@ var CityOps = (function () {
     });
   }
 
-  function saveDayOrder(sec, keys, focusKey) {
-    var st = ctx.store.load();
-    st.dayOrder[sec] = keys;
-    ctx.store.save(st);
-    // Dates are slots: after a reorder the cards must re-label to their new
-    // chronological slots, so a full rerender is required (not just a DOM move).
-    rerender();
-    if (focusKey) {
-      var g = document.querySelector('.days[data-sec="' + sec + '"] .daycard[data-day="' + focusKey + '"] .grip');
-      if (g) g.focus();
-    }
+  // ---- Plan tab: drag an item to reorder it, or to move it to another day ----
+  // Replaces Phase 3's per-section day-SLOT reorder, which the tabbed rework
+  // left with nothing to attach to (the Plan tab groups by date across
+  // sections, so there is no per-section day grid anymore). The grip visual,
+  // the once-bound window listeners and the lift-and-cross mechanics are
+  // carried over from it; what is dragged is now one item, not a whole day.
+  //
+  // Everything lives in the module-scope `drag` context, so the window
+  // listeners bind exactly once in boot() and a rerender mid-drag simply
+  // drops the context instead of leaving a half-finished drag behind.
+
+  // How close to the viewport edge the finger has to get before the page
+  // starts scrolling under it, and the fastest it ever scrolls (px per frame,
+  // so roughly 60x that per second). The Plan tab on the real Tirana guide is
+  // over 15,000px tall at 390px wide: without this, dragging Monday's barber
+  // appointment to Wednesday is not slow, it is impossible, because the
+  // finger is already holding the card and cannot also scroll the page.
+  var PLAN_DRAG_EDGE = 96;
+  var PLAN_DRAG_MAX_SPEED = 26;
+
+  function planListCards(list) {
+    if (!list) return [];
+    return Array.prototype.filter.call(list.children, function (n) {
+      return n.classList && n.classList.contains('card');
+    });
   }
 
-  // Window-level pointermove/pointerup/pointercancel are bound once in init()
-  // (not per rerender, which would stack duplicate listeners). They read the
-  // shared module-scope `drag` context and no-op when it is null.
-  function onDragPointerMove(e) {
+  function planCardIds(list) {
+    return planListCards(list).map(function (c) { return c.getAttribute('data-item-id'); });
+  }
+
+  // The day group under the pointer. Distance-based rather than a strict
+  // rect hit test on purpose: the gaps between day groups are real (h2
+  // margins live outside every rect), and a finger in one of them is
+  // unambiguously heading for the nearest group, not for nothing at all.
+  function planGroupAt(groups, y) {
+    var best = null, bestD = Infinity;
+    groups.forEach(function (g) {
+      var r = g.getBoundingClientRect();
+      var d = (y < r.top) ? (r.top - y) : (y > r.bottom ? y - r.bottom : 0);
+      if (d < bestD) { bestD = d; best = g; }
+    });
+    return best;
+  }
+
+  function markPlanDropTarget(groups, group) {
+    groups.forEach(function (g) {
+      if (g === group) g.classList.add('drop-into');
+      else g.classList.remove('drop-into');
+    });
+  }
+
+  function planInsertAt(list, card, y) {
+    var others = planListCards(list).filter(function (c) { return c !== card; });
+    var before = null;
+    for (var i = 0; i < others.length; i++) {
+      var r = others[i].getBoundingClientRect();
+      if (y < r.top + r.height / 2) { before = others[i]; break; }
+    }
+    if (before) list.insertBefore(card, before);
+    else list.appendChild(card);
+    // An empty day renders a "Nothing planned yet" line; it must not sit
+    // under the card that is visibly being dropped onto it.
+    list.classList.add('has-drop');
+  }
+
+  // One frame of the drag: keep the card under the finger, and either cross a
+  // sibling inside the current day or hand the card to a different day.
+  function planDragUpdate(y) {
     if (!drag) return;
-    var list = drag.list, cards = drag.cards;
-    if (!list.contains(drag.card)) { drag = null; return; }
-    e.preventDefault();
-    var y = e.clientY;
-    drag.card.style.transform = 'translateY(' + (y - drag.startY) + 'px) scale(1.015)';
-    var others = cards().filter(function (c) { return c !== drag.card; });
+    var card = drag.card;
+    var group = planGroupAt(drag.groups, y);
+    if (!group) return;
+    var list = group.querySelector('.planlist');
+    var iso = group.getAttribute('data-day-iso');
+    if (!list) {
+      // A COLLAPSED day. There is no list to preview the card inside, so the
+      // header itself becomes the drop target and the whole group lights up;
+      // dropping appends the item to that day (see commitPlanDrag).
+      drag.collapsedIso = iso;
+      markPlanDropTarget(drag.groups, group);
+      card.style.transform = 'translateY(' + (y - drag.startY) + 'px) scale(1.02)';
+      return;
+    }
+    drag.collapsedIso = null;
+    if (list !== drag.list) {
+      markPlanDropTarget(drag.groups, iso === drag.fromIso ? null : group);
+      drag.list.classList.remove('has-drop');
+      planInsertAt(list, card, y);
+      drag.list = list;
+      // The card just changed its layout position; re-zero the offset so it
+      // stays exactly under the finger instead of jumping by the difference.
+      drag.startY = y;
+      card.style.transform = 'scale(1.02)';
+      return;
+    }
+    markPlanDropTarget(drag.groups, iso === drag.fromIso ? null : group);
+    card.style.transform = 'translateY(' + (y - drag.startY) + 'px) scale(1.02)';
+    var others = planListCards(list).filter(function (c) { return c !== card; });
     for (var i = 0; i < others.length; i++) {
       var r = others[i].getBoundingClientRect();
       var mid = r.top + r.height / 2;
-      var after = drag.card.compareDocumentPosition(others[i]) & Node.DOCUMENT_POSITION_FOLLOWING;
-      if (after && y > mid) {
-        drag.card.style.transform = '';
-        list.insertBefore(others[i], drag.card);
+      var after = card.compareDocumentPosition(others[i]) & Node.DOCUMENT_POSITION_FOLLOWING;
+      if ((after && y > mid) || (!after && y < mid)) {
+        card.style.transform = '';
+        if (after) list.insertBefore(others[i], card);
+        else list.insertBefore(card, others[i]);
         drag.startY = y;
-        drag.card.style.transform = 'scale(1.015)';
-        return;
-      }
-      if (!after && y < mid) {
-        drag.card.style.transform = '';
-        list.insertBefore(drag.card, others[i]);
-        drag.startY = y;
-        drag.card.style.transform = 'scale(1.015)';
+        card.style.transform = 'scale(1.02)';
         return;
       }
     }
   }
 
-  function onDragPointerEnd(e) {
+  // Runs every frame for the whole life of a drag. When the finger is not in
+  // an edge zone it costs one comparison and schedules the next frame.
+  function planDragScrollTick() {
     if (!drag) return;
-    var d = drag;
-    if (!d.list.contains(d.card)) { drag = null; return; }
-    d.card.classList.remove('dragging');
-    d.card.style.transform = '';
-    try { d.grip.releasePointerCapture(e.pointerId); } catch (err) {}
-    drag = null;
-    saveDayOrder(d.sec, d.cards().map(function (c) { return c.dataset.day; }));
+    drag.raf = window.requestAnimationFrame(planDragScrollTick);
+    var h = window.innerHeight || 0;
+    if (!h) return;
+    var zone = Math.min(PLAN_DRAG_EDGE, h / 4);
+    var y = drag.lastY;
+    var v = 0;
+    if (y < zone) v = -PLAN_DRAG_MAX_SPEED * ((zone - y) / zone);
+    else if (y > h - zone) v = PLAN_DRAG_MAX_SPEED * ((y - (h - zone)) / zone);
+    if (!v) return;
+    var before = window.pageYOffset;
+    window.scrollBy(0, v);
+    var dy = window.pageYOffset - before;
+    if (!dy) return; // already at the top or the bottom of the page
+    // The page moved under a stationary finger, so the card's layout position
+    // moved with it. Shifting the origin by the same amount keeps the card
+    // pinned to the finger instead of sliding away as the page scrolls.
+    drag.startY -= dy;
+    planDragUpdate(y);
   }
 
-  // Phase 3's per-section day-slot drag-to-reorder. Dormant as of Phase 4: it
-  // only ever wired up a section's own `.days` grid, and the tab redesign has
-  // no such grid anymore (Plan groups by date ACROSS sections and lists days
-  // chronologically only; a per-section reorder no longer has a coherent
-  // meaning). No render path calls this now; left defined rather than
-  // deleted outright so the drag mechanics are still here if a future Plan
-  // feature wants to resurrect them, but it is a good candidate for a
-  // follow-up cleanup pass. The window pointermove/up/cancel listeners bound
-  // in boot() below are harmless no-ops with `drag` always null.
-  function attachReorder() {
-    var lists = document.querySelectorAll('.days');
-    Array.prototype.forEach.call(lists, function (list) {
-      var sec = list.dataset.sec;
-      var cards = function () { return Array.prototype.slice.call(list.querySelectorAll('.daycard')); };
-      if (cards().length < 2) return;
+  function planItemById(data, id) {
+    var out = null;
+    data.items.forEach(function (i) { if (i.id === id) out = i; });
+    return out;
+  }
 
-      var bar = el('div', 'reorderbar');
-      var status = el('span', null, 'Drag the ⠿ handle to reorder days. Saved on this device.');
-      var reset = el('button', null, 'Reset to date order');
-      reset.type = 'button';
-      reset.onclick = function () {
-        var st = ctx.store.load();
-        delete st.dayOrder[sec];
-        ctx.store.save(st);
-        rerender();
-      };
-      bar.appendChild(status);
-      bar.appendChild(reset);
-      list.parentNode.insertBefore(bar, list);
+  function cardInViewport(card) {
+    var r = card.getBoundingClientRect();
+    var h = window.innerHeight || 0;
+    return r.bottom > 0 && r.top < h;
+  }
 
-      cards().forEach(function (card) {
-        var g = el('div', 'grip');
-        g.setAttribute('role', 'button');
-        g.setAttribute('tabindex', '0');
-        g.setAttribute('aria-label', 'Reorder this day. Use arrow up and arrow down keys.');
-        g.innerHTML = '<svg viewBox="0 0 10 16" fill="currentColor" aria-hidden="true">' +
-          '<circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/>' +
-          '<circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/>' +
-          '<circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg>';
-        card.appendChild(g);
-      });
+  // Turns where the card ended up into saved state: the day it now belongs to
+  // (setDay, through the same displayed-date indirection the day picker uses)
+  // and the arrangement of every day the drag touched.
+  function commitPlanDrag(d) {
+    var st = ctx.store.load();
+    var data = effectiveData(ctx.base, st);
+    var it = planItemById(data, d.itemId);
+    var toIso, ids, fromIds = null, offscreen = false;
+    if (d.collapsedIso) {
+      toIso = d.collapsedIso;
+      var pm = planModel(data, st);
+      var day = null;
+      if (pm.todayIso === toIso) day = { items: pm.today };
+      pm.days.forEach(function (x) { if (x.iso === toIso) day = x; });
+      ids = (day ? day.items.map(function (e) { return e.it.id; }) : [])
+        .filter(function (id) { return id !== d.itemId; })
+        .concat([d.itemId]);
+      fromIds = planCardIds(d.fromList).filter(function (id) { return id !== d.itemId; });
+      // A collapsed day renders no card at all, so on its own this drop would
+      // show the traveler nothing but a count going up in a heading. Open the
+      // day (their collapse choice is one tap to restore, and they just chose
+      // this day deliberately) and reveal the card, so the drop has the same
+      // visible result every other drop has.
+      if (isPlanDayCollapsed(st, toIso)) togglePlanDay(st, toIso);
+      offscreen = true;
+    } else {
+      toIso = d.list.getAttribute('data-day-iso');
+      ids = planCardIds(d.list);
+      if (d.list !== d.fromList) fromIds = planCardIds(d.fromList);
+      offscreen = !cardInViewport(d.card);
+    }
+    if (!isIso(toIso)) { rerender(); return; }
+    if (toIso !== d.fromIso && it) {
+      setDay(st, d.itemId, keyForDisplayedDate(data, st, it.section, toIso));
+    }
+    setDayItemOrder(st, toIso, ids);
+    if (fromIds) setDayItemOrder(st, d.fromIso, fromIds);
+    ctx.store.save(st);
+    if (offscreen) justMoved = d.itemId;
+    rerender();
+  }
 
-      list.addEventListener('pointerdown', function (e) {
-        var grip = e.target.closest('.grip');
-        if (!grip) return;
-        var card = grip.closest('.daycard');
-        if (!card) return;
-        e.preventDefault();
-        grip.setPointerCapture(e.pointerId);
-        drag = { card: card, grip: grip, startY: e.clientY, list: list, cards: cards, sec: sec };
-        card.classList.add('dragging');
-      });
+  // Drops an in-flight drag without committing it (a rerender under the
+  // finger, a city switch, a modal opening). Safe to call with no drag.
+  function cancelPlanDrag() {
+    if (!drag) return;
+    var d = drag;
+    drag = null;
+    if (d.raf && window.cancelAnimationFrame) window.cancelAnimationFrame(d.raf);
+    try { d.grip.releasePointerCapture(d.pointerId); } catch (e) {}
+    if (d.card) { d.card.classList.remove('dragging'); d.card.style.transform = ''; }
+    if (typeof document !== 'undefined' && document.body) document.body.classList.remove('plan-dragging');
+  }
 
-      list.addEventListener('keydown', function (e) {
-        var grip = e.target.closest('.grip');
-        if (!grip) return;
-        var card = grip.closest('.daycard');
-        if (e.key === 'ArrowUp' && card.previousElementSibling) {
-          e.preventDefault();
-          list.insertBefore(card, card.previousElementSibling);
-          saveDayOrder(sec, cards().map(function (c) { return c.dataset.day; }), card.dataset.day);
-        } else if (e.key === 'ArrowDown' && card.nextElementSibling) {
-          e.preventDefault();
-          list.insertBefore(card.nextElementSibling, card);
-          saveDayOrder(sec, cards().map(function (c) { return c.dataset.day; }), card.dataset.day);
-        }
-      });
-    });
+  function onPlanDragStart(e) {
+    // A context still standing at pointerdown means the previous drag never
+    // got its pointerup (a lost pointer capture, a pointer that left the
+    // window). Dropping it here rather than returning early is what stops one
+    // lost event from wedging the grip for the rest of the session.
+    if (drag) cancelPlanDrag();
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    var grip = (e.target && e.target.closest) ? e.target.closest('.plangrip') : null;
+    if (!grip) return;
+    var card = grip.closest('.card');
+    var list = card ? card.parentNode : null;
+    if (!card || !list || !list.classList || !list.classList.contains('planlist')) return;
+    e.preventDefault();
+    try { grip.setPointerCapture(e.pointerId); } catch (err) {}
+    var main = document.getElementById('main');
+    drag = {
+      card: card, grip: grip, pointerId: e.pointerId,
+      itemId: card.getAttribute('data-item-id'),
+      list: list, fromList: list, fromIso: list.getAttribute('data-day-iso'),
+      groups: main ? Array.prototype.slice.call(main.querySelectorAll('.planday')) : [],
+      startY: e.clientY, lastY: e.clientY, collapsedIso: null, raf: null, moved: false
+    };
+    card.classList.add('dragging');
+    document.body.classList.add('plan-dragging');
+    if (window.requestAnimationFrame) drag.raf = window.requestAnimationFrame(planDragScrollTick);
+  }
+
+  function onPlanDragMove(e) {
+    if (!drag) return;
+    if (!drag.card.parentNode) { cancelPlanDrag(); return; }
+    e.preventDefault();
+    drag.lastY = e.clientY;
+    drag.moved = true;
+    planDragUpdate(e.clientY);
+  }
+
+  function onPlanDragEnd(e) {
+    if (!drag) return;
+    var d = drag;
+    var moved = d.moved;
+    var groups = d.groups;
+    var lists = d.list;
+    cancelPlanDrag();
+    groups.forEach(function (g) { g.classList.remove('drop-into'); });
+    if (lists && lists.classList) lists.classList.remove('has-drop');
+    if (d.fromList && d.fromList.classList) d.fromList.classList.remove('has-drop');
+    // A tap on the grip that never moved is not a reorder; it must not write
+    // state or rebuild the page under the traveler's finger.
+    if (!moved || !d.itemId) return;
+    commitPlanDrag(d);
+  }
+
+  // Keyboard equivalent of the drag, on the grip itself: up and down reorder
+  // the item inside its day and persist immediately. Cross-day moves stay
+  // with the card's own "Change day" control (which is a list of dates, and
+  // is what the grip's aria-label points at), rather than inventing a
+  // keyboard gesture for crossing a day boundary.
+  function onPlanGripKey(e) {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    var grip = (e.target && e.target.closest) ? e.target.closest('.plangrip') : null;
+    if (!grip) return;
+    var card = grip.closest('.card');
+    var list = card ? card.parentNode : null;
+    if (!card || !list || !list.classList || !list.classList.contains('planlist')) return;
+    var cards = planListCards(list);
+    var i = cards.indexOf(card);
+    var j = (e.key === 'ArrowUp') ? i - 1 : i + 1;
+    if (i === -1 || j < 0 || j >= cards.length) return;
+    e.preventDefault();
+    cards.splice(i, 1);
+    cards.splice(j, 0, card);
+    var iso = list.getAttribute('data-day-iso');
+    if (!isIso(iso)) return;
+    var st = ctx.store.load();
+    setDayItemOrder(st, iso, cards.map(function (c) { return c.getAttribute('data-item-id'); }));
+    ctx.store.save(st);
+    // The rerender rebuilds every node, so the grip that had focus is gone by
+    // the time the new one exists; restoreGripFocus() puts it back after the
+    // render, which is what makes a second arrow press land on the same item.
+    focusGripItem = card.getAttribute('data-item-id');
+    rerender();
+  }
+
+  function restoreGripFocus() {
+    if (!focusGripItem) return;
+    var id = focusGripItem;
+    focusGripItem = null;
+    var main = document.getElementById('main');
+    if (!main) return;
+    var cards = main.querySelectorAll('[data-item-id]');
+    for (var i = 0; i < cards.length; i++) {
+      if (cards[i].getAttribute('data-item-id') !== id) continue;
+      var g = cards[i].querySelector('.plangrip');
+      if (g && g.focus) { try { g.focus({ preventScroll: false }); } catch (e) { g.focus(); } }
+      return;
+    }
+  }
+
+  // The grip itself: same six-dot handle Phase 3 used for day cards, sized up
+  // to a 40x44 target here (a coarse pointer needs at least 36px, and this one
+  // sits beside real controls it must never be mistaken for).
+  function planGrip(it) {
+    var g = el('div', 'plangrip');
+    g.setAttribute('role', 'button');
+    g.setAttribute('tabindex', '0');
+    g.setAttribute('aria-label', 'Reorder ' + effectiveName(it, curState) +
+      ' within this day: drag it, or use the up and down arrow keys. ' +
+      'To put it on a different day, drag it onto that day, or use the Change day button on this card.');
+    g.innerHTML = '<svg viewBox="0 0 10 16" fill="currentColor" aria-hidden="true">' +
+      '<circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/>' +
+      '<circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/>' +
+      '<circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg>';
+    return g;
   }
 
   var shareOn = false;
@@ -2447,6 +2644,33 @@ var CityOps = (function () {
     return row;
   }
 
+  // Every day on the Plan tab is one .planday group holding its heading and
+  // (unless collapsed) one .planlist of cards. That structure is what the
+  // drag code reads: the group is the drop target, the list is what gets
+  // reordered, and data-day-iso on both is the date a drop writes.
+  function planDayGroup(iso) {
+    var group = el('div', 'planday');
+    group.setAttribute('data-day-iso', iso);
+    return group;
+  }
+
+  function planDayList(iso, entries) {
+    var list = el('div', 'planlist');
+    list.setAttribute('data-day-iso', iso);
+    if (!entries.length) {
+      list.appendChild(el('p', 'when-line empty-note', 'Nothing planned yet.'));
+      return list;
+    }
+    entries.forEach(function (e) {
+      var card = el('div', 'card dragrow' + (e.status === 'done' ? ' item-done' : ''));
+      card.appendChild(planGrip(e.it));
+      card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
+      appendCard(card, e.it, e.status, true, 'labeled');
+      list.appendChild(card);
+    });
+    return list;
+  }
+
   // Phase 4: the Plan tab, the new default landing tab and the home of every
   // date. Reads planModel() (pure, tested on its own): today first, then
   // every other day of the stay in order (expanded by default so the whole
@@ -2462,18 +2686,12 @@ var CityOps = (function () {
         'Today (' + dayLabel(pm.todayIso) + ') is outside this trip\'s dates (' +
         fmtRange(effectiveDates(data, state)) + '). Showing anything dated today anyway.'));
     }
-    main.appendChild(el('h2', null, 'Today · ' + dayLabel(pm.todayIso)));
-    if (!pm.today.length) {
-      main.appendChild(el('p', 'when-line', 'Nothing planned yet.'));
-    } else {
-      pm.today.forEach(function (e) {
-        var card = el('div', 'card' + (e.status === 'done' ? ' item-done' : ''));
-        card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
-        appendCard(card, e.it, e.status, true, 'labeled');
-        main.appendChild(card);
-      });
-    }
+    var todayGroup = planDayGroup(pm.todayIso);
+    todayGroup.appendChild(el('h2', null, 'Today · ' + dayLabel(pm.todayIso)));
+    todayGroup.appendChild(planDayList(pm.todayIso, pm.today));
+    main.appendChild(todayGroup);
     pm.days.forEach(function (d) {
+      var group = planDayGroup(d.iso);
       var collapsed = isPlanDayCollapsed(state, d.iso);
       var h2 = el('h2', collapsed ? 'collapsed' : null);
       var tbtn = el('button', 'sec-toggle');
@@ -2489,18 +2707,12 @@ var CityOps = (function () {
         rerender();
       };
       h2.appendChild(tbtn);
-      main.appendChild(h2);
-      if (collapsed) return;
-      if (!d.items.length) {
-        main.appendChild(el('p', 'when-line', 'Nothing planned yet.'));
-        return;
-      }
-      d.items.forEach(function (e) {
-        var card = el('div', 'card' + (e.status === 'done' ? ' item-done' : ''));
-        card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
-        appendCard(card, e.it, e.status, true, 'labeled');
-        main.appendChild(card);
-      });
+      group.appendChild(h2);
+      // A collapsed day deliberately gets NO list: the group is still a drop
+      // target (its header is what the dragged card lands on), and having no
+      // list is exactly how the drag code recognizes the collapsed case.
+      if (!collapsed) group.appendChild(planDayList(d.iso, d.items));
+      main.appendChild(group);
     });
     if (pm.openTasks.length || pm.doneTasks.length) {
       main.appendChild(el('h2', null, 'Open tasks'));
@@ -2517,7 +2729,7 @@ var CityOps = (function () {
   function rerender() {
     // Any in-flight drag references nodes from the previous render's #main;
     // drop it so a stray window pointerup after a rerender is a no-op.
-    drag = null;
+    cancelPlanDrag();
     var state = ctx.store.load();
     curState = state;
     var data = effectiveData(ctx.base, state);
@@ -2546,8 +2758,10 @@ var CityOps = (function () {
     var notice = document.getElementById('notice');
     notice.textContent = ctx.store.persistent ? '' :
       'Private mode: changes hold for this session only and are not saved.';
-    // Runs after #main is fully rebuilt: the card it looks for only exists now.
+    // Both run after #main is fully rebuilt: the card and the grip they look
+    // for only exist now.
     revealJustMoved();
+    restoreGripFocus();
     // Additive hook: the app shell sets this to re-render its citybar (name/dates)
     // whenever engine state changes, without the shell re-implementing rerender.
     if (CityOps.onStateChange) CityOps.onStateChange();
@@ -2905,12 +3119,18 @@ var CityOps = (function () {
     pendingEdit = null;
     itemExpandOverride = {};
     justMoved = null;
-    drag = null;
+    focusGripItem = null;
+    cancelPlanDrag();
     if (typeof document !== 'undefined' && document.body) document.body.classList.remove('share');
     if (!listenersBound && typeof window !== 'undefined' && window && window.addEventListener) {
-      window.addEventListener('pointermove', onDragPointerMove, { passive: false });
-      window.addEventListener('pointerup', onDragPointerEnd);
-      window.addEventListener('pointercancel', onDragPointerEnd);
+      // Bound exactly once, for the life of the page: per-render binding would
+      // stack a duplicate set on every rerender. They all read the shared
+      // module-scope `drag` context and no-op while it is null.
+      window.addEventListener('pointerdown', onPlanDragStart, { passive: false });
+      window.addEventListener('pointermove', onPlanDragMove, { passive: false });
+      window.addEventListener('pointerup', onPlanDragEnd);
+      window.addEventListener('pointercancel', onPlanDragEnd);
+      window.addEventListener('keydown', onPlanGripKey);
       // QA fix: a rotation or a browser-chrome change can cross the
       // narrow-phone breakpoint (which changes #tabbar's padding/height)
       // without any rerender happening on its own; keep --tabbar-h honest.
