@@ -2377,7 +2377,7 @@ test('buildRatingsPassPrompt lists the items still in play and nothing else', ()
   assert.ok(out.includes('- sisters | dinner | At the Sisters'));     // backup
   assert.equal(out.indexOf('- gone | dinner | Closed Place'), -1);    // archived
   assert.equal(out.indexOf('- eaten | dinner | Already Been'), -1);   // done
-  assert.ok(out.includes('Every line above is `id | section | name`.'));
+  assert.ok(out.includes('Each `- ` line above is `id | section | name`.'));
   // Not an intel pass and not an interests pass: neither block belongs here.
   assert.equal(out.indexOf('## Intel quality rules'), -1);
   assert.equal(out.indexOf('## Traveler interests'), -1);
@@ -2403,6 +2403,209 @@ test('the real PROMPT.md builds a ratings pass that says look it up, never guess
     prompt.indexOf('<' + '!-- /CONTRACT:ITEM -->'));
   assert.ok(/`rating` is optional on any item and is the ONLY place a rating belongs/.test(contract),
     'the rating rule must live INSIDE CONTRACT:ITEM so the delta prompts carry it too');
+});
+
+// ---- Section tabs: chronological default, done at the bottom, drag override ----
+// The section-tab twin of the Plan tab's orderDayItems. Entries here are
+// {it, dayIso, status} rows, since a section spans the whole trip.
+function secEntry(id, dayIso, when, status) {
+  return { it: { id: id, when: when }, dayIso: dayIso || null, status: status || 'plan' };
+}
+
+test('orderSectionItems runs dated items in date order, undated last', () => {
+  const out = C.orderSectionItems([
+    secEntry('u1', null),
+    secEntry('wed', '2026-08-12'),
+    secEntry('u2', null),
+    secEntry('mon', '2026-08-10')
+  ], []).map((e) => e.it.id);
+  assert.deepEqual(out, ['mon', 'wed', 'u1', 'u2']);
+});
+
+test('orderSectionItems sorts one date by whenClock, exactly as a Plan day does', () => {
+  const out = C.orderSectionItems([
+    secEntry('eve', '2026-08-10', 'Dinner'),
+    secEntry('am', '2026-08-10', 'Morning coffee'),
+    secEntry('clock', '2026-08-10', 'leave 08:45'),
+    secEntry('pm', '2026-08-10', 'Afternoon')
+  ], []).map((e) => e.it.id);
+  assert.deepEqual(out, ['clock', 'am', 'pm', 'eve']);
+});
+
+test('orderSectionItems keeps undated items in the guide order, never re-sorted', () => {
+  const out = C.orderSectionItems([
+    secEntry('zeta', null, 'Evening'),
+    secEntry('alpha', null, 'Morning')
+  ], []).map((e) => e.it.id);
+  assert.deepEqual(out, ['zeta', 'alpha']);
+});
+
+test('orderSectionItems sinks done items to the bottom, stable on both sides', () => {
+  const out = C.orderSectionItems([
+    secEntry('a', '2026-08-10', null, 'done'),
+    secEntry('b', '2026-08-11'),
+    secEntry('c', '2026-08-12', null, 'done'),
+    secEntry('d', '2026-08-13')
+  ], []).map((e) => e.it.id);
+  assert.deepEqual(out, ['b', 'd', 'a', 'c']);
+});
+
+test('orderSectionItems lets a saved order win, with unknown ids keeping the tail', () => {
+  const entries = [
+    secEntry('mon', '2026-08-10'),
+    secEntry('tue', '2026-08-11'),
+    secEntry('fresh', '2026-08-09')
+  ];
+  const out = C.orderSectionItems(entries, ['tue', 'mon']).map((e) => e.it.id);
+  assert.deepEqual(out, ['tue', 'mon', 'fresh']);
+  // Stale ids in the saved order are ignored, not fatal: an item the traveler
+  // archived weeks ago must not cost the section its arrangement.
+  const out2 = C.orderSectionItems(entries, ['ghost', 'tue', 'ghost', 'mon']).map((e) => e.it.id);
+  assert.deepEqual(out2, ['tue', 'mon', 'fresh']);
+});
+
+test('orderSectionItems sinks done items even when a drag put one on top', () => {
+  const out = C.orderSectionItems([
+    secEntry('a', '2026-08-10', null, 'done'),
+    secEntry('b', '2026-08-11')
+  ], ['a', 'b']).map((e) => e.it.id);
+  assert.deepEqual(out, ['b', 'a']);
+});
+
+test('setSectionItemOrder cleans ids and drops the key when nothing is left', () => {
+  const st = C.normalizeState({});
+  C.setSectionItemOrder(st, 'dinner', ['a', 'b', 'a', '', null, 'c']);
+  assert.deepEqual(st.sectionItemOrder.dinner, ['a', 'b', 'c']);
+  assert.deepEqual(C.sectionItemOrderFor(st, 'dinner'), ['a', 'b', 'c']);
+  C.setSectionItemOrder(st, 'dinner', []);
+  assert.equal(Object.prototype.hasOwnProperty.call(st.sectionItemOrder, 'dinner'), false);
+  assert.deepEqual(C.sectionItemOrderFor(st, 'dinner'), []);
+  assert.throws(() => C.setSectionItemOrder(st, '', ['a']));
+});
+
+test('a state written before section order existed normalizes to no arrangement', () => {
+  const st = C.normalizeState({ itemStatus: {} });
+  assert.deepEqual(st.sectionItemOrder, {});
+  assert.deepEqual(C.sectionItemOrderFor(st, 'anything'), []);
+});
+
+test('dayItemOrder and sectionItemOrder are separate key spaces, not one map', () => {
+  const st = C.normalizeState({});
+  C.setDayItemOrder(st, '2026-08-10', ['x', 'y']);
+  C.setSectionItemOrder(st, 'dinner', ['y', 'x']);
+  assert.deepEqual(st.dayItemOrder['2026-08-10'], ['x', 'y']);
+  assert.deepEqual(st.sectionItemOrder.dinner, ['y', 'x']);
+});
+
+// ---- Plan tab tasks: done, open, and declined ----
+// Declining a task writes the EXISTING archived status; the Plan tab is the
+// one surface that reads archived task items back out.
+const TASKY = {
+  schema: 1,
+  city: { name: 'Tirana', country: 'AL',
+    dates: { from: '2026-08-22', to: '2026-08-25' },
+    accommodation: { name: 'Stay', lat: 41.3, lng: 19.8 } },
+  sections: [
+    { id: 'tasks', label: 'Tasks', icon: '✅' },
+    { id: 'dinner', label: 'Dinner', icon: '🍽️' }
+  ],
+  items: [
+    { id: 't-open', section: 'tasks', status: 'plan', name: 'Book the barber', links: [] },
+    { id: 't-done', section: 'tasks', status: 'done', name: 'Buy a SIM', links: [] },
+    { id: 't-no', section: 'tasks', status: 'archived', name: 'Day trip to Kruje', links: [] },
+    { id: 'd1', section: 'dinner', status: 'plan', day: '2026-08-23', name: 'Somewhere', links: [] }
+  ]
+};
+
+test('planModel splits tasks three ways: open, done and declined', () => {
+  const pm = C.planModel(clone(TASKY), C.normalizeState({}), '2026-08-22');
+  assert.deepEqual(pm.openTasks.map((e) => e.it.id), ['t-open']);
+  assert.deepEqual(pm.doneTasks.map((e) => e.it.id), ['t-done']);
+  assert.deepEqual(pm.declinedTasks.map((e) => e.it.id), ['t-no']);
+  assert.equal(pm.declinedTasks[0].status, 'archived');
+});
+
+test('declining a task moves it out of open and into declined, and restoring reverses it', () => {
+  const data = clone(TASKY);
+  const st = C.normalizeState({});
+  C.setStatus(st, 't-open', 'archived');
+  let pm = C.planModel(data, st, '2026-08-22');
+  assert.deepEqual(pm.openTasks.map((e) => e.it.id), []);
+  assert.deepEqual(pm.declinedTasks.map((e) => e.it.id).sort(), ['t-no', 't-open']);
+  // Every state is reachable from every other: back to open, then to done.
+  C.setStatus(st, 't-open', 'plan');
+  pm = C.planModel(data, st, '2026-08-22');
+  assert.deepEqual(pm.openTasks.map((e) => e.it.id), ['t-open']);
+  assert.deepEqual(pm.declinedTasks.map((e) => e.it.id), ['t-no']);
+  C.setStatus(st, 't-open', 'done');
+  pm = C.planModel(data, st, '2026-08-22');
+  assert.deepEqual(pm.doneTasks.map((e) => e.it.id).sort(), ['t-done', 't-open']);
+});
+
+test('declining does not invent a status: archived is the only value written', () => {
+  const st = C.normalizeState({});
+  C.setStatus(st, 't-open', 'archived');
+  assert.equal(st.itemStatus['t-open'], 'archived');
+  assert.throws(() => C.setStatus(st, 't-open', 'declined'));
+});
+
+test('a declined task that carries a day still surfaces, so it is never a dead end', () => {
+  const data = clone(TASKY);
+  const st = C.normalizeState({});
+  C.setDay(st, 't-open', '2026-08-23');
+  C.setStatus(st, 't-open', 'archived');
+  const pm = C.planModel(data, st, '2026-08-22');
+  assert.deepEqual(pm.declinedTasks.map((e) => e.it.id).sort(), ['t-no', 't-open']);
+  // And it is not also sitting in the day group it used to be in.
+  const wed = pm.days.filter((d) => d.iso === '2026-08-23')[0];
+  assert.equal(wed.items.filter((e) => e.it.id === 't-open').length, 0);
+});
+
+test('declined tasks come only from task sections, never from a dinner list', () => {
+  const data = clone(TASKY);
+  const st = C.normalizeState({});
+  C.setStatus(st, 'd1', 'archived');
+  const pm = C.planModel(data, st, '2026-08-22');
+  assert.deepEqual(pm.declinedTasks.map((e) => e.it.id), ['t-no']);
+});
+
+test('buildRatingsPassPrompt echoes existing intel so a takeaway cannot delete it', () => {
+  const city = clone(GOOD);
+  city.items[0].intel = {
+    verdicts: [{ tier: 'must', text: 'The duck is the reason to come' }],
+    tips: ['Ask for the terrace'],
+    source: 'Google Maps reviews, Jul 2026'
+  };
+  const out = C.promptKit.buildRatingsPassPrompt(FAKE_RERUN, city);
+  assert.ok(out.includes('- brasserie | dinner | Brasserie 1900'));
+  assert.ok(out.includes('    existing verdict (must): The duck is the reason to come'));
+  assert.ok(out.includes('    existing tip: Ask for the terrace'));
+  assert.ok(out.includes('    existing intel source: Google Maps reviews, Jul 2026'));
+  // An item with no intel costs no extra lines at all.
+  assert.equal(out.indexOf('- tanini | dinner | Tanini\n    existing'), -1);
+  assert.ok(out.includes('Indented lines under an item are the intel it already holds'));
+});
+
+test('the real PROMPT.md ratings pass asks for at most one notable review takeaway', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const prompt = fs.readFileSync(path.join(__dirname, '..', 'PROMPT.md'), 'utf8');
+  const out = C.promptKit.buildRatingsPassPrompt(prompt, GOOD);
+  assert.ok(out.includes('At most one per item, and only when it would change a decision.'));
+  assert.ok(out.includes('`intel` REPLACES an item\'s whole existing intel block.'));
+  assert.ok(out.includes('"intel": {'));
+  // The takeaway rides the existing intel map, so mergeDelta needs no new
+  // machinery: the shape the contract shows must be one mergeDelta accepts.
+  const r = C.mergeDelta(clone(GOOD), {
+    schema: 1, delta: true,
+    ratings: { brasserie: { stars: 4.7, checked: '2026-08-25' } },
+    intel: { nord: { tips: ['Reviewers say the terrace is the quiet half.'],
+      source: 'Google Maps reviews, Aug 2026' } }
+  });
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.summary.ratingsApplied, 1);
+  assert.equal(r.summary.intelApplied, 1);
+  assert.equal(r.data.items[3].intel.tips[0], 'Reviewers say the terrace is the quiet half.');
 });
 
 // ---- tools/extract-ratings.js: prose to structured data ----

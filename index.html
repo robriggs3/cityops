@@ -111,6 +111,10 @@
   .planday.drop-into > h2{color:var(--accent-hover);}
   /* "Nothing planned yet" must not sit under the card being dropped on it. */
   .planlist.has-drop > .empty-note{display:none;}
+  /* A section tab's card list. Purely a drag container: it carries the
+     section id the reorder writes to and nothing visual of its own, so a
+     section tab looks exactly as it did before the grips arrived. */
+  .seclist{display:block;}
 
   /* --- v3 additions --- */
   .daycard{background:var(--bg-card); border:1px solid var(--border-light); border-radius:14px;
@@ -337,19 +341,43 @@
   /* One card per section, every undated item's name (bold) then its note,
      stacked: no accordion, no status controls, since these are facts, not
      todos (item 6 of the spec). */
+  /* Owner feedback 2026-08-25: a headline belongs to the text UNDER it. The
+     space that says so has to sit ABOVE the headline, and the gap under it
+     has to be smaller than the gap over it, or the eye groups each bold name
+     with the block it follows instead of the note it introduces.
+     What made that go wrong: `.card p` (one class + one type) outweighs
+     `.info-item` (one class), so the 12px here never applied and every
+     headline got `.card p`'s 5px, against 10px of `.row` margin under the
+     previous item's link pills. Every selector below is qualified with
+     .info-card so it actually wins, and the numbers are set as a pair:
+     22px over the headline, 1px under it, 6px between a note and its own
+     links so the pills stay part of the item they belong to. */
   .info-card h3{font-size:1rem; margin-bottom:2px;}
-  .info-item{font-size:.9rem; color:var(--text-3); margin-top:12px;}
-  .info-item:first-of-type{margin-top:10px;}
-  .info-item strong{display:block; color:var(--text); margin-bottom:2px; font-size:.94rem;}
+  .info-card .info-item{font-size:.9rem; color:var(--text-3); margin-top:22px;}
+  .info-card .info-item:first-of-type{margin-top:10px;}
+  .info-card .info-item strong{display:block; color:var(--text); margin-bottom:1px; font-size:.94rem;}
+  .info-card .row{margin-top:6px;}
 
   /* --- Phase 4: Plan tab open tasks --- */
   .task-row{padding:10px 0; border-bottom:1px solid var(--border-light);}
   .task-row:last-child{border-bottom:none;}
+  /* The checkbox (or the declined name) takes the width it needs; the decline
+     or restore control is pinned to the far end of the row, well clear of the
+     tick target. */
+  .task-line{display:flex; align-items:center; gap:10px;}
   .task-check{display:flex; align-items:center; gap:10px; font-size:.95rem; font-weight:600;
-    color:var(--text); cursor:pointer; min-height:44px;}
+    color:var(--text); cursor:pointer; min-height:44px; flex:1 1 auto;}
   .task-check input[type="checkbox"]{width:20px; height:20px; flex:0 0 auto; cursor:pointer;}
   .task-note{font-size:.85rem; color:var(--text-3); margin:2px 0 0 30px;}
   .task-row.item-done .task-check{opacity:.55; text-decoration:line-through;}
+  /* A declined task has no checkbox, so its name is inset by exactly the
+     checkbox plus its gap (20px + 10px). Without that the declined names hang
+     a full tick-box to the left of the open ones and the two lists read as
+     two different things rather than two outcomes of the same list. */
+  .task-check-off{cursor:default; padding-left:30px;}
+  .task-ctl{flex:0 0 auto; min-height:36px; line-height:1;}
+  .task-row.task-declined .task-check{opacity:.5; text-decoration:line-through;}
+  .task-row.task-declined .task-note{opacity:.6;}
 
   /* --- Phase 4: the More action sheet (every utility action, one place) --- */
   .sheet-list{display:flex; flex-direction:column; margin-top:6px;}
@@ -927,6 +955,7 @@ var CityOps = (function () {
 
   function emptyState() {
     return { itemStatus: {}, itemDay: {}, itemTitle: {}, dayOrder: {}, dayItemOrder: {},
+      sectionItemOrder: {},
       collapsedSections: {}, collapsedPlanDays: {}, viewMode: null, tab: null,
       dataOverride: null, stayOverride: null, updated: null };
   }
@@ -941,6 +970,12 @@ var CityOps = (function () {
     // it is filled in here exactly like the maps above: an old state simply
     // reads as "no day has been arranged by hand yet".
     st.dayItemOrder = st.dayItemOrder || {};
+    // Per-item order WITHIN one section tab (Eat & Drink, Do, Services). The
+    // mirror image of dayItemOrder: that one is keyed by date and spans every
+    // section, this one is keyed by section and spans every date. Absent in
+    // every state written before this feature shipped, filled in here the same
+    // way, so an old state simply reads as "no section arranged by hand yet".
+    st.sectionItemOrder = st.sectionItemOrder || {};
     st.collapsedSections = st.collapsedSections || {};
     // Phase 4: per-day collapse state for the Plan tab's "remaining days" list,
     // the same tri-state pattern as collapsedSections (explicit true/false
@@ -1363,6 +1398,85 @@ var CityOps = (function () {
     return state;
   }
 
+  // ---- Section tabs: the order of the items INSIDE one section ----
+  // state.sectionItemOrder maps a section id to the item ids in it, in the
+  // order the traveler dragged them into. Deliberately a separate key space
+  // from dayItemOrder rather than a reuse of it: the two answer different
+  // questions about the same item. dayItemOrder answers "what order does
+  // Tuesday run in", across every section; this answers "what order do the
+  // dinners read in", across every date. An item that is fourth on Tuesday
+  // can perfectly well be first in Dinner, and one map cannot hold both.
+  function sectionItemOrderFor(state, secId) {
+    var m = state && state.sectionItemOrder;
+    var list = (m && Object.prototype.hasOwnProperty.call(m, secId)) ? m[secId] : null;
+    return Array.isArray(list) ? list : [];
+  }
+
+  // Same contract as setDayItemOrder: duplicates and non-strings dropped, an
+  // empty result deletes the key so a section reset by hand goes back to the
+  // chronological default rather than freezing whatever it looked like.
+  function setSectionItemOrder(state, secId, ids) {
+    if (typeof secId !== 'string' || !secId) throw new Error('bad section "' + secId + '"');
+    state.sectionItemOrder = state.sectionItemOrder || {};
+    var clean = [];
+    (ids || []).forEach(function (id) {
+      if (typeof id === 'string' && id && clean.indexOf(id) === -1) clean.push(id);
+    });
+    if (clean.length) state.sectionItemOrder[secId] = clean;
+    else delete state.sectionItemOrder[secId];
+    return state;
+  }
+
+  // Pure. `entries` are one section's {it, dayIso, status} rows in the guide's
+  // own order; `order` is that section's saved id list. Three stages, the same
+  // shape orderDayItems has, so the two tabs behave identically under the
+  // hand:
+  //   1. a chronological DEFAULT. A section spans the whole trip rather than
+  //      one day, so dated items lead in date order (and within one date by
+  //      whenClock, exactly as Plan orders that date), then the undated ones
+  //      keep the guide's order: "sometime this trip" has no place on a
+  //      timeline, and hoisting it to either end would be an invention.
+  //   2. the traveler's own arrangement on top, ids it has never heard of
+  //      keeping their default position at the end rather than jumping up.
+  //   3. done items sunk to the bottom of the section, stable on both sides,
+  //      so the top of a section is always what is still in play.
+  function orderSectionItems(entries, order) {
+    var indexed = (entries || []).map(function (e, i) { return { e: e, i: i }; });
+    indexed.sort(function (a, b) {
+      var da = a.e.dayIso || '';
+      var db = b.e.dayIso || '';
+      if (!da !== !db) return da ? -1 : 1;
+      if (da && da !== db) return da < db ? -1 : 1;
+      if (da) {
+        var ca = whenClock(a.e.it && a.e.it.when);
+        var cb = whenClock(b.e.it && b.e.it.when);
+        if (ca !== cb) return ca - cb;
+      }
+      return a.i - b.i;
+    });
+    var list = indexed.map(function (x) { return x.e; });
+    var out;
+    if (!order || !order.length || list.length < 2) {
+      out = list.slice();
+    } else {
+      var byId = Object.create(null);
+      list.forEach(function (e) { byId[e.it.id] = e; });
+      out = [];
+      var taken = Object.create(null);
+      order.forEach(function (id) {
+        if (Object.prototype.hasOwnProperty.call(byId, id) && !taken[id]) {
+          taken[id] = 1;
+          out.push(byId[id]);
+        }
+      });
+      list.forEach(function (e) { if (!taken[e.it.id]) out.push(e); });
+    }
+    var active = [];
+    var done = [];
+    out.forEach(function (e) { (e.status === 'done' ? done : active).push(e); });
+    return active.concat(done);
+  }
+
   // The Plan tab's model: today's day-assigned items (any section), every
   // other day of the stay in chronological order with whatever is assigned
   // to it (also any section: a dinner reservation and an itinerary stop both
@@ -1388,13 +1502,32 @@ var CityOps = (function () {
       return { iso: iso, label: dayLabel(iso),
         items: orderDayItems(byIso[iso] || [], dayItemOrderFor(state, iso)) };
     });
-    var openTasks = [], doneTasks = [];
+    // Three task buckets, one per outcome a task can reach: still open, done,
+    // and declined. Declined is the EXISTING archived status, not a fourth
+    // one: "we are not doing that" and "put it away" are the same fact about
+    // an item, and giving them separate values would mean two ways to say it,
+    // two things to migrate and two places for them to disagree. The Plan tab
+    // is simply the one surface that reads archived tasks back out, since a
+    // task section never renders in any other tab (tabForSection sends it
+    // here), so before this bucket existed a declined task vanished.
+    //
+    // sv.undated holds only plan/backup/done items, so archived tasks are read
+    // from sv.archived, which viewModel already separates out.
+    var openTasks = [], doneTasks = [], declinedTasks = [];
     vms.forEach(function (sv) {
       if (!isTaskSection(sv.section)) return;
       sv.undated.forEach(function (it) {
         var s = effectiveStatus(it, state);
         if (s === 'plan') openTasks.push({ sec: sv.section, it: it, status: s });
         else if (s === 'done') doneTasks.push({ sec: sv.section, it: it, status: s });
+      });
+      // Every archived item in a task section lands here, dated or not. A
+      // task carrying a day is unusual but possible (the traveler used Change
+      // day on one), and filtering those out would make declining such a task
+      // the one move in the app with no way back: the day groups drop archived
+      // items, and no other tab renders a task section at all.
+      sv.archived.forEach(function (it) {
+        declinedTasks.push({ sec: sv.section, it: it, status: 'archived' });
       });
     });
     return {
@@ -1405,7 +1538,8 @@ var CityOps = (function () {
       today: orderDayItems(byIso[today] || [], dayItemOrderFor(state, today)),
       days: otherDays,
       openTasks: openTasks,
-      doneTasks: doneTasks
+      doneTasks: doneTasks,
+      declinedTasks: declinedTasks
     };
   }
 
@@ -2106,11 +2240,38 @@ var CityOps = (function () {
     return out.join('\n');
   }
 
+  // The ratings pass may also return ONE notable-review takeaway per item, and
+  // it delivers that through the existing `intel` delta map, whose merge rule
+  // is REPLACE-the-whole-block (see mergeDelta). So the prompt has to show the
+  // model what an item's intel already says, or a takeaway added to a place
+  // that already carries intel would quietly delete the verdicts and tips the
+  // intel pass earned. These lines are that echo: they exist so the contract
+  // can honestly say "repeat what is here, verbatim, alongside your new tip".
+  // Only items that HAVE intel cost any lines at all.
+  function ratingsItemLines(items) {
+    var b = [];
+    (Array.isArray(items) ? items : []).forEach(function (it) {
+      if (!it || !it.id) return;
+      b.push('- ' + it.id + ' | ' + trimStr(it.section) + ' | ' + trimStr(it.name));
+      var intel = it.intel;
+      if (!intel || typeof intel !== 'object') return;
+      (intel.verdicts || []).forEach(function (v) {
+        if (v && v.text) b.push('    existing verdict (' + trimStr(v.tier) + '): ' + trimStr(v.text));
+      });
+      (intel.tips || []).forEach(function (t) {
+        if (t) b.push('    existing tip: ' + trimStr(t));
+      });
+      if (intel.source) b.push('    existing intel source: ' + trimStr(intel.source));
+    });
+    return b;
+  }
+
   // Assembly order, top to bottom:
   //   1. one header line saying what this run is
   //   2. the city block
   //   3. the RERUN:RATINGS instructions, verbatim from PROMPT.md
-  //   4. the item list, PLAN and BACKUP items only
+  //   4. the item list, PLAN and BACKUP items only, each with whatever intel
+  //      it already carries echoed underneath it
   // Done and archived items are left out on purpose: a rating refresh exists
   // to help the traveler choose between places still in play, and neither a
   // meal already eaten nor a place already put away is one of those.
@@ -2122,11 +2283,13 @@ var CityOps = (function () {
     out = out.concat(cityHeaderLines(cityData));
     out.push('## What I need', '', rerun, '');
     out.push('## Items', '');
-    out = out.concat(itemListLines(items));
+    out = out.concat(ratingsItemLines(items));
     out.push('');
-    out.push('Every line above is `id | section | name`. Return a rating only ' +
-      'for the ones you can actually look up: an omitted item is the correct ' +
-      'answer, an invented number is not.', '');
+    out.push('Each `- ` line above is `id | section | name`. Indented lines under ' +
+      'an item are the intel it already holds, shown so you can repeat it ' +
+      'verbatim if you add a review takeaway to that item. Return a rating ' +
+      'only for the ones you can actually look up: an omitted item is the ' +
+      'correct answer, an invented number is not.', '');
     return out.join('\n');
   }
 
@@ -3104,34 +3267,54 @@ var CityOps = (function () {
     return { h2: h2, collapsed: collapsed };
   }
 
-  // Every active item in a section (day-assigned or not), in chronological
-  // order with the undated ones last, paired with the date label to show as
-  // that card's day chip (null for undated). viewModel() already grouped the
-  // dayed ones into per-date slots; this just flattens that back into one
-  // ordered list, since a tab section is a flat card list, not a day-card
-  // grid (Plan owns day grouping now).
-  function tabItemsFlat(sv) {
+  // Every active item in a section (day-assigned or not), paired with the date
+  // label to show as that card's day chip (null for undated) and the status
+  // the ordering needs. viewModel() already grouped the dayed ones into
+  // per-date slots; this flattens that back into one list and hands it to
+  // orderSectionItems, which owns the three rules a section tab now shares
+  // with the Plan tab: chronological by default, the traveler's own drag
+  // order on top, done items at the bottom.
+  function tabItemsFlat(sv, state) {
     var out = [];
     sv.days.forEach(function (d) {
-      d.items.forEach(function (it) { out.push({ it: it, dayIso: d.iso }); });
+      d.items.forEach(function (it) {
+        out.push({ it: it, dayIso: d.iso, status: effectiveStatus(it, state) });
+      });
     });
-    sv.undated.forEach(function (it) { out.push({ it: it, dayIso: null }); });
-    return out;
+    sv.undated.forEach(function (it) {
+      out.push({ it: it, dayIso: null, status: effectiveStatus(it, state) });
+    });
+    return orderSectionItems(out, sectionItemOrderFor(state, sv.section.id));
   }
 
   // Eat & Drink / Do / Services: one section block per mapped section, items
   // as flat cards (day chip if assigned, "Add to a day" control either way),
   // then backups and archived exactly as before.
+  //
+  // The cards sit in a .seclist, the section-tab twin of the Plan tab's
+  // .planlist: same grip, same drag, same keyboard arrows, one saved order per
+  // section instead of per date. A section with a single card gets no grip at
+  // all, since there is nothing it could reorder.
   function renderTabSectionBlock(sv, state, totalItems) {
     var frag = document.createDocumentFragment();
     var hdr = renderSectionHeader(sv, state, totalItems);
     frag.appendChild(hdr.h2);
     if (hdr.collapsed) return frag;
-    tabItemsFlat(sv).forEach(function (entry) {
-      var status = effectiveStatus(entry.it, state);
-      var chip = entry.dayIso ? dayLabel(entry.dayIso) : null;
-      frag.appendChild(renderCard(entry.it, status, true, chip));
-    });
+    var entries = tabItemsFlat(sv, state);
+    if (entries.length) {
+      var list = el('div', 'seclist');
+      list.setAttribute('data-sec-id', sv.section.id);
+      entries.forEach(function (entry) {
+        var chip = entry.dayIso ? dayLabel(entry.dayIso) : null;
+        var draggable = entries.length > 1;
+        var card = el('div', 'card' + (draggable ? ' dragrow' : '') +
+          (entry.status === 'done' ? ' item-done' : ''));
+        if (draggable) card.appendChild(sectionGrip(entry.it, sv.section));
+        appendCard(card, entry.it, entry.status, true, true, chip);
+        list.appendChild(card);
+      });
+      frag.appendChild(list);
+    }
     if (sv.backups.length) {
       var bk = el('div', 'backup');
       bk.appendChild(el('div', 'bt', '↩ Backups: if Plan A is full, closed, or you want a change'));
@@ -3171,7 +3354,13 @@ var CityOps = (function () {
       var p = el('p', 'info-item');
       p.appendChild(el('strong', null, effectiveName(it, state)));
       if (it.note) {
-        p.appendChild(document.createElement('br'));
+        // No <br> here, deliberately. The headline is display:block in CSS, so
+        // the note already starts on its own line; the <br> this used to carry
+        // added a whole empty line UNDER every headline, which is what made a
+        // bold name read as the end of the block above it instead of the start
+        // of its own note (owner feedback 2026-08-25). The gap under a
+        // headline is now the headline's own 1px margin, against 22px above
+        // it, so the pairing is unambiguous.
         p.appendChild(document.createTextNode(it.note));
       }
       card.appendChild(p);
@@ -3267,6 +3456,18 @@ var CityOps = (function () {
   var PLAN_DRAG_EDGE = 96;
   var PLAN_DRAG_MAX_SPEED = 26;
 
+  // Which kind of reorderable list a card sits in, or null for "not one".
+  // 'day' is the Plan tab's .planlist (reorder within a day, and drop onto a
+  // different day); 'section' is a section tab's .seclist (reorder only). One
+  // reader so the pointer path and the keyboard path can never disagree about
+  // what is draggable.
+  function dragListMode(list) {
+    if (!list || !list.classList) return null;
+    if (list.classList.contains('planlist')) return 'day';
+    if (list.classList.contains('seclist')) return 'section';
+    return null;
+  }
+
   function planListCards(list) {
     if (!list) return [];
     return Array.prototype.filter.call(list.children, function (n) {
@@ -3313,11 +3514,40 @@ var CityOps = (function () {
     list.classList.add('has-drop');
   }
 
+  // Crossing a sibling inside ONE list: the half-height rule, extracted so the
+  // Plan tab's same-day case and the section tab's only case share it rather
+  // than keeping two copies of the arithmetic that decides what a drag means.
+  function planCrossSiblings(list, card, y) {
+    var others = planListCards(list).filter(function (c) { return c !== card; });
+    for (var i = 0; i < others.length; i++) {
+      var r = others[i].getBoundingClientRect();
+      var mid = r.top + r.height / 2;
+      var after = card.compareDocumentPosition(others[i]) & Node.DOCUMENT_POSITION_FOLLOWING;
+      if ((after && y > mid) || (!after && y < mid)) {
+        card.style.transform = '';
+        if (after) list.insertBefore(others[i], card);
+        else list.insertBefore(card, others[i]);
+        drag.startY = y;
+        card.style.transform = 'scale(1.02)';
+        return true;
+      }
+    }
+    return false;
+  }
+
   // One frame of the drag: keep the card under the finger, and either cross a
   // sibling inside the current day or hand the card to a different day.
   function planDragUpdate(y) {
     if (!drag) return;
     var card = drag.card;
+    // Section tabs are reorder-only: there is no second container to cross
+    // into, so the whole day-group hunt below is skipped rather than run and
+    // discarded.
+    if (drag.mode === 'section') {
+      card.style.transform = 'translateY(' + (y - drag.startY) + 'px) scale(1.02)';
+      planCrossSiblings(drag.list, card, y);
+      return;
+    }
     var group = planGroupAt(drag.groups, y);
     if (!group) return;
     var list = group.querySelector('.planlist');
@@ -3345,20 +3575,7 @@ var CityOps = (function () {
     }
     markPlanDropTarget(drag.groups, iso === drag.fromIso ? null : group);
     card.style.transform = 'translateY(' + (y - drag.startY) + 'px) scale(1.02)';
-    var others = planListCards(list).filter(function (c) { return c !== card; });
-    for (var i = 0; i < others.length; i++) {
-      var r = others[i].getBoundingClientRect();
-      var mid = r.top + r.height / 2;
-      var after = card.compareDocumentPosition(others[i]) & Node.DOCUMENT_POSITION_FOLLOWING;
-      if ((after && y > mid) || (!after && y < mid)) {
-        card.style.transform = '';
-        if (after) list.insertBefore(others[i], card);
-        else list.insertBefore(card, others[i]);
-        drag.startY = y;
-        card.style.transform = 'scale(1.02)';
-        return;
-      }
-    }
+    planCrossSiblings(list, card, y);
   }
 
   // Runs every frame for the whole life of a drag. When the finger is not in
@@ -3402,6 +3619,19 @@ var CityOps = (function () {
   // and the arrangement of every day the drag touched.
   function commitPlanDrag(d) {
     var st = ctx.store.load();
+    // Section tabs write one thing and touch nothing else: the order of the
+    // list the card is in. No day changes hands here (the card never left its
+    // section, and a section is not a date), so setDay is deliberately not
+    // called, and the item's day chip reads exactly what it read before.
+    if (d.mode === 'section') {
+      var secId = d.list.getAttribute('data-sec-id');
+      if (!secId) { rerender(); return; }
+      setSectionItemOrder(st, secId, planCardIds(d.list));
+      ctx.store.save(st);
+      if (!cardInViewport(d.card)) justMoved = d.itemId;
+      rerender();
+      return;
+    }
     var data = effectiveData(ctx.base, st);
     var it = planItemById(data, d.itemId);
     var toIso, ids, fromIds = null, offscreen = false;
@@ -3462,15 +3692,17 @@ var CityOps = (function () {
     if (!grip) return;
     var card = grip.closest('.card');
     var list = card ? card.parentNode : null;
-    if (!card || !list || !list.classList || !list.classList.contains('planlist')) return;
+    var mode = dragListMode(list);
+    if (!card || !mode) return;
     e.preventDefault();
     try { grip.setPointerCapture(e.pointerId); } catch (err) {}
     var main = document.getElementById('main');
     drag = {
+      mode: mode,
       card: card, grip: grip, pointerId: e.pointerId,
       itemId: card.getAttribute('data-item-id'),
       list: list, fromList: list, fromIso: list.getAttribute('data-day-iso'),
-      groups: main ? Array.prototype.slice.call(main.querySelectorAll('.planday')) : [],
+      groups: (mode === 'day' && main) ? Array.prototype.slice.call(main.querySelectorAll('.planday')) : [],
       startY: e.clientY, lastY: e.clientY, collapsedIso: null, raf: null, moved: false
     };
     card.classList.add('dragging');
@@ -3514,7 +3746,8 @@ var CityOps = (function () {
     if (!grip) return;
     var card = grip.closest('.card');
     var list = card ? card.parentNode : null;
-    if (!card || !list || !list.classList || !list.classList.contains('planlist')) return;
+    var mode = dragListMode(list);
+    if (!card || !mode) return;
     var cards = planListCards(list);
     var i = cards.indexOf(card);
     var j = (e.key === 'ArrowUp') ? i - 1 : i + 1;
@@ -3522,10 +3755,17 @@ var CityOps = (function () {
     e.preventDefault();
     cards.splice(i, 1);
     cards.splice(j, 0, card);
-    var iso = list.getAttribute('data-day-iso');
-    if (!isIso(iso)) return;
+    var ids = cards.map(function (c) { return c.getAttribute('data-item-id'); });
     var st = ctx.store.load();
-    setDayItemOrder(st, iso, cards.map(function (c) { return c.getAttribute('data-item-id'); }));
+    if (mode === 'section') {
+      var secId = list.getAttribute('data-sec-id');
+      if (!secId) return;
+      setSectionItemOrder(st, secId, ids);
+    } else {
+      var iso = list.getAttribute('data-day-iso');
+      if (!isIso(iso)) return;
+      setDayItemOrder(st, iso, ids);
+    }
     ctx.store.save(st);
     // The rerender rebuilds every node, so the grip that had focus is gone by
     // the time the new one exists; restoreGripFocus() puts it back after the
@@ -3552,18 +3792,36 @@ var CityOps = (function () {
   // The grip itself: same six-dot handle Phase 3 used for day cards, sized up
   // to a 40x44 target here (a coarse pointer needs at least 36px, and this one
   // sits beside real controls it must never be mistaken for).
-  function planGrip(it) {
+  function dragGrip(aria) {
     var g = el('div', 'plangrip');
     g.setAttribute('role', 'button');
     g.setAttribute('tabindex', '0');
-    g.setAttribute('aria-label', 'Reorder ' + effectiveName(it, curState) +
-      ' within this day: drag it, or use the up and down arrow keys. ' +
-      'To put it on a different day, drag it onto that day, or use the Change day button on this card.');
+    g.setAttribute('aria-label', aria);
     g.innerHTML = '<svg viewBox="0 0 10 16" fill="currentColor" aria-hidden="true">' +
       '<circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/>' +
       '<circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/>' +
       '<circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg>';
     return g;
+  }
+
+  function planGrip(it) {
+    return dragGrip('Reorder ' + effectiveName(it, curState) +
+      ' within this day: drag it, or use the up and down arrow keys. ' +
+      'To put it on a different day, drag it onto that day, or use the Change day button on this card.');
+  }
+
+  // The same handle on a section tab. It says "within this list" rather than
+  // "within this day" because a section spans the whole trip, and it does not
+  // offer the cross-container drop the Plan grip does: a card here cannot be
+  // dragged into another SECTION (an item belongs to the section the guide
+  // put it in), only up and down its own. Changing the DAY is still one tap
+  // away on the card's own Change day control, which is what the label points
+  // at rather than inventing a gesture that would look like it should work.
+  function sectionGrip(it, sec) {
+    return dragGrip('Reorder ' + effectiveName(it, curState) + ' within ' +
+      ((sec && sec.label) || 'this list') +
+      ': drag it, or use the up and down arrow keys. ' +
+      'To put it on a day, use the day button on this card.');
   }
 
   var shareOn = false;
@@ -3635,17 +3893,58 @@ var CityOps = (function () {
   // every other status control, so a task is a first-class item (undo-able,
   // exportable) and not a second state shape. Ticking a completed task again
   // unticks it, back to plan.
+  //
+  // A task has three outcomes, not two: done, still open, and declined ("we
+  // are not doing that"). Declining writes the EXISTING archived status, so
+  // a declined task is the same first-class item as any other and needs no
+  // new state shape. The controls follow the status, and every one of the
+  // three is reachable from every other:
+  //   open      -> tick the box (done), or tap ✕ (declined)
+  //   done      -> untick the box (open)
+  //   declined  -> tap ↩ (open); there is no checkbox, because ticking a
+  //                task you already said no to is not an action with a
+  //                meaning, and a control that cannot succeed does not ship.
+  // House default for action controls: icon plus hover tooltip plus
+  // aria-label, no visible text. Decline keeps no text label even though it
+  // is the destructive-looking one, because unlike Archive on a card it is
+  // one tap from undone and the row sits in a list of checkboxes where a word
+  // would read as part of the task.
+  function taskIconBtn(icon, aria, cls, onclick) {
+    var b = el('button', 'ctl icon-btn task-ctl' + (cls ? ' ' + cls : ''), icon);
+    b.type = 'button';
+    b.setAttribute('aria-label', aria);
+    b.title = aria;
+    b.onclick = onclick;
+    return b;
+  }
+
   function renderTaskRow(it, status) {
-    var row = el('div', 'task-row' + (status === 'done' ? ' item-done' : ''));
-    var label = el('label', 'task-check');
-    var cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = status === 'done';
-    cb.setAttribute('aria-label', (status === 'done' ? 'Mark not done: ' : 'Mark done: ') + effectiveName(it, curState));
-    cb.onchange = function () { onStatus(it.id, cb.checked ? 'done' : 'plan'); };
-    label.appendChild(cb);
-    label.appendChild(document.createTextNode(' ' + effectiveName(it, curState)));
-    row.appendChild(label);
+    var declined = status === 'archived';
+    var row = el('div', 'task-row' +
+      (status === 'done' ? ' item-done' : '') + (declined ? ' task-declined' : ''));
+    var line = el('div', 'task-line');
+    var name = effectiveName(it, curState);
+    if (declined) {
+      line.appendChild(el('span', 'task-check task-check-off', name));
+    } else {
+      var label = el('label', 'task-check');
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = status === 'done';
+      cb.setAttribute('aria-label', (status === 'done' ? 'Mark not done: ' : 'Mark done: ') + name);
+      cb.onchange = function () { onStatus(it.id, cb.checked ? 'done' : 'plan'); };
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(' ' + name));
+      line.appendChild(label);
+    }
+    if (declined) {
+      line.appendChild(taskIconBtn('↩', 'Restore to open tasks: ' + name, 'to-plan',
+        function () { onStatus(it.id, 'plan'); }));
+    } else if (status === 'plan') {
+      line.appendChild(taskIconBtn('✕', 'Won\'t do: ' + name, 'to-archived',
+        function () { onStatus(it.id, 'archived'); }));
+    }
+    row.appendChild(line);
     if (it.note) row.appendChild(el('p', 'task-note', it.note));
     return row;
   }
@@ -3730,14 +4029,25 @@ var CityOps = (function () {
       if (!collapsed) group.appendChild(planDayList(d.iso, d.items));
       main.appendChild(group);
     });
-    if (pm.openTasks.length || pm.doneTasks.length) {
+    if (pm.openTasks.length || pm.doneTasks.length || pm.declinedTasks.length) {
       main.appendChild(el('h2', null, 'Open tasks'));
       pm.openTasks.forEach(function (e) { main.appendChild(renderTaskRow(e.it, e.status)); });
+      // Two settled-outcome disclosures, both collapsed, both in the same
+      // visual language (.arch-details uppercases its summary, so these read
+      // as DONE (n) and WON'T DO (n)). Done first because it is the outcome
+      // the traveler wants to see they earned; declined below it because it
+      // is the one they are done thinking about.
       if (pm.doneTasks.length) {
         var det = el('details', 'arch-details');
         det.appendChild(el('summary', null, 'Done (' + pm.doneTasks.length + ')'));
         pm.doneTasks.forEach(function (e) { det.appendChild(renderTaskRow(e.it, e.status)); });
         main.appendChild(det);
+      }
+      if (pm.declinedTasks.length) {
+        var wdet = el('details', 'arch-details');
+        wdet.appendChild(el('summary', null, 'Won\'t do (' + pm.declinedTasks.length + ')'));
+        pm.declinedTasks.forEach(function (e) { wdet.appendChild(renderTaskRow(e.it, e.status)); });
+        main.appendChild(wdet);
       }
     }
   }
@@ -3808,6 +4118,14 @@ var CityOps = (function () {
   // on the laptop. What an exported guide.json carries is the guide, plus
   // status/day/title decisions that belong to the data; how one day's cards
   // are stacked is a device-side view preference, like a collapsed section.
+  //
+  // state.sectionItemOrder (the section tabs' within-section order) is left out
+  // for the second of those reasons, not the first. A section-major array COULD
+  // express it, since that order never crosses a section boundary. It stays out
+  // anyway: baking it would make the array a second place the arrangement is
+  // written down, and the two would disagree the moment a guide exported on one
+  // device is opened on another that has its own sectionItemOrder. One source
+  // of truth, and it syncs with the rest of the state.
   function buildExport(data, state) {
     var out = JSON.parse(JSON.stringify(data));
     out.city.dates = JSON.parse(JSON.stringify(effectiveDates(data, state)));
@@ -4219,6 +4537,10 @@ var CityOps = (function () {
     // Plan-tab within-day item order (drag to reorder), pure and unit-tested.
     orderDayItems: orderDayItems, setDayItemOrder: setDayItemOrder, whenClock: whenClock,
     dayItemOrderFor: dayItemOrderFor,
+    // Section-tab item order (chronological default, done sunk, drag to
+    // override), the section-tab twin of the three above.
+    orderSectionItems: orderSectionItems, setSectionItemOrder: setSectionItemOrder,
+    sectionItemOrderFor: sectionItemOrderFor,
     // Plan-tab per-item day moves: the picker's own pure model.
     dayMoveOptions: dayMoveOptions
   };
@@ -4340,6 +4662,10 @@ CityOps.init();
   .planday.drop-into > h2{color:var(--accent-hover);}
   /* "Nothing planned yet" must not sit under the card being dropped on it. */
   .planlist.has-drop > .empty-note{display:none;}
+  /* A section tab's card list. Purely a drag container: it carries the
+     section id the reorder writes to and nothing visual of its own, so a
+     section tab looks exactly as it did before the grips arrived. */
+  .seclist{display:block;}
 
   /* --- v3 additions --- */
   .daycard{background:var(--bg-card); border:1px solid var(--border-light); border-radius:14px;
@@ -4566,19 +4892,43 @@ CityOps.init();
   /* One card per section, every undated item's name (bold) then its note,
      stacked: no accordion, no status controls, since these are facts, not
      todos (item 6 of the spec). */
+  /* Owner feedback 2026-08-25: a headline belongs to the text UNDER it. The
+     space that says so has to sit ABOVE the headline, and the gap under it
+     has to be smaller than the gap over it, or the eye groups each bold name
+     with the block it follows instead of the note it introduces.
+     What made that go wrong: `.card p` (one class + one type) outweighs
+     `.info-item` (one class), so the 12px here never applied and every
+     headline got `.card p`'s 5px, against 10px of `.row` margin under the
+     previous item's link pills. Every selector below is qualified with
+     .info-card so it actually wins, and the numbers are set as a pair:
+     22px over the headline, 1px under it, 6px between a note and its own
+     links so the pills stay part of the item they belong to. */
   .info-card h3{font-size:1rem; margin-bottom:2px;}
-  .info-item{font-size:.9rem; color:var(--text-3); margin-top:12px;}
-  .info-item:first-of-type{margin-top:10px;}
-  .info-item strong{display:block; color:var(--text); margin-bottom:2px; font-size:.94rem;}
+  .info-card .info-item{font-size:.9rem; color:var(--text-3); margin-top:22px;}
+  .info-card .info-item:first-of-type{margin-top:10px;}
+  .info-card .info-item strong{display:block; color:var(--text); margin-bottom:1px; font-size:.94rem;}
+  .info-card .row{margin-top:6px;}
 
   /* --- Phase 4: Plan tab open tasks --- */
   .task-row{padding:10px 0; border-bottom:1px solid var(--border-light);}
   .task-row:last-child{border-bottom:none;}
+  /* The checkbox (or the declined name) takes the width it needs; the decline
+     or restore control is pinned to the far end of the row, well clear of the
+     tick target. */
+  .task-line{display:flex; align-items:center; gap:10px;}
   .task-check{display:flex; align-items:center; gap:10px; font-size:.95rem; font-weight:600;
-    color:var(--text); cursor:pointer; min-height:44px;}
+    color:var(--text); cursor:pointer; min-height:44px; flex:1 1 auto;}
   .task-check input[type="checkbox"]{width:20px; height:20px; flex:0 0 auto; cursor:pointer;}
   .task-note{font-size:.85rem; color:var(--text-3); margin:2px 0 0 30px;}
   .task-row.item-done .task-check{opacity:.55; text-decoration:line-through;}
+  /* A declined task has no checkbox, so its name is inset by exactly the
+     checkbox plus its gap (20px + 10px). Without that the declined names hang
+     a full tick-box to the left of the open ones and the two lists read as
+     two different things rather than two outcomes of the same list. */
+  .task-check-off{cursor:default; padding-left:30px;}
+  .task-ctl{flex:0 0 auto; min-height:36px; line-height:1;}
+  .task-row.task-declined .task-check{opacity:.5; text-decoration:line-through;}
+  .task-row.task-declined .task-note{opacity:.6;}
 
   /* --- Phase 4: the More action sheet (every utility action, one place) --- */
   .sheet-list{display:flex; flex-direction:column; margin-top:6px;}
@@ -5040,6 +5390,7 @@ var CityOps = (function () {
 
   function emptyState() {
     return { itemStatus: {}, itemDay: {}, itemTitle: {}, dayOrder: {}, dayItemOrder: {},
+      sectionItemOrder: {},
       collapsedSections: {}, collapsedPlanDays: {}, viewMode: null, tab: null,
       dataOverride: null, stayOverride: null, updated: null };
   }
@@ -5054,6 +5405,12 @@ var CityOps = (function () {
     // it is filled in here exactly like the maps above: an old state simply
     // reads as "no day has been arranged by hand yet".
     st.dayItemOrder = st.dayItemOrder || {};
+    // Per-item order WITHIN one section tab (Eat & Drink, Do, Services). The
+    // mirror image of dayItemOrder: that one is keyed by date and spans every
+    // section, this one is keyed by section and spans every date. Absent in
+    // every state written before this feature shipped, filled in here the same
+    // way, so an old state simply reads as "no section arranged by hand yet".
+    st.sectionItemOrder = st.sectionItemOrder || {};
     st.collapsedSections = st.collapsedSections || {};
     // Phase 4: per-day collapse state for the Plan tab's "remaining days" list,
     // the same tri-state pattern as collapsedSections (explicit true/false
@@ -5476,6 +5833,85 @@ var CityOps = (function () {
     return state;
   }
 
+  // ---- Section tabs: the order of the items INSIDE one section ----
+  // state.sectionItemOrder maps a section id to the item ids in it, in the
+  // order the traveler dragged them into. Deliberately a separate key space
+  // from dayItemOrder rather than a reuse of it: the two answer different
+  // questions about the same item. dayItemOrder answers "what order does
+  // Tuesday run in", across every section; this answers "what order do the
+  // dinners read in", across every date. An item that is fourth on Tuesday
+  // can perfectly well be first in Dinner, and one map cannot hold both.
+  function sectionItemOrderFor(state, secId) {
+    var m = state && state.sectionItemOrder;
+    var list = (m && Object.prototype.hasOwnProperty.call(m, secId)) ? m[secId] : null;
+    return Array.isArray(list) ? list : [];
+  }
+
+  // Same contract as setDayItemOrder: duplicates and non-strings dropped, an
+  // empty result deletes the key so a section reset by hand goes back to the
+  // chronological default rather than freezing whatever it looked like.
+  function setSectionItemOrder(state, secId, ids) {
+    if (typeof secId !== 'string' || !secId) throw new Error('bad section "' + secId + '"');
+    state.sectionItemOrder = state.sectionItemOrder || {};
+    var clean = [];
+    (ids || []).forEach(function (id) {
+      if (typeof id === 'string' && id && clean.indexOf(id) === -1) clean.push(id);
+    });
+    if (clean.length) state.sectionItemOrder[secId] = clean;
+    else delete state.sectionItemOrder[secId];
+    return state;
+  }
+
+  // Pure. `entries` are one section's {it, dayIso, status} rows in the guide's
+  // own order; `order` is that section's saved id list. Three stages, the same
+  // shape orderDayItems has, so the two tabs behave identically under the
+  // hand:
+  //   1. a chronological DEFAULT. A section spans the whole trip rather than
+  //      one day, so dated items lead in date order (and within one date by
+  //      whenClock, exactly as Plan orders that date), then the undated ones
+  //      keep the guide's order: "sometime this trip" has no place on a
+  //      timeline, and hoisting it to either end would be an invention.
+  //   2. the traveler's own arrangement on top, ids it has never heard of
+  //      keeping their default position at the end rather than jumping up.
+  //   3. done items sunk to the bottom of the section, stable on both sides,
+  //      so the top of a section is always what is still in play.
+  function orderSectionItems(entries, order) {
+    var indexed = (entries || []).map(function (e, i) { return { e: e, i: i }; });
+    indexed.sort(function (a, b) {
+      var da = a.e.dayIso || '';
+      var db = b.e.dayIso || '';
+      if (!da !== !db) return da ? -1 : 1;
+      if (da && da !== db) return da < db ? -1 : 1;
+      if (da) {
+        var ca = whenClock(a.e.it && a.e.it.when);
+        var cb = whenClock(b.e.it && b.e.it.when);
+        if (ca !== cb) return ca - cb;
+      }
+      return a.i - b.i;
+    });
+    var list = indexed.map(function (x) { return x.e; });
+    var out;
+    if (!order || !order.length || list.length < 2) {
+      out = list.slice();
+    } else {
+      var byId = Object.create(null);
+      list.forEach(function (e) { byId[e.it.id] = e; });
+      out = [];
+      var taken = Object.create(null);
+      order.forEach(function (id) {
+        if (Object.prototype.hasOwnProperty.call(byId, id) && !taken[id]) {
+          taken[id] = 1;
+          out.push(byId[id]);
+        }
+      });
+      list.forEach(function (e) { if (!taken[e.it.id]) out.push(e); });
+    }
+    var active = [];
+    var done = [];
+    out.forEach(function (e) { (e.status === 'done' ? done : active).push(e); });
+    return active.concat(done);
+  }
+
   // The Plan tab's model: today's day-assigned items (any section), every
   // other day of the stay in chronological order with whatever is assigned
   // to it (also any section: a dinner reservation and an itinerary stop both
@@ -5501,13 +5937,32 @@ var CityOps = (function () {
       return { iso: iso, label: dayLabel(iso),
         items: orderDayItems(byIso[iso] || [], dayItemOrderFor(state, iso)) };
     });
-    var openTasks = [], doneTasks = [];
+    // Three task buckets, one per outcome a task can reach: still open, done,
+    // and declined. Declined is the EXISTING archived status, not a fourth
+    // one: "we are not doing that" and "put it away" are the same fact about
+    // an item, and giving them separate values would mean two ways to say it,
+    // two things to migrate and two places for them to disagree. The Plan tab
+    // is simply the one surface that reads archived tasks back out, since a
+    // task section never renders in any other tab (tabForSection sends it
+    // here), so before this bucket existed a declined task vanished.
+    //
+    // sv.undated holds only plan/backup/done items, so archived tasks are read
+    // from sv.archived, which viewModel already separates out.
+    var openTasks = [], doneTasks = [], declinedTasks = [];
     vms.forEach(function (sv) {
       if (!isTaskSection(sv.section)) return;
       sv.undated.forEach(function (it) {
         var s = effectiveStatus(it, state);
         if (s === 'plan') openTasks.push({ sec: sv.section, it: it, status: s });
         else if (s === 'done') doneTasks.push({ sec: sv.section, it: it, status: s });
+      });
+      // Every archived item in a task section lands here, dated or not. A
+      // task carrying a day is unusual but possible (the traveler used Change
+      // day on one), and filtering those out would make declining such a task
+      // the one move in the app with no way back: the day groups drop archived
+      // items, and no other tab renders a task section at all.
+      sv.archived.forEach(function (it) {
+        declinedTasks.push({ sec: sv.section, it: it, status: 'archived' });
       });
     });
     return {
@@ -5518,7 +5973,8 @@ var CityOps = (function () {
       today: orderDayItems(byIso[today] || [], dayItemOrderFor(state, today)),
       days: otherDays,
       openTasks: openTasks,
-      doneTasks: doneTasks
+      doneTasks: doneTasks,
+      declinedTasks: declinedTasks
     };
   }
 
@@ -6219,11 +6675,38 @@ var CityOps = (function () {
     return out.join('\n');
   }
 
+  // The ratings pass may also return ONE notable-review takeaway per item, and
+  // it delivers that through the existing `intel` delta map, whose merge rule
+  // is REPLACE-the-whole-block (see mergeDelta). So the prompt has to show the
+  // model what an item's intel already says, or a takeaway added to a place
+  // that already carries intel would quietly delete the verdicts and tips the
+  // intel pass earned. These lines are that echo: they exist so the contract
+  // can honestly say "repeat what is here, verbatim, alongside your new tip".
+  // Only items that HAVE intel cost any lines at all.
+  function ratingsItemLines(items) {
+    var b = [];
+    (Array.isArray(items) ? items : []).forEach(function (it) {
+      if (!it || !it.id) return;
+      b.push('- ' + it.id + ' | ' + trimStr(it.section) + ' | ' + trimStr(it.name));
+      var intel = it.intel;
+      if (!intel || typeof intel !== 'object') return;
+      (intel.verdicts || []).forEach(function (v) {
+        if (v && v.text) b.push('    existing verdict (' + trimStr(v.tier) + '): ' + trimStr(v.text));
+      });
+      (intel.tips || []).forEach(function (t) {
+        if (t) b.push('    existing tip: ' + trimStr(t));
+      });
+      if (intel.source) b.push('    existing intel source: ' + trimStr(intel.source));
+    });
+    return b;
+  }
+
   // Assembly order, top to bottom:
   //   1. one header line saying what this run is
   //   2. the city block
   //   3. the RERUN:RATINGS instructions, verbatim from PROMPT.md
-  //   4. the item list, PLAN and BACKUP items only
+  //   4. the item list, PLAN and BACKUP items only, each with whatever intel
+  //      it already carries echoed underneath it
   // Done and archived items are left out on purpose: a rating refresh exists
   // to help the traveler choose between places still in play, and neither a
   // meal already eaten nor a place already put away is one of those.
@@ -6235,11 +6718,13 @@ var CityOps = (function () {
     out = out.concat(cityHeaderLines(cityData));
     out.push('## What I need', '', rerun, '');
     out.push('## Items', '');
-    out = out.concat(itemListLines(items));
+    out = out.concat(ratingsItemLines(items));
     out.push('');
-    out.push('Every line above is `id | section | name`. Return a rating only ' +
-      'for the ones you can actually look up: an omitted item is the correct ' +
-      'answer, an invented number is not.', '');
+    out.push('Each `- ` line above is `id | section | name`. Indented lines under ' +
+      'an item are the intel it already holds, shown so you can repeat it ' +
+      'verbatim if you add a review takeaway to that item. Return a rating ' +
+      'only for the ones you can actually look up: an omitted item is the ' +
+      'correct answer, an invented number is not.', '');
     return out.join('\n');
   }
 
@@ -7217,34 +7702,54 @@ var CityOps = (function () {
     return { h2: h2, collapsed: collapsed };
   }
 
-  // Every active item in a section (day-assigned or not), in chronological
-  // order with the undated ones last, paired with the date label to show as
-  // that card's day chip (null for undated). viewModel() already grouped the
-  // dayed ones into per-date slots; this just flattens that back into one
-  // ordered list, since a tab section is a flat card list, not a day-card
-  // grid (Plan owns day grouping now).
-  function tabItemsFlat(sv) {
+  // Every active item in a section (day-assigned or not), paired with the date
+  // label to show as that card's day chip (null for undated) and the status
+  // the ordering needs. viewModel() already grouped the dayed ones into
+  // per-date slots; this flattens that back into one list and hands it to
+  // orderSectionItems, which owns the three rules a section tab now shares
+  // with the Plan tab: chronological by default, the traveler's own drag
+  // order on top, done items at the bottom.
+  function tabItemsFlat(sv, state) {
     var out = [];
     sv.days.forEach(function (d) {
-      d.items.forEach(function (it) { out.push({ it: it, dayIso: d.iso }); });
+      d.items.forEach(function (it) {
+        out.push({ it: it, dayIso: d.iso, status: effectiveStatus(it, state) });
+      });
     });
-    sv.undated.forEach(function (it) { out.push({ it: it, dayIso: null }); });
-    return out;
+    sv.undated.forEach(function (it) {
+      out.push({ it: it, dayIso: null, status: effectiveStatus(it, state) });
+    });
+    return orderSectionItems(out, sectionItemOrderFor(state, sv.section.id));
   }
 
   // Eat & Drink / Do / Services: one section block per mapped section, items
   // as flat cards (day chip if assigned, "Add to a day" control either way),
   // then backups and archived exactly as before.
+  //
+  // The cards sit in a .seclist, the section-tab twin of the Plan tab's
+  // .planlist: same grip, same drag, same keyboard arrows, one saved order per
+  // section instead of per date. A section with a single card gets no grip at
+  // all, since there is nothing it could reorder.
   function renderTabSectionBlock(sv, state, totalItems) {
     var frag = document.createDocumentFragment();
     var hdr = renderSectionHeader(sv, state, totalItems);
     frag.appendChild(hdr.h2);
     if (hdr.collapsed) return frag;
-    tabItemsFlat(sv).forEach(function (entry) {
-      var status = effectiveStatus(entry.it, state);
-      var chip = entry.dayIso ? dayLabel(entry.dayIso) : null;
-      frag.appendChild(renderCard(entry.it, status, true, chip));
-    });
+    var entries = tabItemsFlat(sv, state);
+    if (entries.length) {
+      var list = el('div', 'seclist');
+      list.setAttribute('data-sec-id', sv.section.id);
+      entries.forEach(function (entry) {
+        var chip = entry.dayIso ? dayLabel(entry.dayIso) : null;
+        var draggable = entries.length > 1;
+        var card = el('div', 'card' + (draggable ? ' dragrow' : '') +
+          (entry.status === 'done' ? ' item-done' : ''));
+        if (draggable) card.appendChild(sectionGrip(entry.it, sv.section));
+        appendCard(card, entry.it, entry.status, true, true, chip);
+        list.appendChild(card);
+      });
+      frag.appendChild(list);
+    }
     if (sv.backups.length) {
       var bk = el('div', 'backup');
       bk.appendChild(el('div', 'bt', '↩ Backups: if Plan A is full, closed, or you want a change'));
@@ -7284,7 +7789,13 @@ var CityOps = (function () {
       var p = el('p', 'info-item');
       p.appendChild(el('strong', null, effectiveName(it, state)));
       if (it.note) {
-        p.appendChild(document.createElement('br'));
+        // No <br> here, deliberately. The headline is display:block in CSS, so
+        // the note already starts on its own line; the <br> this used to carry
+        // added a whole empty line UNDER every headline, which is what made a
+        // bold name read as the end of the block above it instead of the start
+        // of its own note (owner feedback 2026-08-25). The gap under a
+        // headline is now the headline's own 1px margin, against 22px above
+        // it, so the pairing is unambiguous.
         p.appendChild(document.createTextNode(it.note));
       }
       card.appendChild(p);
@@ -7380,6 +7891,18 @@ var CityOps = (function () {
   var PLAN_DRAG_EDGE = 96;
   var PLAN_DRAG_MAX_SPEED = 26;
 
+  // Which kind of reorderable list a card sits in, or null for "not one".
+  // 'day' is the Plan tab's .planlist (reorder within a day, and drop onto a
+  // different day); 'section' is a section tab's .seclist (reorder only). One
+  // reader so the pointer path and the keyboard path can never disagree about
+  // what is draggable.
+  function dragListMode(list) {
+    if (!list || !list.classList) return null;
+    if (list.classList.contains('planlist')) return 'day';
+    if (list.classList.contains('seclist')) return 'section';
+    return null;
+  }
+
   function planListCards(list) {
     if (!list) return [];
     return Array.prototype.filter.call(list.children, function (n) {
@@ -7426,11 +7949,40 @@ var CityOps = (function () {
     list.classList.add('has-drop');
   }
 
+  // Crossing a sibling inside ONE list: the half-height rule, extracted so the
+  // Plan tab's same-day case and the section tab's only case share it rather
+  // than keeping two copies of the arithmetic that decides what a drag means.
+  function planCrossSiblings(list, card, y) {
+    var others = planListCards(list).filter(function (c) { return c !== card; });
+    for (var i = 0; i < others.length; i++) {
+      var r = others[i].getBoundingClientRect();
+      var mid = r.top + r.height / 2;
+      var after = card.compareDocumentPosition(others[i]) & Node.DOCUMENT_POSITION_FOLLOWING;
+      if ((after && y > mid) || (!after && y < mid)) {
+        card.style.transform = '';
+        if (after) list.insertBefore(others[i], card);
+        else list.insertBefore(card, others[i]);
+        drag.startY = y;
+        card.style.transform = 'scale(1.02)';
+        return true;
+      }
+    }
+    return false;
+  }
+
   // One frame of the drag: keep the card under the finger, and either cross a
   // sibling inside the current day or hand the card to a different day.
   function planDragUpdate(y) {
     if (!drag) return;
     var card = drag.card;
+    // Section tabs are reorder-only: there is no second container to cross
+    // into, so the whole day-group hunt below is skipped rather than run and
+    // discarded.
+    if (drag.mode === 'section') {
+      card.style.transform = 'translateY(' + (y - drag.startY) + 'px) scale(1.02)';
+      planCrossSiblings(drag.list, card, y);
+      return;
+    }
     var group = planGroupAt(drag.groups, y);
     if (!group) return;
     var list = group.querySelector('.planlist');
@@ -7458,20 +8010,7 @@ var CityOps = (function () {
     }
     markPlanDropTarget(drag.groups, iso === drag.fromIso ? null : group);
     card.style.transform = 'translateY(' + (y - drag.startY) + 'px) scale(1.02)';
-    var others = planListCards(list).filter(function (c) { return c !== card; });
-    for (var i = 0; i < others.length; i++) {
-      var r = others[i].getBoundingClientRect();
-      var mid = r.top + r.height / 2;
-      var after = card.compareDocumentPosition(others[i]) & Node.DOCUMENT_POSITION_FOLLOWING;
-      if ((after && y > mid) || (!after && y < mid)) {
-        card.style.transform = '';
-        if (after) list.insertBefore(others[i], card);
-        else list.insertBefore(card, others[i]);
-        drag.startY = y;
-        card.style.transform = 'scale(1.02)';
-        return;
-      }
-    }
+    planCrossSiblings(list, card, y);
   }
 
   // Runs every frame for the whole life of a drag. When the finger is not in
@@ -7515,6 +8054,19 @@ var CityOps = (function () {
   // and the arrangement of every day the drag touched.
   function commitPlanDrag(d) {
     var st = ctx.store.load();
+    // Section tabs write one thing and touch nothing else: the order of the
+    // list the card is in. No day changes hands here (the card never left its
+    // section, and a section is not a date), so setDay is deliberately not
+    // called, and the item's day chip reads exactly what it read before.
+    if (d.mode === 'section') {
+      var secId = d.list.getAttribute('data-sec-id');
+      if (!secId) { rerender(); return; }
+      setSectionItemOrder(st, secId, planCardIds(d.list));
+      ctx.store.save(st);
+      if (!cardInViewport(d.card)) justMoved = d.itemId;
+      rerender();
+      return;
+    }
     var data = effectiveData(ctx.base, st);
     var it = planItemById(data, d.itemId);
     var toIso, ids, fromIds = null, offscreen = false;
@@ -7575,15 +8127,17 @@ var CityOps = (function () {
     if (!grip) return;
     var card = grip.closest('.card');
     var list = card ? card.parentNode : null;
-    if (!card || !list || !list.classList || !list.classList.contains('planlist')) return;
+    var mode = dragListMode(list);
+    if (!card || !mode) return;
     e.preventDefault();
     try { grip.setPointerCapture(e.pointerId); } catch (err) {}
     var main = document.getElementById('main');
     drag = {
+      mode: mode,
       card: card, grip: grip, pointerId: e.pointerId,
       itemId: card.getAttribute('data-item-id'),
       list: list, fromList: list, fromIso: list.getAttribute('data-day-iso'),
-      groups: main ? Array.prototype.slice.call(main.querySelectorAll('.planday')) : [],
+      groups: (mode === 'day' && main) ? Array.prototype.slice.call(main.querySelectorAll('.planday')) : [],
       startY: e.clientY, lastY: e.clientY, collapsedIso: null, raf: null, moved: false
     };
     card.classList.add('dragging');
@@ -7627,7 +8181,8 @@ var CityOps = (function () {
     if (!grip) return;
     var card = grip.closest('.card');
     var list = card ? card.parentNode : null;
-    if (!card || !list || !list.classList || !list.classList.contains('planlist')) return;
+    var mode = dragListMode(list);
+    if (!card || !mode) return;
     var cards = planListCards(list);
     var i = cards.indexOf(card);
     var j = (e.key === 'ArrowUp') ? i - 1 : i + 1;
@@ -7635,10 +8190,17 @@ var CityOps = (function () {
     e.preventDefault();
     cards.splice(i, 1);
     cards.splice(j, 0, card);
-    var iso = list.getAttribute('data-day-iso');
-    if (!isIso(iso)) return;
+    var ids = cards.map(function (c) { return c.getAttribute('data-item-id'); });
     var st = ctx.store.load();
-    setDayItemOrder(st, iso, cards.map(function (c) { return c.getAttribute('data-item-id'); }));
+    if (mode === 'section') {
+      var secId = list.getAttribute('data-sec-id');
+      if (!secId) return;
+      setSectionItemOrder(st, secId, ids);
+    } else {
+      var iso = list.getAttribute('data-day-iso');
+      if (!isIso(iso)) return;
+      setDayItemOrder(st, iso, ids);
+    }
     ctx.store.save(st);
     // The rerender rebuilds every node, so the grip that had focus is gone by
     // the time the new one exists; restoreGripFocus() puts it back after the
@@ -7665,18 +8227,36 @@ var CityOps = (function () {
   // The grip itself: same six-dot handle Phase 3 used for day cards, sized up
   // to a 40x44 target here (a coarse pointer needs at least 36px, and this one
   // sits beside real controls it must never be mistaken for).
-  function planGrip(it) {
+  function dragGrip(aria) {
     var g = el('div', 'plangrip');
     g.setAttribute('role', 'button');
     g.setAttribute('tabindex', '0');
-    g.setAttribute('aria-label', 'Reorder ' + effectiveName(it, curState) +
-      ' within this day: drag it, or use the up and down arrow keys. ' +
-      'To put it on a different day, drag it onto that day, or use the Change day button on this card.');
+    g.setAttribute('aria-label', aria);
     g.innerHTML = '<svg viewBox="0 0 10 16" fill="currentColor" aria-hidden="true">' +
       '<circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/>' +
       '<circle cx="2" cy="8" r="1.5"/><circle cx="8" cy="8" r="1.5"/>' +
       '<circle cx="2" cy="14" r="1.5"/><circle cx="8" cy="14" r="1.5"/></svg>';
     return g;
+  }
+
+  function planGrip(it) {
+    return dragGrip('Reorder ' + effectiveName(it, curState) +
+      ' within this day: drag it, or use the up and down arrow keys. ' +
+      'To put it on a different day, drag it onto that day, or use the Change day button on this card.');
+  }
+
+  // The same handle on a section tab. It says "within this list" rather than
+  // "within this day" because a section spans the whole trip, and it does not
+  // offer the cross-container drop the Plan grip does: a card here cannot be
+  // dragged into another SECTION (an item belongs to the section the guide
+  // put it in), only up and down its own. Changing the DAY is still one tap
+  // away on the card's own Change day control, which is what the label points
+  // at rather than inventing a gesture that would look like it should work.
+  function sectionGrip(it, sec) {
+    return dragGrip('Reorder ' + effectiveName(it, curState) + ' within ' +
+      ((sec && sec.label) || 'this list') +
+      ': drag it, or use the up and down arrow keys. ' +
+      'To put it on a day, use the day button on this card.');
   }
 
   var shareOn = false;
@@ -7748,17 +8328,58 @@ var CityOps = (function () {
   // every other status control, so a task is a first-class item (undo-able,
   // exportable) and not a second state shape. Ticking a completed task again
   // unticks it, back to plan.
+  //
+  // A task has three outcomes, not two: done, still open, and declined ("we
+  // are not doing that"). Declining writes the EXISTING archived status, so
+  // a declined task is the same first-class item as any other and needs no
+  // new state shape. The controls follow the status, and every one of the
+  // three is reachable from every other:
+  //   open      -> tick the box (done), or tap ✕ (declined)
+  //   done      -> untick the box (open)
+  //   declined  -> tap ↩ (open); there is no checkbox, because ticking a
+  //                task you already said no to is not an action with a
+  //                meaning, and a control that cannot succeed does not ship.
+  // House default for action controls: icon plus hover tooltip plus
+  // aria-label, no visible text. Decline keeps no text label even though it
+  // is the destructive-looking one, because unlike Archive on a card it is
+  // one tap from undone and the row sits in a list of checkboxes where a word
+  // would read as part of the task.
+  function taskIconBtn(icon, aria, cls, onclick) {
+    var b = el('button', 'ctl icon-btn task-ctl' + (cls ? ' ' + cls : ''), icon);
+    b.type = 'button';
+    b.setAttribute('aria-label', aria);
+    b.title = aria;
+    b.onclick = onclick;
+    return b;
+  }
+
   function renderTaskRow(it, status) {
-    var row = el('div', 'task-row' + (status === 'done' ? ' item-done' : ''));
-    var label = el('label', 'task-check');
-    var cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = status === 'done';
-    cb.setAttribute('aria-label', (status === 'done' ? 'Mark not done: ' : 'Mark done: ') + effectiveName(it, curState));
-    cb.onchange = function () { onStatus(it.id, cb.checked ? 'done' : 'plan'); };
-    label.appendChild(cb);
-    label.appendChild(document.createTextNode(' ' + effectiveName(it, curState)));
-    row.appendChild(label);
+    var declined = status === 'archived';
+    var row = el('div', 'task-row' +
+      (status === 'done' ? ' item-done' : '') + (declined ? ' task-declined' : ''));
+    var line = el('div', 'task-line');
+    var name = effectiveName(it, curState);
+    if (declined) {
+      line.appendChild(el('span', 'task-check task-check-off', name));
+    } else {
+      var label = el('label', 'task-check');
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = status === 'done';
+      cb.setAttribute('aria-label', (status === 'done' ? 'Mark not done: ' : 'Mark done: ') + name);
+      cb.onchange = function () { onStatus(it.id, cb.checked ? 'done' : 'plan'); };
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(' ' + name));
+      line.appendChild(label);
+    }
+    if (declined) {
+      line.appendChild(taskIconBtn('↩', 'Restore to open tasks: ' + name, 'to-plan',
+        function () { onStatus(it.id, 'plan'); }));
+    } else if (status === 'plan') {
+      line.appendChild(taskIconBtn('✕', 'Won\'t do: ' + name, 'to-archived',
+        function () { onStatus(it.id, 'archived'); }));
+    }
+    row.appendChild(line);
     if (it.note) row.appendChild(el('p', 'task-note', it.note));
     return row;
   }
@@ -7843,14 +8464,25 @@ var CityOps = (function () {
       if (!collapsed) group.appendChild(planDayList(d.iso, d.items));
       main.appendChild(group);
     });
-    if (pm.openTasks.length || pm.doneTasks.length) {
+    if (pm.openTasks.length || pm.doneTasks.length || pm.declinedTasks.length) {
       main.appendChild(el('h2', null, 'Open tasks'));
       pm.openTasks.forEach(function (e) { main.appendChild(renderTaskRow(e.it, e.status)); });
+      // Two settled-outcome disclosures, both collapsed, both in the same
+      // visual language (.arch-details uppercases its summary, so these read
+      // as DONE (n) and WON'T DO (n)). Done first because it is the outcome
+      // the traveler wants to see they earned; declined below it because it
+      // is the one they are done thinking about.
       if (pm.doneTasks.length) {
         var det = el('details', 'arch-details');
         det.appendChild(el('summary', null, 'Done (' + pm.doneTasks.length + ')'));
         pm.doneTasks.forEach(function (e) { det.appendChild(renderTaskRow(e.it, e.status)); });
         main.appendChild(det);
+      }
+      if (pm.declinedTasks.length) {
+        var wdet = el('details', 'arch-details');
+        wdet.appendChild(el('summary', null, 'Won\'t do (' + pm.declinedTasks.length + ')'));
+        pm.declinedTasks.forEach(function (e) { wdet.appendChild(renderTaskRow(e.it, e.status)); });
+        main.appendChild(wdet);
       }
     }
   }
@@ -7921,6 +8553,14 @@ var CityOps = (function () {
   // on the laptop. What an exported guide.json carries is the guide, plus
   // status/day/title decisions that belong to the data; how one day's cards
   // are stacked is a device-side view preference, like a collapsed section.
+  //
+  // state.sectionItemOrder (the section tabs' within-section order) is left out
+  // for the second of those reasons, not the first. A section-major array COULD
+  // express it, since that order never crosses a section boundary. It stays out
+  // anyway: baking it would make the array a second place the arrangement is
+  // written down, and the two would disagree the moment a guide exported on one
+  // device is opened on another that has its own sectionItemOrder. One source
+  // of truth, and it syncs with the rest of the state.
   function buildExport(data, state) {
     var out = JSON.parse(JSON.stringify(data));
     out.city.dates = JSON.parse(JSON.stringify(effectiveDates(data, state)));
@@ -8332,6 +8972,10 @@ var CityOps = (function () {
     // Plan-tab within-day item order (drag to reorder), pure and unit-tested.
     orderDayItems: orderDayItems, setDayItemOrder: setDayItemOrder, whenClock: whenClock,
     dayItemOrderFor: dayItemOrderFor,
+    // Section-tab item order (chronological default, done sunk, drag to
+    // override), the section-tab twin of the three above.
+    orderSectionItems: orderSectionItems, setSectionItemOrder: setSectionItemOrder,
+    sectionItemOrderFor: sectionItemOrderFor,
     // Plan-tab per-item day moves: the picker's own pure model.
     dayMoveOptions: dayMoveOptions
   };
@@ -8846,9 +9490,10 @@ ignored.
 ### Ratings refresh
 
 Refreshes the `rating` block (stars, review count, source, date checked) on
-items the guide already holds. It changes nothing else about them, and it is
-the pass to run when the guide is a few weeks old and you are choosing
-between two places tonight.
+items the guide already holds, and may attach one short notable-review
+takeaway per item while it is reading those reviews anyway. It changes
+nothing else about them, and it is the pass to run when the guide is a few
+weeks old and you are choosing between two places tonight.
 
 <!-- RERUN:RATINGS -->
 A delta is never a whole guide. Never re-list an item that already exists,
@@ -8874,6 +9519,30 @@ count, and return them keyed by the item's id. Rules:
 - Do not return new items, and do not rewrite names, notes, prices, hours or
   links. Do not return anything for an id that is not in the list.
 
+### Notable reviews (optional, at most one per item)
+
+While you are reading an item's reviews for the number, you may also return
+**one** short takeaway that a reviewer actually makes, in an `intel` block
+keyed by the same item id. Rules:
+
+- **At most one per item, and only when it would change a decision.** "Book
+  the terrace, the indoor room is loud" is worth a line. "Lovely staff" is
+  not. Skip the item entirely rather than pad it.
+- **One sentence, under about 18 words, in the traveler's voice.** No star
+  counts (the rating block already carries those), no quotation marks, no
+  reviewer names.
+- **It must come from reviews you actually read.** The same bar as the number:
+  an omitted takeaway is the correct answer, an invented one is worse than
+  nothing, because it reads exactly like the verified ones.
+- **`intel` REPLACES an item's whole existing intel block.** The item list
+  below echoes any intel an item already holds on indented lines under it. If
+  you add a takeaway to such an item, you must repeat those existing verdicts,
+  tips and source **verbatim** in your `intel` block alongside your new tip,
+  or they are deleted. If you have nothing to add for an item, leave it out of
+  `intel` entirely and its existing intel is untouched.
+- Your takeaway goes in `tips`. Do not invent `verdicts` here: a verdict tier
+  is the intel pass's job, and this pass has not done that work.
+
 Respond with only a JSON code block in this shape, no prose:
 
 ```json
@@ -8887,12 +9556,19 @@ Respond with only a JSON code block in this shape, no prose:
       "source": "Google Maps, Aug 2026",
       "checked": "2026-08-25"
     }
+  },
+  "intel": {
+    "another-item-id": {
+      "tips": ["Reviewers say the terrace is the quiet half; ask for it when you book."],
+      "source": "Google Maps reviews, Aug 2026"
+    }
   }
 }
 ```
 
-Keys of `ratings` are existing item ids. Anything else in the payload is
-ignored.
+Keys of `ratings` and of `intel` are existing item ids. `intel` is optional
+and may name a different, smaller set of items than `ratings` does. Anything
+else in the payload is ignored.
 <!-- /RERUN:RATINGS -->
 
 </script>

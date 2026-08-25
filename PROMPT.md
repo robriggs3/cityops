@@ -500,9 +500,10 @@ ignored.
 ### Ratings refresh
 
 Refreshes the `rating` block (stars, review count, source, date checked) on
-items the guide already holds. It changes nothing else about them, and it is
-the pass to run when the guide is a few weeks old and you are choosing
-between two places tonight.
+items the guide already holds, and may attach one short notable-review
+takeaway per item while it is reading those reviews anyway. It changes
+nothing else about them, and it is the pass to run when the guide is a few
+weeks old and you are choosing between two places tonight.
 
 <!-- RERUN:RATINGS -->
 A delta is never a whole guide. Never re-list an item that already exists,
@@ -528,6 +529,30 @@ count, and return them keyed by the item's id. Rules:
 - Do not return new items, and do not rewrite names, notes, prices, hours or
   links. Do not return anything for an id that is not in the list.
 
+### Notable reviews (optional, at most one per item)
+
+While you are reading an item's reviews for the number, you may also return
+**one** short takeaway that a reviewer actually makes, in an `intel` block
+keyed by the same item id. Rules:
+
+- **At most one per item, and only when it would change a decision.** "Book
+  the terrace, the indoor room is loud" is worth a line. "Lovely staff" is
+  not. Skip the item entirely rather than pad it.
+- **One sentence, under about 18 words, in the traveler's voice.** No star
+  counts (the rating block already carries those), no quotation marks, no
+  reviewer names.
+- **It must come from reviews you actually read.** The same bar as the number:
+  an omitted takeaway is the correct answer, an invented one is worse than
+  nothing, because it reads exactly like the verified ones.
+- **`intel` REPLACES an item's whole existing intel block.** The item list
+  below echoes any intel an item already holds on indented lines under it. If
+  you add a takeaway to such an item, you must repeat those existing verdicts,
+  tips and source **verbatim** in your `intel` block alongside your new tip,
+  or they are deleted. If you have nothing to add for an item, leave it out of
+  `intel` entirely and its existing intel is untouched.
+- Your takeaway goes in `tips`. Do not invent `verdicts` here: a verdict tier
+  is the intel pass's job, and this pass has not done that work.
+
 Respond with only a JSON code block in this shape, no prose:
 
 ```json
@@ -541,10 +566,17 @@ Respond with only a JSON code block in this shape, no prose:
       "source": "Google Maps, Aug 2026",
       "checked": "2026-08-25"
     }
+  },
+  "intel": {
+    "another-item-id": {
+      "tips": ["Reviewers say the terrace is the quiet half; ask for it when you book."],
+      "source": "Google Maps reviews, Aug 2026"
+    }
   }
 }
 ```
 
-Keys of `ratings` are existing item ids. Anything else in the payload is
-ignored.
+Keys of `ratings` and of `intel` are existing item ids. `intel` is optional
+and may name a different, smaller set of items than `ratings` does. Anything
+else in the payload is ignored.
 <!-- /RERUN:RATINGS -->
