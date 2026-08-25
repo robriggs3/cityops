@@ -104,6 +104,10 @@
   .planday.drop-into > h2{color:var(--accent-hover);}
   /* "Nothing planned yet" must not sit under the card being dropped on it. */
   .planlist.has-drop > .empty-note{display:none;}
+  /* A section tab's card list. Purely a drag container: it carries the
+     section id the reorder writes to and nothing visual of its own, so a
+     section tab looks exactly as it did before the grips arrived. */
+  .seclist{display:block;}
 
   /* --- v3 additions --- */
   .daycard{background:var(--bg-card); border:1px solid var(--border-light); border-radius:14px;
@@ -330,19 +334,43 @@
   /* One card per section, every undated item's name (bold) then its note,
      stacked: no accordion, no status controls, since these are facts, not
      todos (item 6 of the spec). */
+  /* Owner feedback 2026-08-25: a headline belongs to the text UNDER it. The
+     space that says so has to sit ABOVE the headline, and the gap under it
+     has to be smaller than the gap over it, or the eye groups each bold name
+     with the block it follows instead of the note it introduces.
+     What made that go wrong: `.card p` (one class + one type) outweighs
+     `.info-item` (one class), so the 12px here never applied and every
+     headline got `.card p`'s 5px, against 10px of `.row` margin under the
+     previous item's link pills. Every selector below is qualified with
+     .info-card so it actually wins, and the numbers are set as a pair:
+     22px over the headline, 1px under it, 6px between a note and its own
+     links so the pills stay part of the item they belong to. */
   .info-card h3{font-size:1rem; margin-bottom:2px;}
-  .info-item{font-size:.9rem; color:var(--text-3); margin-top:12px;}
-  .info-item:first-of-type{margin-top:10px;}
-  .info-item strong{display:block; color:var(--text); margin-bottom:2px; font-size:.94rem;}
+  .info-card .info-item{font-size:.9rem; color:var(--text-3); margin-top:22px;}
+  .info-card .info-item:first-of-type{margin-top:10px;}
+  .info-card .info-item strong{display:block; color:var(--text); margin-bottom:1px; font-size:.94rem;}
+  .info-card .row{margin-top:6px;}
 
   /* --- Phase 4: Plan tab open tasks --- */
   .task-row{padding:10px 0; border-bottom:1px solid var(--border-light);}
   .task-row:last-child{border-bottom:none;}
+  /* The checkbox (or the declined name) takes the width it needs; the decline
+     or restore control is pinned to the far end of the row, well clear of the
+     tick target. */
+  .task-line{display:flex; align-items:center; gap:10px;}
   .task-check{display:flex; align-items:center; gap:10px; font-size:.95rem; font-weight:600;
-    color:var(--text); cursor:pointer; min-height:44px;}
+    color:var(--text); cursor:pointer; min-height:44px; flex:1 1 auto;}
   .task-check input[type="checkbox"]{width:20px; height:20px; flex:0 0 auto; cursor:pointer;}
   .task-note{font-size:.85rem; color:var(--text-3); margin:2px 0 0 30px;}
   .task-row.item-done .task-check{opacity:.55; text-decoration:line-through;}
+  /* A declined task has no checkbox, so its name is inset by exactly the
+     checkbox plus its gap (20px + 10px). Without that the declined names hang
+     a full tick-box to the left of the open ones and the two lists read as
+     two different things rather than two outcomes of the same list. */
+  .task-check-off{cursor:default; padding-left:30px;}
+  .task-ctl{flex:0 0 auto; min-height:36px; line-height:1;}
+  .task-row.task-declined .task-check{opacity:.5; text-decoration:line-through;}
+  .task-row.task-declined .task-note{opacity:.6;}
 
   /* --- Phase 4: the More action sheet (every utility action, one place) --- */
   .sheet-list{display:flex; flex-direction:column; margin-top:6px;}
