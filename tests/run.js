@@ -2206,5 +2206,21 @@ test('orderDayItems maps are prototype-safe', () => {
   assert.equal(({}).it, undefined);
 });
 
+test('whenClock ranks dayparts and explicit times', () => {
+  assert.equal(C.whenClock('AM, coffee crawl 1 of 2'), 540);
+  assert.equal(C.whenClock('Eve, seafood'), 1170);
+  assert.equal(C.whenClock('PM'), 900);
+  assert.equal(C.whenClock('leave 08:45 for the terminal'), 525);
+  assert.equal(C.whenClock('lunch after the market'), 720);
+  assert.equal(C.whenClock(undefined), 780);
+  assert.equal(C.whenClock('tram to Blloku'), 780); // no false am-match inside words
+});
+test('orderDayItems defaults to chronological, drag order still overrides', () => {
+  const mk = (id, when) => ({ it: { id: id, when: when }, sec: {}, status: 'plan' });
+  const day = [mk('work', 'PM'), mk('fish', 'Eve, seafood'), mk('coffee', 'AM, crawl'), mk('bus', 'leave 08:45')];
+  assert.deepEqual(C.orderDayItems(day, null).map(e => e.it.id), ['bus', 'coffee', 'work', 'fish']);
+  assert.deepEqual(C.orderDayItems(day, ['fish', 'work']).map(e => e.it.id), ['fish', 'work', 'bus', 'coffee']);
+});
+
 console.log(pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);
