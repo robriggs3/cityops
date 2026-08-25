@@ -1784,6 +1784,91 @@ test('planModel: a dated task item shows in its day, not in openTasks (no double
   assert.deepEqual(pm.days.find(d => d.iso === '2026-08-09').items.map(e => e.it.id), ['buy-adapter']);
 });
 
+// ---- Plan tab: drag to reorder items inside a day (dayItemOrder) ----
+function entry(id) { return { sec: { id: 's' }, it: { id: id }, status: 'plan' }; }
+
+test('orderDayItems: no saved order leaves the day in its default order', () => {
+  const day = [entry('a'), entry('b'), entry('c')];
+  assert.deepEqual(C.orderDayItems(day, []).map(e => e.it.id), ['a', 'b', 'c']);
+  assert.deepEqual(C.orderDayItems(day, null).map(e => e.it.id), ['a', 'b', 'c']);
+});
+test('orderDayItems: a saved order rearranges the day', () => {
+  const day = [entry('a'), entry('b'), entry('c')];
+  assert.deepEqual(C.orderDayItems(day, ['c', 'a', 'b']).map(e => e.it.id), ['c', 'a', 'b']);
+});
+test('orderDayItems: ids no longer on this day are ignored, not fatal', () => {
+  const day = [entry('a'), entry('b')];
+  assert.deepEqual(C.orderDayItems(day, ['gone', 'b', 'also-gone', 'a']).map(e => e.it.id), ['b', 'a']);
+});
+test('orderDayItems: an item the saved order never heard of keeps its default place at the end', () => {
+  const day = [entry('a'), entry('b'), entry('new')];
+  assert.deepEqual(C.orderDayItems(day, ['b', 'a']).map(e => e.it.id), ['b', 'a', 'new']);
+});
+test('orderDayItems: a duplicated id in the saved order places the item once', () => {
+  const day = [entry('a'), entry('b')];
+  assert.deepEqual(C.orderDayItems(day, ['b', 'b', 'a']).map(e => e.it.id), ['b', 'a']);
+});
+test('orderDayItems does not mutate the entries it is given', () => {
+  const day = [entry('a'), entry('b')];
+  C.orderDayItems(day, ['b', 'a']);
+  assert.deepEqual(day.map(e => e.it.id), ['a', 'b']);
+});
+test('setDayItemOrder stores an arrangement, dedupes it, and drops an empty one', () => {
+  const st = C.emptyState();
+  C.setDayItemOrder(st, '2026-08-13', ['nord', 'brasserie', 'nord', '', null]);
+  assert.deepEqual(st.dayItemOrder['2026-08-13'], ['nord', 'brasserie']);
+  C.setDayItemOrder(st, '2026-08-13', []);
+  assert.ok(!('2026-08-13' in st.dayItemOrder)); // back to the guide's own order
+  assert.throws(() => C.setDayItemOrder(st, 'Thursday', ['nord']), /bad day/);
+});
+test('emptyState carries dayItemOrder and normalizeState backfills it for older saved state', () => {
+  assert.deepEqual(C.emptyState().dayItemOrder, {});
+  const old = C.normalizeState({ itemStatus: {}, itemDay: {}, dayOrder: {} }); // pre-feature state
+  assert.deepEqual(old.dayItemOrder, {});
+  const kept = C.normalizeState({ itemStatus: {}, dayItemOrder: { '2026-08-13': ['nord'] } });
+  assert.deepEqual(kept.dayItemOrder['2026-08-13'], ['nord']);
+});
+test('planModel: a day reads its saved within-day order, across sections', () => {
+  const st = C.emptyState();
+  C.setDay(st, 'nord', '2026-08-13'); // coffee item joins the dinner item already there
+  const before = C.planModel(GOOD, st, '2026-08-10');
+  assert.deepEqual(before.days.find(d => d.iso === '2026-08-13').items.map(e => e.it.id),
+    ['brasserie', 'nord']); // default: section order, then guide order
+  C.setDayItemOrder(st, '2026-08-13', ['nord', 'brasserie']);
+  const after = C.planModel(GOOD, st, '2026-08-10');
+  assert.deepEqual(after.days.find(d => d.iso === '2026-08-13').items.map(e => e.it.id),
+    ['nord', 'brasserie']);
+});
+test('planModel: today honors its own within-day order too', () => {
+  const st = C.emptyState();
+  C.setDay(st, 'nord', '2026-08-10'); // tanini is already on this date
+  assert.deepEqual(C.planModel(GOOD, st, '2026-08-10').today.map(e => e.it.id), ['tanini', 'nord']);
+  C.setDayItemOrder(st, '2026-08-10', ['nord', 'tanini']);
+  assert.deepEqual(C.planModel(GOOD, st, '2026-08-10').today.map(e => e.it.id), ['nord', 'tanini']);
+});
+test('planModel: an arrangement whose item moved away still orders the rest', () => {
+  const st = C.emptyState();
+  C.setDay(st, 'nord', '2026-08-13');
+  C.setDayItemOrder(st, '2026-08-13', ['nord', 'brasserie']);
+  C.setDay(st, 'nord', '2026-08-14'); // dragged off to the next day
+  const pm = C.planModel(GOOD, st, '2026-08-10');
+  assert.deepEqual(pm.days.find(d => d.iso === '2026-08-13').items.map(e => e.it.id), ['brasserie']);
+  assert.deepEqual(pm.days.find(d => d.iso === '2026-08-14').items.map(e => e.it.id), ['nord']);
+});
+// The export decision, as a test: a within-day arrangement is device/sync
+// state, not guide data. See the comment above buildExport for why array
+// position cannot carry it (the item array is section-major).
+test('buildExport ignores dayItemOrder, and the round trip stays lossless with one saved', () => {
+  const st = C.emptyState();
+  C.setDay(st, 'nord', '2026-08-13');
+  const plain = C.buildExport(GOOD, st);
+  C.setDayItemOrder(st, '2026-08-13', ['nord', 'brasserie']);
+  const arranged = C.buildExport(GOOD, st);
+  assert.deepEqual(arranged, plain);
+  const again = C.buildExport(C.parse(JSON.stringify(arranged)).data, C.emptyState());
+  assert.deepEqual(again, arranged);
+});
+
 // QA follow-up: an integration guard against the real Tirana dataset (the
 // freeform-schema fixture the tab mapping has to handle), so a future
 // section id added to that guide can never silently orphan into no tab at
