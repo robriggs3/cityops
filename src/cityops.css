@@ -114,6 +114,13 @@
   .ctl:hover{border-color:var(--accent);}
   .ctl.to-done:hover{border-color:var(--green); color:var(--green);}
   .ctl.to-archived:hover{border-color:var(--accent); color:var(--accent);}
+  /* The day the item is already on: shown so the picker states where things
+     stand, but not a tap target, since moving an item to its own day is an
+     action that cannot succeed. */
+  .ctl.is-current{background:var(--accent-soft); border-color:var(--accent);
+    color:var(--accent-hover); cursor:default;}
+  .ctl:disabled{cursor:default;}
+  .ctl:disabled:hover{border-color:var(--accent);}
   .item-done{opacity:.55;}
   .donemark{color:var(--green); font-weight:800; margin-right:6px;}
   .arch-details{margin:2px 0 22px;}
@@ -188,6 +195,25 @@
      single glyph is not a sliver to tap. Archive keeps its text label (see
      the engine's TRANSITIONS table) so its button is simply wider. */
   .icon-btn{min-width:36px; text-align:center;}
+  /* An icon button that also carries its text (the Plan tab's day-move
+     control) is a normal-width pill, not a 36px square. */
+  .icon-btn.has-label{min-width:0;}
+
+  /* A day move relocates the card under a different day heading, often far
+     off screen. The engine scrolls it back into view and adds this class for
+     1.8s so the eye lands on the card that just moved rather than on whatever
+     happens to be at that scroll position. */
+  .card.just-moved, .daycard.just-moved{animation:justmoved 1.8s ease-out 1;}
+  @keyframes justmoved{
+    0%{box-shadow:0 0 0 3px var(--accent);}
+    65%{box-shadow:0 0 0 3px var(--accent);}
+    100%{box-shadow:0 1px 2px rgba(0,0,0,.03);}
+  }
+  /* Reduced motion still needs the answer to "where did it go", so the ring
+     stays; only the fade is dropped. */
+  @media (prefers-reduced-motion: reduce){
+    .card.just-moved, .daycard.just-moved{animation:none; box-shadow:0 0 0 3px var(--accent);}
+  }
 
   /* --- Phase 3: section header counts + sticky section nav --- */
   /* top is the rendered #tabbar height (Phase 4), kept in sync by

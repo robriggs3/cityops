@@ -121,6 +121,13 @@
   .ctl:hover{border-color:var(--accent);}
   .ctl.to-done:hover{border-color:var(--green); color:var(--green);}
   .ctl.to-archived:hover{border-color:var(--accent); color:var(--accent);}
+  /* The day the item is already on: shown so the picker states where things
+     stand, but not a tap target, since moving an item to its own day is an
+     action that cannot succeed. */
+  .ctl.is-current{background:var(--accent-soft); border-color:var(--accent);
+    color:var(--accent-hover); cursor:default;}
+  .ctl:disabled{cursor:default;}
+  .ctl:disabled:hover{border-color:var(--accent);}
   .item-done{opacity:.55;}
   .donemark{color:var(--green); font-weight:800; margin-right:6px;}
   .arch-details{margin:2px 0 22px;}
@@ -195,6 +202,25 @@
      single glyph is not a sliver to tap. Archive keeps its text label (see
      the engine's TRANSITIONS table) so its button is simply wider. */
   .icon-btn{min-width:36px; text-align:center;}
+  /* An icon button that also carries its text (the Plan tab's day-move
+     control) is a normal-width pill, not a 36px square. */
+  .icon-btn.has-label{min-width:0;}
+
+  /* A day move relocates the card under a different day heading, often far
+     off screen. The engine scrolls it back into view and adds this class for
+     1.8s so the eye lands on the card that just moved rather than on whatever
+     happens to be at that scroll position. */
+  .card.just-moved, .daycard.just-moved{animation:justmoved 1.8s ease-out 1;}
+  @keyframes justmoved{
+    0%{box-shadow:0 0 0 3px var(--accent);}
+    65%{box-shadow:0 0 0 3px var(--accent);}
+    100%{box-shadow:0 1px 2px rgba(0,0,0,.03);}
+  }
+  /* Reduced motion still needs the answer to "where did it go", so the ring
+     stays; only the fade is dropped. */
+  @media (prefers-reduced-motion: reduce){
+    .card.just-moved, .daycard.just-moved{animation:none; box-shadow:0 0 0 3px var(--accent);}
+  }
 
   /* --- Phase 3: section header counts + sticky section nav --- */
   /* top is the rendered #tabbar height (Phase 4), kept in sync by
@@ -886,6 +912,37 @@ var CityOps = (function () {
     return iso;
   }
 
+  // The pure model behind the per-item day picker: every date of the stay,
+  // each carrying the section slot key a move would actually write (the same
+  // keyForDisplayedDate indirection the picker has always used), plus a
+  // `current` flag on the date this item already sits on.
+  //
+  // `current` exists so the renderer can take that one date OUT of the tap
+  // targets. Tapping the day you are already on is an action that cannot
+  // succeed: it rewrites the same value, re-renders, and looks exactly like
+  // a control that did nothing. On a phone, where there is no hover tooltip
+  // to explain the icon in the first place, one such no-op tap is enough to
+  // conclude the whole feature is broken. Matching on KEY (not iso) is
+  // deliberate: after a slot reorder an item's stored day-key can differ
+  // from the date it renders under, and "the day you are on" means the one
+  // you SEE it under.
+  function dayMoveOptions(data, state, it) {
+    var cur = effectiveDay(it, state);
+    var currentIso = null;
+    var options = stayDates(effectiveDates(data, state)).map(function (iso) {
+      var key = keyForDisplayedDate(data, state, it.section, iso);
+      var isCurrent = !!cur && key === cur;
+      if (isCurrent) currentIso = iso;
+      return { iso: iso, label: dayLabel(iso), key: key, current: isCurrent };
+    });
+    return {
+      options: options,
+      currentIso: currentIso,
+      currentLabel: currentIso ? dayLabel(currentIso) : null,
+      hasDay: !!cur
+    };
+  }
+
   function calendarModel(data, state) {
     var byIso = {};
     var undated = [];
@@ -2035,6 +2092,16 @@ var CityOps = (function () {
   // object; expanding a card to read it is not a planning decision worth
   // remembering across visits.
   var itemExpandOverride = {};
+  // Item id to reveal and flash once after the next render. A day move in the
+  // Plan tab relocates the card to a different day heading, which on a phone
+  // is routinely thousands of pixels away from where the traveler was
+  // looking: measured on the real Tirana guide at 390px, moving Sat 22's
+  // arrival note to Fri 28 left the card 5,558px below the viewport with the
+  // scroll position untouched. The move worked and persisted, but every
+  // visible trace of it was off screen, so the tap read as "nothing
+  // happened" or, worse, "I just deleted that". This is what makes the
+  // result of the tap visible.
+  var justMoved = null;
 
   function defaultExpanded(status) { return status !== 'done'; }
 
@@ -2047,6 +2114,7 @@ var CityOps = (function () {
     setDay(st, it.id, key);
     ctx.store.save(st);
     pendingPromote = null;
+    justMoved = it.id;
     rerender();
   }
 
@@ -2056,24 +2124,81 @@ var CityOps = (function () {
     setDay(st, it.id, key);
     ctx.store.save(st);
     pendingMove = null;
+    justMoved = it.id;
     rerender();
   }
 
-  function dayPickerRow(hint, onPick, onCancel) {
+  // Scrolls the just-moved card back under the traveler's eyes and flashes it
+  // once, so a day move has a visible result instead of the card vanishing
+  // upward or downward out of the viewport. Deliberately looks the card up by
+  // walking the rendered cards rather than building a CSS selector from the
+  // id: item ids come from guide data, and a quote or a bracket in one would
+  // turn a selector into a thrown exception mid-render.
+  function revealJustMoved() {
+    if (!justMoved) return;
+    var id = justMoved;
+    justMoved = null;
+    var main = document.getElementById('main');
+    if (!main) return;
+    var cards = main.querySelectorAll('[data-item-id]');
+    var card = null;
+    for (var i = 0; i < cards.length; i++) {
+      if (cards[i].getAttribute('data-item-id') === id) { card = cards[i]; break; }
+    }
+    if (!card) return;
+    // Deliberately an instant scroll, not a smooth one. A move commonly spans
+    // thousands of pixels, and animating that on a phone is a long ride that
+    // ends somewhere the traveler did not ask to be. The jump plus the ring
+    // below reads as "here it is" instead. It is also the behavior that can
+    // actually be verified: smooth scrolling is silently ignored in several
+    // automation and reduced-motion contexts, so relying on it would mean
+    // shipping a result nobody watched work.
+    if (card.scrollIntoView) {
+      try { card.scrollIntoView({ block: 'center' }); }
+      catch (e) { card.scrollIntoView(); }
+    }
+    card.classList.add('just-moved');
+    setTimeout(function () { card.classList.remove('just-moved'); }, 1800);
+  }
+
+  // The shared day picker, used by both "move to another day" and "promote a
+  // backup onto a day". `mode` is 'move' or 'promote':
+  //   - move: the item's current day is shown but not tappable (see
+  //     dayMoveOptions), and "No day" only appears when there is an
+  //     assignment to clear. Neither of those taps can change anything, and
+  //     a control that cannot succeed should not be offered.
+  //   - promote: every day stays live, because picking the current day still
+  //     does real work there (it flips the status out of backup), and "No
+  //     day" is always a valid promote target.
+  function dayPickerRow(it, hint, onPick, onCancel, mode) {
     var frag = document.createDocumentFragment();
-    frag.appendChild(el('p', 'when-line', hint));
-    var pick = el('div', 'ctl-row');
     var pst = ctx.store.load();
-    stayDates(effectiveDates(effectiveData(ctx.base, pst), pst)).forEach(function (iso) {
-      var db = el('button', 'ctl', dayLabel(iso));
+    var model = dayMoveOptions(effectiveData(ctx.base, pst), pst, it);
+    var isMove = mode !== 'promote';
+    // Naming the current day turns the picker into its own explanation: the
+    // traveler sees where the item is now and where it can go, in one line.
+    frag.appendChild(el('p', 'when-line',
+      hint + (isMove && model.currentLabel ? ' Now on ' + model.currentLabel + '.' : '')));
+    var pick = el('div', 'ctl-row');
+    model.options.forEach(function (o) {
+      var isCurrent = o.current && isMove;
+      var db = el('button', 'ctl' + (isCurrent ? ' is-current' : ''), o.label);
       db.type = 'button';
-      db.onclick = function () { onPick(iso); };
+      if (isCurrent) {
+        db.disabled = true;
+        db.setAttribute('aria-current', 'true');
+        db.title = 'Already on ' + o.label;
+      } else {
+        db.onclick = function () { onPick(o.iso); };
+      }
       pick.appendChild(db);
     });
-    var nd = el('button', 'ctl', 'No day');
-    nd.type = 'button';
-    nd.onclick = function () { onPick(null); };
-    pick.appendChild(nd);
+    if (!isMove || model.hasDay) {
+      var nd = el('button', 'ctl', 'No day');
+      nd.type = 'button';
+      nd.onclick = function () { onPick(null); };
+      pick.appendChild(nd);
+    }
     var cancel = el('button', 'ctl to-archived', 'Cancel');
     cancel.type = 'button';
     cancel.onclick = onCancel;
@@ -2161,15 +2286,15 @@ var CityOps = (function () {
     (it.links || []).forEach(function (l) { row.appendChild(linkPill(l)); });
     if (row.children.length) frag.appendChild(row);
     if (status === 'backup' && withDayPicker && pendingPromote === it.id) {
-      frag.appendChild(dayPickerRow('Promote to which day?',
+      frag.appendChild(dayPickerRow(it, 'Promote to which day?',
         function (iso) { promoteTo(it, iso); },
-        function () { pendingPromote = null; rerender(); }));
+        function () { pendingPromote = null; rerender(); }, 'promote'));
       return frag;
     }
     if (pendingMove === it.id) {
-      frag.appendChild(dayPickerRow('Move to which day?',
+      frag.appendChild(dayPickerRow(it, 'Move to which day?',
         function (iso) { moveTo(it, iso); },
-        function () { pendingMove = null; rerender(); }));
+        function () { pendingMove = null; rerender(); }, 'move'));
       return frag;
     }
     var ctl = el('div', 'ctl-row');
@@ -2192,12 +2317,22 @@ var CityOps = (function () {
     if (withDayPicker && (status === 'plan' || status === 'done')) {
       // Phase 4: this is the "Add to a day" control from any Eat & Drink, Do
       // or Services card (populate-Plan-from-other-tabs). Same picker either
-      // way (it already offers "No day" to clear an assignment); only the
-      // label changes so a traveler with nothing set yet does not read
-      // "change" for an action they have never taken.
+      // way; only the label changes so a traveler with nothing set yet does
+      // not read "change" for an action they have never taken.
+      //
+      // In the Plan tab (withDayPicker === 'labeled') the icon also carries
+      // its text. The house default is wordless icon controls with a hover
+      // tooltip, and that default holds everywhere else here. It fails in
+      // exactly this spot: the Plan tab is used on a phone, a phone has no
+      // hover, so the tooltip that carries the entire meaning of an
+      // otherwise decorative calendar glyph is unreachable on the one
+      // surface where moving an item between days is the point. The row
+      // already carries a text label on Archive, so this costs one word of
+      // density and no new visual language.
       var hasDay = !!effectiveDay(it, curState);
       var mvLabel = hasDay ? 'Change day' : 'Add to a day';
-      var mv = el('button', 'ctl icon-btn', '📅');
+      var mv = el('button', 'ctl icon-btn' + (withDayPicker === 'labeled' ? ' has-label' : ''),
+        withDayPicker === 'labeled' ? ('📅 ' + mvLabel) : '📅');
       mv.type = 'button';
       mv.setAttribute('aria-label', mvLabel);
       mv.title = mvLabel;
@@ -2255,6 +2390,9 @@ var CityOps = (function () {
     else if (Object.prototype.hasOwnProperty.call(itemExpandOverride, it.id)) expanded = itemExpandOverride[it.id];
     else expanded = defaultExpanded(status);
     container.classList.add(expanded ? 'expanded' : 'collapsed');
+    // Stamped on every card everywhere, so revealJustMoved() can find a card
+    // again after a re-render relocated it, in any tab.
+    container.setAttribute('data-item-id', it.id);
     var hd = cardHeaderBtn(it, status, expanded, dayChip);
     hd.onclick = function () { toggleExpand(it.id, status); };
     container.appendChild(hd);
@@ -2709,7 +2847,7 @@ var CityOps = (function () {
       pm.today.forEach(function (e) {
         var card = el('div', 'card' + (e.status === 'done' ? ' item-done' : ''));
         card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
-        appendCard(card, e.it, e.status, true, true);
+        appendCard(card, e.it, e.status, true, 'labeled');
         main.appendChild(card);
       });
     }
@@ -2738,7 +2876,7 @@ var CityOps = (function () {
       d.items.forEach(function (e) {
         var card = el('div', 'card' + (e.status === 'done' ? ' item-done' : ''));
         card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
-        appendCard(card, e.it, e.status, true, true);
+        appendCard(card, e.it, e.status, true, 'labeled');
         main.appendChild(card);
       });
     });
@@ -2786,6 +2924,8 @@ var CityOps = (function () {
     var notice = document.getElementById('notice');
     notice.textContent = ctx.store.persistent ? '' :
       'Private mode: changes hold for this session only and are not saved.';
+    // Runs after #main is fully rebuilt: the card it looks for only exists now.
+    revealJustMoved();
     // Additive hook: the app shell sets this to re-render its citybar (name/dates)
     // whenever engine state changes, without the shell re-implementing rerender.
     if (CityOps.onStateChange) CityOps.onStateChange();
@@ -2927,7 +3067,7 @@ var CityOps = (function () {
       var summary = diffSummary(current, res.data);
       st.dataOverride = res.data;
       ctx.store.save(st);
-      pendingPromote = pendingMove = pendingEdit = null; // item ids may change under an override
+      pendingPromote = pendingMove = pendingEdit = justMoved = null; // item ids may change under an override
       wrap.remove();
       rerender();
       document.getElementById('notice').textContent = 'Data updated: ' + summary + '.';
@@ -2940,7 +3080,7 @@ var CityOps = (function () {
         var st = ctx.store.load();
         st.dataOverride = null;
         ctx.store.save(st);
-        pendingPromote = pendingMove = pendingEdit = null;
+        pendingPromote = pendingMove = pendingEdit = justMoved = null;
         wrap.remove();
         rerender();
       };
@@ -3125,6 +3265,7 @@ var CityOps = (function () {
     pendingMove = null;
     pendingEdit = null;
     itemExpandOverride = {};
+    justMoved = null;
     drag = null;
     if (typeof document !== 'undefined' && document.body) document.body.classList.remove('share');
     if (!listenersBound && typeof window !== 'undefined' && window && window.addEventListener) {
@@ -3192,7 +3333,9 @@ var CityOps = (function () {
     // Phase 4 additions: tabs (replaces the Today/Guide/Calendar view switch)
     // and the Plan tab's own model, all pure and unit-tested on their own.
     TABS: TABS, tabForSection: tabForSection, setTab: setTab, effectiveTab: effectiveTab,
-    planModel: planModel, isPlanDayCollapsed: isPlanDayCollapsed, togglePlanDay: togglePlanDay
+    planModel: planModel, isPlanDayCollapsed: isPlanDayCollapsed, togglePlanDay: togglePlanDay,
+    // Plan-tab per-item day moves: the picker's own pure model.
+    dayMoveOptions: dayMoveOptions
   };
 })();
 CityOps.init();
@@ -3322,6 +3465,13 @@ CityOps.init();
   .ctl:hover{border-color:var(--accent);}
   .ctl.to-done:hover{border-color:var(--green); color:var(--green);}
   .ctl.to-archived:hover{border-color:var(--accent); color:var(--accent);}
+  /* The day the item is already on: shown so the picker states where things
+     stand, but not a tap target, since moving an item to its own day is an
+     action that cannot succeed. */
+  .ctl.is-current{background:var(--accent-soft); border-color:var(--accent);
+    color:var(--accent-hover); cursor:default;}
+  .ctl:disabled{cursor:default;}
+  .ctl:disabled:hover{border-color:var(--accent);}
   .item-done{opacity:.55;}
   .donemark{color:var(--green); font-weight:800; margin-right:6px;}
   .arch-details{margin:2px 0 22px;}
@@ -3396,6 +3546,25 @@ CityOps.init();
      single glyph is not a sliver to tap. Archive keeps its text label (see
      the engine's TRANSITIONS table) so its button is simply wider. */
   .icon-btn{min-width:36px; text-align:center;}
+  /* An icon button that also carries its text (the Plan tab's day-move
+     control) is a normal-width pill, not a 36px square. */
+  .icon-btn.has-label{min-width:0;}
+
+  /* A day move relocates the card under a different day heading, often far
+     off screen. The engine scrolls it back into view and adds this class for
+     1.8s so the eye lands on the card that just moved rather than on whatever
+     happens to be at that scroll position. */
+  .card.just-moved, .daycard.just-moved{animation:justmoved 1.8s ease-out 1;}
+  @keyframes justmoved{
+    0%{box-shadow:0 0 0 3px var(--accent);}
+    65%{box-shadow:0 0 0 3px var(--accent);}
+    100%{box-shadow:0 1px 2px rgba(0,0,0,.03);}
+  }
+  /* Reduced motion still needs the answer to "where did it go", so the ring
+     stays; only the fade is dropped. */
+  @media (prefers-reduced-motion: reduce){
+    .card.just-moved, .daycard.just-moved{animation:none; box-shadow:0 0 0 3px var(--accent);}
+  }
 
   /* --- Phase 3: section header counts + sticky section nav --- */
   /* top is the rendered #tabbar height (Phase 4), kept in sync by
@@ -3995,6 +4164,37 @@ var CityOps = (function () {
     return iso;
   }
 
+  // The pure model behind the per-item day picker: every date of the stay,
+  // each carrying the section slot key a move would actually write (the same
+  // keyForDisplayedDate indirection the picker has always used), plus a
+  // `current` flag on the date this item already sits on.
+  //
+  // `current` exists so the renderer can take that one date OUT of the tap
+  // targets. Tapping the day you are already on is an action that cannot
+  // succeed: it rewrites the same value, re-renders, and looks exactly like
+  // a control that did nothing. On a phone, where there is no hover tooltip
+  // to explain the icon in the first place, one such no-op tap is enough to
+  // conclude the whole feature is broken. Matching on KEY (not iso) is
+  // deliberate: after a slot reorder an item's stored day-key can differ
+  // from the date it renders under, and "the day you are on" means the one
+  // you SEE it under.
+  function dayMoveOptions(data, state, it) {
+    var cur = effectiveDay(it, state);
+    var currentIso = null;
+    var options = stayDates(effectiveDates(data, state)).map(function (iso) {
+      var key = keyForDisplayedDate(data, state, it.section, iso);
+      var isCurrent = !!cur && key === cur;
+      if (isCurrent) currentIso = iso;
+      return { iso: iso, label: dayLabel(iso), key: key, current: isCurrent };
+    });
+    return {
+      options: options,
+      currentIso: currentIso,
+      currentLabel: currentIso ? dayLabel(currentIso) : null,
+      hasDay: !!cur
+    };
+  }
+
   function calendarModel(data, state) {
     var byIso = {};
     var undated = [];
@@ -5144,6 +5344,16 @@ var CityOps = (function () {
   // object; expanding a card to read it is not a planning decision worth
   // remembering across visits.
   var itemExpandOverride = {};
+  // Item id to reveal and flash once after the next render. A day move in the
+  // Plan tab relocates the card to a different day heading, which on a phone
+  // is routinely thousands of pixels away from where the traveler was
+  // looking: measured on the real Tirana guide at 390px, moving Sat 22's
+  // arrival note to Fri 28 left the card 5,558px below the viewport with the
+  // scroll position untouched. The move worked and persisted, but every
+  // visible trace of it was off screen, so the tap read as "nothing
+  // happened" or, worse, "I just deleted that". This is what makes the
+  // result of the tap visible.
+  var justMoved = null;
 
   function defaultExpanded(status) { return status !== 'done'; }
 
@@ -5156,6 +5366,7 @@ var CityOps = (function () {
     setDay(st, it.id, key);
     ctx.store.save(st);
     pendingPromote = null;
+    justMoved = it.id;
     rerender();
   }
 
@@ -5165,24 +5376,81 @@ var CityOps = (function () {
     setDay(st, it.id, key);
     ctx.store.save(st);
     pendingMove = null;
+    justMoved = it.id;
     rerender();
   }
 
-  function dayPickerRow(hint, onPick, onCancel) {
+  // Scrolls the just-moved card back under the traveler's eyes and flashes it
+  // once, so a day move has a visible result instead of the card vanishing
+  // upward or downward out of the viewport. Deliberately looks the card up by
+  // walking the rendered cards rather than building a CSS selector from the
+  // id: item ids come from guide data, and a quote or a bracket in one would
+  // turn a selector into a thrown exception mid-render.
+  function revealJustMoved() {
+    if (!justMoved) return;
+    var id = justMoved;
+    justMoved = null;
+    var main = document.getElementById('main');
+    if (!main) return;
+    var cards = main.querySelectorAll('[data-item-id]');
+    var card = null;
+    for (var i = 0; i < cards.length; i++) {
+      if (cards[i].getAttribute('data-item-id') === id) { card = cards[i]; break; }
+    }
+    if (!card) return;
+    // Deliberately an instant scroll, not a smooth one. A move commonly spans
+    // thousands of pixels, and animating that on a phone is a long ride that
+    // ends somewhere the traveler did not ask to be. The jump plus the ring
+    // below reads as "here it is" instead. It is also the behavior that can
+    // actually be verified: smooth scrolling is silently ignored in several
+    // automation and reduced-motion contexts, so relying on it would mean
+    // shipping a result nobody watched work.
+    if (card.scrollIntoView) {
+      try { card.scrollIntoView({ block: 'center' }); }
+      catch (e) { card.scrollIntoView(); }
+    }
+    card.classList.add('just-moved');
+    setTimeout(function () { card.classList.remove('just-moved'); }, 1800);
+  }
+
+  // The shared day picker, used by both "move to another day" and "promote a
+  // backup onto a day". `mode` is 'move' or 'promote':
+  //   - move: the item's current day is shown but not tappable (see
+  //     dayMoveOptions), and "No day" only appears when there is an
+  //     assignment to clear. Neither of those taps can change anything, and
+  //     a control that cannot succeed should not be offered.
+  //   - promote: every day stays live, because picking the current day still
+  //     does real work there (it flips the status out of backup), and "No
+  //     day" is always a valid promote target.
+  function dayPickerRow(it, hint, onPick, onCancel, mode) {
     var frag = document.createDocumentFragment();
-    frag.appendChild(el('p', 'when-line', hint));
-    var pick = el('div', 'ctl-row');
     var pst = ctx.store.load();
-    stayDates(effectiveDates(effectiveData(ctx.base, pst), pst)).forEach(function (iso) {
-      var db = el('button', 'ctl', dayLabel(iso));
+    var model = dayMoveOptions(effectiveData(ctx.base, pst), pst, it);
+    var isMove = mode !== 'promote';
+    // Naming the current day turns the picker into its own explanation: the
+    // traveler sees where the item is now and where it can go, in one line.
+    frag.appendChild(el('p', 'when-line',
+      hint + (isMove && model.currentLabel ? ' Now on ' + model.currentLabel + '.' : '')));
+    var pick = el('div', 'ctl-row');
+    model.options.forEach(function (o) {
+      var isCurrent = o.current && isMove;
+      var db = el('button', 'ctl' + (isCurrent ? ' is-current' : ''), o.label);
       db.type = 'button';
-      db.onclick = function () { onPick(iso); };
+      if (isCurrent) {
+        db.disabled = true;
+        db.setAttribute('aria-current', 'true');
+        db.title = 'Already on ' + o.label;
+      } else {
+        db.onclick = function () { onPick(o.iso); };
+      }
       pick.appendChild(db);
     });
-    var nd = el('button', 'ctl', 'No day');
-    nd.type = 'button';
-    nd.onclick = function () { onPick(null); };
-    pick.appendChild(nd);
+    if (!isMove || model.hasDay) {
+      var nd = el('button', 'ctl', 'No day');
+      nd.type = 'button';
+      nd.onclick = function () { onPick(null); };
+      pick.appendChild(nd);
+    }
     var cancel = el('button', 'ctl to-archived', 'Cancel');
     cancel.type = 'button';
     cancel.onclick = onCancel;
@@ -5270,15 +5538,15 @@ var CityOps = (function () {
     (it.links || []).forEach(function (l) { row.appendChild(linkPill(l)); });
     if (row.children.length) frag.appendChild(row);
     if (status === 'backup' && withDayPicker && pendingPromote === it.id) {
-      frag.appendChild(dayPickerRow('Promote to which day?',
+      frag.appendChild(dayPickerRow(it, 'Promote to which day?',
         function (iso) { promoteTo(it, iso); },
-        function () { pendingPromote = null; rerender(); }));
+        function () { pendingPromote = null; rerender(); }, 'promote'));
       return frag;
     }
     if (pendingMove === it.id) {
-      frag.appendChild(dayPickerRow('Move to which day?',
+      frag.appendChild(dayPickerRow(it, 'Move to which day?',
         function (iso) { moveTo(it, iso); },
-        function () { pendingMove = null; rerender(); }));
+        function () { pendingMove = null; rerender(); }, 'move'));
       return frag;
     }
     var ctl = el('div', 'ctl-row');
@@ -5301,12 +5569,22 @@ var CityOps = (function () {
     if (withDayPicker && (status === 'plan' || status === 'done')) {
       // Phase 4: this is the "Add to a day" control from any Eat & Drink, Do
       // or Services card (populate-Plan-from-other-tabs). Same picker either
-      // way (it already offers "No day" to clear an assignment); only the
-      // label changes so a traveler with nothing set yet does not read
-      // "change" for an action they have never taken.
+      // way; only the label changes so a traveler with nothing set yet does
+      // not read "change" for an action they have never taken.
+      //
+      // In the Plan tab (withDayPicker === 'labeled') the icon also carries
+      // its text. The house default is wordless icon controls with a hover
+      // tooltip, and that default holds everywhere else here. It fails in
+      // exactly this spot: the Plan tab is used on a phone, a phone has no
+      // hover, so the tooltip that carries the entire meaning of an
+      // otherwise decorative calendar glyph is unreachable on the one
+      // surface where moving an item between days is the point. The row
+      // already carries a text label on Archive, so this costs one word of
+      // density and no new visual language.
       var hasDay = !!effectiveDay(it, curState);
       var mvLabel = hasDay ? 'Change day' : 'Add to a day';
-      var mv = el('button', 'ctl icon-btn', '📅');
+      var mv = el('button', 'ctl icon-btn' + (withDayPicker === 'labeled' ? ' has-label' : ''),
+        withDayPicker === 'labeled' ? ('📅 ' + mvLabel) : '📅');
       mv.type = 'button';
       mv.setAttribute('aria-label', mvLabel);
       mv.title = mvLabel;
@@ -5364,6 +5642,9 @@ var CityOps = (function () {
     else if (Object.prototype.hasOwnProperty.call(itemExpandOverride, it.id)) expanded = itemExpandOverride[it.id];
     else expanded = defaultExpanded(status);
     container.classList.add(expanded ? 'expanded' : 'collapsed');
+    // Stamped on every card everywhere, so revealJustMoved() can find a card
+    // again after a re-render relocated it, in any tab.
+    container.setAttribute('data-item-id', it.id);
     var hd = cardHeaderBtn(it, status, expanded, dayChip);
     hd.onclick = function () { toggleExpand(it.id, status); };
     container.appendChild(hd);
@@ -5818,7 +6099,7 @@ var CityOps = (function () {
       pm.today.forEach(function (e) {
         var card = el('div', 'card' + (e.status === 'done' ? ' item-done' : ''));
         card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
-        appendCard(card, e.it, e.status, true, true);
+        appendCard(card, e.it, e.status, true, 'labeled');
         main.appendChild(card);
       });
     }
@@ -5847,7 +6128,7 @@ var CityOps = (function () {
       d.items.forEach(function (e) {
         var card = el('div', 'card' + (e.status === 'done' ? ' item-done' : ''));
         card.appendChild(el('p', 'sec-meta', (e.sec.icon ? e.sec.icon + ' ' : '') + e.sec.label));
-        appendCard(card, e.it, e.status, true, true);
+        appendCard(card, e.it, e.status, true, 'labeled');
         main.appendChild(card);
       });
     });
@@ -5895,6 +6176,8 @@ var CityOps = (function () {
     var notice = document.getElementById('notice');
     notice.textContent = ctx.store.persistent ? '' :
       'Private mode: changes hold for this session only and are not saved.';
+    // Runs after #main is fully rebuilt: the card it looks for only exists now.
+    revealJustMoved();
     // Additive hook: the app shell sets this to re-render its citybar (name/dates)
     // whenever engine state changes, without the shell re-implementing rerender.
     if (CityOps.onStateChange) CityOps.onStateChange();
@@ -6036,7 +6319,7 @@ var CityOps = (function () {
       var summary = diffSummary(current, res.data);
       st.dataOverride = res.data;
       ctx.store.save(st);
-      pendingPromote = pendingMove = pendingEdit = null; // item ids may change under an override
+      pendingPromote = pendingMove = pendingEdit = justMoved = null; // item ids may change under an override
       wrap.remove();
       rerender();
       document.getElementById('notice').textContent = 'Data updated: ' + summary + '.';
@@ -6049,7 +6332,7 @@ var CityOps = (function () {
         var st = ctx.store.load();
         st.dataOverride = null;
         ctx.store.save(st);
-        pendingPromote = pendingMove = pendingEdit = null;
+        pendingPromote = pendingMove = pendingEdit = justMoved = null;
         wrap.remove();
         rerender();
       };
@@ -6234,6 +6517,7 @@ var CityOps = (function () {
     pendingMove = null;
     pendingEdit = null;
     itemExpandOverride = {};
+    justMoved = null;
     drag = null;
     if (typeof document !== 'undefined' && document.body) document.body.classList.remove('share');
     if (!listenersBound && typeof window !== 'undefined' && window && window.addEventListener) {
@@ -6301,7 +6585,9 @@ var CityOps = (function () {
     // Phase 4 additions: tabs (replaces the Today/Guide/Calendar view switch)
     // and the Plan tab's own model, all pure and unit-tested on their own.
     TABS: TABS, tabForSection: tabForSection, setTab: setTab, effectiveTab: effectiveTab,
-    planModel: planModel, isPlanDayCollapsed: isPlanDayCollapsed, togglePlanDay: togglePlanDay
+    planModel: planModel, isPlanDayCollapsed: isPlanDayCollapsed, togglePlanDay: togglePlanDay,
+    // Plan-tab per-item day moves: the picker's own pure model.
+    dayMoveOptions: dayMoveOptions
   };
 })();
 CityOps.init();
