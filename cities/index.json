@@ -2,6 +2,7 @@
   "cities": [
     {"file": "batumi.json", "name": "Batumi", "dates": "Aug 8-15, 2026"},
     {"file": "yerevan.json", "name": "Yerevan", "dates": "Aug 15-22, 2026"},
-    {"file": "tirana.json", "name": "Tiranë", "dates": "Aug 22-29, 2026"}
+    {"file": "tirana.json", "name": "Tiranë", "dates": "Aug 22-29, 2026"},
+    {"file": "ksamil.json", "name": "Ksamil", "dates": "Aug 29-Sep 5, 2026"}
   ]
 }

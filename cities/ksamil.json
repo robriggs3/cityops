@@ -1,0 +1,2479 @@
+{
+  "schema": 1,
+  "city": {
+    "name": "Ksamil",
+    "country": "AL",
+    "dates": {
+      "from": "2026-08-29",
+      "to": "2026-09-05"
+    },
+    "accommodation": {
+      "name": "Prestige Home Ksamil",
+      "lat": 39.7686,
+      "lng": 20.0042
+    },
+    "currency": {
+      "code": "ALL",
+      "usd": 0.0126
+    },
+    "notes": [
+      "No Bolt, no Uber, anywhere in Albania",
+      "Cash for sunbeds, buses and small places",
+      "Bus to Sarande 150 L, last one back around 18:30",
+      "Your week is still peak, not shoulder",
+      "Four 24-hour bakeries, one ATM fee worth avoiding"
+    ]
+  },
+  "sections": [
+    {
+      "id": "dinner",
+      "label": "Dinner",
+      "icon": "🍽️"
+    },
+    {
+      "id": "breakfast",
+      "label": "Breakfast",
+      "icon": "🍳"
+    },
+    {
+      "id": "lunch",
+      "label": "Lunch",
+      "icon": "🥙"
+    },
+    {
+      "id": "coffee",
+      "label": "Coffee",
+      "icon": "☕"
+    },
+    {
+      "id": "cowork",
+      "label": "Coworking",
+      "icon": "💻"
+    },
+    {
+      "id": "activities",
+      "label": "Activities",
+      "icon": "🏛️"
+    },
+    {
+      "id": "services",
+      "label": "Services",
+      "icon": "🧺"
+    },
+    {
+      "id": "practical",
+      "label": "Practical",
+      "icon": "💡"
+    }
+  ],
+  "items": [
+    {
+      "id": "bon-appetit",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-08-29",
+      "when": "Arrival night, walk it",
+      "name": "Bon Appetit Restaurant",
+      "price": {
+        "text": "~1,000-1,500 ALL / $13-19"
+      },
+      "note": "The highest-rated sit-down seafood room in Ksamil at real volume, and it is family-run inside the Poseidon Hotel on Konstandin Kristoforidhi, a short walk from your door. Right answer for a travel day: you order seafood linguine, they bring a portion reviewers call huge, and you are home in an hour. IT CLOSES BEFORE 23:00 and Google does not publish the exact time, so treat 21:00 as your last safe sitting rather than a late one.",
+      "hours": {
+        "text": "Opens 08:00 · closes before 23:00, exact time unpublished",
+        "class": "eve"
+      },
+      "tags": [
+        "Book ahead"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Bon+Appetit+Restaurant+Ksamil"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355683473011"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Seafood linguine, named specifically in 51 separate reviews, more than any other dish in the village"
+          },
+          {
+            "tier": "must",
+            "text": "Whatever the fresh fish is that night: 42 reviews name it, and the kitchen is the reason this sits at 4.9"
+          },
+          {
+            "tier": "good",
+            "text": "Squid, 27 review mentions, the second thing people order after the pasta"
+          }
+        ],
+        "tips": [
+          "Portions are the recurring theme in reviews, so one main is one meal here, not a starting point",
+          "Small room and a big rating: on a Saturday in August, phone ahead or arrive before 20:00"
+        ],
+        "source": "Google Maps review keyword tallies and panel, read 2026-08-25"
+      },
+      "rating": {
+        "stars": 4.9,
+        "count": 581,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "mendra",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-08-30",
+      "when": "After Butrint · opens 18:00, not before",
+      "name": "MËNDRA Restaurant Ksamil",
+      "price": {
+        "text": "~1,000-1,500 ALL / $13-19"
+      },
+      "note": "The one night you do not eat fish. This is the only place in Ksamil where the reviews cluster hard on actual Albanian cooking rather than pasta and grilled bream: 142 reviews name traditional Albanian food, 26 name tave kosi by itself. It follows a morning in the ruins properly. DINNER ONLY, the door opens at 18:00, so do not wander over at lunch.",
+      "hours": {
+        "text": "Opens 18:00 · dinner only",
+        "class": "eve"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Mendra+Restaurant+Ksamil"
+        },
+        {
+          "kind": "web",
+          "label": "ksamil.al",
+          "href": "https://ksamil.al"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355684694595"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Tave kosi, the baked lamb and yoghurt, named by 26 reviewers and the reason the place has its reputation"
+          },
+          {
+            "tier": "must",
+            "text": "Lakror, the savoury tart the restaurant puts in its own trading name"
+          },
+          {
+            "tier": "good",
+            "text": "Stuffed peppers, which Google surfaces as the single most ordered dish"
+          },
+          {
+            "tier": "good",
+            "text": "Baklava to finish, named alongside the focaccia in recent reviews"
+          }
+        ],
+        "tips": [
+          "It is up in Fontana, above the beach strip, so it is a walk uphill rather than a stroll along the sand"
+        ],
+        "source": "Google Maps review keyword tallies, read 2026-08-25"
+      },
+      "rating": {
+        "stars": 4.7,
+        "count": 1155,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "fish-tavern",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-08-31",
+      "when": "After the islets · salt still on you",
+      "name": "The Fish Tavern",
+      "price": {
+        "text": "~1,000-1,500 ALL / $13-19"
+      },
+      "note": "Rated with the best of them and priced in the same band as the cheap places, which is the combination you want on a Monday. Plain fish taverna, no view premium, plus code Q282+94P in the village. Open until 23:30, so this is the one dinner in the week that genuinely waits for you if the swim runs long.",
+      "hours": {
+        "text": "12:00-23:30",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=The+Fish+Tavern+Ksamil"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.8,
+        "count": 933,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "king-mussel",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-09-01",
+      "when": "Eve, taxi out and back · agree the fare first",
+      "name": "King Mussel Taverna",
+      "price": {
+        "text": "~1,000-2,500 ALL / $13-32"
+      },
+      "note": "Mussels out of Lake Butrint are the one genuinely local thing on this coast, farmed in the lagoon and served metres from the ropes they grew on. Two places do it. This is the better one on the numbers: it out-rates The Mussel House by three tenths of a star on a tenth of the volume, and it is cheaper by Google's own price band. It sits on the lagoon road at km 6, so it is a taxi, not a walk, and reviewers describe the last stretch of road as rough but driveable to the door. OPENS 13:00, closing time unpublished.",
+      "hours": {
+        "text": "Opens 13:00 · close time unpublished",
+        "class": "eve"
+      },
+      "tags": [
+        "Book ahead"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=King+Mussel+Taverna+Butrint+Sarande"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355692656887"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Mussels sote, the house dish, named in 48 reviews and the thing Google lists as most ordered"
+          },
+          {
+            "tier": "good",
+            "text": "Octopus, 13 mentions, the second thing regulars order"
+          },
+          {
+            "tier": "good",
+            "text": "Mussel pasta if you want the same shellfish as a full plate rather than a bowl"
+          }
+        ],
+        "tips": [
+          "342 reviews means a small room. Ring ahead in the first week of September rather than turning up",
+          "Ask the driver to wait or take his number: there is nothing to flag down on the lagoon road at 21:00"
+        ],
+        "source": "Google Maps review keyword tallies and panel, read 2026-08-25"
+      },
+      "rating": {
+        "stars": 4.8,
+        "count": 342,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "haxhi",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-09-02",
+      "when": "Eve, after Lekursi · you are already in Sarande",
+      "name": "Haxhi",
+      "price": {
+        "text": "~1,000-3,000 ALL / $13-38"
+      },
+      "note": "The strongest rating-and-volume combination anywhere in this guide, in either town, and the reason Wednesday is the night you go into Sarande. Family-run on Rruga 40 Shenjtoret with a sea view, reviewers repeatedly mention homemade liqueur arriving unasked at the end. Checked live at 23:00 on a Tuesday in late August and Google had it flagged busier than usual, so this is not a walk-up.",
+      "hours": {
+        "text": "12:00-23:30",
+        "class": "late"
+      },
+      "tags": [
+        "Book ahead"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Haxhi+Restaurant+Sarande"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355696638919"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Seafood pasta, 98 review mentions, and the seafood risotto behind it at 59"
+          },
+          {
+            "tier": "good",
+            "text": "Gambas al ajillo and the fritto misto, the two things reviewers photograph most"
+          },
+          {
+            "tier": "good",
+            "text": "Ask for a table with the sea view: 161 reviews mention it, so it is worth naming when you call"
+          }
+        ],
+        "tips": [
+          "Portion size is the single most repeated word in the reviews, 323 mentions. Order fewer courses than you think",
+          "No website, Facebook only. Phone is the booking channel",
+          "The last bus back to Ksamil has gone by the time you finish. Budget a taxi, 1,500 to 2,500 ALL, agreed before you get in"
+        ],
+        "source": "Google Maps review keyword tallies and live panel, read 2026-08-25"
+      },
+      "rating": {
+        "stars": 4.9,
+        "count": 9272,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "ftelea",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-09-03",
+      "when": "Eve, back from the Blue Eye",
+      "name": "Ftelea Fish Taverna Ksamil",
+      "price": {
+        "text": "~1,000-2,000 ALL / $13-25"
+      },
+      "note": "Reviewers keep saying a version of the same thing: it does not look like much and the food is the best in the village. 135 reviews name the fresh fish, 99 name the calamari. This is the by-the-kilo fish place, which makes it the one where the weighing rule matters most, and that rule is on its own card under Practical. Open to 23:30.",
+      "hours": {
+        "text": "11:30-23:30",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Ftelea+Fish+Taverna+Ksamil"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355697308444"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Calamari, 99 review mentions, the dish people come back for"
+          },
+          {
+            "tier": "must",
+            "text": "Sauteed crabs, which Google lists as the most ordered plate here"
+          },
+          {
+            "tier": "good",
+            "text": "Sea bass, 63 mentions, and the mussels at 79 if you did not get enough on Tuesday"
+          }
+        ],
+        "tips": [
+          "See the fish and agree the price per kilo AND the weight before it goes on the grill. Grilled fish runs about 5,000 ALL a kilo and nobody volunteers that"
+        ],
+        "source": "Google Maps review keyword tallies, read 2026-08-25, plus repeated Ksamil pricing warnings across guides"
+      },
+      "rating": {
+        "stars": 4.6,
+        "count": 2346,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "grill-zone",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-09-04",
+      "when": "Last night · walkable, no booking anxiety",
+      "name": "Grill Zone",
+      "price": {
+        "text": "~1,000-1,500 ALL / $13-19"
+      },
+      "note": "By a distance the most reviewed business in Ksamil, and it is meat rather than fish, which is the right last night after a week of it. Inside Hotel Vila Melina on Rruga Butrinti, so it is a walk. 194 reviewers mention the raki, 229 mention the staff, and 70 specifically flag it halal. A rating that high on that volume in a village this size is unusual and I am reporting it as Google shows it rather than vouching for it.",
+      "hours": {
+        "text": "12:00-23:30",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Grill+Zone+Ksamil"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355675385617"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The mix grill for two, which Google lists as the single most ordered thing on the menu"
+          },
+          {
+            "tier": "good",
+            "text": "The raki, named by 194 separate reviewers, which in a grill house is a verdict about the house rather than the drink"
+          }
+        ],
+        "tips": [
+          "It is a grill, not a seafood place. Come here for the change, not for one more plate of calamari"
+        ],
+        "source": "Google Maps review keyword tallies, read 2026-08-25"
+      },
+      "rating": {
+        "stars": 4.9,
+        "count": 8467,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "mussel-house",
+      "section": "dinner",
+      "status": "backup",
+      "name": "The Mussel House",
+      "price": {
+        "text": "~4,300 ALL / $54 for two starters, two mains and a litre of wine, per one reviewer"
+      },
+      "note": "The famous lagoon mussel place, on the water at km 10 of the Sarande to Butrint road, with rooms and a pool attached. Well rated, but below King Mussel Taverna and below every other pick in this section. The split in the reviews is entirely about value: plenty of people call it the fairest price for the quality, plenty of others call it expensive for the area and one calls the food bang average. Use it if King Mussel is full or closed, not ahead of it.",
+      "hours": {
+        "text": "11:30-23:30",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=The+Mussel+House+Restaurant+Ksamil"
+        },
+        {
+          "kind": "web",
+          "label": "themusselhouse.com",
+          "href": "https://themusselhouse.com"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355692329231"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.5,
+        "count": 3764,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "lime-ksamil",
+      "section": "dinner",
+      "status": "backup",
+      "name": "Lime Restaurant & Cocktail Bar Ksamil",
+      "price": {
+        "text": "~500-2,500 ALL / $6-32"
+      },
+      "note": "It does not close until 01:30, which makes it the only real answer in the village if a work block overruns and you are eating at 22:30. On Rruga Butrinti. I could not open the full review panel, so I have the rating and the hours and no dish-level verdict to give you.",
+      "hours": {
+        "text": "Closes 01:30",
+        "class": "late"
+      },
+      "tags": [
+        "Late"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Lime+Restaurant+Cocktail+Bar+Ksamil"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.9,
+        "count": 840,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "poda-restaurant",
+      "section": "dinner",
+      "status": "backup",
+      "name": "Pōda Restaurant Ksamil",
+      "price": {
+        "text": "Above the village norm: lobster and steak menu, no published band"
+      },
+      "note": "Steps from the sand on SH81 and named repeatedly for the sunset. Lobster pasta is what Google lists as most ordered, and reviewers also name the tomahawk. Two warnings. First, that rating with a lobster-and-steak menu means you can spend real money for a middling plate. Second, there is a SEPARATE business called Poda Lounge Bar sitting at 3.7 across 2,368 reviews. Check which door you are walking through.",
+      "hours": {
+        "text": "09:00-23:30",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Poda+Restaurant+Ksamil"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355684822925"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.5,
+        "count": 1416,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "taverna-del-mare",
+      "section": "dinner",
+      "status": "backup",
+      "name": "Taverna Del Mare",
+      "price": {
+        "text": "~1,000-3,000 ALL / $13-38"
+      },
+      "note": "Sarande, on Rruga Peshkatari. The one to call when Haxhi cannot seat you, and unlike Haxhi it has its own website, so booking is plausible rather than a phone gamble. 96 reviews name the linguine, 45 the seafood pasta, 21 the risotto.",
+      "hours": {
+        "text": "12:00-23:30",
+        "class": "late"
+      },
+      "tags": [
+        "Book ahead"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Taverna+Del+Mare+Sarande"
+        },
+        {
+          "kind": "web",
+          "label": "taverna-del-mare.al",
+          "href": "https://taverna-del-mare.al"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355699112553"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.8,
+        "count": 2323,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "kujtimi",
+      "section": "dinner",
+      "status": "backup",
+      "name": "Bar Restaurant Kujtimi",
+      "price": {
+        "text": "~500-1,000 ALL / $6-13"
+      },
+      "note": "The cheapest verified sit-down meal in either town, on Rruga Zejtareve in Sarande, shaded terrace, local dishes. The rating sits a full half-star behind everything else here, so this is a value pick and not a food pick: go when you want to eat well for under ten dollars, not when you want the meal of the trip. Open until midnight.",
+      "hours": {
+        "text": "11:00-00:00",
+        "class": "late"
+      },
+      "tags": [
+        "Cheap"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Bar+Restaurant+Kujtimi+Sarande"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.2,
+        "count": 761,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "guvat",
+      "section": "dinner",
+      "status": "backup",
+      "name": "Guvat Bar Restorant",
+      "price": {
+        "text": "Reviewers report 25 EUR / ~2,300 ALL for four fried prawns"
+      },
+      "note": "READ THIS BEFORE YOU BOOK IT. Guvat is the sunset-view name every blog gives you, and it sits nearly a full star under a village where the competition runs 4.5 to 4.9. Its review vocabulary is dominated by the view, 189 mentions, not the food. The complaints repeat: 30 to 50 EUR mains with small portions, an hour and a half before anyone took an order, being told only three mains were available, and explicit reports of overcharges appearing on the bill with locals warning to check it. The view is real. Go up for one drink at sunset, check the bill line by line, and eat somewhere else.",
+      "hours": {
+        "text": "Opens 07:00 · close time unpublished"
+      },
+      "tags": [
+        "Check the bill"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Guvat+Bar+Restorant+Ksamil"
+        },
+        {
+          "kind": "web",
+          "label": "guvatbarrestorant.shop",
+          "href": "https://guvatbarrestorant.shop"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355685432183"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 3.9,
+        "count": 2737,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "memaj-bakery",
+      "section": "breakfast",
+      "status": "plan",
+      "name": "Memaj Bakery & Pastry",
+      "price": {
+        "text": "Under 500 ALL / under $6 a head"
+      },
+      "note": "OPEN 24 HOURS, which answers the whole breakfast question before it is asked. Ksamil is not a village where nothing opens before 08:00: it has four round-the-clock bakeries, and this is the best of them. On SH81 in the middle of the village, plus code Q293+76. Burek and a coffee at 07:15 costs you about 300 ALL and you are back at the desk in twenty minutes.",
+      "hours": {
+        "text": "Open 24 hours",
+        "class": "late"
+      },
+      "tags": [
+        "Best"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Memaj+Bakery+Pastry+Ksamil"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355696625275"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Burek in the morning, 33 review mentions, and the baklava at 53 if you are there in the evening instead"
+          },
+          {
+            "tier": "good",
+            "text": "Trilece, 25 mentions, the milk cake that is the local dessert default"
+          }
+        ],
+        "tips": [
+          "Ice cream, baklava and a hot chocolate came to 1,100 ALL for one reviewer, which is the ceiling here rather than the norm"
+        ],
+        "source": "Google Maps review keyword tallies, read 2026-08-25"
+      },
+      "rating": {
+        "stars": 4.6,
+        "count": 1035,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "primera-bakery",
+      "section": "breakfast",
+      "status": "plan",
+      "name": "Bakery Primera Food House",
+      "price": {
+        "text": "Cheese pastry plus espresso ~300 ALL / $4"
+      },
+      "note": "Also OPEN 24 HOURS, and the only bakery here with a working website that takes orders, which matters on a morning you do not want to leave the desk. Plus code Q2F4+R3. 29 reviewers name the burek, and the menu runs past pastry into pizza and midhje. Fewer reviews than Memaj, same hours, slightly out from the centre.",
+      "hours": {
+        "text": "Open 24 hours",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Bakery+Primera+food+house+Ksamil"
+        },
+        {
+          "kind": "web",
+          "label": "primerabakery.com",
+          "href": "https://primerabakery.com"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355693603197"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.5,
+        "count": 152,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "bleta-premium",
+      "section": "breakfast",
+      "status": "plan",
+      "name": "Bleta Premium Ksamil",
+      "price": {
+        "text": "~500-1,000 ALL / $6-13"
+      },
+      "note": "The third 24-hour option, on Sheshi 4 Valltaret. It is a patisserie crossed with a bakery, so pastries, bread, byrek, crepes and gelato, and it is the priciest of the four by Google's own band. Take it when you want a sit-down and a proper coffee rather than a paper bag.",
+      "hours": {
+        "text": "Open 24 hours",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Bleta+Premium+Ksamil"
+        },
+        {
+          "kind": "web",
+          "label": "bletapremium.com",
+          "href": "https://bletapremium.com"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355695882093"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.4,
+        "count": 500,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "furre-kosova",
+      "section": "breakfast",
+      "status": "backup",
+      "name": "Furrë Bukë Kosova",
+      "price": {
+        "text": "Under 500 ALL / under $6"
+      },
+      "note": "The fourth 24-hour bakery, on SH81 at plus code Q292+PC9. This is the working bread oven rather than a cafe, and it is repeatedly named as the best actual loaf in Ksamil. The rating rests on only 23 reviews, so treat it as thin. Go here for bread for the apartment, not for a seat.",
+      "hours": {
+        "text": "Open 24 hours",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Furre+buke+kosova+Ksamil"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.4,
+        "count": 23,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "basilico",
+      "section": "lunch",
+      "status": "plan",
+      "name": "Basilico Restaurant",
+      "price": {
+        "text": "~500-1,500 ALL / $6-19"
+      },
+      "note": "The best price-to-rating ratio in Ksamil, full stop: that rating at 500 to 1,500 ALL a head, a band 1,404 separate people reported. Open from 08:00, plus code Q293+Q6, walkable. THE CATCH IS THE HOUR: a detailed recent review says arrive before 19:00 or you queue, which is exactly why this is your 14:30 lunch and not your dinner. Moussaka is what Google lists as most ordered, and the photo tags run oysters, croquettes, risotto, scampi and mackerel.",
+      "hours": {
+        "text": "08:00-23:30 · queues after 19:00",
+        "class": "late"
+      },
+      "tags": [
+        "Best value"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Basilico+Restaurant+Ksamil"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355686242717"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.8,
+        "count": 2564,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "byreck",
+      "section": "lunch",
+      "status": "plan",
+      "name": "Byreck",
+      "price": {
+        "text": "Under 500 ALL / under $6"
+      },
+      "note": "Street byrek on SH81, plus code Q2C4+X4V, and the cheapest hot lunch in the village. The rating rests on only 41 reviews, so it is thin and the recommendation rests on what byrek is rather than on the sample. Meat byrek is what reviewers name. Hours are not published anywhere I could find, so treat it as a walk-past rather than a destination.",
+      "hours": {
+        "text": "Hours not published"
+      },
+      "tags": [
+        "Cheap"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Byreck+Ksamil"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.6,
+        "count": 41,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "veranda-apollonia",
+      "section": "lunch",
+      "status": "plan",
+      "name": "Veranda By Apollonia",
+      "price": {
+        "text": "Sunbeds 1,000-2,000 ALL for two / $13-25, food on top"
+      },
+      "note": "The lounger-plus-lunch answer: you pay for the bed, you order to the bed, the afternoon takes care of itself. Open 09:00 to 23:55. Reviewers report paying 1,000 ALL and 2,000 ALL for two loungers all day, which is the honest spread. Know what it is: 145 reviews mention the cocktails and 58 the sunset, so it is a DJ beach club with a kitchen rather than a quiet lunch. Greek salad is what Google lists as most ordered.",
+      "hours": {
+        "text": "09:00-23:55",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Veranda+By+Apollonia+Ksamil"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355699453790"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.5,
+        "count": 2216,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "gjordeni",
+      "section": "lunch",
+      "status": "plan",
+      "name": "Supermarket Gjordeni",
+      "price": {
+        "text": "Bottled water 60-150 ALL / $0.75-1.90 for 1.5L"
+      },
+      "note": "The main grocery, on Rruga Butrinti, open 07:00 to midnight, with the fruit and vegetables singled out in reviews. This is where the self-catered lunch and the case of bottled water come from, and it opens at 07:00, which lines up with a work morning. Buy the water in a multipack on day one: the tap here is not the thing to drink, and beach kiosks charge several times this.",
+      "hours": {
+        "text": "07:00-00:00",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Supermarket+Gjordeni+Ksamil"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355699326056"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.1,
+        "count": 684,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "laguna-beach-ksamil",
+      "section": "lunch",
+      "status": "backup",
+      "name": "Laguna Beach Ksamil",
+      "price": {
+        "text": "~1,000-3,000 ALL / $13-38"
+      },
+      "note": "Opens 08:00. The second beach-club kitchen if Veranda is full, and the weakest rating of the beach options here. Worth knowing because it is the real business behind the name Taverna Laguna that some guides list: there is no restaurant by that name.",
+      "hours": {
+        "text": "Opens 08:00"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Laguna+Beach+Ksamil"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.3,
+        "count": 1492,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "hidden-bay",
+      "section": "lunch",
+      "status": "backup",
+      "name": "Hidden Bay Beach Bar",
+      "price": {
+        "text": "~500-2,500 ALL / $6-32"
+      },
+      "note": "Opens 09:00, plus code QX9R+6GW. This is what Google actually returns when you search for a rooftop restaurant in Ksamil, and it is a beach bar rather than a rooftop: there is no verified rooftop venue in the village, whatever the blogs say. Smaller and better rated than Laguna.",
+      "hours": {
+        "text": "Opens 09:00"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Hidden+Bay+Beach+Bar+Ksamil"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.7,
+        "count": 439,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "piceri-luna",
+      "section": "lunch",
+      "status": "backup",
+      "name": "Restorant Piceri Luna",
+      "price": {
+        "text": "No published band"
+      },
+      "note": "Pizza, which after four days of seafood is a genuine service. I found it on Google's related-places panel rather than by opening its own page, so I have the rating and nothing else: no hours, no price band, no dish verdicts. Treat it as a real place with an unverified everything.",
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Restorant+Piceri+Luna+Ksamil"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.7,
+        "count": 1285,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "savory-bistro",
+      "section": "coffee",
+      "status": "plan",
+      "name": "Savory Bistro Cafe & Lounge",
+      "price": {
+        "text": "~500-1,000 ALL / $6-13"
+      },
+      "note": "Google's own result card calls this the best coffee in Ksamil, and it is the highest-rated all-day cafe in the village. On SH81, plus code Q293+96, closes at 01:00. It is also the breakfast answer if you want a plate rather than a paper bag: avocado toast with poached eggs is the most ordered dish, 42 reviews name it, 17 name the poached eggs, and reviewers add pancakes, waffles, omelettes and a club sandwich. Espresso, americano and freddo all get named by name, which in Albania is a better signal than a menu claim. TWO GAPS I could not close: the opening time is not published, and no review anywhere mentions wifi, plugs or laptops.",
+      "hours": {
+        "text": "Closes 01:00 · opening time unpublished",
+        "class": "late"
+      },
+      "tags": [
+        "Best"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Savory+bistro+cafe+lounge+Ksamil"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355695663793"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.9,
+        "count": 1150,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "simple-temple",
+      "section": "coffee",
+      "status": "plan",
+      "name": "Simple Temple",
+      "price": {
+        "text": "~500-1,000 ALL / $6-13"
+      },
+      "note": "On Isadora Dunkan street and OPEN 24 HOURS, which makes it the fallback at any hour a work block ends. Being straight about the evidence: it is the place Google returns for the query cafe with wifi in Ksamil, and that is weak evidence of wifi rather than proof of it. It is also categorised as a lounge bar, so expect music in the evening.",
+      "hours": {
+        "text": "Open 24 hours",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Simple+Temple+Ksamil"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.9,
+        "count": 412,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "no-specialty-coffee",
+      "section": "coffee",
+      "status": "plan",
+      "name": "The honest answer on specialty coffee",
+      "note": "There is none in Ksamil, and there is none in Sarande either. Not one roaster, not one place advertising origin, brew method or beans, in either town. Albania's specialty scene is in Tirana, which you are leaving. What the south has instead is standard Albanian bar espresso, which is genuinely good and costs 100 to 150 ALL, about a dollar seventy, with a cappuccino at 200 to 300. Set the expectation now and you will enjoy it: order espresso or a freddo, not a flat white, and do not go looking for a pour-over. The four cards below are the best of the non-specialty field, all in Sarande, plus the two Ksamil places above.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "balux-coffee",
+      "section": "coffee",
+      "status": "backup",
+      "name": "Balux Coffee Bar",
+      "price": {
+        "text": "~500-1,000 ALL / $6-13"
+      },
+      "note": "Sarande, Rruga Onhezmi, and the top hit when you search Maps for specialty coffee in Sarande. It is not specialty, but it is the highest-rated actual coffee shop in either town. Closes 01:30.",
+      "hours": {
+        "text": "Closes 01:30",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Balux+Coffee+Bar+Sarande"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355697847995"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.9,
+        "count": 324,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "zum-cafe",
+      "section": "coffee",
+      "status": "backup",
+      "name": "ZUM Cafe",
+      "price": {
+        "text": "Cappuccino 200 ALL / $2.50"
+      },
+      "note": "Sarande, Onhezmi, and one blogger who measured the town cafe by cafe calls it the best-tasting coffee in Sarande. Shakshuka is what Google lists as most ordered, so it is a brunch room as much as a coffee bar. THE CATCH FOR WORK: the same blogger measured its wifi at 14 Mbps, the slowest of the good cafes, and puts its closing at 16:30. Come for the cup, not the desk.",
+      "hours": {
+        "text": "Opens 08:30 · one source says it closes 16:30",
+        "class": "day"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=ZUM+cafe+Sarande"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355682172484"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.8,
+        "count": 811,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "corner-bar",
+      "section": "coffee",
+      "status": "backup",
+      "name": "Corner Bar",
+      "price": {
+        "text": "Cappuccino 120 ALL / $1.50"
+      },
+      "note": "Central Sarande, and the cheapest cappuccino anyone measured in either town at 120 ALL. Reported hours 06:30 to 23:30, wifi around 60 Mbps, and rated work-friendly by the one person who tested the town's cafes properly. CASH ONLY. This is a blog-sourced find rather than a Maps-verified one, so I have no rating for it and I am not inventing one.",
+      "hours": {
+        "text": "06:30-23:30 · cash only",
+        "class": "late"
+      },
+      "tags": [
+        "Cheap"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Corner+Bar+Sarande"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "mulliri-vjeter",
+      "section": "coffee",
+      "status": "backup",
+      "name": "Mulliri i Vjetër, Qendër",
+      "price": {
+        "text": "Up to ~1,500 ALL / $19"
+      },
+      "note": "The national bakery-cafe chain does have a Sarande branch, on Rruga Dede Gjo Luli, and it OPENS AT 06:30, the earliest verified opening in either town. The rating rests on only 30 reviews, which is too thin to lean on. It is a chain, not a roaster: useful for the hour, not for the coffee.",
+      "hours": {
+        "text": "Opens 06:30"
+      },
+      "tags": [
+        "Early"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Mulliri+i+Vjeter+Sarande"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+35542407923"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.9,
+        "count": 30,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "apartment-desk",
+      "section": "cowork",
+      "status": "plan",
+      "name": "The apartment, which is your actual office",
+      "note": "THERE IS NO COWORKING SPACE IN KSAMIL. I searched for one and the top result was a travel agency. So the nearest workspace to your accommodation is your accommodation, and the honest planning position is that your week's connectivity rests on the apartment wifi with a phone hotspot behind it. Three things a Ksamil-resident blogger flags that no booking page will: wifi in village accommodation is often slow, power cuts happen in peak summer when the grid overloads, and some guesthouses run off water tanks rather than mains. None of that is a reason not to be here. It is a reason to buy the big SIM in Tirana, carry a power bank, and put anything that genuinely cannot drop into the middle of the day rather than the evening peak.",
+      "tags": [
+        "Closest"
+      ],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "saranda-coworking",
+      "section": "cowork",
+      "status": "plan",
+      "name": "Saranda Marketing & Coworking",
+      "price": {
+        "text": "Membership only, price not published; one blog says ~3 EUR / ~280 ALL a day, uncorroborated"
+      },
+      "note": "The only real coworking within reach, 7 km away on Rruga Gjergj Araniti in Sarande, plus code V2F8+56, next to Vive Mare. Their own site claims up to 480 Mbps down and 24/7 access. TWO THINGS THAT DECIDE WHETHER THIS WORKS. First, it is MEMBERS ONLY and you must buy access AT LEAST TWO HOURS AHEAD, so it is never a walk-in on the morning you need it. Second, it has exactly one Google review, so that rating tells you nothing at all. Buy a day for the one week-day you have a call that cannot fail, and buy it the night before.",
+      "hours": {
+        "text": "Listed 24/7, members only · buy access 2h ahead",
+        "class": "late"
+      },
+      "tags": [
+        "Best",
+        "Book ahead"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Saranda+Marketing+Coworking"
+        },
+        {
+          "kind": "web",
+          "label": "sarandacoworking.com",
+          "href": "https://sarandacoworking.com"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355693115395"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 5,
+        "count": 1,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "vive-mare",
+      "section": "cowork",
+      "status": "plan",
+      "name": "Vive Mare",
+      "price": {
+        "text": "Cappuccino 250 ALL / $3"
+      },
+      "note": "Sarande, hillside with a bay view, and the best measured working cafe in either town: 230 Mbps, open 07:00 to midnight, open-air terrace, rated excellent for laptops by the one person who benchmarked the town. It is also right beside the coworking space, so the two are one trip. The speed figure is from a single blogger with a speed test, not from the venue.",
+      "hours": {
+        "text": "07:00-00:00",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Vive+Mare+Sarande"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.7,
+        "count": 71,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "sweesh",
+      "section": "cowork",
+      "status": "backup",
+      "name": "Sweesh",
+      "price": {
+        "text": "Cappuccino 200 ALL / $2.50"
+      },
+      "note": "Rruga Flamurit in Sarande, 08:00 to midnight, and the fastest wifi anyone has measured in the town at over 200 Mbps, with couches and a work-friendly verdict. CALIBRATE: Google files it as an ice cream shop, so it is a gelateria with excellent internet rather than a cafe with a laptop culture.",
+      "hours": {
+        "text": "08:00-00:00",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Sweesh+Sarande"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.4,
+        "count": 399,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "limani-not-for-work",
+      "section": "cowork",
+      "status": "backup",
+      "name": "Limani Bar Restaurant, and why not to work there",
+      "price": {
+        "text": "~500-3,000 ALL / $6-38 · cappuccino 250 ALL"
+      },
+      "note": "On the Sarande marina at Rruga Jonianet 3, boats alongside, and it is the first place you will want to open a laptop because of where it sits. Do not. Measured wifi was 20 Mbps and patchy and it was the one venue rated POOR for working. It is a fine lunch with a view, on the same street as the Ksamil bus stop, and it takes online bookings. Grilled octopus is what recent reviewers single out.",
+      "hours": {
+        "text": "07:00-23:30",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Limani+Bar+Restaurant+Sarande"
+        },
+        {
+          "kind": "web",
+          "label": "limanisarande.com",
+          "href": "https://limanisarande.com"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355692979994"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.3,
+        "count": 3390,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "butrint",
+      "section": "activities",
+      "status": "plan",
+      "day": "2026-08-30",
+      "when": "AM, be at the gate for 08:30 opening",
+      "name": "Butrint National Park",
+      "price": {
+        "text": "1,000 ALL / $12.60 · bring cash, the gate is unreliable on cards"
+      },
+      "note": "The UNESCO site, 4 km down the road, and the single best thing within reach. Sunday morning is deliberate: your weekday mornings belong to work, the site opens at 08:30, and early is when it is neither 31C nor full of coach parties. The full circuit is 90 minutes to two hours. THE ONE EXPECTATION TO KILL NOW: the famous baptistery mosaic with the peacocks is BURIED UNDER SAND and only uncovered a few times a year, because the lagoon floods it and permanent exposure would destroy it. Assume you will not see it. What you will see is a Roman theatre that survives almost intact, the Great Basilica, the Lion Gate, and the Acropolis Museum in the Venetian tower, which is inside your ticket. Bring bug spray: it is a lagoon, and mosquitoes are the most repeated complaint.",
+      "hours": {
+        "text": "08:30-20:00 daily, last entry 18:00 · same hours through 31 Oct",
+        "class": "day"
+      },
+      "tags": [
+        "Sun",
+        "Cash only"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Butrint+National+Park+Albania"
+        },
+        {
+          "kind": "web",
+          "label": "culturalsites.myticket.al",
+          "href": "https://culturalsites.myticket.al/butrinti.php?lang=en"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The Roman theatre, the one structure reviewers agree survives well enough to read as a building"
+          },
+          {
+            "tier": "good",
+            "text": "The Acropolis Museum in the Venetian tower: it is included, it is air-conditioned, and the 1st and 2nd century glass is the best-rated part of the collection"
+          },
+          {
+            "tier": "skip",
+            "text": "Turning up expecting the baptistery mosaic. It is under sand and there is no published uncovering calendar"
+          }
+        ],
+        "tips": [
+          "Two independent sources say entry is free on the last Sunday of every month, which would make 30 Aug free. The official ticket page does not list it, so carry 1,000 ALL and treat a free gate as a bonus, not a plan",
+          "Signage is described as good by some reviewers and as missing by others, and I could not verify an on-site guide rate. The site is small enough to walk unaided",
+          "Trails flood and the stone is uneven: this is not a flip-flop walk"
+        ],
+        "source": "Official ticket page plus Google and TripAdvisor review aggregates, read 2026-08-25"
+      },
+      "rating": {
+        "stars": 4.6,
+        "count": 13536,
+        "source": "Google Maps via aggregate",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "ksamil-islets",
+      "section": "activities",
+      "status": "plan",
+      "day": "2026-08-31",
+      "when": "PM, after the work block · last boats mid-afternoon",
+      "name": "The Ksamil islets",
+      "price": {
+        "text": "Water taxi 500-1,000 ALL / $6-13 return · pedal boat ~€10 · kayak ~€7"
+      },
+      "note": "The highest-rated thing in Ksamil itself, and the reason the village is on anyone's map. Four rocky islets totalling under nine hectares, all inside Butrint National Park. The nearest one is SWIMMABLE from the main beach, which is free and is the best version of this. The further pair, the Twin Islands joined by a white sand spit, need a boat and have no beach clubs, no loungers and no music on them, which after a day on the main strip is the whole point. Informal water taxis run off the main beach and the price is negotiable.",
+      "hours": {
+        "text": "Daylight, boats stop mid to late afternoon",
+        "class": "day"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Ksamil+Islands"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The Twin Islands and the sandbar between them: no loungers, no music, and the snorkelling reviewers actually rate"
+          },
+          {
+            "tier": "good",
+            "text": "Swimming to the nearest islet rather than paying for the crossing, which several reviewers describe doing"
+          },
+          {
+            "tier": "skip",
+            "text": "The pedal boats. Reviewers consistently call them poor value against the water taxi"
+          }
+        ],
+        "tips": [
+          "There is no formal entry fee to the islets, but loungers get rented on them in season at whatever the operator asks",
+          "One recurring one-star complaint is litter, bottles and broken glass on the rocks. Water shoes, not bare feet"
+        ],
+        "source": "Google and TripAdvisor review aggregates plus regional guides, read 2026-08-25"
+      },
+      "rating": {
+        "stars": 4.7,
+        "count": 217,
+        "source": "Google Maps via aggregate",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "last-bay",
+      "section": "activities",
+      "status": "plan",
+      "day": "2026-09-01",
+      "when": "PM, after the work block",
+      "name": "The Last Bay, also signed Augustus Beach",
+      "price": {
+        "text": "~1,000 ALL / $12.60 for loungers, the cheapest verified in Ksamil"
+      },
+      "note": "The quiet one, at the southern end of the village. Described consistently as the second calmest beach area in Ksamil with NO LOUD MUSIC, which on this coast is a genuine differentiator, and it is a third of the price of the central beaches. Parking under the trees. WATER SHOES: the sand turns to large pebbles at the water and the entry is not soft. Paddleboards and canoes for rent. If you only rent a lounger once this week, rent it here.",
+      "hours": {
+        "text": "Daylight · arrive before 10:00 for shade and a spot",
+        "class": "day"
+      },
+      "tags": [
+        "Quiet",
+        "Water shoes"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=The+Last+Bay+Ksamil"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "lekursi-castle",
+      "section": "activities",
+      "status": "plan",
+      "day": "2026-09-02",
+      "when": "Eve, be up there by 18:30 · sunset 19:08",
+      "name": "Lekursi Castle",
+      "price": {
+        "text": "Free · taxi up from Sarande ~500-1,000 ALL / $6-13"
+      },
+      "note": "The sunset, over Sarande and across to Corfu. ENTRY IS FREE AND YOU DO NOT HAVE TO EAT THERE. That matters, because the restaurant inside sits at 2.4 stars across 790 reviews, which is one of the worst ratings I have seen on a functioning business: parties left without ordering, a group of thirty refused outdoor seats while half the terrace sat empty. Go up, take the view, have one drink, and eat at Haxhi afterwards. Sunset on 2 September is 19:08, so be there by 18:30 to get a spot before the viewpoint fills.",
+      "hours": {
+        "text": "Grounds open, no posted hours · sunset 19:08 on 2 Sep",
+        "class": "eve"
+      },
+      "tags": [
+        "Evening",
+        "Free"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Lekuresi+Castle+Saranda"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "The view itself, which is the only thing every review agrees on"
+          },
+          {
+            "tier": "skip",
+            "text": "Dinner at the castle restaurant: 2.4 stars over 790 reviews, expensive cocktails, and repeated reports that locals get the good tables"
+          }
+        ],
+        "tips": [
+          "It is 3 to 4 km uphill from the promenade, 45 to 60 minutes on foot. Take the taxi up and decide about walking down",
+          "Pair it with the Monastery of 40 Saints on the same hill and the same taxi run"
+        ],
+        "source": "Google Maps panel and review aggregates, read 2026-08-25"
+      },
+      "rating": {
+        "stars": 4.3,
+        "count": 7000,
+        "source": "Google Maps via aggregate, count rounded",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "forty-saints",
+      "section": "activities",
+      "status": "plan",
+      "day": "2026-09-02",
+      "when": "Eve, before Lekursi · same taxi, same hill",
+      "name": "Monastery of 40 Saints",
+      "price": {
+        "text": "Free"
+      },
+      "note": "The 6th century Byzantine monastery that gave Sarande its name: Agioi Saranda, the Forty Saints. Basilica, pilgrim hostels, underground chambers and crypts, now largely ruins, on the same hill as Lekursi, 3 km up from the promenade. Free, an information panel at the entrance showing what was there before it was destroyed, no posted hours. Ratings are split across duplicate listings between 4.0 and 4.3. Twenty minutes on the way up to the castle, and the reason to take the taxi rather than walk.",
+      "hours": {
+        "text": "No posted hours · daylight",
+        "class": "day"
+      },
+      "tags": [
+        "Free"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Monastery+of+40+Saints+Saranda"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.3,
+        "count": 179,
+        "source": "Google Maps via aggregate",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "blue-eye",
+      "section": "activities",
+      "status": "plan",
+      "day": "2026-09-03",
+      "when": "Invert the day: 10:00 bus out, 14:25 back, work the evening",
+      "name": "Blue Eye, Syri i Kaltër",
+      "price": {
+        "text": "50 ALL / $0.63 entry, cash only · bus 400 ALL / $5 each way"
+      },
+      "note": "THIS IS THE ONE DAY THE GUIDE ASKS YOU TO SWAP MORNING FOR EVENING, and here is why it is worth it. The spring is essentially free at 50 lek, but its entire quality depends on arriving early: August pulled over 78,000 people through it, and the consensus is that the first hour after opening is the whole experience. Take the Sarande to Gjirokastër bus at 10:00, get off at the spring, take the 14:25 back, and work the evening instead. TripAdvisor has it at 3.8 against the Google number on the badge above, and that gap is the overrated-versus-magic argument in one line. SWIMMING IS BANNED and rangers now enforce it: it is a drinking water source. The water is 10 to 13C anyway.",
+      "hours": {
+        "text": "Roughly 07:00-19:00 · arrive before 09:00 for the quiet version",
+        "class": "day"
+      },
+      "tags": [
+        "Cash only",
+        "Confirm the bus"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Syri+i+Kalter+Blue+Eye+Albania"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "intel": {
+        "verdicts": [
+          {
+            "tier": "must",
+            "text": "Getting there before the coaches. Every positive review and every negative one turns on the hour of arrival"
+          },
+          {
+            "tier": "skip",
+            "text": "Planning to swim in the spring. The ban is real, it is enforced, and the fine is not the point: it is the town's water"
+          }
+        ],
+        "tips": [
+          "CONFIRM THE BUS FIRST. The 400 ALL Sarande to Blue Eye to Gjirokastër service is published as June to August only, and your trip runs into September. Ask at the Sarande stop on day one",
+          "It is 2.2 km uphill from the car park to the spring, 25 to 35 minutes with almost no shade. A seasonal little train runs it for 300 ALL",
+          "Cash only at the gate and there is no ATM anywhere near it",
+          "Parking is 100 to 200 ALL if you end up in a taxi rather than the bus"
+        ],
+        "source": "Google and TripAdvisor aggregates, published 2026 bus schedule and site guides, read 2026-08-25"
+      },
+      "rating": {
+        "stars": 4.4,
+        "count": 15007,
+        "source": "Google Maps via aggregate",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "lori-beach",
+      "section": "activities",
+      "status": "plan",
+      "day": "2026-09-04",
+      "when": "PM, last full afternoon · nothing after this but packing",
+      "name": "Lori Beach",
+      "price": {
+        "text": "1,500-2,500 ALL / $19-32 for two loungers and an umbrella"
+      },
+      "note": "The calm one in the middle of the village, walkable, repeatedly praised for having no constant loud music, which most of the strip cannot say. Light sand with a deck option, and you order to the lounger. The price is the honest seasonal story in one line: one visitor paid 2,500 ALL in August and another paid 1,500 in September for the identical set. Its restaurant OPENS AT 07:30, so if you want one sit-down breakfast on the sand this week, this is where it is. Reviewers are candid that the food is good rather than memorable, which for a last lazy afternoon is exactly the right amount of ambition.",
+      "hours": {
+        "text": "Beach daylight · restaurant 07:30-23:30",
+        "class": "day"
+      },
+      "tags": [
+        "Quiet"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Lori+Beach+Ksamil"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355692160216"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.7,
+        "count": 1952,
+        "source": "Google Maps, restaurant listing",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "saranda-promenade",
+      "section": "activities",
+      "status": "plan",
+      "name": "The Sarande promenade, and the evening xhiro",
+      "price": {
+        "text": "Free"
+      },
+      "note": "Anytime, free, and the thing to do with any Sarande evening after the light goes. The seafront strip fills between 19:00 and midnight with the xhiro, the Albanian evening walk, and it is where the town actually is in summer. Cafes, gelato and bars the whole length. Be honest about it: this is a working tourist strip, not a historic waterfront, but it is pleasant, safe and cheap, and a coffee costs a fifth of what the view is worth. There is also a public beach right on it with free municipal umbrellas, which is more than Ksamil manages.",
+      "hours": {
+        "text": "Best 19:00 to midnight",
+        "class": "late"
+      },
+      "tags": [
+        "Evening",
+        "Free"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Saranda+Promenade+Albania"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.6,
+        "count": 140,
+        "source": "Google Maps via aggregate",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "synagogue-basilica",
+      "section": "activities",
+      "status": "plan",
+      "name": "Synagogue-Basilica complex, Sarande",
+      "price": {
+        "text": "Free"
+      },
+      "note": "Fifteen minutes, free, open air, no gate, on Rruga Skënderbeu next to Friendship Park and directly on your route between the long-distance bus streets and the promenade. A 5th century synagogue later converted into a Christian basilica in ancient Onhezmus, with a claimed mosaic floor carrying a menorah, a shofar and an etrog. WHETHER THAT MOSAIC IS CURRENTLY UNCOVERED I could not confirm, and given that Butrint reburies its mosaics for exactly the same reason, do not count on it. TripAdvisor has it at 3.1, which is what happens when people arrive expecting a monument and find a fenced excavation. Take it as a fifteen-minute detour, not a destination.",
+      "hours": {
+        "text": "Open air, any time",
+        "class": "day"
+      },
+      "tags": [
+        "Free"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Synagogue+Basilica+Saranda"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 3.9,
+        "count": 148,
+        "source": "Google Maps via aggregate",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "triangular-castle-ferry",
+      "section": "activities",
+      "status": "plan",
+      "name": "The Vivari channel cable ferry and the Triangular Castle",
+      "price": {
+        "text": "~100 ALL / $1.26 on foot, negotiable and inconsistently quoted"
+      },
+      "note": "Tack this onto Butrint rather than making a trip of it. The road south of Butrint has no bridge over the Vivari channel: there is a hand-operated cable ferry, it takes minutes, and it deposits you at a 16th century triangular Venetian fortress guarding the channel mouth. It is a genuine curiosity and it costs about a dollar. DO NOT CONFUSE IT with Ali Pasha Castle, which is a separate structure out at the lagoon mouth reachable only by informal boat at around 10 EUR a head, roughly June to September.",
+      "hours": {
+        "text": "Daylight, operator-dependent",
+        "class": "day"
+      },
+      "tags": [
+        "Cash only"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Triangular+Castle+Butrint"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "corfu-day-trip",
+      "section": "activities",
+      "status": "backup",
+      "name": "Corfu, as a day trip from Sarande",
+      "price": {
+        "text": "€25 one way conventional, €30 fast · 10% off a same-day return booked together"
+      },
+      "note": "Genuinely practical, and it is the biggest single day available to you, but it costs a whole day and it is the only thing here with a border in it. The hydrofoil is 30 minutes. Take the 08:00 or 09:00 out and the 18:00 or 19:00 back and you get seven or eight useful hours in Corfu Town, which is itself UNESCO-listed, and you are back for a late dinner on the promenade. Operators are Finikas Lines, Ionian Seaways and Albania Luxury Ferries, up to 13 sailings a day. THREE THINGS THAT SINK PEOPLE: boarding closes 30 minutes before departure and the terminal wants you an hour early, so 29 minutes early means you missed it. Corfu is ONE HOUR AHEAD, which is what catches people on the return. And Albania is outside Schengen while Greece is inside, so this is a real crossing both ways, it burns days against your Schengen 90 in 180, and the EU biometric entry system makes the first Greek entry slower than a stamp.",
+      "hours": {
+        "text": "Sailings roughly 06:00-20:00 · be at the terminal 1h before",
+        "class": "day"
+      },
+      "tags": [
+        "Passport",
+        "Full day"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Saranda+Port+ferry+terminal+Albania"
+        },
+        {
+          "kind": "web",
+          "label": "directferries.com",
+          "href": "https://www.directferries.com/saranda_corfu_ferry.htm"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "gjirokaster",
+      "section": "activities",
+      "status": "backup",
+      "name": "Gjirokastër, the Ottoman stone town",
+      "price": {
+        "text": "Bus 400-500 ALL / $5-6 each way, flat fare"
+      },
+      "note": "The strongest cultural counterweight to a beach week and the only place on this list that is genuinely a different kind of place. UNESCO Ottoman hill town, 2 to 2.5 hours by the same bus that serves the Blue Eye. The only pairing that works is the 07:15 out of Sarande and the 17:00 back, which means leaving Ksamil around 06:30 and getting home near 20:00. That is a full day and it eats a work day, which is why it is a backup rather than a plan. SAME WARNING AS THE BLUE EYE: the timetable is published as June to August only. Confirm it before you build a day on it. You cannot do this and the Blue Eye properly on the same day: pick one.",
+      "hours": {
+        "text": "Bus out 07:15, 10:00, 14:15 · back 11:00, 13:45, 17:00",
+        "class": "day"
+      },
+      "tags": [
+        "Full day",
+        "Confirm the bus"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Gjirokaster+Albania"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "ksamil-watersports",
+      "section": "activities",
+      "status": "backup",
+      "name": "Ksamil Watersports & Boat Tours",
+      "price": {
+        "text": "From €17 for an hour around the islets · €33 for 1.5h to Pulëbardha and the Pigeon Cave"
+      },
+      "note": "The boat market here is mostly informal touts on the sand, which is fine and cheap but unbookable. This is the one operator I could verify by name with real review counts behind individual trips: the badge above is the one-hour island loop, and the Pulëbardha and Pigeon Cave snorkel trip runs 4.7 across 30 reviews. A three-hour RIB to Tongo Island is 80 EUR at 4.8 across 8 reviews, which is too thin to lean on. Book this if you want a boat with a name on it rather than a negotiation on the beach.",
+      "hours": {
+        "text": "Departures cluster 09:00-10:00",
+        "class": "day"
+      },
+      "tags": [
+        "Book ahead"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Ksamil+Watersports+Boat+Tours"
+        },
+        {
+          "kind": "web",
+          "label": "checkyeti.com",
+          "href": "https://www.checkyeti.com/en/boat-tours/albania/ksamil/islands-boat-trips"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.8,
+        "count": 81,
+        "source": "CheckYeti, island loop trip",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "pasqyra-beach",
+      "section": "activities",
+      "status": "backup",
+      "name": "Pasqyra, Mirror Beach",
+      "price": {
+        "text": "~€20 / ~1,850 ALL for one umbrella and two loungers, some report 3,000 ALL"
+      },
+      "note": "A 150 m pebble cove 6 km NORTH of Ksamil, not south as most guides put it. It runs as a private beach club from June to September with sunbed rental effectively mandatory, so the free-in-the-off-season line you will read does not apply to your week. Getting there is the catch: the Sarande bus drops you on the main road and then it is a 1.2 km walk down a steep, loose dirt track, about 20 minutes, and back up it afterwards in the heat. Sea shoes required. Reviewers say the water is blue rather than the clearest, because of the waves and boat traffic.",
+      "hours": {
+        "text": "Daylight",
+        "class": "day"
+      },
+      "tags": [
+        "Water shoes"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Plazhi+i+Pasqyrave+Mirror+Beach+Saranda"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4,
+        "count": 1505,
+        "source": "Google Maps via aggregate",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "pulebardha",
+      "section": "activities",
+      "status": "backup",
+      "name": "Pulëbardha Beach",
+      "price": {
+        "text": "2,000-3,000 ALL / $25-38, with 1,000 refunded if you eat at the beach restaurant"
+      },
+      "note": "Off the Sarande to Ksamil road, and the pricing has one genuinely useful wrinkle: a thousand lek comes back off the lounger if you eat there, which turns a 3,000 ALL day into a 2,000 ALL day plus lunch. THE ACCESS IS THE PROBLEM: 1 to 1.5 km of unpaved, steep, rocky, potholed track, then a car park, then stairs down. Low cars scrape. Take a taxi rather than a scooter. Large grey pebbles, so beach shoes, and reviewers complain about loud music from the restaurants.",
+      "hours": {
+        "text": "Daylight · arrive early, it fills",
+        "class": "day"
+      },
+      "tags": [
+        "Water shoes"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Pulebardha+Beach+Saranda"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.1,
+        "count": 1911,
+        "source": "Google Maps via aggregate",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "lavanderi-agalliu",
+      "section": "services",
+      "status": "plan",
+      "name": "Lavanderi AGALLIU",
+      "price": {
+        "text": "Not published · ask the price per kilo before you hand it over"
+      },
+      "note": "The only laundry I could find in Ksamil, on Rruga Eqerem Cabej at plus code Q2G4+977, opens 08:00 and the closing time is not published. The rating is middling, but this is what the village has. What reviewers actually say is warm: clothes came back clean, ironed and neatly folded, and the owner mended a customer's trousers for free because the nearest tailor was far. The listing is unclaimed on Google, so phone rather than expecting a website.",
+      "hours": {
+        "text": "Opens 08:00 · close time unpublished",
+        "class": "day"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Lavanderi+AGALLIU+Ksamil"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355685592440"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 3.9,
+        "count": 59,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "laundry-load",
+      "section": "services",
+      "status": "plan",
+      "day": "2026-09-02",
+      "when": "AM, drop it before the work block",
+      "name": "Laundry drop",
+      "note": "Wednesday, so it is back well before Saturday. Agalliu opens at 08:00 and the closing time is not published anywhere, so drop early and ask when to collect rather than assuming a same-day turnaround.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "beauty-retreat",
+      "section": "services",
+      "status": "plan",
+      "name": "The Beauty Retreat, Massage & Nails by Silvi",
+      "price": {
+        "text": "Not published · agree it on the phone"
+      },
+      "note": "The cleanest rating of any business in this guide, on Apollonia Street at plus code Q292+6X. Open 09:00 to 23:30, which is late enough that a massage fits after a work block rather than instead of one. Seven reviews name the full body massage and seven the relaxing massage; the owner replies to reviews, which in a village this size is the signal that someone is actually running it. No website, so book by phone.",
+      "hours": {
+        "text": "09:00-23:30",
+        "class": "late"
+      },
+      "tags": [
+        "Book ahead"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=The+Beauty+Retreat+Massage+Nails+SILVI+Ksamil"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355697997174"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 5,
+        "count": 181,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "barber-03",
+      "section": "services",
+      "status": "plan",
+      "name": "Barber Shop 03",
+      "price": {
+        "text": "Not published"
+      },
+      "note": "On Rruga Apollonia, plus code Q292+8P, and OPEN 24 HOURS, so this is never a scheduling problem. Reviewers name the barbers rather than the shop, which is usually the right sign. Google flags it as women-owned and one review is from a woman who was its first female customer, so it may or may not routinely do women's hair.",
+      "hours": {
+        "text": "Open 24 hours",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Barber+shop+03+Ksamil"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355688243589"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.9,
+        "count": 115,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "farmaci-idi",
+      "section": "services",
+      "status": "plan",
+      "name": "Farmaci IDI",
+      "price": {
+        "text": "n/a"
+      },
+      "note": "The late pharmacy, plus code Q2F3+4V, CLOSES AT 02:00, and one reviewer specifically thanks it for those hours over a sick child at night. The rating rests on only 15 reviews, and there is no phone number on the listing at all. Ksamil's pharmacy provision is thin enough that this is the one Google surfaces rather than demonstrably the only one, so bring anything you actually rely on. Sarande, fifteen to twenty minutes away, has proper coverage.",
+      "hours": {
+        "text": "Closes 02:00 · opening time unpublished",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Farmaci+IDI+Ksamil"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.7,
+        "count": 15,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "local-market-24h",
+      "section": "services",
+      "status": "plan",
+      "name": "Local Market",
+      "price": {
+        "text": "Grocery prices, no band published"
+      },
+      "note": "OPEN 24 HOURS on Rruga Riviera, praised for locally sourced fruit. This is the 3 a.m. answer and the fresh-produce answer. The bigger weekly shop is Supermarket Gjordeni on the Lunch tab, which is larger and opens at 07:00 but shuts at midnight.",
+      "hours": {
+        "text": "Open 24 hours",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Open in Maps",
+          "href": "https://www.google.com/maps/search/?api=1&query=Local+Market+Ksamil"
+        },
+        {
+          "kind": "tel",
+          "label": "Call",
+          "href": "tel:+355692102665"
+        }
+      ],
+      "place_id": null,
+      "verified": null,
+      "rating": {
+        "stars": 4.9,
+        "count": 69,
+        "source": "Google Maps",
+        "checked": "2026-08-25"
+      }
+    },
+    {
+      "id": "arrival-day",
+      "section": "practical",
+      "status": "plan",
+      "day": "2026-08-29",
+      "when": "PM, in by roughly 15:00",
+      "name": "Arrival: Tirana to Sarande to Ksamil",
+      "note": "BOOKED: Tisa Travel, Tirana 09:45 to Sarande 14:00, from the Kashar terminal. Then the local bus onward, which is the same municipal line that runs Sarande to Ksamil to Butrint: it leaves from Rruga Jonianet, just outside the FERRY TERMINAL at the roundabout with the big tree, not from the long-distance streets by Friendship Park where your Tisa bus will drop you. Those are two different places about a kilometre apart. Fare 150 ALL, cash to the driver or the conductor working the aisle, 15 to 25 minutes, hourly. Get off on Rruga Butrinti in the middle of Ksamil, look for the blue and white signs; there is no bus station. The apartment is on the main street, two minutes from Ksamil Beach. If the connection has gone, a taxi is 1,500 to 2,500 ALL and you agree the number before the door shuts.",
+      "tags": [],
+      "links": [
+        {
+          "kind": "map",
+          "label": "Sarande local bus stop",
+          "href": "https://www.google.com/maps/search/?api=1&query=Rruga+Jonianet+ferry+terminal+Sarande+Albania"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "cash-pull",
+      "section": "practical",
+      "status": "plan",
+      "day": "2026-08-29",
+      "when": "PM, one withdrawal, not six",
+      "name": "Cash pull: 50,000 to 70,000 ALL, in ONE go",
+      "note": "Do this on day one and do it once. The full reasoning is on the Cash and ATMs card; the action is: find an OTP Bank machine in Ksamil, decline the conversion offer, take 50,000 to 70,000 ALL. One OTP withdrawal of 60,000 costs 500 ALL in fees, which is 0.8%. Six withdrawals of 10,000 cost 3,000 ALL, which is 5%. That difference is a dinner at Haxhi.",
+      "tags": [
+        "Cash"
+      ],
+      "links": [
+        {
+          "kind": "map",
+          "label": "OTP ATM, Ksamil",
+          "href": "https://www.google.com/maps/search/?api=1&query=OTP+Bank+ATM+Ksamil+Albania"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "cash-and-atms",
+      "section": "practical",
+      "status": "plan",
+      "name": "Cash and ATMs: Ksamil has plenty, and that is not the problem",
+      "note": "THE CALL: do not arrive with a wallet full of lek from Tirana, but do plan one large withdrawal rather than several small ones. I checked OpenStreetMap directly for cash machines inside the Ksamil village bounding box and got SIXTEEN, which is far more than a village of this size implies. OTP Bank runs five of them, plus a Western Union and exchange point at Sheshi 4 Valltaret; Raiffeisen, BKT, Tirana Bank and Fibank have one each. There is no Credins, Intesa, Union Bank or Alpha here, so do not plan around them. THE COST IS THE FEE, NOT THE ACCESS. Every Albanian ATM charges a flat fee per withdrawal on a foreign card, 500 to 800 ALL, and there are no fee-free ATMs in the country. OTP is the cheap tier at 500 ALL with a 70,000 ALL ceiling; Raiffeisen and BKT are 700 to 800. Credins used to be free and is not any more, whatever older blogs say. ALWAYS DECLINE the machine's offer to bill you in dollars or euros: that conversion runs 3 to 7% worse than your own bank. And avoid any blue and yellow Euronet machine on sight; I could not confirm one exists in Ksamil, but the branding is the tell. WHAT ACTUALLY NEEDS CASH: sunbeds always, the bus always, small shops, bakeries and cafes, the Blue Eye gate, the Butrint gate in practice, and the cable ferry. Larger restaurants take cards; small tavernas prefer not to. One warning I could not corroborate but which is cheap to insure against: riviera ATMs are reported to run dry on peak weekends.",
+      "tags": [
+        "Cash"
+      ],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "euros-cost-you",
+      "section": "practical",
+      "status": "plan",
+      "name": "Paying in euros costs you 8%",
+      "note": "Euros are accepted informally almost everywhere here, at a flat shopkeeper rate of 1 EUR to 100 lek. The real rate on 25 August was about 92.5, so every euro you hand over loses you seven to eight percent, and your change comes back in lek at the same bad rate. Carry lek. Keep a few euros as a backstop and nothing more. For the arithmetic in your head all week: 100 lek is about $1.26, so divide lek by 80 for dollars.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "the-rhythm",
+      "section": "practical",
+      "status": "plan",
+      "name": "The rhythm this week actually rewards",
+      "note": "Beaches before 10:00 or after 17:00, and nothing in between. That is not a preference, it is the arithmetic of your dates: in peak August one writer had staff laugh at an 11:00 request for a lounger, and Poda beach is reported full by 08:00. Your work mornings collide head-on with the only civilised beach hours, which is why this guide puts the beach in the late afternoon on weekdays and puts Butrint on the Sunday morning when the mornings are yours. Sunset is 19:10 on 1 September and 19:05 by the 4th, so an evening plan means leaving the apartment around 18:15, and dinner sits naturally at 20:00. Highs run about 31C at the start of your week easing toward 26C, sea at 25C, and there is essentially no rain in the first ten days of September, so the weather will not rearrange anything.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "late-august-not-shoulder",
+      "section": "practical",
+      "status": "plan",
+      "name": "September 1 is not the shoulder season here",
+      "note": "CORRECT THIS EXPECTATION BEFORE YOU ARRIVE. The switch does not flip on 1 September in Ksamil. Albanian schools going back thins the domestic crowd, but Italian and northern European holidays run on, and the honest local characterisation of your exact window is August crowds at ninety percent of August prices. The real drop is 11 to 20 September, after you have gone. What that means concretely: 29 to 31 August are the three worst days of your stay for beach space, front beaches still fill by 11:00 through roughly 3 September, and restaurants still queue at 21:00. There is one measurable softening you can use: the same lounger set that goes for 2,500 ALL at Lori in August was 1,500 in September, so from about the 2nd it is worth asking for a better number rather than accepting the first. Nothing closes for the season during your week; that starts in late October.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "sunbeds-and-free-sand",
+      "section": "practical",
+      "status": "plan",
+      "name": "Sunbeds, price caps, and where the free sand actually is",
+      "note": "Every beach in Albania is legally public and in Ksamil that is close to a technicality. For 2026 the government created a municipal price ceiling, and Sarande council, which covers Ksamil, set tiers of 1,000, 2,000 and 3,000 lek per umbrella, then added a FOURTH tier of 4,000 lek for the main Ksamil beaches around the islands. Read that carefully: the cap on the best beaches is about 43 EUR. The council report does not say how many loungers an umbrella buys. The free municipal beach exists and a fact-check published four days before this guide counted it: TWENTY-FOUR umbrellas, four rows of six, wedged between two private operations, no lifeguard, overcrowded. You may also pitch your own towel or umbrella there. In practice: walk past the last row of paid umbrellas and the sand beyond it is free, the far ends of any beach are your best odds, and half of Paradise Beach has been made public. Two documented pressure patterns: a price that is quoted rather than posted and moves with who is asking, and a parking charge that appears after you decline the loungers. Ask what the number covers before you sit down or park.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "fish-by-weight",
+      "section": "practical",
+      "status": "plan",
+      "name": "The one overcharge pattern that will actually catch you",
+      "note": "FISH IS SOLD BY WEIGHT AND NOBODY VOLUNTEERS THE NUMBER. This is the single most repeated complaint across Ksamil reviews: a diner expecting a 1,000 to 1,500 ALL bill gets 4,000 to 5,000 because grilled fish runs around 5,000 ALL a kilo and the fish they picked was bigger than they thought. The defence is one sentence: ask to see the fish, and confirm the price per kilo AND its weight, before it goes on the grill. Second pattern, well documented and named in Sarande specifically: drinks served without a price, at three or four times the local-brand rate, and bread or sides appearing on the bill. Ask for a written menu with prices. Your sanity anchors: grilled fish 600 to 1,200 ALL a portion, local salad 200 to 300, house wine 400 to 600 for a half litre, espresso 70 to 100, cappuccino 150 to 200, domestic beer 150 to 200, byrek 50 to 100. Three or four times those numbers means you are being worked. Third: the beachfront premium is real and it is measurable. Basilico, two streets back, prices at 500 to 1,500 a head; the beachfront rooms at 1,000 to 3,000 for food that is not better.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "buses-and-taxis",
+      "section": "practical",
+      "status": "plan",
+      "name": "Buses and taxis: no Bolt, no Uber, no meters",
+      "note": "BOLT DOES NOT OPERATE IN ALBANIA. Neither does Uber. Bolt's own city list has no Albanian cities at all, so whatever a blog told you, do not plan around an app. The local apps that cover Sarande are VrapOn and Clust, and I could not verify either works in Ksamil. THE BUS is the thing that works: the Sarande municipal line runs Sarande to Ksamil to Butrint, roughly hourly, 150 ALL to Ksamil and 200 ALL to Butrint, cash to the conductor, 15 to 25 minutes. It leaves Sarande from Rruga Jonianet outside the ferry terminal. THE TIMETABLE IS THE WEAK POINT: four sources give four answers, first bus somewhere between 06:30 and 07:30, last one out of Sarande between 17:30 and 18:30. Plan on the last bus back to Ksamil being early evening and confirm it with your driver on day one. Anything after that is a taxi. TAXIS DO NOT USE METERS. Agree the number before the door shuts, and get quotes from two drivers standing near each other rather than the first. Sarande to Ksamil is realistically 1,500 to 2,500 ALL and drivers ask more at night and in peak August; a short hop inside Sarande has a 1,000 ALL floor whatever the distance. Ksamil has no signposted rank: drivers wait informally on the main road and near the busy beach entrances, and the local move is to take a driver's number and arrange the next ride by WhatsApp.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "sim-and-data",
+      "section": "practical",
+      "status": "plan",
+      "name": "SIM and data: buy it in Tirana, not here",
+      "note": "Buy the SIM at Tirana airport on the way through, at the Vodafone or One counter in arrivals, both open 24 hours, passport needed. Take the 100 GB tier at 2,900 ALL, about $37, on either carrier: at that price the cheaper 40 GB bundle is a false economy when you are tethering a laptop for a week. This is not a backup connection, it is your primary one, because Ksamil accommodation wifi is reported slow and the grid drops in peak summer. ONE THING WORTH ASKING AT THE COUNTER: Albania is not in the EU roaming zone but it is in the Western Balkans one, which should mean your Albanian data keeps working in North Macedonia on 5 September at domestic rates. That applies to Albanian SIMs generally; I could not confirm it on the specific tourist bundles, so ask before you pay.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "water-and-sea",
+      "section": "practical",
+      "status": "plan",
+      "name": "Water, shoes, and what is in the sea",
+      "note": "DRINK BOTTLED. Albanian tap water is chlorinated and generally meets national standards, but the risk here is not the treatment plant, it is intermittent supply, old pipes and rooftop tanks, and some Ksamil guesthouses run off tanks rather than mains. Every source, including the ones that say the water is compliant, tells travellers to buy bottled. 60 to 150 ALL for 1.5 litres in a supermarket, several times that from a beach kiosk, so buy a multipack on day one. WATER SHOES ARE NOT OPTIONAL: the entry at the main Ksamil beach is rocky despite the photographs, The Last Bay is large pebbles, Pasqyra and Pulëbardha are pebble coves, and there are sea urchins on the rocky bases of the islets. Jellyfish appear in the Ionian in late summer after strong southerlies, which is your window; that is a single-source claim so treat it as worth a look at the water rather than a warning. Emergency number is 112, with English-speaking operators.",
+      "tags": [
+        "Water shoes"
+      ],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "tipping",
+      "section": "practical",
+      "status": "plan",
+      "name": "Tipping, and one rule about how",
+      "note": "Five to ten percent at a taverna, appreciated and not obligatory; in cafes and small places locals round up to the nearest 100 lek, so 1,400 on a 1,200 bill reads exactly right. Round up for taxis, no percentage. THE RULE THAT MATTERS: tip in cash, on the table or into a hand. Card tips in Albanian restaurants frequently do not reach the person who served you.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "work-block-mon",
+      "section": "practical",
+      "status": "plan",
+      "day": "2026-08-31",
+      "when": "AM",
+      "name": "Work block",
+      "note": "First weekday. Apartment wifi plus phone hotspot behind it. Beach after, not before.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "work-block-tue",
+      "section": "practical",
+      "status": "plan",
+      "day": "2026-09-01",
+      "when": "AM",
+      "name": "Work block",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "work-block-wed",
+      "section": "practical",
+      "status": "plan",
+      "day": "2026-09-02",
+      "when": "AM",
+      "name": "Work block",
+      "note": "Laundry goes in first. Sarande in the evening, so finish clean rather than running late.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "work-block-thu",
+      "section": "practical",
+      "status": "plan",
+      "day": "2026-09-03",
+      "when": "Eve, not AM",
+      "name": "Work block, moved to the evening",
+      "note": "The Blue Eye is the one thing this week that only works early, so Thursday inverts: bus out at 10:00, back on the 14:25, and the block lands in the evening instead. If that trade does not work for the calendar, the Blue Eye is the item to drop, not this.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "work-block-fri",
+      "section": "practical",
+      "status": "plan",
+      "day": "2026-09-04",
+      "when": "AM",
+      "name": "Work block",
+      "note": "Last one of the stay. Saturday is a travel day end to end.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "confirm-ohrid-bus",
+      "section": "practical",
+      "status": "plan",
+      "day": "2026-09-03",
+      "when": "PM, two calls, five minutes",
+      "name": "Confirm the Ohrid bus and book Saturday's ride",
+      "note": "Call Senad Tours on +355 69 313 2075 and confirm two things: that the 11:30 to Ohrid runs on Saturday 5 September, and EXACTLY where in Sarande it picks up. That second one is the real gap: Sarande has no central bus station, aggregators say central bus station anyway, and the operator's own site does not say. Then ask the apartment to book Saturday's taxi and to tell the driver the pickup point once you have it. This is a once-a-day seasonal service and there is no second bus.",
+      "tags": [
+        "Call"
+      ],
+      "links": [
+        {
+          "kind": "tel",
+          "label": "Senad Tours",
+          "href": "tel:+355693132075"
+        },
+        {
+          "kind": "web",
+          "label": "senadtours.com",
+          "href": "https://senadtours.com"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "pack",
+      "section": "practical",
+      "status": "plan",
+      "day": "2026-09-04",
+      "when": "Eve",
+      "name": "Pack",
+      "note": "Collect the laundry if it is not already back. Keep lek out for Saturday: the taxi is cash, and unofficial fees asked at Balkan land borders are a known scam, so anything not paid at an official window is not a real charge.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "departure",
+      "section": "practical",
+      "status": "plan",
+      "day": "2026-09-05",
+      "when": "Leave Ksamil 09:00, bus 11:30",
+      "name": "Departure: Ksamil to Sarande to Ohrid",
+      "note": "BOOKED: rideshare out of Ksamil at 09:00, then Senad Tours Sarande to Struga to Ohrid at 11:30, arriving about 19:00. Leaving at 09:00 gives you two and a half hours, and that is the right margin rather than an excessive one: you have to find a pickup point in a town with no bus station, for a service that runs once a day, and the ride is seven and a half hours with a border stop at Kjafasan where everyone gets off for document checks. There is no plannable time in Ksamil today. If the rideshare falls through, a taxi is 1,500 to 2,500 ALL agreed up front, and the 07:30 or 08:30 local bus at 150 ALL is the fallback behind that.",
+      "tags": [],
+      "links": [
+        {
+          "kind": "tel",
+          "label": "Senad Tours",
+          "href": "tel:+355693132075"
+        }
+      ],
+      "place_id": null,
+      "verified": null
+    },
+    {
+      "id": "on-sources",
+      "section": "practical",
+      "status": "plan",
+      "name": "What I could not verify",
+      "note": "So you know where the soft ground is. THE BUS TIMETABLE: four sources, four answers on the first and last Sarande to Ksamil departure. Confirm with a driver on day one. THE BLUE EYE AND GJIROKASTËR BUS: the 400 ALL service is published as June to August only and your trip runs into September, which is the single most consequential unknown here, because both inland days hang on it. THE OHRID PICKUP POINT in Sarande: unresolved, hence the Thursday call. ATM FEE SCHEDULES: every figure comes from traveller reports, not from a bank's published tariff, so treat 500 to 800 ALL as a range not a quote. RATINGS: Google Maps and TripAdvisor both refuse automated reading, so the Ksamil and Sarande restaurant numbers came off live Maps panels read by hand on 25 August, and the Butrint, Blue Eye and beach numbers came second-hand through an aggregator with no date stamp. NOT FOUND AT ALL, despite being in published guides: Restaurant Abiel, Bar Restorant Ksamili, Taverna Laguna, Mare Nostrum and Vila Ilir in Sarande. TWO PLACES THAT ARE SHUT and still appear in 2026-dated blog lists: Sofra Shqiptare is permanently closed and Fourth Island is temporarily closed. And there is no verified rooftop restaurant in Ksamil and no pharmacy other than the one above.",
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    }
+  ]
+}
