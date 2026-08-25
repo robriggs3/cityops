@@ -86,6 +86,19 @@
   body.plan-dragging .card-hd{pointer-events:none;}
   /* The day the card would land on, including a collapsed day whose header is
      the only thing it has to offer. */
+  /* Today banner: the wheres current-banner vocabulary (accent frame,
+     corner badge, soft accent shadow) so the pinned group reads as "you are
+     here", not as a mis-sorted day. */
+  .planday-today{position:relative; background:var(--bg-card);
+    border:1px solid var(--accent); border-radius:12px;
+    padding:30px 12px 12px; margin:0 0 28px;
+    box-shadow:0 4px 20px rgba(199,32,39,.10), 0 1px 3px rgba(0,0,0,.05);}
+  .planday-today::before{content:'TODAY'; position:absolute; top:0; left:0;
+    background:var(--accent); color:#fff; padding:4px 13px;
+    border-radius:11px 0 8px 0; font-size:.66rem; font-weight:800;
+    letter-spacing:.14em;}
+  .planday-today > h2{margin:2px 0 10px;}
+  .planday-today .card{box-shadow:none;}
   .planday.drop-into{background:var(--accent-soft); border-radius:12px;
     box-shadow:0 0 0 2px var(--accent);}
   .planday.drop-into > h2{color:var(--accent-hover);}
@@ -3143,8 +3156,14 @@ var CityOps = (function () {
         'Today (' + dayLabel(pm.todayIso) + ') is outside this trip\'s dates (' +
         fmtRange(effectiveDates(data, state)) + '). Showing anything dated today anyway.'));
     }
+    // Today wears the same visual language as the wheres tracker's
+    // you-are-here banner: accent frame, corner badge, elevated. Without it
+    // the pinned group reads as a day sorted out of order rather than a
+    // deliberate "you are here". The badge carries the word TODAY, so the
+    // heading only needs the date.
     var todayGroup = planDayGroup(pm.todayIso);
-    todayGroup.appendChild(el('h2', null, 'Today · ' + dayLabel(pm.todayIso)));
+    todayGroup.className += ' planday-today';
+    todayGroup.appendChild(el('h2', null, dayLabel(pm.todayIso)));
     todayGroup.appendChild(planDayList(pm.todayIso, pm.today));
     main.appendChild(todayGroup);
     pm.days.forEach(function (d) {
@@ -3749,6 +3768,19 @@ CityOps.init();
   body.plan-dragging .card-hd{pointer-events:none;}
   /* The day the card would land on, including a collapsed day whose header is
      the only thing it has to offer. */
+  /* Today banner: the wheres current-banner vocabulary (accent frame,
+     corner badge, soft accent shadow) so the pinned group reads as "you are
+     here", not as a mis-sorted day. */
+  .planday-today{position:relative; background:var(--bg-card);
+    border:1px solid var(--accent); border-radius:12px;
+    padding:30px 12px 12px; margin:0 0 28px;
+    box-shadow:0 4px 20px rgba(199,32,39,.10), 0 1px 3px rgba(0,0,0,.05);}
+  .planday-today::before{content:'TODAY'; position:absolute; top:0; left:0;
+    background:var(--accent); color:#fff; padding:4px 13px;
+    border-radius:11px 0 8px 0; font-size:.66rem; font-weight:800;
+    letter-spacing:.14em;}
+  .planday-today > h2{margin:2px 0 10px;}
+  .planday-today .card{box-shadow:none;}
   .planday.drop-into{background:var(--accent-soft); border-radius:12px;
     box-shadow:0 0 0 2px var(--accent);}
   .planday.drop-into > h2{color:var(--accent-hover);}
@@ -6714,8 +6746,14 @@ var CityOps = (function () {
         'Today (' + dayLabel(pm.todayIso) + ') is outside this trip\'s dates (' +
         fmtRange(effectiveDates(data, state)) + '). Showing anything dated today anyway.'));
     }
+    // Today wears the same visual language as the wheres tracker's
+    // you-are-here banner: accent frame, corner badge, elevated. Without it
+    // the pinned group reads as a day sorted out of order rather than a
+    // deliberate "you are here". The badge carries the word TODAY, so the
+    // heading only needs the date.
     var todayGroup = planDayGroup(pm.todayIso);
-    todayGroup.appendChild(el('h2', null, 'Today · ' + dayLabel(pm.todayIso)));
+    todayGroup.className += ' planday-today';
+    todayGroup.appendChild(el('h2', null, dayLabel(pm.todayIso)));
     todayGroup.appendChild(planDayList(pm.todayIso, pm.today));
     main.appendChild(todayGroup);
     pm.days.forEach(function (d) {
