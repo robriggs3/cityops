@@ -21,6 +21,12 @@
             "to": { "$ref": "#/$defs/isoDate" }
           }
         },
+        "utc_offset": {
+          "description": "Offset from UTC in MINUTES for the duration of this stay (Tirana in August: 120). Optional. Lets the header show sunset on the city's own clock instead of the reader's device clock. A fixed number rather than a zone name because one stay is one week; a stay straddling a DST changeover would be an hour out on the far side of it.",
+          "type": "integer",
+          "minimum": -840,
+          "maximum": 840
+        },
         "accommodation": {
           "type": "object",
           "properties": {

@@ -3233,6 +3233,48 @@ test('cityLatLng prefers the accommodation and falls back to the first item with
   assert.equal(C.sunKit.cityLatLng(null), null);
 });
 
+test('cityUtcOffsetMinutes takes only a real offset, in minutes', () => {
+  assert.equal(C.sunKit.cityUtcOffsetMinutes({ city: { utc_offset: 120 } }), 120);
+  assert.equal(C.sunKit.cityUtcOffsetMinutes({ city: { utc_offset: -300 } }), -300);
+  assert.equal(C.sunKit.cityUtcOffsetMinutes({ city: { utc_offset: 0 } }), 0);
+  // Absent, the wrong type, or off the real world's map: null, and the chip
+  // falls back to the reader's device clock rather than inventing an offset.
+  assert.equal(C.sunKit.cityUtcOffsetMinutes({ city: {} }), null);
+  assert.equal(C.sunKit.cityUtcOffsetMinutes({ city: { utc_offset: '120' } }), null);
+  assert.equal(C.sunKit.cityUtcOffsetMinutes({ city: { utc_offset: NaN } }), null);
+  assert.equal(C.sunKit.cityUtcOffsetMinutes({ city: { utc_offset: 900 } }), null);
+  assert.equal(C.sunKit.cityUtcOffsetMinutes({ city: { utc_offset: -900 } }), null);
+  assert.equal(C.sunKit.cityUtcOffsetMinutes(null), null);
+});
+
+test('every real city states its own offset, so a guide read from elsewhere is still right', () => {
+  // Without this, opening next week's Ksamil guide from Tiranë shows Tiranë's
+  // clock. Georgia and Armenia sit at UTC+4 year round; Albania is on CEST
+  // through October, and every stay here is one week, so a fixed number is
+  // exact for the whole stay.
+  const fs = require('fs');
+  const path = require('path');
+  const want = { batumi: 240, yerevan: 240, tirana: 120, ksamil: 120 };
+  const localSunset = {};
+  Object.keys(want).forEach((name) => {
+    const city = JSON.parse(fs.readFileSync(
+      path.join(__dirname, '..', 'cities', name + '.json'), 'utf8'));
+    assert.equal(C.sunKit.cityUtcOffsetMinutes(city), want[name], name + ' offset');
+    const loc = C.sunKit.cityLatLng(city);
+    const mins = C.sunKit.sunsetUtcMinutes(city.city.dates.from, loc.lat, loc.lng);
+    const local = Math.floor(mins) + want[name];  // a clock reads the minute you are in
+    localSunset[name] = Math.floor(local / 60) + ':' + ('0' + (local % 60)).slice(-2);
+  });
+  // Arrival-day sunset on each city's OWN clock. Every one of these is the
+  // met.no UTC time plus that city's offset, checked by hand when this landed.
+  assert.deepEqual(localSunset, {
+    batumi: '20:23',    // met.no 2026-08-08 16:23 UTC, +4
+    yerevan: '19:59',   // met.no 2026-08-15 15:59 UTC, +4
+    tirana: '19:29',    // met.no 2026-08-22 17:29 UTC, +2
+    ksamil: '19:16'     // met.no 2026-08-29 17:16 UTC, +2
+  });
+});
+
 test('the real city files all resolve to a location, so every guide gets the chip', () => {
   const fs = require('fs');
   const path = require('path');
