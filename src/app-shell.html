@@ -936,6 +936,31 @@
   // Live planning state (done marks, renames, day arrangement) is keyed by item
   // id in a separate store that neither mergeDelta nor this function touches,
   // so it survives untouched by construction.
+  // The ONE place in the app that writes a changed city record. Enrich's Apply
+  // was the only caller when it was inline; adding a place by hand is the
+  // second, and factoring it out is what stops the two drifting on the four
+  // things that have to happen together (canonical write, override clear,
+  // sync push, reboot). Returns the city id it wrote, which is not always
+  // activeId: appStore.add re-derives the id from the city name and dates.
+  function commitCityData(newData) {
+    var added = CityOps.appStore.add(store, newData);   // stamps updatedAt now
+    store = added.store;
+    saveStore(store);
+    // The override's content is part of the canonical data now, so clearing
+    // it changes nothing on screen and stops it masking future merges.
+    var cs = CityOps.makeStore(added.cityId, LS);
+    var cst = cs.load();
+    if (cst.dataOverride) { cst.dataOverride = null; cs.save(cst); }
+    schedulePush('data', added.cityId);
+    // Same scroll-preserve pattern as applyPull: activateCity reboots the
+    // city (CityOps.boot), which re-renders from the top.
+    var y = 0;
+    try { y = window.scrollY || window.pageYOffset || 0; } catch (e) {}
+    activateCity(added.cityId);   // reboots the city; rewrites #notice
+    try { window.scrollTo(0, y); } catch (e2) {}
+    return added.cityId;
+  }
+
   function enrichSummaryText(s) {
     var parts = [];
     if (s.added) parts.push(s.added + ' added');
@@ -952,6 +977,59 @@
     return parts.length ? parts.join(', ') : 'nothing new';
   }
 
+  // The copy / download / clipboard-fallback trio, shared by every modal that
+  // hands a built prompt to the traveler. Same stub-friendly pattern Build my
+  // prompt uses: try the async clipboard, and when it is unreachable (an
+  // insecure origin, a denied permission, an old engine) drop a read-only
+  // textarea above the message and select its contents, so there is always a
+  // way to get the prompt out of the app. `box` is the modal body, `msg` the
+  // status line already appended to it.
+  function makePromptOut(box, msg) {
+    var fallbackTa = null;
+    function showFallback(text) {
+      if (!fallbackTa) {
+        fallbackTa = document.createElement('textarea');
+        fallbackTa.className = 'promptout';
+        fallbackTa.readOnly = true;
+        fallbackTa.setAttribute('aria-label', 'Generated prompt');
+        box.insertBefore(fallbackTa, msg);
+      }
+      fallbackTa.value = text;
+      msg.textContent = 'Could not reach the clipboard. The prompt is selected above: copy it, ' +
+        'paste it into Claude or ChatGPT, then paste the JSON it returns below.';
+      try { fallbackTa.focus(); fallbackTa.select(); } catch (e) {}
+    }
+    return {
+      fallback: showFallback,
+      copy: function (text) {
+        var wrote = null;
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) wrote = navigator.clipboard.writeText(text);
+        } catch (e) { wrote = null; }
+        if (wrote && typeof wrote.then === 'function') {
+          wrote.then(function () {
+            msg.textContent = 'Copied. Paste it into Claude or ChatGPT, then paste the JSON it returns below.';
+          }, function () { showFallback(text); });
+        } else {
+          showFallback(text);
+        }
+      },
+      download: function (text, filename) {
+        var blob = new Blob([text], { type: 'text/markdown' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        var freeUrl = a.href;
+        setTimeout(function () { URL.revokeObjectURL(freeUrl); }, 4000);
+        msg.textContent = 'Downloaded ' + filename + '. Paste it into Claude or ChatGPT, ' +
+          'then paste the JSON it returns below.';
+      }
+    };
+  }
+
   function openEnrichModal() {
     if (!activeId || !has(store.cities, activeId)) return;
     var m = modalShell('Enrich ' + store.cities[activeId].city.name);
@@ -959,49 +1037,8 @@
       'and paste the result back. New items are added and nothing you have already planned is disturbed.'));
 
     var msg = el('div', 'diff', '');
-    var fallbackTa = null;
-
-    // Same stub-friendly pattern as Build my prompt: try the async clipboard,
-    // fall back to a read-only textarea the traveler can copy from by hand.
-    function showFallback(text) {
-      if (!fallbackTa) {
-        fallbackTa = document.createElement('textarea');
-        fallbackTa.className = 'promptout';
-        fallbackTa.readOnly = true;
-        fallbackTa.setAttribute('aria-label', 'Generated prompt');
-        m.box.insertBefore(fallbackTa, msg);
-      }
-      fallbackTa.value = text;
-      msg.textContent = 'Could not reach the clipboard. The prompt is selected above: copy it, ' +
-        'paste it into Claude or ChatGPT, then paste the JSON it returns below.';
-      try { fallbackTa.focus(); fallbackTa.select(); } catch (e) {}
-    }
-    function copyOut(text) {
-      var wrote = null;
-      try {
-        if (navigator.clipboard && navigator.clipboard.writeText) wrote = navigator.clipboard.writeText(text);
-      } catch (e) { wrote = null; }
-      if (wrote && typeof wrote.then === 'function') {
-        wrote.then(function () {
-          msg.textContent = 'Copied. Paste it into Claude or ChatGPT, then paste the JSON it returns below.';
-        }, function () { showFallback(text); });
-      } else {
-        showFallback(text);
-      }
-    }
-    function downloadOut(text, filename) {
-      var blob = new Blob([text], { type: 'text/markdown' });
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      var freeUrl = a.href;
-      setTimeout(function () { URL.revokeObjectURL(freeUrl); }, 4000);
-      msg.textContent = 'Downloaded ' + filename + '. Paste it into Claude or ChatGPT, ' +
-        'then paste the JSON it returns below.';
-    }
+    var out = makePromptOut(m.box, msg);
+    var copyOut = out.copy, downloadOut = out.download;
     // The prompts describe the city as it stands right now, override included,
     // which is the same data the merge will run against.
     function currentData() {
@@ -1143,22 +1180,8 @@
         msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n');
         return;
       }
-      var added = CityOps.appStore.add(store, res.data);   // stamps updatedAt now
-      store = added.store;
-      saveStore(store);
-      // The override's content is part of the canonical data now, so clearing
-      // it changes nothing on screen and stops it masking future merges.
-      var cs = CityOps.makeStore(added.cityId, LS);
-      var cst = cs.load();
-      if (cst.dataOverride) { cst.dataOverride = null; cs.save(cst); }
       m.close();
-      schedulePush('data', added.cityId);
-      // Same scroll-preserve pattern as applyPull: activateCity reboots the
-      // city (CityOps.boot), which re-renders from the top.
-      var y = 0;
-      try { y = window.scrollY || window.pageYOffset || 0; } catch (e) {}
-      activateCity(added.cityId);   // reboots the city; rewrites #notice
-      try { window.scrollTo(0, y); } catch (e2) {}
+      commitCityData(res.data);
       showSyncNotice('Enriched: ' + enrichSummaryText(res.summary) + '.');
     };
     var cancel = el('button', 'ctl', 'Cancel');
@@ -1170,6 +1193,143 @@
 
     m.box.appendChild(el('p', 'diff', 'This builds a prompt for your own AI (Claude, ChatGPT). ' +
       'In-app research is planned for a future version.'));
+  }
+
+  // ---- Ask Claude about ONE place ----
+  // The other half of the owner's dinner scenario: the place is in the guide,
+  // now find out whether it beats what was already there. Opened from the ✨
+  // on any card the engine judges un-researched (see placeNeedsResearch),
+  // which every hand-added place is.
+  //
+  // Two transports, ONE prompt, and one merge door:
+  //   - Run with Claude, when a key is saved, via the same callClaudeStream
+  //     the Enrich passes use. The reply is parsed, previewed as a count, and
+  //     lands in the SAME textarea the paste flow reads.
+  //   - Copy prompt / Download .md when there is no key, which is the only
+  //     path a signed-out traveler has and is never hidden.
+  // Either way the traveler presses one Apply, which runs mergeDelta and
+  // commitCityData exactly like Enrich's Apply does. There is no second place
+  // in this app that writes a delta into a city.
+  function openAskPlaceModal(itemId) {
+    if (!activeId || !has(store.cities, activeId)) return;
+    function currentData() {
+      var st = CityOps.liveState() || CityOps.makeStore(activeId, LS).load();
+      return CityOps.effectiveData(store.cities[activeId], st);
+    }
+    var data = currentData();
+    var item = null;
+    (data.items || []).forEach(function (x) { if (x && x.id === itemId) item = x; });
+    if (!item) return;
+    var liveSt = CityOps.liveState();
+    var shownName = liveSt ? CityOps.effectiveName(item, liveSt) : item.name;
+    var siblings = (data.items || []).filter(function (x) {
+      return x && x.id !== item.id && x.section === item.section;
+    }).length;
+
+    var m = modalShell('Check ' + shownName);
+    m.box.appendChild(el('p', 'diff', siblings
+      ? ('Claude looks this place up and ranks it against the ' + siblings +
+        ' other ' + (siblings === 1 ? 'place' : 'places') + ' already in this section. ' +
+        'It returns a rating and a short verdict, and touches nothing else.')
+      : ('Claude looks this place up and returns a rating and a short verdict. ' +
+        'There is nothing else in this section yet, so there is nothing to rank it against.')));
+
+    var msg = el('div', 'diff', '');
+    var out = makePromptOut(m.box, msg);
+
+    function build() {
+      var tpl = promptTemplateText();
+      if (!tpl) {
+        msg.textContent = 'This build has no prompt template embedded. Use PROMPT.md from the repo.';
+        return null;
+      }
+      try {
+        return CityOps.promptKit.buildPlacePassPrompt(tpl, currentData(), item, CityOps.liveState());
+      } catch (e) {
+        msg.textContent = e.message;
+        return null;
+      }
+    }
+
+    var ta = document.createElement('textarea');
+    ta.setAttribute('aria-label', 'Delta JSON from your AI');
+
+    var row = el('div', 'mrow');
+    if (loadApiKey()) {
+      var run = el('button', 'ctl to-done', 'Ask Claude');
+      run.type = 'button';
+      run.onclick = function () {
+        var text = build();
+        if (text === null) return;
+        var orig = run.textContent;
+        run.disabled = true;
+        run.textContent = 'Asking...';
+        msg.textContent = 'Starting...';
+        callClaudeStream(text, loadApiKey(), function (p) {
+          msg.textContent = (p.kind === 'thinking' ? 'Thinking... ' : 'Writing... ') +
+            p.totalChars + ' characters so far.';
+        }).then(function (resultText) {
+          run.disabled = false;
+          run.textContent = orig;
+          var block = CityOps.extractJsonBlock(resultText);
+          if (block === null) { msg.textContent = CityOps.RETRY_INSTRUCTION; return; }
+          var parsed;
+          try { parsed = JSON.parse(block); }
+          catch (e) { msg.textContent = 'Claude\'s response was not valid JSON: ' + e.message; return; }
+          var res = CityOps.mergeDelta(currentData(), parsed);
+          if (!res.data) { msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n'); return; }
+          ta.value = JSON.stringify(parsed, null, 2);
+          msg.textContent = 'Claude proposes: ' + enrichSummaryText(res.summary) + '. Review below, then Apply.';
+        }).catch(function (e) {
+          run.disabled = false;
+          run.textContent = orig;
+          msg.textContent = 'Claude API error: ' + e.message;
+        });
+      };
+      row.appendChild(run);
+    }
+    var copy = el('button', 'ctl', 'Copy prompt');
+    copy.type = 'button';
+    copy.onclick = function () { var t = build(); if (t !== null) out.copy(t); };
+    row.appendChild(copy);
+    var dl = el('button', 'ctl', 'Download .md');
+    dl.type = 'button';
+    dl.onclick = function () {
+      var t = build();
+      if (t !== null) out.download(t, CityOps.slug(shownName) + '-check.md');
+    };
+    row.appendChild(dl);
+    m.box.appendChild(row);
+
+    if (!loadApiKey()) {
+      m.box.appendChild(el('p', 'diff', 'No Claude API key is saved on this device, so the prompt ' +
+        'goes to your own chat and the answer comes back through the box below. ' +
+        'Save a key in Profile to do it in one tap instead.'));
+    }
+    m.box.appendChild(el('p', 'diff', 'Paste what your AI returns here. It is a partial payload: ' +
+      'a rating and an intel block for this one place.'));
+    m.box.appendChild(ta);
+    m.box.appendChild(msg);
+
+    var row2 = el('div', 'mrow');
+    var apply = el('button', 'ctl to-done', 'Apply');
+    apply.type = 'button';
+    apply.onclick = function () {
+      var parsed;
+      try { parsed = JSON.parse(ta.value); }
+      catch (e) { msg.textContent = 'That is not valid JSON: ' + e.message; return; }
+      var res = CityOps.mergeDelta(currentData(), parsed);
+      if (!res.data) { msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n'); return; }
+      m.close();
+      commitCityData(res.data);
+      showSyncNotice('Enriched: ' + enrichSummaryText(res.summary) + '.');
+    };
+    var cancel = el('button', 'ctl', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = m.close;
+    row2.appendChild(apply);
+    row2.appendChild(cancel);
+    m.box.appendChild(row2);
   }
 
   // Phase 4: rows appended to the engine's More action sheet (app context
@@ -2842,7 +3002,19 @@
 
   // Set before the first boot so the engine's More sheet picks up the
   // app-only rows.
-  window.CityOpsApp = { exportStandalone: exportStandalone, moreActions: moreActions };
+  // The engine's app hooks. Each one is a capability the engine draws a
+  // control for ONLY when it is present, so a standalone exported guide (no
+  // CityOpsApp at all) simply never shows a button that has nothing behind
+  // it: no Claude key, no embedded PROMPT.md, no canonical city record.
+  //   askPlace(id)              -> the ✨ on an un-researched card
+  //   notePlaceAdded(data, id)  -> where a hand-added place gets written when
+  //                                the app is around; without it the engine
+  //                                falls back to its own state.dataOverride
+  window.CityOpsApp = {
+    exportStandalone: exportStandalone, moreActions: moreActions,
+    askPlace: openAskPlaceModal,
+    notePlaceAdded: function (newData) { commitCityData(newData); }
+  };
 
   // Re-decorate the header and re-render the panel on every engine state
   // change (not just on city switch, which activateCity already triggers via
