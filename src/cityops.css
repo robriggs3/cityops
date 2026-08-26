@@ -373,13 +373,33 @@
   .task-row.task-declined .task-note{opacity:.6;}
 
   /* --- Phase 4: the More action sheet (every utility action, one place) --- */
-  .sheet-list{display:flex; flex-direction:column; margin-top:6px;}
-  .sheet-row{font:inherit; font-size:.95rem; font-weight:600; color:var(--text); background:none;
-    border:none; border-bottom:1px solid var(--border-light); text-align:left; padding:14px 4px;
-    cursor:pointer; min-height:44px;}
+  /* Aug 2026 grouping pass: the flat eight-row list of bare labels made the
+     traveler read and rank every line each time. Now three labelled clusters,
+     each row an icon plus a label plus one muted line of what it does. The
+     group label borrows the uppercase-muted idiom the archive and intel
+     disclosures already use, so nothing new has to be learned to read it. */
+  .sheet-group{margin-top:14px;}
+  .modal h3 + .sheet-group{margin-top:6px;}
+  .sheet-grouplabel{font-size:.72rem; font-weight:800; letter-spacing:.6px;
+    text-transform:uppercase; color:var(--text-3); padding:0 4px 2px;}
+  /* The destructive cluster is pushed clear of the rest and fenced off with a
+     rule of its own: Remove city must never sit one careless thumb-width
+     below a row someone actually meant to tap. */
+  .sheet-group-last{margin-top:20px; border-top:1px solid var(--border); padding-top:10px;}
+  .sheet-list{display:flex; flex-direction:column;}
+  .sheet-row{font:inherit; color:var(--text); background:none;
+    border:none; border-bottom:1px solid var(--border-light); text-align:left; padding:10px 4px;
+    cursor:pointer; min-height:52px; display:flex; align-items:center; gap:12px;}
   .sheet-row:last-child{border-bottom:none;}
-  .sheet-row:hover{color:var(--accent-hover);}
-  .sheet-row.danger{color:var(--accent-hover); font-weight:800;}
+  .sheet-row:hover .sheet-label{color:var(--accent-hover);}
+  .sheet-ic{flex:0 0 22px; font-size:1.05rem; line-height:1.2; text-align:center;}
+  .sheet-txt{display:flex; flex-direction:column; gap:1px; min-width:0;}
+  .sheet-label{font-size:.95rem; font-weight:700;}
+  .sheet-desc{font-size:.78rem; font-weight:400; color:var(--text-3); line-height:1.35;}
+  .sheet-row.danger .sheet-label{color:var(--accent-hover); font-weight:800;}
+  /* Enrich's three passes borrow the same group label, with room above so
+     each pass reads as its own block. */
+  .enrich-h{margin-top:18px; padding-left:0;}
 
   @media (max-width: 430px){
     #tabbar{gap:4px;}

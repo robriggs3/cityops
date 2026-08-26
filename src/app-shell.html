@@ -1026,9 +1026,13 @@
         msg.textContent = 'Claude API error: ' + e.message;
       });
     }
-    function promptRow(kind, filename, disabledReason) {
+    // `noun` names the pass on its own button. The three blocks used to carry
+    // three identical "Copy prompt" buttons, so on a phone (where the heading
+    // that told them apart has usually scrolled off) picking the ratings pass
+    // meant counting rows. Each button now says which prompt it copies.
+    function promptRow(kind, filename, disabledReason, noun) {
       var row = el('div', 'mrow');
-      var copy = el('button', 'ctl', 'Copy prompt');
+      var copy = el('button', 'ctl', 'Copy ' + noun + ' prompt');
       copy.type = 'button';
       var dl = el('button', 'ctl', 'Download .md');
       dl.type = 'button';
@@ -1053,11 +1057,15 @@
       return row;
     }
 
+    // Each pass gets a heading in the same uppercase-muted idiom the More
+    // sheet's group labels use, so the three blocks read as three choices
+    // rather than one long paragraph with buttons in it.
     var profileEmpty = CityOps.profile.isEmpty(store.profile);
-    m.box.appendChild(el('p', 'diff', 'Interests delta: new places in this city that match your interest profile, ' +
+    m.box.appendChild(el('div', 'sheet-grouplabel enrich-h', 'Interests delta'));
+    m.box.appendChild(el('p', 'diff', 'New places in this city that match your interest profile, ' +
       'in their own section, on top of what is already here.'));
     var irow = promptRow('interests', 'interests-delta.md',
-      profileEmpty ? 'Add interests in Profile first' : null);
+      profileEmpty ? 'Add interests in Profile first' : null, 'interests');
     if (profileEmpty) {
       var goProfile = el('button', 'ctl', 'Open Profile');
       goProfile.type = 'button';
@@ -1066,16 +1074,18 @@
     }
     m.box.appendChild(irow);
 
-    m.box.appendChild(el('p', 'diff', 'Intel pass: what to actually order or do at the places this guide ' +
+    m.box.appendChild(el('div', 'sheet-grouplabel enrich-h', 'Intel pass'));
+    m.box.appendChild(el('p', 'diff', 'What to actually order or do at the places this guide ' +
       'already holds, from what reviewers say repeatedly.'));
-    m.box.appendChild(promptRow('intel', 'intel-pass.md', null));
+    m.box.appendChild(promptRow('intel', 'intel-pass.md', null, 'intel'));
 
     // Third builder: the numbers go stale in a way the rest of a guide does
     // not, so this is the one pass worth re-running on a guide that is
     // otherwise finished. It touches nothing but `rating`.
-    m.box.appendChild(el('p', 'diff', 'Ratings refresh: current Google Maps stars and review counts ' +
+    m.box.appendChild(el('div', 'sheet-grouplabel enrich-h', 'Ratings refresh'));
+    m.box.appendChild(el('p', 'diff', 'Current Google Maps stars and review counts ' +
       'for the places still in play (plan and backup), as a badge on each card.'));
-    m.box.appendChild(promptRow('ratings', 'ratings-refresh.md', null));
+    m.box.appendChild(promptRow('ratings', 'ratings-refresh.md', null, 'ratings'));
 
     m.box.appendChild(el('p', 'diff', 'Paste what your AI returns here. It is a partial payload: only new items, ' +
       'intel and ratings, never a whole guide.'));
@@ -1128,21 +1138,32 @@
   // Phase 4: rows appended to the engine's More action sheet (app context
   // only), replacing the old toolbarExtras + the standalone Export-guide
   // button + Remove city's old home inside the city-switcher panel. Returns
-  // [{label, onClick, cls}]; the engine renders each as a sheet row.
+  // [{label, desc, icon, group, order, onClick, cls}]; the engine renders each
+  // as a sheet row inside the cluster `group` names.
+  // `group` and `order` place each row inside the engine's three clusters
+  // (see MORE_GROUPS); `desc` is the one muted line under the label. Enrich
+  // leads its cluster because it is the row a traveler opens repeatedly
+  // mid-trip; Remove city sits last in the last cluster, where a thumb
+  // reaching for anything else never passes over it.
   function moreActions() {
     var actions = [];
-    actions.push({ label: 'Enrich', onClick: openEnrichModal });
+    actions.push({ label: 'Enrich', desc: 'Add AI research without touching your progress',
+      icon: '✨', group: 'work', order: 10, onClick: openEnrichModal });
+    actions.push({ label: 'Export guide', desc: 'Standalone offline HTML file',
+      icon: '📄', group: 'share', order: 20, onClick: exportStandalone });
     // Phase 2: Edit reopens the Add/Edit city form for the ACTIVE city,
     // pre-filled with its saved form values (see openAddModal's editCityId
     // param), so a traveler can tweak the header and regenerate.
     if (activeId && has(store.cities, activeId)) {
-      actions.push({ label: 'Edit city', onClick: function () { openAddModal(activeId); } });
+      actions.push({ label: 'Edit city', desc: 'Name, dates, lodging and trip notes',
+        icon: '✏️', group: 'city', order: 10,
+        onClick: function () { openAddModal(activeId); } });
     }
-    actions.push({ label: 'Export guide', onClick: exportStandalone });
     // Phase 4, item 7: Remove city moves here from the city-switcher panel,
     // keeping its existing type-to-confirm modal unchanged.
     if (activeId && has(store.cities, activeId)) {
-      actions.push({ label: 'Remove city', onClick: openRemoveModal, cls: 'danger' });
+      actions.push({ label: 'Remove city', desc: 'Deletes this city and its progress here',
+        icon: '🗑️', group: 'city', order: 20, onClick: openRemoveModal, cls: 'danger' });
     }
     return actions;
   }
