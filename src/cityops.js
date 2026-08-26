@@ -3703,36 +3703,105 @@ var CityOps = (function () {
     setTimeout(function () { URL.revokeObjectURL(freeUrl); }, 4000);
   }
 
+  // The sheet's three clusters, top to bottom. Owner ask, Aug 2026: "better
+  // layout our nav to be better ux, more clear without having to study each
+  // line item. prioritize functions that are more likely to be used, group
+  // related items". So: the things a traveler touches during a trip first,
+  // the things that send the trip somewhere else second, and the two that own
+  // the city record itself last, where the destructive one is furthest from a
+  // thumb reaching for Enrich.
+  var MORE_GROUPS = [
+    { id: 'work', label: 'Add and update' },
+    { id: 'share', label: 'Share and export' },
+    { id: 'city', label: 'This city' }
+  ];
+
+  // Pure: turns a flat row list into [{id, label, rows}], each group's rows
+  // sorted by their own `order` and empty groups dropped (a standalone guide
+  // has no app rows at all, so its `city` group never renders). A row whose
+  // group is not one of the three is NOT dropped: it joins the first group at
+  // the end, because a row that silently vanishes from a menu is a worse bug
+  // than a row in the wrong cluster.
+  function moreSheetGroups(rows) {
+    var list = Array.isArray(rows) ? rows : [];
+    var known = {};
+    MORE_GROUPS.forEach(function (g) { known[g.id] = 1; });
+    var out = [];
+    MORE_GROUPS.forEach(function (g, gi) {
+      var inG = list.filter(function (r) {
+        return r && (r.group === g.id || (gi === 0 && !known[r.group]));
+      }).map(function (r, i) {
+        return { r: r, i: i, order: (typeof r.order === 'number' ? r.order : 999) };
+      });
+      inG.sort(function (a, b) { return (a.order - b.order) || (a.i - b.i); });
+      if (inG.length) {
+        out.push({ id: g.id, label: g.label, rows: inG.map(function (x) { return x.r; }) });
+      }
+    });
+    return out;
+  }
+
   // App-only rows (Enrich, Edit city, Export guide, Remove city) are supplied
   // by the shell via window.CityOpsApp.moreActions(), returning
-  // [{label, onClick, cls}]. Standalone guide files have no CityOpsApp, so
-  // the sheet there only ever shows the four base rows: no trace of an
-  // app-only action ships inside them.
+  // [{label, desc, icon, group, order, onClick, cls}]. Standalone guide files
+  // have no CityOpsApp, so the sheet there only ever shows the four base rows:
+  // no trace of an app-only action ships inside them, and they land in the
+  // same clusters they would in the app rather than drifting into a second
+  // layout.
+  //
+  // Every row is icon + label + one muted line saying what it does, because
+  // the old flat eight-row list of bare labels made the traveler read and
+  // rank them from scratch every time.
   function openMoreSheet() {
     var host = document.getElementById('modal');
     host.innerHTML = '';
     var wrap = el('div', 'modal-wrap');
     var box = el('div', 'modal');
     box.appendChild(el('h3', null, 'More'));
-    var list = el('div', 'sheet-list');
-    function addRow(label, onClick, cls) {
-      var b = el('button', 'sheet-row' + (cls ? ' ' + cls : ''), label);
-      b.type = 'button';
-      b.onclick = function () { wrap.remove(); onClick(); };
-      list.appendChild(b);
-    }
-    addRow(shareOn ? 'Back to planner' : 'Share view', function () {
-      shareOn = !shareOn;
-      document.body.classList.toggle('share', shareOn);
-      rerender();
-    });
-    addRow('Export JSON', doExportJson);
-    addRow('Update data', openUpdateModal);
-    addRow('Edit dates', openDatesModal);
+    var rows = [
+      { label: shareOn ? 'Back to planner' : 'Share view',
+        desc: shareOn ? 'Return to the planner and its controls'
+          : 'Clean read-only page for sending or printing',
+        icon: '👁', group: 'share', order: 10,
+        onClick: function () {
+          shareOn = !shareOn;
+          document.body.classList.toggle('share', shareOn);
+          rerender();
+        } },
+      { label: 'Export JSON', desc: 'Your data, portable',
+        icon: '💾', group: 'share', order: 30, onClick: doExportJson },
+      { label: 'Update data', desc: 'Replace this city\'s research wholesale',
+        icon: '🔄', group: 'work', order: 20, onClick: openUpdateModal },
+      { label: 'Edit dates', desc: 'Move the arrival and departure days',
+        icon: '📅', group: 'work', order: 30, onClick: openDatesModal }
+    ];
     if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.moreActions) {
-      window.CityOpsApp.moreActions().forEach(function (a) { addRow(a.label, a.onClick, a.cls); });
+      rows = rows.concat(window.CityOpsApp.moreActions());
     }
-    box.appendChild(list);
+    moreSheetGroups(rows).forEach(function (g) {
+      var group = el('div', 'sheet-group' + (g.id === 'city' ? ' sheet-group-last' : ''));
+      group.appendChild(el('div', 'sheet-grouplabel', g.label));
+      var list = el('div', 'sheet-list');
+      // The cluster label is a plain div, so name the list with it too: a
+      // screen reader otherwise hears eight buttons with no grouping at all.
+      list.setAttribute('role', 'group');
+      list.setAttribute('aria-label', g.label);
+      g.rows.forEach(function (r) {
+        var b = el('button', 'sheet-row' + (r.cls ? ' ' + r.cls : ''));
+        b.type = 'button';
+        var ic = el('span', 'sheet-ic', r.icon || '·');
+        ic.setAttribute('aria-hidden', 'true');
+        b.appendChild(ic);
+        var txt = el('span', 'sheet-txt');
+        txt.appendChild(el('span', 'sheet-label', r.label));
+        if (r.desc) txt.appendChild(el('span', 'sheet-desc', r.desc));
+        b.appendChild(txt);
+        b.onclick = function () { wrap.remove(); r.onClick(); };
+        list.appendChild(b);
+      });
+      group.appendChild(list);
+      box.appendChild(group);
+    });
     wrap.appendChild(box);
     wrap.onclick = function (e) { if (e.target === wrap) wrap.remove(); };
     host.appendChild(wrap);
@@ -3939,7 +4008,10 @@ var CityOps = (function () {
     orderSectionItems: orderSectionItems, setSectionItemOrder: setSectionItemOrder,
     sectionItemOrderFor: sectionItemOrderFor,
     // Plan-tab per-item day moves: the picker's own pure model.
-    dayMoveOptions: dayMoveOptions
+    dayMoveOptions: dayMoveOptions,
+    // The More sheet's clustering, pure so the grouping and the within-group
+    // order are testable without a DOM.
+    MORE_GROUPS: MORE_GROUPS, moreSheetGroups: moreSheetGroups
   };
 })();
 CityOps.init();

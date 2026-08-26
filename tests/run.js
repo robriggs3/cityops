@@ -2890,5 +2890,56 @@ test('refreshFailure only calls a grant dead when the body says so', () => {
     'should be transient: ' + s + ' ' + b));
 });
 
+
+// ---- the More action sheet's clustering (pure; the DOM builder renders it) ----
+
+test('moreSheetGroups clusters rows and orders each cluster by its own order', () => {
+  const rows = [
+    { label: 'Share view', group: 'share', order: 10 },
+    { label: 'Export JSON', group: 'share', order: 30 },
+    { label: 'Update data', group: 'work', order: 20 },
+    { label: 'Edit dates', group: 'work', order: 30 },
+    { label: 'Enrich', group: 'work', order: 10 },
+    { label: 'Export guide', group: 'share', order: 20 },
+    { label: 'Edit city', group: 'city', order: 10 },
+    { label: 'Remove city', group: 'city', order: 20, cls: 'danger' }
+  ];
+  const gs = C.moreSheetGroups(rows);
+  assert.deepEqual(gs.map(g => g.id), ['work', 'share', 'city']);
+  assert.deepEqual(gs.map(g => g.label), C.MORE_GROUPS.map(g => g.label));
+  assert.deepEqual(gs[0].rows.map(r => r.label), ['Enrich', 'Update data', 'Edit dates']);
+  assert.deepEqual(gs[1].rows.map(r => r.label), ['Share view', 'Export guide', 'Export JSON']);
+  assert.deepEqual(gs[2].rows.map(r => r.label), ['Edit city', 'Remove city']);
+  // The destructive row is the last row of the last group, every time.
+  const last = gs[gs.length - 1].rows[gs[gs.length - 1].rows.length - 1];
+  assert.equal(last.cls, 'danger');
+});
+
+test('a standalone guide drops the empty app-only cluster', () => {
+  // No CityOpsApp: only the four engine rows exist, so 'city' never renders
+  // and the other two keep the same order they have in the app.
+  const gs = C.moreSheetGroups([
+    { label: 'Share view', group: 'share', order: 10 },
+    { label: 'Export JSON', group: 'share', order: 30 },
+    { label: 'Update data', group: 'work', order: 20 },
+    { label: 'Edit dates', group: 'work', order: 30 }
+  ]);
+  assert.deepEqual(gs.map(g => g.id), ['work', 'share']);
+  assert.deepEqual(gs[0].rows.map(r => r.label), ['Update data', 'Edit dates']);
+  assert.deepEqual(gs[1].rows.map(r => r.label), ['Share view', 'Export JSON']);
+});
+
+test('a row with no group is shown, never dropped', () => {
+  const gs = C.moreSheetGroups([
+    { label: 'Enrich', group: 'work', order: 10 },
+    { label: 'Mystery' },
+    { label: 'Remove city', group: 'city', order: 20, cls: 'danger' }
+  ]);
+  const shown = [].concat.apply([], gs.map(g => g.rows.map(r => r.label)));
+  assert.ok(shown.indexOf('Mystery') !== -1, 'an ungrouped row must still render');
+  assert.deepEqual(gs[0].rows.map(r => r.label), ['Enrich', 'Mystery']);
+  assert.equal(shown[shown.length - 1], 'Remove city');
+});
+
 console.log(pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);
