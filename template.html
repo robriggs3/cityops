@@ -2432,7 +2432,13 @@ var CityOps = (function () {
     return stampedBlock(raw, normalizeGenMetaValue);
   }
 
-  // sidecars: {apiKey, genmeta}, each {value, updated} or absent.
+  // sidecars: {apiKey, github, genmeta}, each {value, updated} or absent.
+  //
+  // `github` is the GitHub personal access token the trip surface publishes the
+  // family page with (added 2026-08-26, when the trip editor moved onto the
+  // cityops origin). It is a credential exactly like apiKey, so it rides the
+  // same way: its own stamp, its own reconcile, never inside a data blob that
+  // an export, a snapshot or a published page could carry.
   function buildProfileRow(profile, sidecars) {
     var p = normalizeProfile(profile);
     var data = {};
@@ -2440,6 +2446,8 @@ var CityOps = (function () {
     var s = (sidecars && typeof sidecars === 'object') ? sidecars : {};
     var key = normalizeKeyBlock(s.apiKey);
     if (key) data.apiKey = key;
+    var gh = normalizeKeyBlock(s.github);
+    if (gh) data.github = gh;
     var gm = normalizeGenMetaBlock(s.genmeta);
     if (gm) data.genmeta = gm;
     return { data: data, updated_at: p.updated || EPOCH_ISO };
@@ -2450,7 +2458,65 @@ var CityOps = (function () {
   // before sidecars existed).
   function readSidecars(rowData) {
     var src = (rowData && typeof rowData === 'object') ? rowData : {};
-    return { apiKey: normalizeKeyBlock(src.apiKey), genmeta: normalizeGenMetaBlock(src.genmeta) };
+    return {
+      apiKey: normalizeKeyBlock(src.apiKey),
+      github: normalizeKeyBlock(src.github),
+      genmeta: normalizeGenMetaBlock(src.genmeta)
+    };
+  }
+
+  // Newest-wins per sidecar. `mine` and `theirs` are each {value, updated} or
+  // null; a null side never wins, and a tie keeps the account's copy (the same
+  // "ties keep what is already there" rule decideSync uses).
+  function newerBlock(mine, theirs) {
+    if (!mine) return theirs || null;
+    if (!theirs) return mine;
+    return (decideSync(mine.updated, theirs.updated) === 'push') ? mine : theirs;
+  }
+
+  // Builds the profile-row payload for a device that owns only the CREDENTIALS,
+  // not the interest profile: the trip surface, which has no Profile UI but
+  // must be able to push a key or a token it was just given.
+  //
+  // A PostgREST upsert replaces the whole row, so pushing a row built from an
+  // empty profile would blank the account's interests. This keeps the account's
+  // profile half (and its stamp) exactly as read, and only reconciles the
+  // sidecars. `row` is the pulled row ({data, updated_at}) or null; `mine` is
+  // this device's blocks, {apiKey, github, genmeta}, each optional.
+  function mergeProfileRow(row, mine) {
+    var theirs = readSidecars(row && row.data);
+    var m = (mine && typeof mine === 'object') ? mine : {};
+    var merged = {
+      apiKey: newerBlock(normalizeKeyBlock(m.apiKey), theirs.apiKey),
+      github: newerBlock(normalizeKeyBlock(m.github), theirs.github),
+      genmeta: newerBlock(normalizeGenMetaBlock(m.genmeta), theirs.genmeta)
+    };
+    var profile = normalizeProfile(row && row.data);
+    // Keep the ACCOUNT's profile stamp. This device did not edit the profile,
+    // and stamping it now would make a credential change look like a profile
+    // edit and beat the device that actually owns the profile.
+    if (row && typeof row.updated_at === 'string' && row.updated_at) {
+      profile.updated = row.updated_at;
+    }
+    return buildProfileRow(profile, merged);
+  }
+
+  // True when at least one of this device's sidecars beats the account's, so a
+  // credential push has something to say. Nothing to send is never sent: an
+  // upsert that changes nothing still costs a round trip and a row rewrite.
+  function sidecarsWorthPushing(row, mine) {
+    var theirs = readSidecars(row && row.data);
+    var m = (mine && typeof mine === 'object') ? mine : {};
+    var pairs = [
+      [normalizeKeyBlock(m.apiKey), theirs.apiKey],
+      [normalizeKeyBlock(m.github), theirs.github],
+      [normalizeGenMetaBlock(m.genmeta), theirs.genmeta]
+    ];
+    for (var i = 0; i < pairs.length; i++) {
+      var mineBlock = pairs[i][0], theirBlock = pairs[i][1];
+      if (mineBlock && decideSync(mineBlock.updated, theirBlock ? theirBlock.updated : null) === 'push') return true;
+    }
+    return false;
   }
 
   // What a failed token refresh means. A refresh that fails because the token
@@ -4513,6 +4579,9 @@ var CityOps = (function () {
       // metadata), plus the refresh-failure classifier: all pure, all unit
       // tested, so the app shell keeps only transport, storage and UI.
       buildProfileRow: buildProfileRow, readSidecars: readSidecars,
+      // The trip surface's push path: it owns credentials but not the interest
+      // profile, so it merges rather than replaces.
+      mergeProfileRow: mergeProfileRow, sidecarsWorthPushing: sidecarsWorthPushing,
       refreshFailure: refreshFailure
     },
     safeHref: safeHref,

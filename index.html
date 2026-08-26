@@ -506,6 +506,11 @@
     color:#fff; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.4);
     border-radius:20px; padding:5px 11px; cursor:pointer; white-space:nowrap;}
   .hdr-chip:hover{background:rgba(255,255,255,.25);}
+  /* The Trip door is a real link (middle-click, open-in-new-tab, and a visible
+     target in the status bar all matter for a crossing between surfaces), so
+     it has to be talked back into looking like the sibling buttons. */
+  a.hdr-chip{display:inline-flex; align-items:center; text-decoration:none;}
+  a.hdr-chip:hover{color:#fff;}
 
   /* Dropdown panel: floats directly under the header (does not add header
      height); #citybar is its host, positioned inside .wrap right after
@@ -2521,7 +2526,13 @@ var CityOps = (function () {
     return stampedBlock(raw, normalizeGenMetaValue);
   }
 
-  // sidecars: {apiKey, genmeta}, each {value, updated} or absent.
+  // sidecars: {apiKey, github, genmeta}, each {value, updated} or absent.
+  //
+  // `github` is the GitHub personal access token the trip surface publishes the
+  // family page with (added 2026-08-26, when the trip editor moved onto the
+  // cityops origin). It is a credential exactly like apiKey, so it rides the
+  // same way: its own stamp, its own reconcile, never inside a data blob that
+  // an export, a snapshot or a published page could carry.
   function buildProfileRow(profile, sidecars) {
     var p = normalizeProfile(profile);
     var data = {};
@@ -2529,6 +2540,8 @@ var CityOps = (function () {
     var s = (sidecars && typeof sidecars === 'object') ? sidecars : {};
     var key = normalizeKeyBlock(s.apiKey);
     if (key) data.apiKey = key;
+    var gh = normalizeKeyBlock(s.github);
+    if (gh) data.github = gh;
     var gm = normalizeGenMetaBlock(s.genmeta);
     if (gm) data.genmeta = gm;
     return { data: data, updated_at: p.updated || EPOCH_ISO };
@@ -2539,7 +2552,65 @@ var CityOps = (function () {
   // before sidecars existed).
   function readSidecars(rowData) {
     var src = (rowData && typeof rowData === 'object') ? rowData : {};
-    return { apiKey: normalizeKeyBlock(src.apiKey), genmeta: normalizeGenMetaBlock(src.genmeta) };
+    return {
+      apiKey: normalizeKeyBlock(src.apiKey),
+      github: normalizeKeyBlock(src.github),
+      genmeta: normalizeGenMetaBlock(src.genmeta)
+    };
+  }
+
+  // Newest-wins per sidecar. `mine` and `theirs` are each {value, updated} or
+  // null; a null side never wins, and a tie keeps the account's copy (the same
+  // "ties keep what is already there" rule decideSync uses).
+  function newerBlock(mine, theirs) {
+    if (!mine) return theirs || null;
+    if (!theirs) return mine;
+    return (decideSync(mine.updated, theirs.updated) === 'push') ? mine : theirs;
+  }
+
+  // Builds the profile-row payload for a device that owns only the CREDENTIALS,
+  // not the interest profile: the trip surface, which has no Profile UI but
+  // must be able to push a key or a token it was just given.
+  //
+  // A PostgREST upsert replaces the whole row, so pushing a row built from an
+  // empty profile would blank the account's interests. This keeps the account's
+  // profile half (and its stamp) exactly as read, and only reconciles the
+  // sidecars. `row` is the pulled row ({data, updated_at}) or null; `mine` is
+  // this device's blocks, {apiKey, github, genmeta}, each optional.
+  function mergeProfileRow(row, mine) {
+    var theirs = readSidecars(row && row.data);
+    var m = (mine && typeof mine === 'object') ? mine : {};
+    var merged = {
+      apiKey: newerBlock(normalizeKeyBlock(m.apiKey), theirs.apiKey),
+      github: newerBlock(normalizeKeyBlock(m.github), theirs.github),
+      genmeta: newerBlock(normalizeGenMetaBlock(m.genmeta), theirs.genmeta)
+    };
+    var profile = normalizeProfile(row && row.data);
+    // Keep the ACCOUNT's profile stamp. This device did not edit the profile,
+    // and stamping it now would make a credential change look like a profile
+    // edit and beat the device that actually owns the profile.
+    if (row && typeof row.updated_at === 'string' && row.updated_at) {
+      profile.updated = row.updated_at;
+    }
+    return buildProfileRow(profile, merged);
+  }
+
+  // True when at least one of this device's sidecars beats the account's, so a
+  // credential push has something to say. Nothing to send is never sent: an
+  // upsert that changes nothing still costs a round trip and a row rewrite.
+  function sidecarsWorthPushing(row, mine) {
+    var theirs = readSidecars(row && row.data);
+    var m = (mine && typeof mine === 'object') ? mine : {};
+    var pairs = [
+      [normalizeKeyBlock(m.apiKey), theirs.apiKey],
+      [normalizeKeyBlock(m.github), theirs.github],
+      [normalizeGenMetaBlock(m.genmeta), theirs.genmeta]
+    ];
+    for (var i = 0; i < pairs.length; i++) {
+      var mineBlock = pairs[i][0], theirBlock = pairs[i][1];
+      if (mineBlock && decideSync(mineBlock.updated, theirBlock ? theirBlock.updated : null) === 'push') return true;
+    }
+    return false;
   }
 
   // What a failed token refresh means. A refresh that fails because the token
@@ -4602,6 +4673,9 @@ var CityOps = (function () {
       // metadata), plus the refresh-failure classifier: all pure, all unit
       // tested, so the app shell keeps only transport, storage and UI.
       buildProfileRow: buildProfileRow, readSidecars: readSidecars,
+      // The trip surface's push path: it owns credentials but not the interest
+      // profile, so it merges rather than replaces.
+      mergeProfileRow: mergeProfileRow, sidecarsWorthPushing: sidecarsWorthPushing,
       refreshFailure: refreshFailure
     },
     safeHref: safeHref,
@@ -7048,7 +7122,13 @@ var CityOps = (function () {
     return stampedBlock(raw, normalizeGenMetaValue);
   }
 
-  // sidecars: {apiKey, genmeta}, each {value, updated} or absent.
+  // sidecars: {apiKey, github, genmeta}, each {value, updated} or absent.
+  //
+  // `github` is the GitHub personal access token the trip surface publishes the
+  // family page with (added 2026-08-26, when the trip editor moved onto the
+  // cityops origin). It is a credential exactly like apiKey, so it rides the
+  // same way: its own stamp, its own reconcile, never inside a data blob that
+  // an export, a snapshot or a published page could carry.
   function buildProfileRow(profile, sidecars) {
     var p = normalizeProfile(profile);
     var data = {};
@@ -7056,6 +7136,8 @@ var CityOps = (function () {
     var s = (sidecars && typeof sidecars === 'object') ? sidecars : {};
     var key = normalizeKeyBlock(s.apiKey);
     if (key) data.apiKey = key;
+    var gh = normalizeKeyBlock(s.github);
+    if (gh) data.github = gh;
     var gm = normalizeGenMetaBlock(s.genmeta);
     if (gm) data.genmeta = gm;
     return { data: data, updated_at: p.updated || EPOCH_ISO };
@@ -7066,7 +7148,65 @@ var CityOps = (function () {
   // before sidecars existed).
   function readSidecars(rowData) {
     var src = (rowData && typeof rowData === 'object') ? rowData : {};
-    return { apiKey: normalizeKeyBlock(src.apiKey), genmeta: normalizeGenMetaBlock(src.genmeta) };
+    return {
+      apiKey: normalizeKeyBlock(src.apiKey),
+      github: normalizeKeyBlock(src.github),
+      genmeta: normalizeGenMetaBlock(src.genmeta)
+    };
+  }
+
+  // Newest-wins per sidecar. `mine` and `theirs` are each {value, updated} or
+  // null; a null side never wins, and a tie keeps the account's copy (the same
+  // "ties keep what is already there" rule decideSync uses).
+  function newerBlock(mine, theirs) {
+    if (!mine) return theirs || null;
+    if (!theirs) return mine;
+    return (decideSync(mine.updated, theirs.updated) === 'push') ? mine : theirs;
+  }
+
+  // Builds the profile-row payload for a device that owns only the CREDENTIALS,
+  // not the interest profile: the trip surface, which has no Profile UI but
+  // must be able to push a key or a token it was just given.
+  //
+  // A PostgREST upsert replaces the whole row, so pushing a row built from an
+  // empty profile would blank the account's interests. This keeps the account's
+  // profile half (and its stamp) exactly as read, and only reconciles the
+  // sidecars. `row` is the pulled row ({data, updated_at}) or null; `mine` is
+  // this device's blocks, {apiKey, github, genmeta}, each optional.
+  function mergeProfileRow(row, mine) {
+    var theirs = readSidecars(row && row.data);
+    var m = (mine && typeof mine === 'object') ? mine : {};
+    var merged = {
+      apiKey: newerBlock(normalizeKeyBlock(m.apiKey), theirs.apiKey),
+      github: newerBlock(normalizeKeyBlock(m.github), theirs.github),
+      genmeta: newerBlock(normalizeGenMetaBlock(m.genmeta), theirs.genmeta)
+    };
+    var profile = normalizeProfile(row && row.data);
+    // Keep the ACCOUNT's profile stamp. This device did not edit the profile,
+    // and stamping it now would make a credential change look like a profile
+    // edit and beat the device that actually owns the profile.
+    if (row && typeof row.updated_at === 'string' && row.updated_at) {
+      profile.updated = row.updated_at;
+    }
+    return buildProfileRow(profile, merged);
+  }
+
+  // True when at least one of this device's sidecars beats the account's, so a
+  // credential push has something to say. Nothing to send is never sent: an
+  // upsert that changes nothing still costs a round trip and a row rewrite.
+  function sidecarsWorthPushing(row, mine) {
+    var theirs = readSidecars(row && row.data);
+    var m = (mine && typeof mine === 'object') ? mine : {};
+    var pairs = [
+      [normalizeKeyBlock(m.apiKey), theirs.apiKey],
+      [normalizeKeyBlock(m.github), theirs.github],
+      [normalizeGenMetaBlock(m.genmeta), theirs.genmeta]
+    ];
+    for (var i = 0; i < pairs.length; i++) {
+      var mineBlock = pairs[i][0], theirBlock = pairs[i][1];
+      if (mineBlock && decideSync(mineBlock.updated, theirBlock ? theirBlock.updated : null) === 'push') return true;
+    }
+    return false;
   }
 
   // What a failed token refresh means. A refresh that fails because the token
@@ -9129,6 +9269,9 @@ var CityOps = (function () {
       // metadata), plus the refresh-failure classifier: all pure, all unit
       // tested, so the app shell keeps only transport, storage and UI.
       buildProfileRow: buildProfileRow, readSidecars: readSidecars,
+      // The trip surface's push path: it owns credentials but not the interest
+      // profile, so it merges rather than replaces.
+      mergeProfileRow: mergeProfileRow, sidecarsWorthPushing: sidecarsWorthPushing,
       refreshFailure: refreshFailure
     },
     safeHref: safeHref,
@@ -9790,6 +9933,15 @@ else in the payload is ignored.
   var CLAUDE_KEY = 'cityops.claude.apikey.v1';
   var CLAUDE_KEY_AT = 'cityops.claude.apikey.updated.v1';  // ISO stamp for the reconcile
 
+  // The GitHub personal access token the TRIP surface (trip.html, same origin)
+  // publishes the family page with. This shell has no UI for it and never reads
+  // its value; it only carries it through the profile row, because a
+  // PostgREST upsert replaces the whole row and a shell that did not know about
+  // this sidecar would silently delete the account's token every time it pushed
+  // a profile. Same store, same stamp rule, same reconcile as the Claude key.
+  var GITHUB_KEY = 'cityops.github.pat.v1';
+  var GITHUB_KEY_AT = 'cityops.github.pat.updated.v1';
+
   // The Add/Edit city form fields that are NOT part of schema v1
   // (accommodation address, transport, free-text trip notes) exist only to
   // build a prompt; the city JSON itself never carries them. They are saved
@@ -9950,6 +10102,21 @@ else in the payload is ignored.
   function saveApiKey(k) {
     writeApiKey(k, new Date().toISOString());
     schedulePush('profile');
+  }
+
+  // ---- GitHub token (carried, never read here) ----
+  // Exactly the three functions the Claude key has, minus a save path: the trip
+  // surface is the only thing that writes this token, and this shell only needs
+  // to be able to preserve it and to adopt a newer one.
+  function loadGithubToken() { return readLS(GITHUB_KEY) || ''; }
+  function githubTokenStamp() {
+    var at = readLS(GITHUB_KEY_AT);
+    if (at) return at;
+    return loadGithubToken() ? CityOps.syncKit.EPOCH : null;
+  }
+  function writeGithubToken(k, iso) {
+    writeLS(GITHUB_KEY, k ? k : null);
+    writeLS(GITHUB_KEY_AT, iso || null);
   }
 
   // ---- generation-form metadata (local working copy + its own stamp) ----
@@ -10149,6 +10316,14 @@ else in the payload is ignored.
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); h1.click(); }
     };
     var actions = el('div', 'hdr-actions');
+    // The trip door (2026-08-26). Both surfaces are one app on one origin now,
+    // so the header carries the crossing rather than a footer link: this is
+    // the guide half, and Trip is where the stops, stays and legs live.
+    var tripBtn = el('a', 'hdr-chip', 'Trip');
+    tripBtn.href = './trip.html';
+    tripBtn.title = 'Your trip: stops, stays and travel legs';
+    tripBtn.onclick = function (e) { e.stopPropagation(); };
+    actions.appendChild(tripBtn);
     // Feature 7: Profile is app-level (one interest profile, one Claude key
     // for every city), so it is a top-level header control, not a row inside
     // the per-city switcher menu.
@@ -11828,9 +12003,11 @@ else in the payload is ignored.
   // the field out entirely rather than writing an empty one.
   function localSidecars() {
     var keyAt = apiKeyStamp();
+    var ghAt = githubTokenStamp();
     var gmAt = genMetaStamp();
     return {
       apiKey: keyAt ? { value: loadApiKey(), updated: keyAt } : null,
+      github: ghAt ? { value: loadGithubToken(), updated: ghAt } : null,
       genmeta: gmAt ? { value: loadGenMeta(), updated: gmAt } : null
     };
   }
@@ -11849,6 +12026,12 @@ else in the payload is ignored.
       // actually made the change.
       writeApiKey(remote.apiKey.value, remote.apiKey.updated);
       changed.push('Claude API key');
+    }
+    // Carried, not used: this shell has no GitHub UI, so adopting a newer token
+    // is purely so the next push preserves it and so the trip surface finds it
+    // already here.
+    if (remote.github && CityOps.syncKit.decide(githubTokenStamp(), remote.github.updated) === 'pull') {
+      writeGithubToken(remote.github.value, remote.github.updated);
     }
     if (remote.genmeta && CityOps.syncKit.decide(genMetaStamp(), remote.genmeta.updated) === 'pull') {
       writeGenMeta(remote.genmeta.value, remote.genmeta.updated);
@@ -11903,7 +12086,7 @@ else in the payload is ignored.
     var row = CityOps.syncKit.buildProfileRow(store.profile, localSidecars());
     // Nothing this device has ever set: pushing an empty profile with no
     // sidecars would overwrite a real one with this device's blank.
-    if (!row.data.updated && !row.data.apiKey && !row.data.genmeta) return;
+    if (!row.data.updated && !row.data.apiKey && !row.data.github && !row.data.genmeta) return;
     api('/rest/v1/profile?on_conflict=user_id', {
       method: 'POST',
       headers: {
@@ -12091,13 +12274,10 @@ else in the payload is ignored.
   // a profile that is otherwise in sync still has something to send up. This
   // is what carries a key typed before key sync existed up to the account.
   function sidecarNewerHere(row) {
-    var remote = CityOps.syncKit.readSidecars(row && row.data);
-    var mine = localSidecars();
-    if (mine.apiKey && CityOps.syncKit.decide(mine.apiKey.updated,
-      remote.apiKey ? remote.apiKey.updated : null) === 'push') return true;
-    if (mine.genmeta && CityOps.syncKit.decide(mine.genmeta.updated,
-      remote.genmeta ? remote.genmeta.updated : null) === 'push') return true;
-    return false;
+    // The comparison itself is pure and lives in the engine (it is the same
+    // question the trip surface asks before pushing a credential), so both
+    // surfaces answer it the same way and one set of tests covers both.
+    return CityOps.syncKit.sidecarsWorthPushing(row, localSidecars());
   }
 
   function applyPull(cityRows, stateRows, profileRows) {
@@ -12249,9 +12429,9 @@ else in the payload is ignored.
     lastSyncIso = null;
     if (LS) { try { LS.removeItem(SYNC_KEY); } catch (e) {} }
     // Signing out is a decision, not a failure: no alert for it. The Claude
-    // key and the form metadata stay on this device untouched (losing the key
-    // on sign-out would recreate exactly the annoyance key sync fixes); they
-    // simply stop being pushed.
+    // key, the GitHub token and the form metadata stay on this device
+    // untouched (losing a key on sign-out would recreate exactly the annoyance
+    // key sync fixes); they simply stop being pushed.
     clearSyncAlert();
     renderPanel();
   }
@@ -12423,7 +12603,15 @@ else in the payload is ignored.
   function decorateFoot() {
     var foot = document.getElementById('foot');
     if (!foot || foot.querySelector('.foot-wheres')) return;
-    foot.appendChild(document.createTextNode(' · itinerary: '));
+    // Two links, two different things: Trip is the other half of THIS app
+    // (same origin, same sign-in), and wheres is the read-only page the family
+    // watches. Naming both here keeps the footer honest about which is which.
+    foot.appendChild(document.createTextNode(' · '));
+    var t = el('a', 'foot-trip', 'trip');
+    t.href = './trip.html';
+    t.title = 'Your trip: stops, stays and travel legs';
+    foot.appendChild(t);
+    foot.appendChild(document.createTextNode(' · family: '));
     var a = el('a', 'foot-wheres', 'wheres.robriggs.com');
     a.href = 'https://wheres.robriggs.com';
     a.target = '_blank';
@@ -12463,6 +12651,14 @@ else in the payload is ignored.
       store.active = seeded.cityId;
       saveStore(store);
     }
+    // #profile: the trip surface's only door into sign-in. It carries no magic
+    // link flow of its own (one GoTrue redirect URL for the whole app, and it
+    // is this page), so its signed-out state sends the traveler here and the
+    // Profile modal has to open by itself when they arrive. Read before the
+    // city hash, and scrubbed, so it never survives into activateCity's
+    // #city= rewrite or into history.
+    var wantProfile = String(location.hash || '') === '#profile';
+    if (wantProfile) cleanHash();
     var wanted = hashCity();
     var target = CityOps.appStore.resolveStartCity(store, wanted);
     // Feature 3: never boot straight into a hidden example. If it hides
@@ -12474,6 +12670,14 @@ else in the payload is ignored.
     }
     activateCity(target);
     window.addEventListener('hashchange', function () {
+      // Arriving at #profile from a page that is already this one is a
+      // same-document hash change, not a load, so start() never runs again.
+      // The door has to work from either direction or it is a dead link.
+      if (String(location.hash || '') === '#profile') {
+        cleanHash();
+        openProfileModal();
+        return;
+      }
       var id = hashCity();
       if (id === SEED_ID && !exampleVisible()) return;
       if (id && has(store.cities, id) && id !== activeId) activateCity(id);
@@ -12482,6 +12686,9 @@ else in the payload is ignored.
     // sign-in notice has to be appended once that has happened.
     if (authNotice) showSyncNotice(authNotice);
     startSync();
+    // After startSync, so the account block inside the modal already knows
+    // whether there is a session to describe.
+    if (wantProfile) openProfileModal();
   }
 
   // Offline support: register the app-shell service worker. Feature-detected

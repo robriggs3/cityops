@@ -14,6 +14,7 @@ half the value is discovered on the ground. CityOps owns the layer between
 AI research and the actual week: a guide with a working memory.
 
 **Live app:** [cityops.robriggs.com](https://cityops.robriggs.com) ·
+**Trip:** [/trip.html](https://cityops.robriggs.com/trip.html) ·
 **Example guides:** [Yerevan](https://cityops.robriggs.com/yerevan.html)
 (currently being lived in) and
 [Batumi](https://cityops.robriggs.com/batumi.html) (the field-tested
@@ -100,6 +101,14 @@ The short version of [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md):
 - Sync is Supabase over raw `fetch` (no SDK): magic-link auth, epoch-ms
   newer-wins reconcile, flush-on-hide, RLS-only security with anonymous
   access revoked and verified.
+- Two surfaces, one app: the guide side (`index.html`, what to do in a
+  city) and the trip side (`trip.html`, stops, stays and travel legs)
+  share an origin, a session, and a credential store. Both are assembled
+  from `src/` by the same assembler, so the drift guard covers both.
+- Credentials never live in synced data. The Anthropic key and the GitHub
+  publish token each keep their own localStorage entry with their own ISO
+  stamp, and sync as stamped sidecars on the profile row, reconciled one
+  by one. No export, snapshot or published page can carry one.
 - The AI integration is a prompt contract: `PROMPT.md` doubles as
   documentation and machine-readable source, sliced by landmark into
   generated prompts; the merge path is validation-gated and
