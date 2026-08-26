@@ -1619,11 +1619,15 @@ var CityOps = (function () {
   //   5. the item list the re-run block refers to as "below", archived items
   //      omitted (nobody needs intel on something already put away)
   //   6. the coverage instruction
-  function buildIntelPassPrompt(templateText, cityData) {
+  // `state` is optional: the app passes its live state so an item archived on
+  // this device (state.itemStatus, which effectiveData never folds into the
+  // JSON) is put away here too. Without it, the JSON statuses stand.
+  function buildIntelPassPrompt(templateText, cityData, state) {
     var rules = sliceLandmark(templateText, 'RULES:INTEL');
     var rerun = sliceLandmark(templateText, 'RERUN:INTEL');
+    var st = { itemStatus: (state && state.itemStatus) || {} };
     var items = (cityData && Array.isArray(cityData.items) ? cityData.items : [])
-      .filter(function (it) { return it && it.status !== 'archived'; });
+      .filter(function (it) { return it && effectiveStatus(it, st) !== 'archived'; });
     var out = ['You are adding review-verified intel to an existing CityOps city guide.', ''];
     out = out.concat(cityHeaderLines(cityData));
     out.push('## Intel quality rules', '', rules, '');
@@ -1671,11 +1675,19 @@ var CityOps = (function () {
   //      it already carries echoed underneath it
   // Done and archived items are left out on purpose: a rating refresh exists
   // to help the traveler choose between places still in play, and neither a
-  // meal already eaten nor a place already put away is one of those.
-  function buildRatingsPassPrompt(templateText, cityData) {
+  // meal already eaten nor a place already put away is one of those. Done-ness
+  // is usually per-device state rather than JSON, so `state` (optional) lets
+  // the app pass its live state and have items ticked done in the app drop
+  // out too. Without it, the JSON statuses stand.
+  function buildRatingsPassPrompt(templateText, cityData, state) {
     var rerun = sliceLandmark(templateText, 'RERUN:RATINGS');
+    var st = { itemStatus: (state && state.itemStatus) || {} };
     var items = (cityData && Array.isArray(cityData.items) ? cityData.items : [])
-      .filter(function (it) { return it && (it.status === 'plan' || it.status === 'backup'); });
+      .filter(function (it) {
+        if (!it) return false;
+        var s = effectiveStatus(it, st);
+        return s === 'plan' || s === 'backup';
+      });
     var out = ['You are refreshing the Google Maps ratings on an existing CityOps city guide.', ''];
     out = out.concat(cityHeaderLines(cityData));
     out.push('## What I need', '', rerun, '');

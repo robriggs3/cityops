@@ -967,9 +967,11 @@
     }
     // The prompts describe the city as it stands right now, override included,
     // which is the same data the merge will run against.
+    function currentState() {
+      return CityOps.liveState() || CityOps.makeStore(activeId, LS).load();
+    }
     function currentData() {
-      var st = CityOps.liveState() || CityOps.makeStore(activeId, LS).load();
-      return CityOps.effectiveData(store.cities[activeId], st);
+      return CityOps.effectiveData(store.cities[activeId], currentState());
     }
     function build(kind) {
       var tpl = promptTemplateText();
@@ -978,8 +980,13 @@
         return null;
       }
       try {
-        if (kind === 'intel') return CityOps.promptKit.buildIntelPassPrompt(tpl, currentData());
-        if (kind === 'ratings') return CityOps.promptKit.buildRatingsPassPrompt(tpl, currentData());
+        // Intel and ratings get the live state too: done and archived live in
+        // state.itemStatus, which effectiveData never folds into the JSON, so
+        // without it the roster would still carry every item ticked off in
+        // the app. The interests pass keeps the full list on purpose: an item
+        // already eaten is still not one to re-suggest.
+        if (kind === 'intel') return CityOps.promptKit.buildIntelPassPrompt(tpl, currentData(), currentState());
+        if (kind === 'ratings') return CityOps.promptKit.buildRatingsPassPrompt(tpl, currentData(), currentState());
         return CityOps.promptKit.buildInterestsDeltaPrompt(tpl, currentData(), store.profile);
       } catch (e) {
         msg.textContent = e.message;
