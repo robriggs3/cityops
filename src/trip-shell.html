@@ -97,7 +97,27 @@
     overflow-x: hidden;
   }
 
-  .wrap { max-width: 1200px; margin: 0 auto; padding: var(--space-7) var(--space-6) 80px; }
+  /* The two numbers BOTH surfaces share. cityops.css declares the same pair
+     under the same names (owner ask 2026-08-26: "get header consistent
+     between cityops page and logistics page, cityops is narrow, plan-ahead
+     is full width"). This page keeps its own stylesheet by design, so the
+     values are duplicated here rather than imported; they have to be edited
+     together or the two surfaces drift apart again.
+     Was 1200px against cityops' 760px, which moved every column on the page
+     when you crossed between them. 960px is the settled measure: wide enough
+     for this page's densest grids (which already reflow below 720px anyway)
+     and a readable column on the guide side. */
+  :root { --content-max: 960px; --gutter: 16px;
+    /* Identical to cityops.css: .wrap is border-box, so its content edge is
+       (50vw - content-max/2) + gutter once the max-width bites and just
+       `gutter` before it, and max() of the two aligns the hero's contents
+       with the sections below it at every width. */
+    --bleed-pad: max(var(--gutter), calc(50vw - var(--content-max) / 2 + var(--gutter))); }
+  /* 16px of side gutter, up from 12px at phone width (owner ask: "give me a
+     little more left/right margin on plan-ahead page"), and the same 16px
+     cityops uses at every width, so a card's left edge does not shift when
+     you cross surfaces. */
+  .wrap { max-width: var(--content-max); margin: 0 auto; padding: var(--space-7) var(--gutter) 80px; }
 
   /* HERO */
   .hero {
@@ -947,21 +967,32 @@
   }
 
   /* FOOTER */
+  /* Owner feedback 2026-08-26: "fix font in footer, currently hard to read,
+     can't distinguish between normal text and links, don't use all caps."
+     Every one of those was true here: 11px of monospace, uppercased, tracked
+     out to 0.08em, in --text-3, with links set in the SAME colour and no
+     underline, so the line read as one grey smear with no doors in it.
+     Now: the body face at a readable size, sentence case, normal tracking,
+     and links carrying both the accent colour and an underline, because
+     colour on its own is not a distinction every reader can make. */
   .footer {
     margin-top: 60px;
     padding-top: 24px;
     border-top: 1px solid var(--border);
     text-align: center;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    color: var(--text-3);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    line-height: 1.7;
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-size: 13px;
+    color: var(--text-2);
+    letter-spacing: normal;
+    line-height: 1.8;
   }
-  .footer a { color: var(--text-3); text-decoration: none; transition: color 0.15s; }
-  .footer a:hover { color: var(--accent); }
-  .footer-privacy { margin-top: 6px; }
+  .footer a {
+    color: var(--accent); font-weight: 600;
+    text-decoration: underline; text-underline-offset: 2px;
+    transition: color 0.15s;
+  }
+  .footer a:hover { color: var(--accent-hover); }
+  .footer-privacy { margin-top: 6px; font-size: 12px; color: var(--text-3); }
 
   /* MAP RESET BUTTON */
   .map-reset-btn {
@@ -1254,7 +1285,9 @@
      Only breakpoints were 720/880/900px, so a 375px screen still paid 24px of
      side padding and a 56px display headline before any data. */
   @media (max-width: 430px) {
-    .wrap { padding: 18px 12px 56px; }
+    /* Side padding is --gutter at every width now (see .wrap above), so this
+       tier only tightens the vertical rhythm. */
+    .wrap { padding: 18px var(--gutter) 56px; }
     .hero { margin-bottom: 24px; gap: 12px; }
     .hero-left h1 { font-size: 38px; }
     .hero-left .sub { font-size: 13px; }
@@ -1302,12 +1335,17 @@
      The negative margins cancel .wrap's padding so the block touches
      three edges of the viewport; the values are kept in lockstep with
      .wrap's own padding at each breakpoint below. */
+  /* Edge to edge of the VIEWPORT, not of .wrap, and identical to cityops'
+     .wrap>header rule: the negative side margins pull the band past the
+     content column's max-width, and --bleed-pad puts its contents back onto
+     that column. So the h1 and the chip row start exactly where the first
+     section below them starts, at the same x on both surfaces. */
   .hero {
     display: block;
     background: linear-gradient(160deg, var(--accent) 0%, var(--accent-hover) 100%);
     color: #ffffff;
-    margin: calc(-1 * var(--space-7)) calc(-1 * var(--space-6)) var(--space-8);
-    padding: 26px var(--space-6) 22px;
+    margin: calc(-1 * var(--space-7)) calc(50% - 50vw) var(--space-8);
+    padding: 26px var(--bleed-pad) 22px;
     border-radius: 0;
   }
   .hero-left h1 {
@@ -1414,8 +1452,10 @@
      the narrow padding, so these margins track .wrap's 12px exactly. */
   @media (max-width: 430px) {
     .hero {
-      margin: -18px -12px 24px;
-      padding: 20px 14px 16px;
+      /* Still full-bleed; only the vertical padding tightens. The side
+         padding stays --bleed-pad, which is --gutter at this width. */
+      margin: -18px calc(50% - 50vw) 24px;
+      padding: 20px var(--bleed-pad) 16px;
     }
     .hero-left h1 { font-size: 27px; }
     .hero-left .sub { font-size: 13px; }
@@ -1622,7 +1662,10 @@
   <section class="section">
     <div class="section-head">
       <h2>Settings</h2>
-      <div class="meta">data stays in your browser</div>
+      <!-- This used to carry a data-locality promise the app does not keep
+           (see the footer comment). A section heading's job here is to say
+           what the section holds. -->
+      <div class="meta">Preferences, keys and integrations</div>
     </div>
 
     <div class="settings-grid">
@@ -1635,7 +1678,12 @@
         <div id="api-key-block" style="display:none">
           <label for="api-key-input">Anthropic API key</label>
           <input class="text-input" type="password" id="api-key-input" style="width:100%" placeholder="sk-ant-..." oninput="setAPIKey(this.value)">
-          <div class="muted" style="margin-top:6px">Stored only in your browser. Required for live in-app responses.</div>
+          <!-- This line used to claim the key was stored in one place and
+               nowhere else. It was wrong: the key also rides a stamped
+               sidecar on the profile sync row while you are signed in, and
+               every prompt you run is sent to Anthropic. Facts, no
+               guarantees. -->
+          <div class="muted" style="margin-top:6px">Saved on this device, and in your own account while you are signed in. Prompts you run are sent to Anthropic's API. Required for live in-app responses.</div>
           <div style="margin-top:12px;padding:10px 12px;background:var(--bg-softer);border-radius:6px;font-size:12px">
             <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">AI usage</div>
             <div id="ai-usage-display"><span style="color:var(--text-3)">No AI usage today.</span></div>
@@ -1743,8 +1791,13 @@
   </section>
 
   <footer class="footer">
-    <div><a href="./">city guides</a> · <a href="https://wheres.robriggs.com" target="_blank" rel="noopener noreferrer">family: wheres.robriggs.com</a> · Built by <a href="https://robriggs.com" target="_blank" rel="noopener noreferrer">Rob Riggs</a> · <a href="https://codeconspirators.com" target="_blank" rel="noopener noreferrer">Code Conspirators</a> · <a href="https://github.com/robriggs3/cityops" target="_blank" rel="noopener noreferrer" id="footer-github">★ Star on GitHub</a></div>
-    <div class="footer-privacy">Your data stays in your browser, and in your own account when you sign in. · <span id="build-stamp" style="opacity:0.6"></span></div>
+    <div><a href="./">City guides</a> · <a href="https://wheres.robriggs.com" target="_blank" rel="noopener noreferrer">Family: wheres.robriggs.com</a> · <a href="https://github.com/robriggs3/cityops/issues/new" target="_blank" rel="noopener noreferrer" id="footer-feedback" title="Open an issue on GitHub">Feedback and suggestions</a> · Built by <a href="https://robriggs.com" target="_blank" rel="noopener noreferrer">Rob Riggs</a> · <a href="https://codeconspirators.com" target="_blank" rel="noopener noreferrer">Code Conspirators</a> · <a href="https://github.com/robriggs3/cityops" target="_blank" rel="noopener noreferrer" id="footer-github">★ Star on GitHub</a></div>
+    <!-- The privacy claim that used to sit here was removed in the
+         2026-08-26 sweep. It was not true of this app: prompts go to
+         Anthropic, a published family page is a public URL, and the account
+         rows are a third place besides. The build stamp is the only thing
+         this line was ever structurally needed for. -->
+    <div class="footer-privacy"><span id="build-stamp" style="opacity:0.6"></span></div>
   </footer>
 
 </div>
@@ -1878,7 +1931,10 @@
     3. Copy the beacon token from your Cloudflare dashboard
     4. Replace YOUR_TOKEN_HERE below with that token
     5. Commit + push
-  Does nothing until you swap the token. Doesn't violate the "data stays in your browser" promise — it only logs page loads + referrer, not your content.
+  Does nothing until you swap the token. It logs page loads and referrer only,
+  never trip content. (This note used to measure itself against a data-locality
+  promise in the footer; that promise was removed on 2026-08-26, because the
+  app could not keep it.)
 -->
 <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "YOUR_TOKEN_HERE"}'></script>
 
@@ -1900,7 +1956,7 @@
 const STORAGE_KEY = 'planahead:v1';
 // Build stamp — bump when shipping. Shown in the footer + logged to console so you can
 // confirm at a glance which code your browser is actually running (rules out stale cache).
-const BUILD = '2026.08.26-trip1';
+const BUILD = '2026.08.26-trip2';
 const SNAPSHOTS_KEY = 'planahead:v1:snapshots';
 const MAX_AUTO_SNAPSHOTS = 7;    // daily auto rolling — about a week
 const MAX_MANUAL_SNAPSHOTS = 10; // generous cap for user snapshots

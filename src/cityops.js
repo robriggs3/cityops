@@ -446,7 +446,7 @@ var CityOps = (function () {
     return { itemStatus: {}, itemDay: {}, itemTitle: {}, dayOrder: {}, dayItemOrder: {},
       sectionItemOrder: {},
       collapsedSections: {}, collapsedPlanDays: {}, viewMode: null, tab: null,
-      pinned: [],
+      pinned: [], archived: null,
       dataOverride: null, stayOverride: null, updated: null };
   }
 
@@ -481,6 +481,15 @@ var CityOps = (function () {
     // Deduped and capped here too, so a state that arrives over sync from a
     // build with a different cap can never render a five-chip row.
     st.pinned = pinnedIds(st);
+    // Past-city override (see the archiveKit block below). Tri-state, and the
+    // ONLY valid values are true, false and null: anything else (absent in
+    // every state written before this shipped, or garbage off a hand-edited
+    // payload) reads as null, which means "no override, decide from the
+    // dates". Lives on the state object rather than the app store on purpose:
+    // the state object is what syncs (city_state rows), so archiving Batumi
+    // on the phone archives it on the laptop, while store.order and
+    // store.active stay device-local the way they always have.
+    if (st.archived !== true && st.archived !== false) st.archived = null;
     // null always means "unset" and is left alone (see VIEW_MODES comment
     // above). A value that is present but neither null nor one of the three
     // named modes (a stray "bogus" string, or garbage from an old build) is
@@ -910,9 +919,15 @@ var CityOps = (function () {
   ];
   var TAB_IDS = TABS.map(function (t) { return t.id; });
 
-  var EAT_SECTION_IDS = ['dinner', 'breakfast', 'lunch', 'coffee', 'restaurants', 'bars', 'cowork'];
+  var EAT_SECTION_IDS = ['dinner', 'breakfast', 'lunch', 'coffee', 'restaurants', 'bars'];
   var DO_SECTION_IDS = ['activities', 'interests'];
-  var SERVICE_SECTION_IDS = ['services', 'laundry'];
+  // cowork moved here from EAT_SECTION_IDS (owner decision 2026-08-26).
+  // A coworking space is a nomad utility, not a meal: filing it under Eat &
+  // Drink put "day pass, 1500 ALL, fast wifi" between two dinner cards. A
+  // sixth tab was the alternative and it loses: five tab chips plus the More
+  // control already fill a 390px row, so Services becomes the utilities tab
+  // (laundry, barber, coworking) rather than the tab bar growing.
+  var SERVICE_SECTION_IDS = ['services', 'laundry', 'cowork'];
   // Info's own explicit ids are checked BEFORE the generic services keyword
   // fallback below, on purpose: Tirana's real "safety" section is labeled
   // "Health & safety", and a naive keyword match on "health" would misfile a
@@ -1277,11 +1292,49 @@ var CityOps = (function () {
   // size). `totalItems` is optional so every existing caller (and the
   // existing unit test) that never passed it keeps the old small-guide
   // default of "open".
-  var SECTION_AUTOCOLLAPSE_THRESHOLD = 30;
-
+  // Owner feedback 2026-08-26: "default to all accordions be expanded on
+  // default". So this now returns false for every section at every guide
+  // size. The size-based auto-collapse it replaces was well meant (a 200-item
+  // Tirana guide opened as a wall) but it hid content the traveler had asked
+  // to see, and it made the SAME section behave differently in two cities for
+  // reasons nobody could see on screen. The wall is answered instead by the
+  // Collapse all link the section renderers now draw once per tab, which is a
+  // choice the traveler makes and which sticks (it writes the same explicit
+  // overrides a tap on one section header writes).
+  //
+  // The 30-item threshold constant is gone with it; a dead number sitting
+  // here would read as "size-based collapse is still a thing". The two
+  // ARGUMENTS stay: every caller still passes them, toggleSection still runs
+  // its "back to the default" comparison through here, and nothing
+  // downstream has to change if a future default ever depends on size again.
   function defaultSectionCollapsed(secId, totalItems) {
-    if (secId === 'base') return false;
-    return (typeof totalItems === 'number') && totalItems > SECTION_AUTOCOLLAPSE_THRESHOLD;
+    return false;
+  }
+
+  // Expand all / Collapse all, as a pure state write. Explicit per-section
+  // choices are what this sets: it goes through exactly the arithmetic
+  // toggleSection uses, so "Expand all" (which now matches the default)
+  // DELETES the overrides rather than writing a wall of `false`, and the map
+  // only ever holds genuine departures from the default.
+  function setSectionsCollapsed(state, secIds, collapsed, totalItems) {
+    state.collapsedSections = state.collapsedSections || {};
+    (Array.isArray(secIds) ? secIds : []).forEach(function (id) {
+      if (!id) return;
+      if (collapsed === defaultSectionCollapsed(id, totalItems)) delete state.collapsedSections[id];
+      else state.collapsedSections[id] = !!collapsed;
+    });
+    return state;
+  }
+
+  // The Plan tab's twin of the above, over dates instead of section ids.
+  function setPlanDaysCollapsed(state, isos, collapsed) {
+    state.collapsedPlanDays = state.collapsedPlanDays || {};
+    (Array.isArray(isos) ? isos : []).forEach(function (iso) {
+      if (!iso) return;
+      if (collapsed === false) delete state.collapsedPlanDays[iso];
+      else state.collapsedPlanDays[iso] = true;
+    });
+    return state;
   }
 
   // Tri-state read: an explicit true/false in collapsedSections always wins
@@ -1306,6 +1359,63 @@ var CityOps = (function () {
     if (next === defaultSectionCollapsed(secId, totalItems)) delete state.collapsedSections[secId];
     else state.collapsedSections[secId] = next;
     return state;
+  }
+
+  // ---- Past cities (state.archived) ----
+  // Owner ask 2026-08-26: "need the ability to archive cities previously
+  // visited in cityops page (take cue from plan-ahead page)". The trip page
+  // already groups stops you have left under one collapsed "Past" disclosure
+  // and fades them; the city switcher does the same here.
+  //
+  // Three states, in the same tri-state shape collapsedSections uses:
+  //   true   the traveler archived it by hand (early, before the dates ran out)
+  //   false  the traveler kept it active by hand (its dates have passed but
+  //          they are still using it, e.g. writing up a city after leaving)
+  //   null   no opinion: decide from the stay's end date
+  //
+  // `isActive` is the one rule that overrides the DATE but never the
+  // traveler: the city you are looking at right now does not slide into a
+  // collapsed group under your cursor on the day your stay ends. An explicit
+  // `true` still archives it, because that was a deliberate tap.
+  function cityArchiveMode(state) {
+    var v = state && state.archived;
+    if (v === true) return 'archived';
+    if (v === false) return 'active';
+    return 'auto';
+  }
+
+  function setCityArchived(state, v) {
+    state.archived = (v === true || v === false) ? v : null;
+    return state;
+  }
+
+  // `dates` is the EFFECTIVE stay range ({from, to}), so a stayOverride the
+  // traveler set in Edit dates is what this reads, not the shipped data.
+  function cityIsPast(state, dates, todayIso, isActive) {
+    var mode = cityArchiveMode(state);
+    if (mode === 'archived') return true;
+    if (mode === 'active') return false;
+    if (isActive) return false;
+    var to = dates && dates.to;
+    if (typeof to !== 'string' || !to) return false;
+    return to < String(todayIso || '');
+  }
+
+  // What one tap should do next, given where a city stands. Returned as a
+  // named intent rather than a boolean so the switcher's control can label
+  // itself from this and never offer an action that does nothing: a city
+  // already in Past offers Restore, everything else offers Archive.
+  function nextArchiveValue(state, dates, todayIso, isActive) {
+    if (cityIsPast(state, dates, todayIso, isActive)) {
+      // Restoring a city whose dates have genuinely passed needs the explicit
+      // `false`, or the date rule would simply re-archive it on the next
+      // render. Restoring one that is only archived by hand can go back to
+      // 'auto', which keeps the state object free of overrides that say the
+      // same thing the dates already say.
+      var byDate = (dates && typeof dates.to === 'string' && dates.to < String(todayIso || ''));
+      return (byDate && !isActive) ? false : null;
+    }
+    return true;
   }
 
   // ---- Pinned highlights (state.pinned) ----
@@ -3146,7 +3256,14 @@ var CityOps = (function () {
   function askBtn(it) {
     var hook = askPlaceHook();
     if (!hook || !placeNeedsResearch(it, sectionFor(it.section))) return null;
-    var b = el('button', 'ctl icon-btn ask-btn', '✨');
+    // .ctl-more, so it joins Archive and Rename behind the card's expand.
+    // Measured on the real Ksamil guide the day it shipped: with ✨ always
+    // visible, 26 of 26 Eat & Drink control rows wrapped to a second line
+    // (baseline was 0 of 26). It is exactly the case the .ctl-more comment
+    // above describes: one more always-on pill is more than the row's slack,
+    // and asking Claude to research a place is a sitting-down action, not a
+    // standing-in-the-street one.
+    var b = el('button', 'ctl icon-btn ask-btn ctl-more', '✨');
     b.type = 'button';
     b.setAttribute('aria-label', 'Ask Claude about this place');
     b.title = 'Ask Claude to check this place and rank it against the rest of this section';
@@ -3620,6 +3737,49 @@ var CityOps = (function () {
     return frag;
   }
 
+  // "Expand all · Collapse all", once per tab (owner ask 2026-08-26, the
+  // other half of "default to all accordions be expanded").
+  //
+  // Text links, not buttons, and deliberately so: the page already carries a
+  // pill control row on every card and a chip row above them, and two more
+  // pills at the top of every tab would read as a third bar of actions rather
+  // than a footnote. They are muted, small, and right where the first section
+  // heading starts, so they are findable when the wall is the problem and
+  // invisible when it is not.
+  //
+  // `apply(collapsed)` is handed in by the caller because the two callers
+  // write different maps (sections by id, Plan days by date) through the two
+  // pure writers above. Nothing here decides anything: the whole decision is
+  // in setSectionsCollapsed / setPlanDaysCollapsed, which are unit tested.
+  function renderExpandAll(anyCollapsible, apply) {
+    if (!anyCollapsible) return null;
+    var row = el('div', 'xall-row');
+    function link(label, collapsed, aria) {
+      var b = el('button', 'xall', label);
+      b.type = 'button';
+      b.setAttribute('aria-label', aria);
+      b.title = aria;
+      b.onclick = function () {
+        var st = ctx.store.load();
+        apply(st, collapsed);
+        ctx.store.save(st);
+        rerender();
+      };
+      return b;
+    }
+    row.appendChild(link('Expand all', false, 'Expand every section in this tab'));
+    row.appendChild(el('span', 'xall-sep', '·'));
+    row.appendChild(link('Collapse all', true, 'Collapse every section in this tab'));
+    return row;
+  }
+
+  function sectionExpandAllRow(vms, totalItems) {
+    var ids = vms.map(function (sv) { return sv.section.id; }).filter(Boolean);
+    return renderExpandAll(ids.length > 1, function (st, collapsed) {
+      setSectionsCollapsed(st, ids, collapsed, totalItems);
+    });
+  }
+
   function renderTabSections(vms, state, totalItems) {
     var main = document.getElementById('main');
     main.innerHTML = '';
@@ -3627,6 +3787,8 @@ var CityOps = (function () {
       main.appendChild(el('p', 'when-line', 'Nothing in this tab yet.'));
       return;
     }
+    var xall = sectionExpandAllRow(vms, totalItems);
+    if (xall) main.appendChild(xall);
     vms.forEach(function (sv) { main.appendChild(renderTabSectionBlock(sv, state, totalItems)); });
   }
 
@@ -3678,6 +3840,8 @@ var CityOps = (function () {
       main.appendChild(el('p', 'when-line', 'Nothing in this tab yet.'));
       return;
     }
+    var xall = sectionExpandAllRow(vms, totalItems);
+    if (xall) main.appendChild(xall);
     vms.forEach(function (sv) {
       var hdr = renderSectionHeader(sv, state, totalItems);
       main.appendChild(hdr.h2);
@@ -4299,6 +4463,14 @@ var CityOps = (function () {
         'Today (' + dayLabel(pm.todayIso) + ') is outside this trip\'s dates (' +
         fmtRange(effectiveDates(data, state)) + '). Showing anything dated today anyway.'));
     }
+    // Over the REMAINING days only: today's group has no toggle (you are
+    // never collapsing the day you are standing in), so a link that claimed
+    // to act on "all" of them would be lying about one.
+    var dayIsos = pm.days.map(function (d) { return d.iso; }).filter(Boolean);
+    var xall = renderExpandAll(dayIsos.length > 1, function (st, collapsed) {
+      setPlanDaysCollapsed(st, dayIsos, collapsed);
+    });
+    if (xall) main.appendChild(xall);
     // Today wears the same visual language as the wheres tracker's
     // you-are-here banner: accent frame, corner badge, elevated. Without it
     // the pinned group reads as a day sorted out of order rather than a
@@ -4385,7 +4557,14 @@ var CityOps = (function () {
       else renderTabSections(tabVms, state, totalItems);
     }
     var foot = document.getElementById('foot');
-    foot.textContent = 'cityops · schema v1 · state saved on this device';
+    // The data-locality clause this line used to carry went in the
+    // 2026-08-26 privacy sweep. It was accurate for a standalone guide file
+    // and wrong for the hosted app, which also keeps rows in a synced
+    // account and sends prompts to an AI provider, and this one line is
+    // rendered by BOTH. A footer is not the place to describe where data
+    // lives; a footer that describes it wrongly is worse than one that stays
+    // quiet. See docs/ for the removed strings.
+    foot.textContent = 'cityops · schema v1';
     var notice = document.getElementById('notice');
     notice.textContent = ctx.store.persistent ? '' :
       'Private mode: changes hold for this session only and are not saved.';
@@ -5088,6 +5267,15 @@ var CityOps = (function () {
     effectiveDay: effectiveDay, setDay: setDay, stayDates: stayDates,
     normalizeState: normalizeState, effectiveDates: effectiveDates,
     setStayDates: setStayDates, toggleSection: toggleSection,
+    // Expand all / Collapse all: the two pure writers behind the per-tab
+    // links, over sections and over Plan-tab days respectively.
+    setSectionsCollapsed: setSectionsCollapsed, setPlanDaysCollapsed: setPlanDaysCollapsed,
+    // Past cities. Pure, and read by the app shell's city switcher; the flag
+    // itself rides state.archived, which is what syncs between devices.
+    archiveKit: {
+      mode: cityArchiveMode, set: setCityArchived,
+      isPast: cityIsPast, nextValue: nextArchiveValue
+    },
     effectiveName: effectiveName, setTitle: setTitle, setViewMode: setViewMode,
     keyForDisplayedDate: keyForDisplayedDate, calendarModel: calendarModel,
     // Phase 3 additions, all pure and unit-tested on their own.
