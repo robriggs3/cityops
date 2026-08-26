@@ -3288,13 +3288,86 @@ test('the real city files all resolve to a location, so every guide gets the chi
   });
 });
 
-test('sunsetUtcMinutes is pure: same answer twice, arguments untouched', () => {
+test('the sunset kit is pure: same answer twice, and it never writes to the city', () => {
   const a = C.sunKit.sunsetUtcMinutes('2026-08-26', 41.33, 19.8101);
   const b = C.sunKit.sunsetUtcMinutes('2026-08-26', 41.33, 19.8101);
   assert.equal(a, b);
-  const snap = JSON.stringify(GOOD);
-  C.sunKit.cityLatLng(GOOD);
-  assert.equal(JSON.stringify(GOOD), snap);
+  // The object arguments are the ones that COULD be written to, so those are
+  // the ones worth snapshotting; the coordinates are primitives and could not
+  // be mutated by anything.
+  const city = clone(GOOD);
+  city.city.utc_offset = 240;
+  const citySnap = JSON.stringify(city);
+  const st = C.emptyState();
+  const stSnap = JSON.stringify(st);
+  C.sunKit.cityLatLng(city);
+  C.sunKit.cityUtcOffsetMinutes(city);
+  C.sunKit.chip(city, st, '2026-08-10');
+  assert.equal(JSON.stringify(city), citySnap, 'the city was written to');
+  assert.equal(JSON.stringify(st), stSnap, 'the state was written to');
+});
+
+test('the chip picks a date, a clock, and the calendar day the wrap lands on', () => {
+  const chip = (city, now) => C.sunKit.chip(city, C.emptyState(), now);
+  const tirana = { schema: 1, city: { name: 'Tiranë', utc_offset: 120,
+    dates: { from: '2026-08-22', to: '2026-08-29' },
+    accommodation: { name: 'x', lat: 41.33, lng: 19.8101 } }, sections: [], items: [] };
+
+  // Inside the stay: today's sunset, on the city's clock, labelled today.
+  const mid = chip(tirana, '2026-08-26');
+  assert.deepEqual(mid, { text: '19:23', iso: '2026-08-26', isToday: true, cityClock: true });
+  // Outside the stay: the arrival day instead, and NOT labelled today, so a
+  // guide opened three weeks early answers "what are the evenings like there".
+  const early = chip(tirana, '2026-07-01');
+  assert.deepEqual(early, { text: '19:29', iso: '2026-08-22', isToday: false, cityClock: true });
+  const late = chip(tirana, '2026-12-01');
+  assert.equal(late.iso, '2026-08-22');
+
+  // No offset stated: the reader's device clock, and the chip says so via
+  // cityClock:false so the tooltip can name whose clock it used.
+  const noOff = clone(tirana);
+  delete noOff.city.utc_offset;
+  assert.equal(chip(noOff, '2026-08-26').cityClock, false);
+  // A fractional offset is refused rather than rendered: 5.5 is what someone
+  // writes meaning hours, and it used to come out as a chip reading "17:00.5".
+  const half = clone(tirana);
+  half.city.utc_offset = 5.5;
+  const halfChip = chip(half, '2026-08-26');
+  assert.equal(halfChip.cityClock, false, 'a fractional offset must not be used');
+  assert.ok(/^\d\d:\d\d$/.test(halfChip.text), 'chip text was ' + halfChip.text);
+
+  // No coordinates anywhere: no chip at all, rather than a guess.
+  const nowhere = clone(tirana);
+  delete nowhere.city.accommodation;
+  assert.equal(chip(nowhere, '2026-08-26'), null);
+});
+
+test('a chip whose wrap crosses midnight moves its DATE with its time', () => {
+  // Kiritimati sits at UTC+14 with a longitude that puts its sunset on the
+  // NEXT UTC day before the offset is even applied. Labelling that with the
+  // UTC day would make the chip say "sunset this evening" about tomorrow.
+  const kiri = { schema: 1, city: { name: 'Kiritimati', utc_offset: 840,
+    dates: { from: '2026-08-20', to: '2026-08-27' },
+    accommodation: { name: 'x', lat: 1.87, lng: -157.4 } }, sections: [], items: [] };
+  const utc = C.sunKit.sunsetUtcMinutes('2026-08-24', 1.87, -157.4);
+  assert.ok(utc > 1440, 'this case only bites when sunset is past UTC midnight, got ' + utc);
+  // met.no for 2026-08-24 at these coordinates: 2026-08-25T04:36Z, which is
+  // 18:36 on the 25th at UTC+14.
+  const c = C.sunKit.chip(kiri, C.emptyState(), '2026-08-24');
+  assert.equal(c.cityClock, true);
+  assert.equal(c.text, '18:36');
+  assert.equal(c.iso, '2026-08-25', 'the label must follow the wrap');
+  assert.equal(c.isToday, false, 'that evening is not today in the city');
+  // And the other direction: a far-western city whose sunset is the PREVIOUS
+  // UTC day once its offset is applied. met.no: 2026-08-25T04:54Z, which is
+  // 18:54 on the 24th at UTC-10.
+  const honolulu = { schema: 1, city: { name: 'Honolulu', utc_offset: -600,
+    dates: { from: '2026-08-20', to: '2026-08-27' },
+    accommodation: { name: 'x', lat: 21.3069, lng: -157.8583 } }, sections: [], items: [] };
+  const h = C.sunKit.chip(honolulu, C.emptyState(), '2026-08-24');
+  assert.equal(h.text, '18:54');
+  assert.equal(h.iso, '2026-08-24', 'the wrap went back a day, and the label with it');
+  assert.equal(h.isToday, true);
 });
 
 // ---------------------------------------------------------------------------
@@ -3530,6 +3603,129 @@ test('newPlaceDelta is pure: it reads the city and changes nothing', () => {
   assert.equal(JSON.stringify(GOOD), snap);
 });
 
+test('an id every plain object already inherits is added, not silently skipped', () => {
+  // "Constructor" is a plausible bar name and slugs to "constructor", which
+  // every plain object answers to. mergeDelta's existing-id lookup used a
+  // plain {}, so the item read as already present: added 0, skipped 1, no
+  // errors, and the caller was told the delta applied.
+  ['Constructor', 'ToString', 'Valueof', 'Hasownproperty'].forEach((name) => {
+    const built = C.newPlaceDelta(GOOD, { name: name, section: 'dinner' });
+    assert.deepEqual(built.errors, []);
+    const res = C.mergeDelta(GOOD, built.delta);
+    assert.deepEqual(res.errors, []);
+    assert.equal(res.summary.added, 1, name + ' was not added');
+    assert.equal(res.summary.skipped, 0, name + ' was reported as already present');
+    assert.ok(res.data.items.filter((i) => i.id === built.id).length === 1);
+  });
+  // The same hole in the section map: a delta section named "constructor"
+  // read as already present and was never added.
+  const secRes = C.mergeDelta(GOOD, {
+    schema: 1, delta: true,
+    sections: [{ id: 'constructor', label: 'Constructor' }],
+    items: [{ id: 'c1', section: 'constructor', status: 'plan', name: 'X', links: [] }]
+  });
+  assert.deepEqual(secRes.errors, []);
+  assert.equal(secRes.summary.sectionsAdded, 1);
+  assert.equal(secRes.summary.added, 1);
+  // And a hostile delta still cannot paint intel onto every card. Built via
+  // JSON.parse on purpose: a `{'__proto__': x}` OBJECT LITERAL sets the
+  // prototype instead of creating a key, so a literal here would test
+  // nothing. JSON.parse creates a real own property, which is exactly what
+  // arrives from an AI response.
+  const eviland = C.mergeDelta(GOOD, JSON.parse(
+    '{"schema":1,"delta":true,"intel":{"__proto__":{"tips":["pwned"]}}}'));
+  assert.deepEqual(eviland.errors, []);
+  assert.equal(eviland.summary.intelSkipped, 1);
+  assert.equal(eviland.summary.intelApplied, 0);
+  eviland.data.items.forEach((i) => assert.equal(i.intel, undefined));
+});
+
+test('an item whose id is an Object.prototype key still renders and still behaves', () => {
+  // The deeper half of the same hole mergeDelta had, found by adding a place
+  // called "Constructor" in the real app rather than by reading the code: the
+  // per-item STATE maps are plain objects too, so effectiveStatus returned
+  // the Object constructor instead of "not set". The item was written to the
+  // guide correctly and then rendered on no tab at all, and the reveal's
+  // fallback message printed "function Object() { [native code] }".
+  const built = C.newPlaceDelta(GOOD, { name: 'Constructor', section: 'dinner' });
+  const city = C.mergeDelta(GOOD, built.delta).data;
+  const it = city.items.filter((i) => i.id === 'constructor')[0];
+  assert.ok(it, 'the place must be in the guide');
+  const st = C.emptyState();
+
+  // Nothing set yet: every reader must say so rather than hand back an
+  // inherited member of Object.prototype.
+  assert.equal(C.effectiveStatus(it, st), 'plan');
+  assert.equal(C.effectiveName(it, st), 'Constructor');
+  assert.equal(C.effectiveDay(it, st), null);
+  assert.equal(C.isSectionCollapsed(st, 'constructor', 4), C.defaultSectionCollapsed('constructor', 4));
+  assert.equal(C.isPlanDayCollapsed(st, 'constructor'), false);
+  assert.deepEqual(C.dayItemOrderFor(st, 'constructor'), []);
+  assert.deepEqual(C.sectionItemOrderFor(st, 'constructor'), []);
+
+  // And once something IS set, it reads back.
+  C.setStatus(st, 'constructor', 'done');
+  C.setTitle(st, 'constructor', 'Konstruktori');
+  C.setDay(st, 'constructor', '2026-08-13');
+  assert.equal(C.effectiveStatus(it, st), 'done');
+  assert.equal(C.effectiveName(it, st), 'Konstruktori');
+  assert.equal(C.effectiveDay(it, st), '2026-08-13');
+
+  // The whole render model has to place it, which is the failure that was
+  // actually visible: a status of "function Object" matches none of the four
+  // buckets, so the card appeared nowhere.
+  const vm = C.viewModel(city, C.emptyState());
+  const dinner = vm.filter((sv) => sv.section.id === 'dinner')[0];
+  const seen = [].concat(dinner.undated, dinner.backups, dinner.archived,
+    [].concat.apply([], dinner.days.map((d) => d.items))).map((x) => x.id);
+  assert.ok(seen.indexOf('constructor') !== -1,
+    'the card rendered in no bucket at all: ' + JSON.stringify(seen));
+
+  // The other prototype keys a name can slug to, same bar.
+  ['ToString', 'Valueof', 'Hasownproperty', 'Proto'].forEach((n) => {
+    const b = C.newPlaceDelta(city, { name: n, section: 'dinner' });
+    const merged = C.mergeDelta(city, b.delta);
+    assert.equal(merged.summary.added, 1, n);
+    const item = merged.data.items.filter((i) => i.id === b.id)[0];
+    assert.equal(C.effectiveStatus(item, C.emptyState()), 'plan', n + ' status');
+    assert.equal(C.effectiveName(item, C.emptyState()), n, n + ' name');
+  });
+});
+
+test('a name that collides many times keeps counting rather than falling back to a clock', () => {
+  // The suffix loop used to stop at 500 and fall back to a timestamp, which
+  // two adds inside one millisecond would duplicate, and mergeDelta would
+  // then SKIP the second silently.
+  let city = clone(GOOD);
+  for (let i = 0; i < 520; i++) {
+    const built = C.newPlaceDelta(city, { name: 'Oda', section: 'dinner' });
+    const res = C.mergeDelta(city, built.delta);
+    assert.equal(res.summary.added, 1, 'add ' + i + ' produced a duplicate id: ' + built.id);
+    city = res.data;
+  }
+  assert.equal(city.items.filter((i) => /^oda(-\d+)?$/.test(i.id)).length, 520);
+  assert.ok(city.items.filter((i) => i.id === 'oda-520').length === 1);
+});
+
+test('rosterLines survives an item whose intel never went through validate()', () => {
+  // Both roster helpers are exported on promptKit, so a caller can hand them
+  // hand-built data. "oops".forEach would throw and take the render with it.
+  const lines = C.promptKit.rosterLines([
+    { id: 'a', name: 'A', intel: { verdicts: 'oops', tips: 7 } },
+    { id: 'b', name: 'B', intel: null },
+    { id: 'c', name: 'C', rating: { stars: 'four' } },
+    null,
+    { name: 'no id' }
+  ], null);
+  assert.ok(lines.join('\n').indexOf('- a | A') !== -1);
+  assert.ok(lines.join('\n').indexOf('- b | B') !== -1);
+  assert.equal(lines.filter((l) => /no id/.test(l)).length, 0);
+  // A rating whose stars are not a number is not a rating, so the item still
+  // reads as unresearched rather than as rated "four".
+  assert.ok(lines.join('\n').indexOf('- c | C') !== -1);
+  assert.ok(lines.filter((l) => /not researched yet/.test(l)).length >= 3);
+});
+
 // ---------------------------------------------------------------------------
 // Ask Claude about one place
 // ---------------------------------------------------------------------------
@@ -3752,11 +3948,11 @@ function sseBody(events) {
   };
 }
 
-let asyncPending = 0, asyncFail = 0;
+let asyncPending = 0;
 function asyncTest(name, fn) {
   asyncPending++;
   fn().then(() => { pass++; console.log('PASS ' + name); },
-    (e) => { fail++; asyncFail++; console.log('FAIL ' + name + '\n  ' + (e && e.message)); })
+    (e) => { fail++; console.log('FAIL ' + name + '\n  ' + (e && e.message)); })
     .then(() => { asyncPending--; });
 }
 
@@ -3827,8 +4023,24 @@ asyncTest('a reply with no JSON fence is reported, never half applied', () => {
 
 // The async tests above resolve on a microtask, so the summary has to wait
 // for them or it reports before they have run and the exit code lies.
+//
+// With a deadline, because polling for a counter to reach zero is a hang
+// waiting to happen: a promise that never settles would otherwise reschedule
+// this forever and CI would sit at "no output" instead of failing. Ten
+// seconds is roughly a thousand times what the mocked-fetch tests take.
+const ASYNC_DEADLINE_MS = 10000;
+const asyncStartedAt = Date.now();
 function finish() {
-  if (asyncPending > 0) { setTimeout(finish, 5); return; }
+  if (asyncPending > 0) {
+    if (Date.now() - asyncStartedAt > ASYNC_DEADLINE_MS) {
+      fail += asyncPending;
+      console.log('FAIL ' + asyncPending + ' async test(s) never settled within ' +
+        (ASYNC_DEADLINE_MS / 1000) + 's');
+    } else {
+      setTimeout(finish, 5);
+      return;
+    }
+  }
   console.log(pass + ' passed, ' + fail + ' failed');
   if (fail) process.exit(1);
 }

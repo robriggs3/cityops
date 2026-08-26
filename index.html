@@ -281,6 +281,7 @@
   .info-card .info-item > .pin-btn{float:right; margin:0 0 4px 8px; min-width:32px;}
   body.share .info-card .info-item > .pin-btn{display:none;}
   .info-card .info-item.just-moved{animation:justmoved 1.8s ease-out 1; border-radius:8px;}
+  .task-row.just-moved{animation:justmoved 1.8s ease-out 1;}
 
   /* Add-a-place form fields: label over control, one per row, so a 390px
      phone never puts a label and its input on the same line. */
@@ -926,7 +927,13 @@ var CityOps = (function () {
     });
     newSections.forEach(function (s) { secIds[s.id] = 1; });
 
-    var existingIds = {};
+    // Object.create(null) plus an own-property check, for the same reason the
+    // intel/ratings lookup below uses them. This one was a plain {} until an
+    // item id could come from a HUMAN typing a name: "Constructor" slugs to
+    // "constructor", which every plain object inherits, so the item read as
+    // already present and was counted as skipped rather than added. The delta
+    // was reported as applied and nothing was added.
+    var existingIds = Object.create(null);
     (Array.isArray(cityData.items) ? cityData.items : []).forEach(function (it) {
       if (it && it.id) existingIds[it.id] = 1;
     });
@@ -943,7 +950,7 @@ var CityOps = (function () {
           var before = errors.length;
           validateItem(it, ref, secIds, seen, errors, DELTA_STATUSES, DELTA_STATUS_HINT);
           if (errors.length !== before) return;
-          if (existingIds[it.id]) { skipped++; return; }
+          if (Object.prototype.hasOwnProperty.call(existingIds, it.id)) { skipped++; return; }
           toAdd.push(it);
         });
       }
@@ -981,10 +988,12 @@ var CityOps = (function () {
     if (!Array.isArray(out.sections)) out.sections = [];
     if (!Array.isArray(out.items)) out.items = [];
 
-    var haveSec = {};
+    // Same prototype-safe pair as existingIds above: a section id of
+    // "constructor" would otherwise read as already present.
+    var haveSec = Object.create(null);
     out.sections.forEach(function (s) { if (s && s.id) haveSec[s.id] = 1; });
     newSections.forEach(function (s) {
-      if (haveSec[s.id]) return;
+      if (Object.prototype.hasOwnProperty.call(haveSec, s.id)) return;
       haveSec[s.id] = 1;
       out.sections.push(deepClone(s));
       summary.sectionsAdded++;
@@ -1055,12 +1064,18 @@ var CityOps = (function () {
       if (it && it.id) taken[it.id] = 1;
     });
     var base = slug(name) || PLACE_ID_FALLBACK;
-    if (!Object.prototype.hasOwnProperty.call(taken, base)) return base;
-    for (var n = 2; n < 500; n++) {
+    function free(id) { return !Object.prototype.hasOwnProperty.call(taken, id); }
+    if (free(base)) return base;
+    // Unbounded rather than capped at a few hundred. A capped loop needs a
+    // fallback, the obvious fallback is a timestamp, and two adds inside one
+    // millisecond would then produce the same id and mergeDelta would SKIP
+    // the second one silently, which is precisely the failure this function
+    // exists to prevent. Counting up cannot collide, and the loop is bounded
+    // in practice by the number of items already in the guide.
+    for (var n = 2; ; n++) {
       var cand = base + '-' + n;
-      if (!Object.prototype.hasOwnProperty.call(taken, cand)) return cand;
+      if (free(cand)) return cand;
     }
-    return base + '-' + Date.now();
   }
 
   // Returns {delta, id, errors}. errors is the caller-facing list for the
@@ -1226,13 +1241,27 @@ var CityOps = (function () {
     return state;
   }
 
+  // Every one of the per-item state maps is a plain object, so a key that
+  // Object.prototype already answers to reads back as an inherited function
+  // instead of "not set". That was harmless while item ids came only from an
+  // AI's generated slugs; it stopped being harmless the moment a traveler
+  // could type a name and have it slugged into an id. "Constructor" is a
+  // plausible bar name. Before this guard, its card's effectiveStatus was the
+  // Object constructor, which matches none of plan/backup/done/archived, so
+  // the item was written to the guide correctly and then rendered on no tab
+  // at all. One reader for every such lookup, so the next map added cannot
+  // reintroduce it.
+  function ownProp(map, key) {
+    return (map && Object.prototype.hasOwnProperty.call(map, key)) ? map[key] : undefined;
+  }
+
   function effectiveStatus(it, state) {
-    return state.itemStatus[it.id] || it.status;
+    return ownProp(state.itemStatus, it.id) || it.status;
   }
 
   function effectiveDay(it, state) {
     if (state.itemDay && Object.prototype.hasOwnProperty.call(state.itemDay, it.id)) {
-      return state.itemDay[it.id] || null;
+      return ownProp(state.itemDay, it.id) || null;
     }
     return it.day || null;
   }
@@ -1270,7 +1299,7 @@ var CityOps = (function () {
   }
 
   function effectiveName(it, state) {
-    return (state.itemTitle && state.itemTitle[it.id]) || it.name;
+    return ownProp(state.itemTitle, it.id) || it.name;
   }
 
   function setTitle(state, id, title) {
@@ -1441,9 +1470,16 @@ var CityOps = (function () {
   // when a guide for somewhere else is opened from home. That fallback is why
   // this is optional rather than required: a guide generated by someone
   // else's AI pass still gets a sunset, it just gets the reader's clock.
+  // WHOLE minutes, and that check is not pedantry: 5.5 is what someone writes
+  // for India or Nepal while thinking in hours, and a fractional offset came
+  // out of the formatter below as a chip reading "17:00.5". A value that is
+  // not a whole number of minutes is a value whose author meant something
+  // else, so it is refused and the device clock takes over, which at least
+  // says whose clock it is.
   function cityUtcOffsetMinutes(data) {
     var v = (data && data.city) ? data.city.utc_offset : undefined;
     if (typeof v !== 'number' || !isFinite(v)) return null;
+    if (Math.floor(v) !== v) return null;
     if (v < -840 || v > 840) return null;   // the real world spans UTC-12..+14
     return v;
   }
@@ -1620,7 +1656,7 @@ var CityOps = (function () {
   // on page load (was collapsed); the traveler's own explicit choice, once
   // made, still sticks (that's what collapsedPlanDays persists).
   function isPlanDayCollapsed(state, iso) {
-    var explicit = state.collapsedPlanDays ? state.collapsedPlanDays[iso] : undefined;
+    var explicit = ownProp(state.collapsedPlanDays, iso);
     if (explicit === true || explicit === false) return explicit;
     return false;
   }
@@ -1954,7 +1990,7 @@ var CityOps = (function () {
   // (the traveler's own choice, remembered); absent falls back to the
   // computed default above.
   function isSectionCollapsed(state, secId, totalItems) {
-    var explicit = state.collapsedSections ? state.collapsedSections[secId] : undefined;
+    var explicit = ownProp(state.collapsedSections, secId);
     if (explicit === true || explicit === false) return explicit;
     return defaultSectionCollapsed(secId, totalItems);
   }
@@ -2126,7 +2162,7 @@ var CityOps = (function () {
       // arrangement) is therefore content-on-its-own-date, and saved orders
       // from before empty slots existed keep content where the user left it.
       var stated = [];
-      (state.dayOrder[sec.id] || []).forEach(function (k) {
+      (ownProp(state.dayOrder, sec.id) || []).forEach(function (k) {
         if (keys.indexOf(k) !== -1 && stated.indexOf(k) === -1) stated.push(k);
       });
       var slotKey = {};
@@ -2777,10 +2813,14 @@ var CityOps = (function () {
       var intel = it.intel;
       var said = false;
       if (intel && typeof intel === 'object') {
-        (intel.verdicts || []).forEach(function (v) {
+        // Array.isArray rather than `|| []`: this is exported on promptKit,
+        // so a caller can hand it data that never went through validate(),
+        // and `"oops".forEach` throwing here would take the whole render with
+        // it. A malformed intel block should cost its own lines, nothing else.
+        (Array.isArray(intel.verdicts) ? intel.verdicts : []).forEach(function (v) {
           if (v && v.text) { said = true; b.push('    verdict (' + trimStr(v.tier) + '): ' + trimStr(v.text)); }
         });
-        (intel.tips || []).forEach(function (t) {
+        (Array.isArray(intel.tips) ? intel.tips : []).forEach(function (t) {
           if (t) { said = true; b.push('    tip: ' + trimStr(t)); }
         });
       }
@@ -3489,7 +3529,14 @@ var CityOps = (function () {
     }
     if (miss && miss.okText) {
       var okn = document.getElementById('notice');
-      if (okn) okn.textContent = miss.okText;
+      // rerender() has just written the private-mode warning here on a device
+      // that cannot persist anything. That line matters more than a
+      // confirmation, so it keeps its place and the confirmation follows it
+      // rather than replacing it.
+      if (okn) {
+        var standing = okn.textContent;
+        okn.textContent = standing ? (standing + ' ' + miss.okText) : miss.okText;
+      }
     }
     // An archived card lives inside a closed <details>, and scrolling to a
     // node in a closed subtree lands on the summary with nothing under it.
@@ -3857,10 +3904,20 @@ var CityOps = (function () {
       mv.onclick = function () { pendingMove = it.id; rerender(); };
       ctl.appendChild(mv);
     }
+    // The pin sits OUTSIDE the not-archived guard, unlike Ask and Rename.
+    // Archiving does not unpin (that would be a surprise: the traveler put
+    // the item away, they did not touch the header), so the archived card has
+    // to keep the only control that can unpin it. Without this, pinning then
+    // archiving left a chip holding one of the four slots forever, while
+    // every other card's disabled tooltip pointed at a control that no longer
+    // existed. Shown only when it would do something: on an UNpinned archived
+    // card there is nothing worth offering.
+    if (status !== 'archived' || isPinned(curState || emptyState(), it.id)) {
+      ctl.appendChild(pinBtn(it));
+    }
     if (status !== 'archived') {
       var ask = askBtn(it);
       if (ask) ctl.appendChild(ask);
-      ctl.appendChild(pinBtn(it));
       var ed = el('button', 'ctl icon-btn ctl-more', '✎');
       ed.type = 'button';
       ed.setAttribute('aria-label', 'Rename');
@@ -3982,35 +4039,51 @@ var CityOps = (function () {
   // opening next week's Ksamil guide from Tiranë give Ksamil's evening. With
   // no offset it falls back to the reader's device clock, which is right
   // standing in the city and wrong from home, so it never claims otherwise.
-  function sunsetChip(data, state) {
+  // nowIso is an injection point for tests; real callers omit it and get the
+  // device's actual clock, the same convention effectiveViewMode and
+  // todayModel already use.
+  function sunsetChip(data, state, nowIso) {
     var loc = cityLatLng(data);
     if (!loc) return null;
-    var range = effectiveDates(data, state);
-    var today = todayIso();
+    var range = effectiveDates(data, state || emptyState());
+    var today = nowIso || todayIso();
     var iso = (today >= range.from && today <= range.to) ? today : range.from;
     if (!isIso(iso)) return null;
     var mins = sunsetUtcMinutes(iso, loc.lat, loc.lng);
     if (mins === null) return null;
     var off = cityUtcOffsetMinutes(data);
     if (off !== null) {
-      // Pure arithmetic, no Date: minutes past midnight in the city, wrapped
-      // so a sunset that belongs to the neighbouring UTC day still reads as a
-      // clock time rather than a negative number.
+      // Pure arithmetic, no Date: minutes past midnight in the city.
       //
       // FLOOR, not round, and it matters: a clock reads the minute you are
       // in, so 17:29:48 is 17:29 for the same reason a watch says so, and
       // published sunset tables (met.no included) truncate the same way.
       // Rounding would put Tiranë's arrival evening a minute later than every
       // source the number was checked against.
+      //
+      // The wrap carries the DATE with it. mins is measured from midnight UTC
+      // on `iso`, so adding an offset can land on the day before or the day
+      // after: a Pacific city at UTC+14 has a sunset that is already the next
+      // UTC day before the offset is applied at all. Labelling that time with
+      // the UTC day would make the chip say "sunset 18:35 today" about
+      // tomorrow evening. shiftDays is how many calendar days the wrap
+      // crossed, and the label follows it. No repo city crosses today; the
+      // first Pacific one would.
       var local = Math.floor(mins) + off;
-      local = ((local % 1440) + 1440) % 1440;
+      var shiftDays = Math.floor(local / 1440);
+      local = local - shiftDays * 1440;
+      var localIso = shiftDays === 0 ? iso : addDaysIso(iso, shiftDays);
       return { text: pad2(Math.floor(local / 60)) + ':' + pad2(local % 60),
-        iso: iso, isToday: iso === today, cityClock: true };
+        iso: localIso, isToday: localIso === today, cityClock: true };
     }
+    // The device-clock fallback gets the same treatment for free: the Date
+    // knows its own calendar day in the reader's zone, so read the day off it
+    // rather than off the UTC iso that went in.
     var base = Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10), 0, 0, 0);
     var d = new Date(base + Math.round(mins * 60000));
+    var devIso = d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
     return { text: pad2(d.getHours()) + ':' + pad2(d.getMinutes()),
-      iso: iso, isToday: iso === today, cityClock: false };
+      iso: devIso, isToday: devIso === today, cityClock: false };
   }
 
   function renderHighlights(data, state) {
@@ -4059,7 +4132,14 @@ var CityOps = (function () {
     var data = effectiveData(ctx.base, st);
     var it = null, sec = null;
     (data.items || []).forEach(function (x) { if (x && x.id === id) it = x; });
-    if (!it) return;
+    if (!it) {
+      // Only reachable if the guide changed under a pin between the render
+      // that drew the chip and the tap on it. Say so rather than absorb the
+      // tap: a chip that does nothing twice reads as a broken app.
+      var gone = document.getElementById('notice');
+      if (gone) gone.textContent = 'That item is no longer in this guide, so its highlight has gone with it.';
+      return;
+    }
     (data.sections || []).forEach(function (s) { if (s && s.id === it.section) sec = s; });
     var totalItems = Array.isArray(data.items) ? data.items.length : 0;
     var tab = tabForSection(sec);
@@ -4067,6 +4147,16 @@ var CityOps = (function () {
     if (effectiveTab(st) !== tab) { setTab(st, tab); changed = true; }
     if (isSectionCollapsed(st, it.section, totalItems)) {
       toggleSection(st, it.section, totalItems);
+      changed = true;
+    }
+    // The Plan tab hides a collapsed DAY's cards entirely (see renderPlanTab),
+    // and a day is a different collapse map from a section. Without this, a
+    // pinned itinerary stop on a day the traveler had folded away jumped to a
+    // page with no card on it, and the miss line then said the item needed a
+    // day, which it had. Reachable on the real Tirana guide.
+    var itDay = effectiveDay(it, st);
+    if (tab === 'plan' && itDay && isPlanDayCollapsed(st, itDay)) {
+      togglePlanDay(st, itDay);
       changed = true;
     }
     if (shareOn) { shareOn = false; document.body.classList.remove('share'); }
@@ -4148,9 +4238,13 @@ var CityOps = (function () {
     // The primary way in for "someone just told me about a place": it sits on
     // the header of the section the place belongs to, so the section arrives
     // filled in and the traveler is already looking at what it has to beat.
-    // A task section never renders a section header (tabForSection sends it
-    // to Plan), so this never offers to add a place to a to-do list.
-    if (!isTaskSection(sv.section)) {
+    //
+    // The guard is belt and braces rather than load-bearing: a Plan-tab
+    // section never reaches this function at all (renderPlanTab draws its own
+    // day headings), and openAddPlaceModal drops those sections from its
+    // picker anyway. It stays so the two rules cannot drift apart if the Plan
+    // tab ever grows a section header.
+    if (tabForSection(sv.section) !== 'plan') {
       var addb = el('button', 'sec-add icon-btn', '+');
       addb.type = 'button';
       var aria = 'Add a place to ' + sv.section.label;
@@ -4828,6 +4922,12 @@ var CityOps = (function () {
     var declined = status === 'archived';
     var row = el('div', 'task-row' +
       (status === 'done' ? ' item-done' : '') + (declined ? ' task-declined' : ''));
+    // Stamped for the same reason every card is: so revealJustMoved can find
+    // this row again after a re-render moved it. A task carries no pin
+    // control today, so nothing routinely reveals one, but a state synced
+    // from elsewhere can name a task id and the reveal should land rather
+    // than fall through to the "no card on this tab" line.
+    row.setAttribute('data-item-id', it.id);
     var line = el('div', 'task-line');
     var name = effectiveName(it, curState);
     if (declined) {
@@ -5105,8 +5205,15 @@ var CityOps = (function () {
     host.innerHTML = '';
     var st0 = ctx.store.load();
     var data0 = effectiveData(ctx.base, st0);
+    // Every section EXCEPT the ones the Plan tab owns. That is one rule where
+    // it used to be a to-do-list exclusion, and it covers the case that was
+    // wrong: Tirana's "Daily plan" is not a task section, but the Plan tab
+    // renders only items that carry a day, so a place added there with the
+    // default "No day yet" was written and then appeared nowhere at all. A
+    // picker should not offer a destination the result is invisible in, and
+    // this is called Add a PLACE, not Add an itinerary stop.
     var sections = (Array.isArray(data0.sections) ? data0.sections : []).filter(function (s) {
-      return s && s.id && !isTaskSection(s);
+      return s && s.id && tabForSection(s) !== 'plan';
     });
     var wrap = el('div', 'modal-wrap');
     var box = el('div', 'modal');
@@ -5183,6 +5290,16 @@ var CityOps = (function () {
     var row = el('div', 'mrow');
     var add = el('button', 'ctl to-done', 'Add');
     add.type = 'button';
+    // A guide whose only sections are to-do lists has nowhere to put a place.
+    // Vanishingly rare, but Add would then fail on every tap with "Pick a
+    // section" and no section to pick, which is the one thing a control is
+    // never allowed to do.
+    if (!sections.length) {
+      add.disabled = true;
+      add.title = 'This guide has no section a place could go in.';
+      msg.textContent = 'This guide has no place sections yet. Add one with ' +
+        'Update data or an Enrich pass first.';
+    }
     add.onclick = function () {
       var st = ctx.store.load();
       var data = effectiveData(ctx.base, st);
@@ -5193,6 +5310,17 @@ var CityOps = (function () {
       if (built.errors.length) { msg.textContent = built.errors.join(' '); return; }
       var res = mergeDelta(data, built.delta);
       if (!res.data) { msg.textContent = 'Not added:\n' + res.errors.join('\n'); return; }
+      // mergeDelta reports an id it already holds as SKIPPED, with no errors
+      // and unchanged data. Checking only res.data would close the modal, run
+      // the write and say "Added", having added nothing. Nothing should be
+      // able to reach this now (freePlaceId hands out a free id and the
+      // lookup behind it is prototype-safe), which is exactly why it is worth
+      // catching loudly rather than trusting.
+      if (res.summary.added !== 1) {
+        msg.textContent = 'Not added: this city already has an item with the id "' +
+          built.id + '". Try a slightly different name.';
+        return;
+      }
       var secLabel = (sections.filter(function (s) { return s.id === secSel.value; })[0] || {}).label ||
         secSel.value;
       var placeName = trimStr(nameIn.value);
@@ -5692,6 +5820,9 @@ var CityOps = (function () {
     sunKit: {
       ZENITH: SUNSET_ZENITH, sunsetUtcMinutes: sunsetUtcMinutes,
       cityLatLng: cityLatLng, cityUtcOffsetMinutes: cityUtcOffsetMinutes,
+      // The chip's whole model: which date, which clock, and the wrap that
+      // carries the date across a day boundary with the time.
+      chip: sunsetChip,
       julianDayUtc: julianDayUtc,
       equationOfTime: equationOfTime, sunDeclination: sunDeclination
     },
@@ -5989,6 +6120,7 @@ CityOps.init();
   .info-card .info-item > .pin-btn{float:right; margin:0 0 4px 8px; min-width:32px;}
   body.share .info-card .info-item > .pin-btn{display:none;}
   .info-card .info-item.just-moved{animation:justmoved 1.8s ease-out 1; border-radius:8px;}
+  .task-row.just-moved{animation:justmoved 1.8s ease-out 1;}
 
   /* Add-a-place form fields: label over control, one per row, so a 390px
      phone never puts a label and its input on the same line. */
@@ -6513,7 +6645,13 @@ var CityOps = (function () {
     });
     newSections.forEach(function (s) { secIds[s.id] = 1; });
 
-    var existingIds = {};
+    // Object.create(null) plus an own-property check, for the same reason the
+    // intel/ratings lookup below uses them. This one was a plain {} until an
+    // item id could come from a HUMAN typing a name: "Constructor" slugs to
+    // "constructor", which every plain object inherits, so the item read as
+    // already present and was counted as skipped rather than added. The delta
+    // was reported as applied and nothing was added.
+    var existingIds = Object.create(null);
     (Array.isArray(cityData.items) ? cityData.items : []).forEach(function (it) {
       if (it && it.id) existingIds[it.id] = 1;
     });
@@ -6530,7 +6668,7 @@ var CityOps = (function () {
           var before = errors.length;
           validateItem(it, ref, secIds, seen, errors, DELTA_STATUSES, DELTA_STATUS_HINT);
           if (errors.length !== before) return;
-          if (existingIds[it.id]) { skipped++; return; }
+          if (Object.prototype.hasOwnProperty.call(existingIds, it.id)) { skipped++; return; }
           toAdd.push(it);
         });
       }
@@ -6568,10 +6706,12 @@ var CityOps = (function () {
     if (!Array.isArray(out.sections)) out.sections = [];
     if (!Array.isArray(out.items)) out.items = [];
 
-    var haveSec = {};
+    // Same prototype-safe pair as existingIds above: a section id of
+    // "constructor" would otherwise read as already present.
+    var haveSec = Object.create(null);
     out.sections.forEach(function (s) { if (s && s.id) haveSec[s.id] = 1; });
     newSections.forEach(function (s) {
-      if (haveSec[s.id]) return;
+      if (Object.prototype.hasOwnProperty.call(haveSec, s.id)) return;
       haveSec[s.id] = 1;
       out.sections.push(deepClone(s));
       summary.sectionsAdded++;
@@ -6642,12 +6782,18 @@ var CityOps = (function () {
       if (it && it.id) taken[it.id] = 1;
     });
     var base = slug(name) || PLACE_ID_FALLBACK;
-    if (!Object.prototype.hasOwnProperty.call(taken, base)) return base;
-    for (var n = 2; n < 500; n++) {
+    function free(id) { return !Object.prototype.hasOwnProperty.call(taken, id); }
+    if (free(base)) return base;
+    // Unbounded rather than capped at a few hundred. A capped loop needs a
+    // fallback, the obvious fallback is a timestamp, and two adds inside one
+    // millisecond would then produce the same id and mergeDelta would SKIP
+    // the second one silently, which is precisely the failure this function
+    // exists to prevent. Counting up cannot collide, and the loop is bounded
+    // in practice by the number of items already in the guide.
+    for (var n = 2; ; n++) {
       var cand = base + '-' + n;
-      if (!Object.prototype.hasOwnProperty.call(taken, cand)) return cand;
+      if (free(cand)) return cand;
     }
-    return base + '-' + Date.now();
   }
 
   // Returns {delta, id, errors}. errors is the caller-facing list for the
@@ -6813,13 +6959,27 @@ var CityOps = (function () {
     return state;
   }
 
+  // Every one of the per-item state maps is a plain object, so a key that
+  // Object.prototype already answers to reads back as an inherited function
+  // instead of "not set". That was harmless while item ids came only from an
+  // AI's generated slugs; it stopped being harmless the moment a traveler
+  // could type a name and have it slugged into an id. "Constructor" is a
+  // plausible bar name. Before this guard, its card's effectiveStatus was the
+  // Object constructor, which matches none of plan/backup/done/archived, so
+  // the item was written to the guide correctly and then rendered on no tab
+  // at all. One reader for every such lookup, so the next map added cannot
+  // reintroduce it.
+  function ownProp(map, key) {
+    return (map && Object.prototype.hasOwnProperty.call(map, key)) ? map[key] : undefined;
+  }
+
   function effectiveStatus(it, state) {
-    return state.itemStatus[it.id] || it.status;
+    return ownProp(state.itemStatus, it.id) || it.status;
   }
 
   function effectiveDay(it, state) {
     if (state.itemDay && Object.prototype.hasOwnProperty.call(state.itemDay, it.id)) {
-      return state.itemDay[it.id] || null;
+      return ownProp(state.itemDay, it.id) || null;
     }
     return it.day || null;
   }
@@ -6857,7 +7017,7 @@ var CityOps = (function () {
   }
 
   function effectiveName(it, state) {
-    return (state.itemTitle && state.itemTitle[it.id]) || it.name;
+    return ownProp(state.itemTitle, it.id) || it.name;
   }
 
   function setTitle(state, id, title) {
@@ -7028,9 +7188,16 @@ var CityOps = (function () {
   // when a guide for somewhere else is opened from home. That fallback is why
   // this is optional rather than required: a guide generated by someone
   // else's AI pass still gets a sunset, it just gets the reader's clock.
+  // WHOLE minutes, and that check is not pedantry: 5.5 is what someone writes
+  // for India or Nepal while thinking in hours, and a fractional offset came
+  // out of the formatter below as a chip reading "17:00.5". A value that is
+  // not a whole number of minutes is a value whose author meant something
+  // else, so it is refused and the device clock takes over, which at least
+  // says whose clock it is.
   function cityUtcOffsetMinutes(data) {
     var v = (data && data.city) ? data.city.utc_offset : undefined;
     if (typeof v !== 'number' || !isFinite(v)) return null;
+    if (Math.floor(v) !== v) return null;
     if (v < -840 || v > 840) return null;   // the real world spans UTC-12..+14
     return v;
   }
@@ -7207,7 +7374,7 @@ var CityOps = (function () {
   // on page load (was collapsed); the traveler's own explicit choice, once
   // made, still sticks (that's what collapsedPlanDays persists).
   function isPlanDayCollapsed(state, iso) {
-    var explicit = state.collapsedPlanDays ? state.collapsedPlanDays[iso] : undefined;
+    var explicit = ownProp(state.collapsedPlanDays, iso);
     if (explicit === true || explicit === false) return explicit;
     return false;
   }
@@ -7541,7 +7708,7 @@ var CityOps = (function () {
   // (the traveler's own choice, remembered); absent falls back to the
   // computed default above.
   function isSectionCollapsed(state, secId, totalItems) {
-    var explicit = state.collapsedSections ? state.collapsedSections[secId] : undefined;
+    var explicit = ownProp(state.collapsedSections, secId);
     if (explicit === true || explicit === false) return explicit;
     return defaultSectionCollapsed(secId, totalItems);
   }
@@ -7713,7 +7880,7 @@ var CityOps = (function () {
       // arrangement) is therefore content-on-its-own-date, and saved orders
       // from before empty slots existed keep content where the user left it.
       var stated = [];
-      (state.dayOrder[sec.id] || []).forEach(function (k) {
+      (ownProp(state.dayOrder, sec.id) || []).forEach(function (k) {
         if (keys.indexOf(k) !== -1 && stated.indexOf(k) === -1) stated.push(k);
       });
       var slotKey = {};
@@ -8364,10 +8531,14 @@ var CityOps = (function () {
       var intel = it.intel;
       var said = false;
       if (intel && typeof intel === 'object') {
-        (intel.verdicts || []).forEach(function (v) {
+        // Array.isArray rather than `|| []`: this is exported on promptKit,
+        // so a caller can hand it data that never went through validate(),
+        // and `"oops".forEach` throwing here would take the whole render with
+        // it. A malformed intel block should cost its own lines, nothing else.
+        (Array.isArray(intel.verdicts) ? intel.verdicts : []).forEach(function (v) {
           if (v && v.text) { said = true; b.push('    verdict (' + trimStr(v.tier) + '): ' + trimStr(v.text)); }
         });
-        (intel.tips || []).forEach(function (t) {
+        (Array.isArray(intel.tips) ? intel.tips : []).forEach(function (t) {
           if (t) { said = true; b.push('    tip: ' + trimStr(t)); }
         });
       }
@@ -9076,7 +9247,14 @@ var CityOps = (function () {
     }
     if (miss && miss.okText) {
       var okn = document.getElementById('notice');
-      if (okn) okn.textContent = miss.okText;
+      // rerender() has just written the private-mode warning here on a device
+      // that cannot persist anything. That line matters more than a
+      // confirmation, so it keeps its place and the confirmation follows it
+      // rather than replacing it.
+      if (okn) {
+        var standing = okn.textContent;
+        okn.textContent = standing ? (standing + ' ' + miss.okText) : miss.okText;
+      }
     }
     // An archived card lives inside a closed <details>, and scrolling to a
     // node in a closed subtree lands on the summary with nothing under it.
@@ -9444,10 +9622,20 @@ var CityOps = (function () {
       mv.onclick = function () { pendingMove = it.id; rerender(); };
       ctl.appendChild(mv);
     }
+    // The pin sits OUTSIDE the not-archived guard, unlike Ask and Rename.
+    // Archiving does not unpin (that would be a surprise: the traveler put
+    // the item away, they did not touch the header), so the archived card has
+    // to keep the only control that can unpin it. Without this, pinning then
+    // archiving left a chip holding one of the four slots forever, while
+    // every other card's disabled tooltip pointed at a control that no longer
+    // existed. Shown only when it would do something: on an UNpinned archived
+    // card there is nothing worth offering.
+    if (status !== 'archived' || isPinned(curState || emptyState(), it.id)) {
+      ctl.appendChild(pinBtn(it));
+    }
     if (status !== 'archived') {
       var ask = askBtn(it);
       if (ask) ctl.appendChild(ask);
-      ctl.appendChild(pinBtn(it));
       var ed = el('button', 'ctl icon-btn ctl-more', '✎');
       ed.type = 'button';
       ed.setAttribute('aria-label', 'Rename');
@@ -9569,35 +9757,51 @@ var CityOps = (function () {
   // opening next week's Ksamil guide from Tiranë give Ksamil's evening. With
   // no offset it falls back to the reader's device clock, which is right
   // standing in the city and wrong from home, so it never claims otherwise.
-  function sunsetChip(data, state) {
+  // nowIso is an injection point for tests; real callers omit it and get the
+  // device's actual clock, the same convention effectiveViewMode and
+  // todayModel already use.
+  function sunsetChip(data, state, nowIso) {
     var loc = cityLatLng(data);
     if (!loc) return null;
-    var range = effectiveDates(data, state);
-    var today = todayIso();
+    var range = effectiveDates(data, state || emptyState());
+    var today = nowIso || todayIso();
     var iso = (today >= range.from && today <= range.to) ? today : range.from;
     if (!isIso(iso)) return null;
     var mins = sunsetUtcMinutes(iso, loc.lat, loc.lng);
     if (mins === null) return null;
     var off = cityUtcOffsetMinutes(data);
     if (off !== null) {
-      // Pure arithmetic, no Date: minutes past midnight in the city, wrapped
-      // so a sunset that belongs to the neighbouring UTC day still reads as a
-      // clock time rather than a negative number.
+      // Pure arithmetic, no Date: minutes past midnight in the city.
       //
       // FLOOR, not round, and it matters: a clock reads the minute you are
       // in, so 17:29:48 is 17:29 for the same reason a watch says so, and
       // published sunset tables (met.no included) truncate the same way.
       // Rounding would put Tiranë's arrival evening a minute later than every
       // source the number was checked against.
+      //
+      // The wrap carries the DATE with it. mins is measured from midnight UTC
+      // on `iso`, so adding an offset can land on the day before or the day
+      // after: a Pacific city at UTC+14 has a sunset that is already the next
+      // UTC day before the offset is applied at all. Labelling that time with
+      // the UTC day would make the chip say "sunset 18:35 today" about
+      // tomorrow evening. shiftDays is how many calendar days the wrap
+      // crossed, and the label follows it. No repo city crosses today; the
+      // first Pacific one would.
       var local = Math.floor(mins) + off;
-      local = ((local % 1440) + 1440) % 1440;
+      var shiftDays = Math.floor(local / 1440);
+      local = local - shiftDays * 1440;
+      var localIso = shiftDays === 0 ? iso : addDaysIso(iso, shiftDays);
       return { text: pad2(Math.floor(local / 60)) + ':' + pad2(local % 60),
-        iso: iso, isToday: iso === today, cityClock: true };
+        iso: localIso, isToday: localIso === today, cityClock: true };
     }
+    // The device-clock fallback gets the same treatment for free: the Date
+    // knows its own calendar day in the reader's zone, so read the day off it
+    // rather than off the UTC iso that went in.
     var base = Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10), 0, 0, 0);
     var d = new Date(base + Math.round(mins * 60000));
+    var devIso = d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
     return { text: pad2(d.getHours()) + ':' + pad2(d.getMinutes()),
-      iso: iso, isToday: iso === today, cityClock: false };
+      iso: devIso, isToday: devIso === today, cityClock: false };
   }
 
   function renderHighlights(data, state) {
@@ -9646,7 +9850,14 @@ var CityOps = (function () {
     var data = effectiveData(ctx.base, st);
     var it = null, sec = null;
     (data.items || []).forEach(function (x) { if (x && x.id === id) it = x; });
-    if (!it) return;
+    if (!it) {
+      // Only reachable if the guide changed under a pin between the render
+      // that drew the chip and the tap on it. Say so rather than absorb the
+      // tap: a chip that does nothing twice reads as a broken app.
+      var gone = document.getElementById('notice');
+      if (gone) gone.textContent = 'That item is no longer in this guide, so its highlight has gone with it.';
+      return;
+    }
     (data.sections || []).forEach(function (s) { if (s && s.id === it.section) sec = s; });
     var totalItems = Array.isArray(data.items) ? data.items.length : 0;
     var tab = tabForSection(sec);
@@ -9654,6 +9865,16 @@ var CityOps = (function () {
     if (effectiveTab(st) !== tab) { setTab(st, tab); changed = true; }
     if (isSectionCollapsed(st, it.section, totalItems)) {
       toggleSection(st, it.section, totalItems);
+      changed = true;
+    }
+    // The Plan tab hides a collapsed DAY's cards entirely (see renderPlanTab),
+    // and a day is a different collapse map from a section. Without this, a
+    // pinned itinerary stop on a day the traveler had folded away jumped to a
+    // page with no card on it, and the miss line then said the item needed a
+    // day, which it had. Reachable on the real Tirana guide.
+    var itDay = effectiveDay(it, st);
+    if (tab === 'plan' && itDay && isPlanDayCollapsed(st, itDay)) {
+      togglePlanDay(st, itDay);
       changed = true;
     }
     if (shareOn) { shareOn = false; document.body.classList.remove('share'); }
@@ -9735,9 +9956,13 @@ var CityOps = (function () {
     // The primary way in for "someone just told me about a place": it sits on
     // the header of the section the place belongs to, so the section arrives
     // filled in and the traveler is already looking at what it has to beat.
-    // A task section never renders a section header (tabForSection sends it
-    // to Plan), so this never offers to add a place to a to-do list.
-    if (!isTaskSection(sv.section)) {
+    //
+    // The guard is belt and braces rather than load-bearing: a Plan-tab
+    // section never reaches this function at all (renderPlanTab draws its own
+    // day headings), and openAddPlaceModal drops those sections from its
+    // picker anyway. It stays so the two rules cannot drift apart if the Plan
+    // tab ever grows a section header.
+    if (tabForSection(sv.section) !== 'plan') {
       var addb = el('button', 'sec-add icon-btn', '+');
       addb.type = 'button';
       var aria = 'Add a place to ' + sv.section.label;
@@ -10415,6 +10640,12 @@ var CityOps = (function () {
     var declined = status === 'archived';
     var row = el('div', 'task-row' +
       (status === 'done' ? ' item-done' : '') + (declined ? ' task-declined' : ''));
+    // Stamped for the same reason every card is: so revealJustMoved can find
+    // this row again after a re-render moved it. A task carries no pin
+    // control today, so nothing routinely reveals one, but a state synced
+    // from elsewhere can name a task id and the reveal should land rather
+    // than fall through to the "no card on this tab" line.
+    row.setAttribute('data-item-id', it.id);
     var line = el('div', 'task-line');
     var name = effectiveName(it, curState);
     if (declined) {
@@ -10692,8 +10923,15 @@ var CityOps = (function () {
     host.innerHTML = '';
     var st0 = ctx.store.load();
     var data0 = effectiveData(ctx.base, st0);
+    // Every section EXCEPT the ones the Plan tab owns. That is one rule where
+    // it used to be a to-do-list exclusion, and it covers the case that was
+    // wrong: Tirana's "Daily plan" is not a task section, but the Plan tab
+    // renders only items that carry a day, so a place added there with the
+    // default "No day yet" was written and then appeared nowhere at all. A
+    // picker should not offer a destination the result is invisible in, and
+    // this is called Add a PLACE, not Add an itinerary stop.
     var sections = (Array.isArray(data0.sections) ? data0.sections : []).filter(function (s) {
-      return s && s.id && !isTaskSection(s);
+      return s && s.id && tabForSection(s) !== 'plan';
     });
     var wrap = el('div', 'modal-wrap');
     var box = el('div', 'modal');
@@ -10770,6 +11008,16 @@ var CityOps = (function () {
     var row = el('div', 'mrow');
     var add = el('button', 'ctl to-done', 'Add');
     add.type = 'button';
+    // A guide whose only sections are to-do lists has nowhere to put a place.
+    // Vanishingly rare, but Add would then fail on every tap with "Pick a
+    // section" and no section to pick, which is the one thing a control is
+    // never allowed to do.
+    if (!sections.length) {
+      add.disabled = true;
+      add.title = 'This guide has no section a place could go in.';
+      msg.textContent = 'This guide has no place sections yet. Add one with ' +
+        'Update data or an Enrich pass first.';
+    }
     add.onclick = function () {
       var st = ctx.store.load();
       var data = effectiveData(ctx.base, st);
@@ -10780,6 +11028,17 @@ var CityOps = (function () {
       if (built.errors.length) { msg.textContent = built.errors.join(' '); return; }
       var res = mergeDelta(data, built.delta);
       if (!res.data) { msg.textContent = 'Not added:\n' + res.errors.join('\n'); return; }
+      // mergeDelta reports an id it already holds as SKIPPED, with no errors
+      // and unchanged data. Checking only res.data would close the modal, run
+      // the write and say "Added", having added nothing. Nothing should be
+      // able to reach this now (freePlaceId hands out a free id and the
+      // lookup behind it is prototype-safe), which is exactly why it is worth
+      // catching loudly rather than trusting.
+      if (res.summary.added !== 1) {
+        msg.textContent = 'Not added: this city already has an item with the id "' +
+          built.id + '". Try a slightly different name.';
+        return;
+      }
       var secLabel = (sections.filter(function (s) { return s.id === secSel.value; })[0] || {}).label ||
         secSel.value;
       var placeName = trimStr(nameIn.value);
@@ -11279,6 +11538,9 @@ var CityOps = (function () {
     sunKit: {
       ZENITH: SUNSET_ZENITH, sunsetUtcMinutes: sunsetUtcMinutes,
       cityLatLng: cityLatLng, cityUtcOffsetMinutes: cityUtcOffsetMinutes,
+      // The chip's whole model: which date, which clock, and the wrap that
+      // carries the date across a day boundary with the time.
+      chip: sunsetChip,
       julianDayUtc: julianDayUtc,
       equationOfTime: equationOfTime, sunDeclination: sunDeclination
     },
@@ -13030,7 +13292,18 @@ only judges it. `ratings` may be omitted when you could not verify the place;
   // commitCityData exactly like Enrich's Apply does. There is no second place
   // in this app that writes a delta into a city.
   function openAskPlaceModal(itemId) {
-    if (!activeId || !has(store.cities, activeId)) return;
+    // Neither of these should be reachable: the ✨ is only drawn on a card of
+    // the active city. They are here because a tap that opens nothing and
+    // says nothing is the one outcome a control is never allowed to have, and
+    // an unexplained dead button is worse than an odd sentence.
+    function nope(msg) {
+      var n = document.getElementById('notice');
+      if (n) n.textContent = msg;
+    }
+    if (!activeId || !has(store.cities, activeId)) {
+      nope('No city is open, so there is nothing to check.');
+      return;
+    }
     function currentData() {
       var st = CityOps.liveState() || CityOps.makeStore(activeId, LS).load();
       return CityOps.effectiveData(store.cities[activeId], st);
@@ -13038,7 +13311,10 @@ only judges it. `ratings` may be omitted when you could not verify the place;
     var data = currentData();
     var item = null;
     (data.items || []).forEach(function (x) { if (x && x.id === itemId) item = x; });
-    if (!item) return;
+    if (!item) {
+      nope('That place is no longer in this guide, so there is nothing to check.');
+      return;
+    }
     var liveSt = CityOps.liveState();
     var shownName = liveSt ? CityOps.effectiveName(item, liveSt) : item.name;
     var siblings = (data.items || []).filter(function (x) {
@@ -14825,10 +15101,13 @@ only judges it. `ratings` may be omitted when you could not verify the place;
   // control for ONLY when it is present, so a standalone exported guide (no
   // CityOpsApp at all) simply never shows a button that has nothing behind
   // it: no Claude key, no embedded PROMPT.md, no canonical city record.
-  //   askPlace(id)              -> the ✨ on an un-researched card
-  //   notePlaceAdded(data, id)  -> where a hand-added place gets written when
-  //                                the app is around; without it the engine
-  //                                falls back to its own state.dataOverride
+  //   askPlace(id)         -> the ✨ on an un-researched card
+  //   notePlaceAdded(data)  -> where a hand-added place gets written when the
+  //                            app is around; without it the engine falls
+  //                            back to its own state.dataOverride. The engine
+  //                            also passes the new item's id as a second
+  //                            argument; nothing here needs it, because the
+  //                            engine does its own reveal after this returns.
   window.CityOpsApp = {
     exportStandalone: exportStandalone, moreActions: moreActions,
     askPlace: openAskPlaceModal,
