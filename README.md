@@ -40,7 +40,9 @@ original) · **Deep dive:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
   research prompts (city, dates, your interest profile, an output
   contract) for your own Claude/ChatGPT session, then merges the returned
   JSON with hard guarantees: existing items and your progress are never
-  overwritten. The app itself makes no AI calls and has no API bill.
+  overwritten. It can also run those prompts in the app against your own
+  Anthropic API key, in which case the prompt and the reply travel between
+  your device and Anthropic's API, billed to your key.
 - **Review-verified intel.** Cards carry `must / good / skip` verdicts on
   specific dishes and specifics-of-the-thing (which route, which seats,
   which add-on), plus tips and a source line. The shipped Yerevan guide
@@ -122,7 +124,7 @@ The short version of [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md):
   documentation and machine-readable source, sliced by landmark into
   generated prompts; the merge path is validation-gated and
   prototype-safe.
-- 107 tests on Node built-ins; the harness tests the exact bytes that
+- 298 tests on Node built-ins; the harness tests the exact bytes that
   ship. Every feature landed through a written spec, plan, and
   independent review (committed under `docs/superpowers/`), a workflow
   run with AI agents doing implementation and adversarial review under

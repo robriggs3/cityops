@@ -1612,17 +1612,54 @@ test('effectiveViewMode: Today inside the stay, Guide outside it, unless already
   C.setViewMode(st, 'day');
   assert.equal(C.effectiveViewMode(GOOD, st, '2026-08-10'), 'day'); // an explicit choice always wins
 });
-test('toggleSection: sections default collapsed only past ~30 items; base is the one exception', () => {
+// Owner ask 2026-08-26: "default to all accordions be expanded on default".
+// The size-based auto-collapse this replaces is gone: no section, at any
+// guide size, starts collapsed unless the traveler collapsed it.
+test('every section defaults to expanded, at every guide size', () => {
   const st = C.emptyState();
-  assert.equal(C.isSectionCollapsed(st, 'dinner', 10), false); // small guide: open by default
-  assert.equal(C.isSectionCollapsed(st, 'dinner', 40), true);  // large guide: collapsed by default
-  assert.equal(C.isSectionCollapsed(st, 'base', 40), false);   // base never auto-collapses
-  C.toggleSection(st, 'dinner', 40);                           // opens it: explicit override
-  assert.equal(C.isSectionCollapsed(st, 'dinner', 40), false);
-  assert.equal(st.collapsedSections.dinner, false);
-  C.toggleSection(st, 'dinner', 40);                           // back to the (collapsed) default
-  assert.ok(!('dinner' in st.collapsedSections));               // override dropped, not just flipped
+  [0, 10, 40, 400].forEach(n => {
+    assert.equal(C.isSectionCollapsed(st, 'dinner', n), false, 'dinner at ' + n);
+    assert.equal(C.isSectionCollapsed(st, 'base', n), false, 'base at ' + n);
+    assert.equal(C.defaultSectionCollapsed('anything', n), false);
+  });
+  assert.equal(C.isSectionCollapsed(st, 'dinner'), false); // no totalItems at all
+});
+test('toggleSection still stores only genuine departures from the default', () => {
+  const st = C.emptyState();
+  C.toggleSection(st, 'dinner', 40);                    // collapses it: explicit override
   assert.equal(C.isSectionCollapsed(st, 'dinner', 40), true);
+  assert.equal(st.collapsedSections.dinner, true);
+  C.toggleSection(st, 'dinner', 40);                    // back to the (expanded) default
+  assert.ok(!('dinner' in st.collapsedSections));       // override dropped, not just flipped
+  assert.equal(C.isSectionCollapsed(st, 'dinner', 40), false);
+});
+test('Collapse all / Expand all write the same overrides one tap would', () => {
+  const st = C.emptyState();
+  C.setSectionsCollapsed(st, ['dinner', 'coffee', 'base'], true, 40);
+  assert.deepEqual(st.collapsedSections, { dinner: true, coffee: true, base: true });
+  ['dinner', 'coffee', 'base'].forEach(id => {
+    assert.equal(C.isSectionCollapsed(st, id, 40), true, id);
+  });
+  // Expand all matches the default, so it CLEARS rather than writing false:
+  // the map only ever holds real departures (same rule toggleSection follows).
+  C.setSectionsCollapsed(st, ['dinner', 'coffee', 'base'], false, 40);
+  assert.deepEqual(st.collapsedSections, {});
+  // A section the caller did not name is left exactly as it was.
+  C.setSectionsCollapsed(st, ['dinner'], true, 40);
+  C.setSectionsCollapsed(st, ['coffee'], false, 40);
+  assert.deepEqual(st.collapsedSections, { dinner: true });
+  // Garbage in the id list is skipped, not written.
+  C.setSectionsCollapsed(st, [null, '', undefined], true, 40);
+  assert.deepEqual(st.collapsedSections, { dinner: true });
+});
+test('Collapse all / Expand all over Plan-tab days', () => {
+  const st = C.emptyState();
+  C.setPlanDaysCollapsed(st, ['2026-08-10', '2026-08-11'], true);
+  assert.deepEqual(st.collapsedPlanDays, { '2026-08-10': true, '2026-08-11': true });
+  assert.equal(C.isPlanDayCollapsed(st, '2026-08-10'), true);
+  C.setPlanDaysCollapsed(st, ['2026-08-10', '2026-08-11'], false);
+  assert.deepEqual(st.collapsedPlanDays, {});   // default is expanded: keys dropped
+  assert.equal(C.isPlanDayCollapsed(st, '2026-08-10'), false);
 });
 test('todayModel groups items dated today; GOOD has no tasks section so tasks stays empty', () => {
   const st = C.emptyState();
@@ -1695,7 +1732,12 @@ test('tabForSection maps the PROMPT.md schema sections', () => {
   assert.equal(C.tabForSection({ id: 'breakfast', label: 'Breakfast' }), 'eat');
   assert.equal(C.tabForSection({ id: 'lunch', label: 'Lunch' }), 'eat');
   assert.equal(C.tabForSection({ id: 'coffee', label: 'Coffee' }), 'eat');
-  assert.equal(C.tabForSection({ id: 'cowork', label: 'Coworking' }), 'eat'); // a work cafe is an eat-drink venue
+  // Moved out of Eat & Drink on 2026-08-26 (owner decision): a coworking
+  // space is a nomad utility, so it files with laundry and barbers, not
+  // between two dinner cards. A sixth tab was the alternative and it loses
+  // at 390px, where five chips plus More already fill the row.
+  assert.equal(C.tabForSection({ id: 'cowork', label: 'Coworking' }), 'services');
+  assert.equal(C.tabForSection({ id: 'laundry', label: 'Laundry' }), 'services');
   assert.equal(C.tabForSection({ id: 'activities', label: 'Activities' }), 'do');
   assert.equal(C.tabForSection({ id: 'interests', label: 'My interests' }), 'do');
   assert.equal(C.tabForSection({ id: 'services', label: 'Services' }), 'services');
@@ -1726,6 +1768,86 @@ test('tabForSection: itinerary and any tasks section route to Plan', () => {
 test('tabForSection: an unrecognized section falls back to Info', () => {
   assert.equal(C.tabForSection({ id: 'weather', label: 'Weather notes' }), 'info');
   assert.equal(C.tabForSection(null), 'info');
+});
+
+// ---------------------------------------------------------------------------
+// Past cities (state.archived) - owner ask 2026-08-26
+// ---------------------------------------------------------------------------
+const PAST_DATES = { from: '2026-07-01', to: '2026-07-14' };
+const FUTURE_DATES = { from: '2026-12-01', to: '2026-12-14' };
+const TODAY_FOR_ARCHIVE = '2026-08-26';
+
+test('a city whose stay has ended reads as past; one that has not does not', () => {
+  const st = C.emptyState();
+  assert.equal(C.archiveKit.isPast(st, PAST_DATES, TODAY_FOR_ARCHIVE, false), true);
+  assert.equal(C.archiveKit.isPast(st, FUTURE_DATES, TODAY_FOR_ARCHIVE, false), false);
+  // The last day of the stay is still the stay: you are past it the day after.
+  assert.equal(C.archiveKit.isPast(st, { from: '2026-08-20', to: '2026-08-26' },
+    TODAY_FOR_ARCHIVE, false), false);
+  assert.equal(C.archiveKit.isPast(st, { from: '2026-08-20', to: '2026-08-25' },
+    TODAY_FOR_ARCHIVE, false), true);
+});
+
+test('the city you are IN never auto-archives, but an explicit archive still wins', () => {
+  const st = C.emptyState();
+  // Dates say past, but this is the active city: it stays in the live list
+  // rather than sliding into a collapsed group under the reader.
+  assert.equal(C.archiveKit.isPast(st, PAST_DATES, TODAY_FOR_ARCHIVE, true), false);
+  // A deliberate tap is a different thing from a date rolling over.
+  C.archiveKit.set(st, true);
+  assert.equal(C.archiveKit.isPast(st, PAST_DATES, TODAY_FOR_ARCHIVE, true), true);
+});
+
+test('both manual overrides beat the dates, in both directions', () => {
+  const early = C.archiveKit.set(C.emptyState(), true);
+  assert.equal(C.archiveKit.mode(early), 'archived');
+  assert.equal(C.archiveKit.isPast(early, FUTURE_DATES, TODAY_FOR_ARCHIVE, false), true);
+  const kept = C.archiveKit.set(C.emptyState(), false);
+  assert.equal(C.archiveKit.mode(kept), 'active');
+  assert.equal(C.archiveKit.isPast(kept, PAST_DATES, TODAY_FOR_ARCHIVE, false), false);
+  assert.equal(C.archiveKit.mode(C.archiveKit.set(kept, null)), 'auto');
+});
+
+test('one tap always moves a city the other way, and restoring is one tap', () => {
+  // Archived early -> restoring returns it to 'auto' (no override left behind
+  // saying what the dates already say).
+  const early = C.archiveKit.set(C.emptyState(), true);
+  assert.equal(C.archiveKit.nextValue(early, FUTURE_DATES, TODAY_FOR_ARCHIVE, false), null);
+  // Past by date -> restoring needs the explicit false, or the date rule would
+  // simply re-archive it on the next render.
+  const auto = C.emptyState();
+  assert.equal(C.archiveKit.nextValue(auto, PAST_DATES, TODAY_FOR_ARCHIVE, false), false);
+  // Live city -> the tap archives it.
+  assert.equal(C.archiveKit.nextValue(auto, FUTURE_DATES, TODAY_FOR_ARCHIVE, false), true);
+  // Active city whose dates have passed: not shown as past, so the tap
+  // archives it, and it must NOT hand back a value that leaves it unchanged.
+  assert.equal(C.archiveKit.nextValue(auto, PAST_DATES, TODAY_FOR_ARCHIVE, true), true);
+  // And every one of those round-trips: applying nextValue then reading isPast
+  // gives the opposite of what it was.
+  [[auto, PAST_DATES, false], [auto, FUTURE_DATES, false], [early, FUTURE_DATES, false]]
+    .forEach(([base, dates, active]) => {
+      const before = C.archiveKit.isPast(base, dates, TODAY_FOR_ARCHIVE, active);
+      const next = C.archiveKit.set(JSON.parse(JSON.stringify(base)),
+        C.archiveKit.nextValue(base, dates, TODAY_FOR_ARCHIVE, active));
+      assert.equal(C.archiveKit.isPast(next, dates, TODAY_FOR_ARCHIVE, active), !before);
+    });
+});
+
+test('the archive flag rides the synced state object and survives a round trip', () => {
+  // This is the whole reason it lives here rather than on the app store:
+  // normalizeState is what a pulled city_state row goes through.
+  const st = C.archiveKit.set(C.emptyState(), true);
+  assert.equal(JSON.parse(JSON.stringify(st)).archived, true);
+  assert.equal(C.normalizeState(JSON.parse(JSON.stringify(st))).archived, true);
+  // A state written before this shipped simply reads as "no override".
+  const old = C.emptyState();
+  delete old.archived;
+  assert.equal(C.normalizeState(old).archived, null);
+  // Garbage off a hand-edited payload is corrected, never coerced.
+  ['yes', 1, 0, {}, []].forEach(v => {
+    assert.equal(C.normalizeState(Object.assign(C.emptyState(), { archived: v })).archived, null,
+      String(v));
+  });
 });
 test('tabForSection: the services keyword fallback only fires for ids it does not already know', () => {
   // Not one of the explicit ids anywhere: caught by the keyword match instead.
@@ -3928,6 +4050,74 @@ function loadCallClaudeStream(fetchImpl) {
     src + '\nreturn callClaudeStream;');
   return fn(fetchImpl, TextDecoder, 'claude-test', 1000);
 }
+
+// ---------------------------------------------------------------------------
+// #plan= : one tap from a trip stop to a planned city (owner ask 2026-08-26)
+// ---------------------------------------------------------------------------
+// hashPlan lives in the app shell, so it is pulled out of the assembled
+// index.html by name, the same way callClaudeStream is. What it needs from
+// its surroundings is `location` and `trim`, both injected here.
+function loadHashPlan(hash) {
+  const fs = require('fs');
+  const path = require('path');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const start = html.indexOf('function hashPlan(');
+  assert.ok(start !== -1, 'hashPlan is missing from the assembled app');
+  const end = html.indexOf('\n  }\n', start);
+  assert.ok(end !== -1, 'could not find the end of hashPlan');
+  const src = html.slice(start, end + 4);
+  const fn = new Function('location', 'trim', src + '\nreturn hashPlan;');
+  return fn({ hash: hash },
+    (s) => String(s === null || s === undefined ? '' : s).replace(/^\s+|\s+$/g, ''))();
+}
+
+test('#plan= carries the trip stop the guide side needs to scaffold a city', () => {
+  const p = loadHashPlan('#plan=ohrid&name=Ohrid&from=2026-09-05&to=2026-09-12&country=MK');
+  assert.deepEqual(p, { name: 'Ohrid', from: '2026-09-05', to: '2026-09-12', country: 'MK' });
+  // The trip page percent-encodes every value, so a two-word stop has to survive.
+  assert.equal(loadHashPlan('#plan=novi-sad&name=Novi%20Sad&from=2026-10-01&to=2026-10-08').name,
+    'Novi Sad');
+  // country is optional; the rest is not.
+  assert.equal(loadHashPlan('#plan=x&name=X&from=2026-10-01&to=2026-10-08').country, '');
+});
+
+test('#plan= is ignored unless it is actually actionable', () => {
+  assert.equal(loadHashPlan(''), null);
+  assert.equal(loadHashPlan('#city=ohrid-2026-09-05'), null);   // the OTHER fragment
+  assert.equal(loadHashPlan('#profile'), null);
+  assert.equal(loadHashPlan('#plan=ohrid'), null);              // no name, no dates
+  assert.equal(loadHashPlan('#plan=ohrid&name=Ohrid'), null);   // no dates
+  assert.equal(loadHashPlan('#plan=ohrid&name=%20%20&from=2026-09-05&to=2026-09-12'), null);
+  assert.equal(loadHashPlan('#plan=ohrid&name=Ohrid&from=soon&to=2026-09-12'), null);
+  // Backwards dates are the one case that would throw inside blankCity, so it
+  // is refused here rather than left to blow up mid-boot.
+  assert.equal(loadHashPlan('#plan=ohrid&name=Ohrid&from=2026-09-12&to=2026-09-05'), null);
+});
+
+test('a #plan= fragment scaffolds the exact id a second arrival then finds', () => {
+  // The guard in consumePlanHash is `store.cities[cityId(blankCity(...))]`, so
+  // what has to hold is that the fragment maps to ONE id, deterministically:
+  // tapping the same stop card twice must navigate, never scaffold a second
+  // copy under a keep-both name and never re-run generation over a real guide.
+  const p = loadHashPlan('#plan=ohrid&name=Ohrid&from=2026-09-05&to=2026-09-12&country=MK');
+  const scaffold = C.appStore.blankCity(p.name, p.country, p.from, p.to);
+  assert.deepEqual(C.validate(scaffold), []);          // valid through the same door as paste
+  const id = C.cityId(scaffold);
+  assert.equal(id, 'ohrid-2026-09-05');
+  // Deterministic: the second arrival derives the same id from the same link.
+  assert.equal(C.cityId(C.appStore.blankCity(p.name, p.country, p.from, p.to)), id);
+  // And that id is exactly what the trip page's "City guide" link would use
+  // once a guide exists, so the two doors cannot point at different cities.
+  assert.equal(C.slug('Ohrid') + '-' + p.from, id);
+  // Added to a store, the guard sees it.
+  const added = C.appStore.add(C.appStore.normalize({}), scaffold);
+  assert.equal(added.cityId, id);
+  assert.ok(Object.prototype.hasOwnProperty.call(added.store.cities, id));
+  // The scaffold is empty by construction: one placeholder item, no research.
+  // That is what makes replacing it wholesale (the Update-data door) safe.
+  assert.equal(scaffold.items.length, 1);
+  assert.equal(scaffold.city.country, 'MK');
+});
 
 function sseBody(events) {
   // Chunked at awkward boundaries on purpose: the real stream splits wherever

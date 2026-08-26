@@ -21,7 +21,11 @@
      inside the per-city switcher menu): Profile holds ONE interest profile
      and ONE Claude key for every city, so it lives here rather than inside
      the city dropdown, which would read as "this city's profile". */
-  .hdr-actions{position:absolute; top:24px; right:20px; display:flex; gap:6px;}
+  /* #hdr is full-bleed since the 2026-08-26 header pass, so `right` here is
+     measured off the VIEWPORT edge. --bleed-pad is the header's own side
+     padding, so these chips end where the content column ends rather than
+     drifting out to the screen edge on a wide monitor. */
+  .hdr-actions{position:absolute; top:24px; right:var(--bleed-pad); display:flex; gap:6px;}
   .hdr-chip{font:inherit; font-size:.75rem; font-weight:700;
     color:#fff; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.4);
     border-radius:20px; padding:5px 11px; cursor:pointer; white-space:nowrap;}
@@ -123,8 +127,37 @@
   .modal .acct-off{color:var(--amber-ink); background:var(--amber-soft);
     border-radius:8px; padding:8px 10px; font-weight:600;}
   @media (max-width: 430px){
-    .hdr-actions{top:17px; right:14px; gap:4px;}
+    .hdr-actions{top:17px; gap:4px;}
     .hdr-chip{padding:4px 9px; font-size:.7rem;}
+  }
+
+  /* --- Past cities in the switcher (owner ask 2026-08-26) ---
+     "need the ability to archive cities previously visited in cityops page
+     (take cue from plan-ahead page)". The cue taken: the trip surface groups
+     stops you have left behind one collapsed disclosure and fades them to
+     0.72, so a city you have left does the same here. Fade, never hide: a
+     past city is still openable in one tap, and its rows still say what the
+     dates were. */
+  .citypast{border-top:1px solid var(--border-light);}
+  .citypast > summary{list-style:none; cursor:pointer; padding:9px 14px;
+    font-size:.72rem; font-weight:800; letter-spacing:.6px; text-transform:uppercase;
+    color:var(--text-3); background:var(--bg-softer);}
+  .citypast > summary::-webkit-details-marker{display:none;}
+  .citypast > summary:hover{color:var(--accent-hover);}
+  .citypast > summary .chev{display:inline-block; margin-right:6px; font-size:.8rem;}
+  .citypast .cityrow{opacity:.72;}
+  .citypast .cityrow:hover, .citypast .cityrow.current{opacity:1;}
+  /* The per-row archive/restore control. Wordless icon with a tooltip and an
+     aria-label, per the house idiom; it sits at the right end of the row and
+     stops the click from also switching city. */
+  .cityrow{position:relative; padding-right:46px;}
+  .city-arch{position:absolute; top:50%; right:8px; transform:translateY(-50%);
+    font:inherit; font-size:.9rem; line-height:1; background:none; border:none;
+    border-radius:50%; width:32px; height:32px; padding:0; cursor:pointer; opacity:.55;}
+  .city-arch:hover{opacity:1; background:var(--accent-soft);}
+  @media (pointer: coarse){
+    .city-arch{width:44px; height:44px;}
+    .cityrow{padding-right:58px;}
   }
 </style>
 </head>
@@ -412,6 +445,72 @@
     try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; }
   }
 
+  // ---- #plan= : one tap from a trip stop to a planned city ----
+  // The trip surface's stop cards have carried this fragment since they grew
+  // a "Plan this city" control; until now the app root ignored it (an
+  // unrecognised hash was a no-op) and the traveler landed on whatever city
+  // was already open. Owner ask 2026-08-26: "when clicking 'plan city' for a
+  // city that hasn't been planned yet, go ahead and add the city to our
+  // dropdown, plan it with claude, and navigate to that page."
+  //
+  // Shape: #plan=<slug>&name=<name>&from=<iso>&to=<iso>&country=<cc>
+  // The slug is informational (cityops derives its own id from name + start
+  // date, which is what cityId() has always done); name and both dates are
+  // what actually matter, and a fragment missing any of them is not
+  // actionable and reads as absent.
+  function hashPlan() {
+    var h = String(location.hash || '');
+    if (h.indexOf('#plan=') !== 0) return null;
+    var out = {};
+    h.slice(1).split('&').forEach(function (pair) {
+      var eq = pair.indexOf('=');
+      if (eq === -1) return;
+      var k = pair.slice(0, eq);
+      var v = pair.slice(eq + 1);
+      try { v = decodeURIComponent(v); } catch (e) {}
+      out[k] = v;
+    });
+    if (!trim(out.name || '')) return null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(out.from || '') || !/^\d{4}-\d{2}-\d{2}$/.test(out.to || '')) return null;
+    if (out.from > out.to) return null;
+    return { name: trim(out.name), from: out.from, to: out.to, country: trim(out.country || '') };
+  }
+
+  // Returns the id it navigated to, or null if the fragment was not
+  // actionable. Two outcomes, and the guard is the first of them:
+  //
+  //   already in the store  ->  just switch to it. No scaffold, no second
+  //                             copy under a keep-both name, and above all no
+  //                             generation run that would overwrite a guide
+  //                             the traveler already has. Tapping the same
+  //                             stop card twice has to be safe.
+  //   not in the store      ->  scaffold it through appStore.add (the same
+  //                             door + Add city's "Create blank city" uses),
+  //                             switch to it, then hand it to the Add-city
+  //                             modal in edit mode, which is where generating
+  //                             and every one of its failure paths already
+  //                             live. Nothing new is invented here.
+  function consumePlanHash(plan) {
+    if (!plan) return null;
+    var scaffold;
+    try { scaffold = CityOps.appStore.blankCity(plan.name, plan.country, plan.from, plan.to); }
+    catch (e) { return null; }
+    var id = CityOps.cityId(scaffold);
+    cleanHash();
+    if (has(store.cities, id)) { activateCity(id); return id; }
+    var res = CityOps.appStore.add(store, scaffold);
+    store = res.store;
+    saveStore(store);
+    saveGenMetaFor(res.cityId, { country: plan.country });
+    activateCity(res.cityId);
+    schedulePush('data', res.cityId);
+    // Deferred one turn so the engine's first render of the scaffold has
+    // painted before the modal covers it: the traveler sees the city arrive
+    // in the switcher, THEN sees what is being done about filling it.
+    setTimeout(function () { openAddModal(res.cityId, { autoPlan: true }); }, 0);
+    return res.cityId;
+  }
+
   function setHash(id) {
     var target = '#city=' + encodeURIComponent(id);
     if (location.hash === target) return;
@@ -467,6 +566,56 @@
     }
   }
 
+  // ---- Past cities (owner ask 2026-08-26) ----
+  // The flag itself lives on the per-city STATE object (state.archived), and
+  // that is the whole point of putting it there: the state object is what
+  // rides the city_state sync rows, so archiving Batumi on the phone archives
+  // it on the laptop. store.order and store.active, the two other places a
+  // per-city flag could plausibly have gone, are device-local by design and
+  // would have made this a per-browser setting.
+  //
+  // Reading it means reading each city's state, which readStateFull already
+  // does for the sync layer (and which correctly prefers the LIVE state of
+  // the booted city over its localStorage copy).
+  function todayIsoLocal() { return CityOps.todayIso(); }
+
+  // Effective dates: an Edit-dates stayOverride wins over the shipped data,
+  // exactly as it does everywhere the engine shows a range.
+  function cityDatesFor(id) {
+    var d = store.cities[id];
+    if (!d) return null;
+    return CityOps.effectiveDates(d, readStateFull(id) || CityOps.emptyState());
+  }
+
+  function cityIsPastNow(id, isCurrent) {
+    if (!store.cities[id]) return false;
+    return CityOps.archiveKit.isPast(
+      readStateFull(id) || CityOps.emptyState(), cityDatesFor(id), todayIsoLocal(), !!isCurrent);
+  }
+
+  // Writes the flag and queues the state push so the other device sees it.
+  //
+  // The re-boot on the active city is load-bearing, not tidiness. The engine
+  // holds its OWN store instance with an in-memory copy of the booted city's
+  // state (makeStore's `mem`, which exists so private mode still works), and
+  // that copy wins over localStorage on every read. A write from out here
+  // through a second store instance would sit in localStorage unseen: the
+  // panel would redraw from the engine's stale copy and the tap would look
+  // like it did nothing. Re-booting hands the engine a store whose mem is
+  // empty, so it reads the value we just wrote.
+  function setCityArchived(id, value) {
+    if (!store.cities[id]) return;
+    var s = CityOps.makeStore(id, LS);
+    var st = s.load();
+    CityOps.archiveKit.set(st, value);
+    s.save(st);
+    schedulePush('state', id);
+    if (id === activeId) {
+      CityOps.boot(clone(store.cities[id]));
+      stateStamp[id] = readStateStamp(id);
+    }
+  }
+
   // Renders (or clears) the dropdown panel: the city list plus + Add city
   // (and Load example / Sync, when applicable). Remove city lives in the
   // More action sheet now (Phase 4 nav cleanup), not here.
@@ -482,10 +631,13 @@
     bar.appendChild(scrim);
     var panel = el('div', 'citypanel');
     var exVisible = exampleVisible();
-    store.order.forEach(function (id) {
-      // Feature 3: the example city never appears in the switcher once a real
-      // city exists, unless the traveler turned "Show example city" on.
-      if (id === SEED_ID && !exVisible) return;
+    var today = todayIsoLocal();
+
+    // One row, built the same way whether it lands in the live list or the
+    // Past group: the ONLY difference between the two is which parent it is
+    // appended to, so a restored city cannot pick up a different treatment
+    // than a city that was never archived.
+    function cityRow(id) {
       var d = store.cities[id];
       var isCurrent = id === activeId;
       var prow = el('button', 'cityrow' + (isCurrent ? ' current' : ''));
@@ -493,7 +645,7 @@
       var nameWrap = el('span', 'cname', d.city.name);
       if (isCurrent) nameWrap.appendChild(el('span', 'dot'));
       prow.appendChild(nameWrap);
-      prow.appendChild(el('span', 'cdates', CityOps.fmtRange(d.city.dates)));
+      prow.appendChild(el('span', 'cdates', CityOps.fmtRange(cityDatesFor(id))));
       prow.onclick = function () {
         panelOpen = false;
         // activateCity triggers a real engine render, which calls
@@ -502,8 +654,56 @@
         if (id === activeId) { updateHeaderExpanded(); renderPanel(); return; }
         activateCity(id);
       };
-      panel.appendChild(prow);
+      prow.appendChild(archiveBtn(id, isCurrent));
+      return prow;
+    }
+
+    // Removal stays where it was (the More sheet, behind a typed confirm).
+    // This control is the reversible one: one tap out, one tap back, and it
+    // says which of the two it is doing rather than reading "archive" on a
+    // city that is already in the Past group.
+    function archiveBtn(id, isCurrent) {
+      var past = cityIsPastNow(id, isCurrent);
+      var b = el('button', 'city-arch', past ? '↩' : '🗄');
+      b.type = 'button';
+      var aria = past ? 'Restore this city to the active list'
+        : 'Move this city to Past';
+      b.setAttribute('aria-label', aria);
+      b.title = aria;
+      b.onclick = function (e) {
+        e.stopPropagation();
+        setCityArchived(id, CityOps.archiveKit.nextValue(
+          readStateFull(id) || CityOps.emptyState(), cityDatesFor(id), today, isCurrent));
+        renderPanel();
+      };
+      return b;
+    }
+
+    var live = [], past = [];
+    store.order.forEach(function (id) {
+      // Feature 3: the example city never appears in the switcher once a real
+      // city exists, unless the traveler turned "Show example city" on.
+      if (id === SEED_ID && !exVisible) return;
+      (cityIsPastNow(id, id === activeId) ? past : live).push(id);
     });
+    live.forEach(function (id) { panel.appendChild(cityRow(id)); });
+    if (past.length) {
+      // <details> rather than a button and a class, so the browser owns the
+      // open/closed state and the keyboard already works. Collapsed on every
+      // open, deliberately: a past city is history, and the point of the
+      // group is that it is out of the way until you want it.
+      var det = el('details', 'citypast');
+      var sum = document.createElement('summary');
+      sum.appendChild(el('span', 'chev', '▸'));
+      sum.appendChild(document.createTextNode('Past (' + past.length + ')'));
+      det.appendChild(sum);
+      det.ontoggle = function () {
+        var c = sum.querySelector('.chev');
+        if (c) c.textContent = det.open ? '▾' : '▸';
+      };
+      past.forEach(function (id) { det.appendChild(cityRow(id)); });
+      panel.appendChild(det);
+    }
     var acts = el('div', 'cityact');
     var add = el('button', 'cityadd', '+ Add city');
     add.type = 'button';
@@ -1393,9 +1593,16 @@
   // `onProgress({kind: 'thinking'|'text', totalChars})` fires on every delta
   // so the caller can show live progress. Rejects with a plain Error whose
   // message is safe to show as-is.
-  function callClaudeStream(prompt, apiKey, onProgress) {
+  //
+  // `signal` is optional and is the only way out of a run that is going to
+  // take minutes: aborting it rejects this promise (with an AbortError the
+  // caller distinguishes from a real failure) and stops the read loop, so a
+  // cancelled generation costs nothing further. Omitted by every caller that
+  // has no cancel control, and by the unit tests' mocked fetch.
+  function callClaudeStream(prompt, apiKey, onProgress, signal) {
     return fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
+      signal: signal || undefined,
       headers: {
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
@@ -1479,17 +1686,27 @@
   // collision with an unrelated city, not for the edit you just opened). If
   // the name/dates change enough to derive a different id, it falls back to
   // the normal add flow and the original city is left alone.
-  function openAddModal(editCityId) {
+  // `opts.autoPlan`: this modal was opened by the #plan= flow, not by a tap on
+  // + Add city. The city is already scaffolded and already active behind the
+  // modal; what is left is filling it. So the modal says so, and starts
+  // generating (or, with no key saved, builds the prompt) by itself instead
+  // of waiting for a tap the traveler has already made once on the trip page.
+  function openAddModal(editCityId, opts) {
     var isEdit = !!(editCityId && has(store.cities, editCityId));
     var editCity = isEdit ? store.cities[editCityId] : null;
     var meta = isEdit ? (loadGenMeta()[editCityId] || {}) : {};
+    var autoPlan = !!(opts && opts.autoPlan) && isEdit;
 
     var host = document.getElementById('modal');
     host.innerHTML = '';
     var wrap = el('div', 'modal-wrap');
     var box = el('div', 'modal');
-    box.appendChild(el('h3', null, isEdit ? ('Edit ' + editCity.city.name) : 'Add a city'));
-    box.appendChild(el('p', 'diff', isEdit
+    box.appendChild(el('h3', null, autoPlan ? ('Planning ' + editCity.city.name)
+      : isEdit ? ('Edit ' + editCity.city.name) : 'Add a city'));
+    box.appendChild(el('p', 'diff', autoPlan
+      ? (editCity.city.name + ' is now in your cities, with these dates and nothing in it yet. ' +
+         'Filling it starts below; you can close this at any point and the city stays.')
+      : isEdit
       ? 'Change anything below, then regenerate, or paste replacement city JSON.'
       : 'Start blank now and fill it with generated data later, generate it here with Claude, or paste ready-made city JSON below.'));
     var whereItGoes = (session && session.access_token)
@@ -1649,6 +1866,10 @@
     var genMsg = el('div', 'diff', '');
     box.appendChild(genMsg);
 
+    // The in-flight run's abort handle, or null when nothing is running. One
+    // at a time by construction: genBtn is disabled while a run is live, and
+    // Cancel is the only other control in the row.
+    var genAbort = null;
     function setGenerateRow(extraButtons) {
       genRow.innerHTML = '';
       genRow.appendChild(genBtn);
@@ -1656,7 +1877,18 @@
     }
     function setGenerating(on) {
       genBtn.disabled = on || !loadApiKey();
-      genBtn.textContent = on ? 'Generating...' : 'Generate with Claude';
+      genBtn.textContent = on ? 'Researching...' : 'Generate with Claude';
+    }
+    // A run this long needs a way out that is not "close the tab". Aborting
+    // the fetch stops the stream; the scaffold city is untouched either way,
+    // because nothing is written until a reply has parsed and validated.
+    function cancelButton() {
+      var c = el('button', 'ctl', 'Cancel');
+      c.type = 'button';
+      c.onclick = function () {
+        if (genAbort) { try { genAbort.abort(); } catch (e) {} }
+      };
+      return c;
     }
     function showRetry(afterMsg) {
       genMsg.textContent = afterMsg;
@@ -1698,28 +1930,61 @@
         return;
       }
       var prompt = CityOps.promptKit.buildCityPrompt(tpl, formHeader(), store.profile);
-      setGenerateRow([]);
+      var cityName = trim(bn.value);
+      setGenerateRow([cancelButton()]);
       setGenerating(true);
-      genMsg.textContent = 'Starting...';
+      // Named, and honest about the wait. PROMPT.md asks for a whole city (60
+      // to 90 places across eight sections, each with hours, prices and a
+      // map link), so this is minutes, not seconds; a progress line that says
+      // "Starting..." and then sits there is how a working run gets killed.
+      genMsg.textContent = 'Claude is researching ' + cityName + '... this usually takes 2 to 4 minutes.';
+      genAbort = (typeof AbortController !== 'undefined') ? new AbortController() : null;
       callClaudeStream(prompt, key, function (p) {
-        genMsg.textContent = (p.kind === 'thinking' ? 'Thinking... ' : 'Writing the guide... ') +
+        genMsg.textContent = 'Claude is researching ' + cityName + '... ' +
+          (p.kind === 'thinking' ? 'thinking, ' : 'writing the guide, ') +
           p.totalChars + ' characters so far.';
-      }).then(function (text) {
+      }, genAbort ? genAbort.signal : null).then(function (text) {
+        genAbort = null;
         setGenerating(false);
         var block = CityOps.extractJsonBlock(text);
-        if (block === null) { showRetry(CityOps.RETRY_INSTRUCTION); return; }
+        // Never a dead end: the scaffold city is already saved and already
+        // active, so a reply that will not parse costs the traveler the wait
+        // and nothing else. The reply itself is preserved in the paste box
+        // below, where Apply runs it through the same validated door, and
+        // Retry is one tap.
+        if (block === null) { keepReply(text); showRetry(CityOps.RETRY_INSTRUCTION); return; }
         var res = CityOps.parse(block);
         if (!res.data) {
-          showRetry('Claude\'s response did not match the city guide format:\n- ' + res.errors.join('\n- '));
+          keepReply(block);
+          showRetry('Claude\'s response did not match the city guide format:\n- ' + res.errors.join('\n- ') +
+            '\n\nThe reply is in the paste box below: fix it and press Apply, or press Retry.');
           return;
         }
         genMsg.textContent = 'Generated ' + res.data.city.name + '. Added to your cities.';
         offerDownload(res.data);
         commitFromForm(res.data, true);
       }).catch(function (e) {
+        genAbort = null;
         setGenerating(false);
+        // A cancel and a failure both land here; only the first is the
+        // traveler's own doing, and telling them "Claude API error: aborted"
+        // for a button they just pressed reads as a bug.
+        if (e && (e.name === 'AbortError' || /abort/i.test(e.message || ''))) {
+          // Deliberately does not claim the city is empty: this same Cancel
+          // also fires on a REGENERATE of a city that already has a guide,
+          // and telling that traveler their city is empty would be a scare.
+          showRetry('Cancelled. Nothing was changed, and ' + trim(bn.value) +
+            ' is still in your cities. Press Retry when you want to fill it.');
+          return;
+        }
         showRetry('Claude API error: ' + e.message);
       });
+    }
+    // Puts an unusable reply somewhere the traveler can still act on it,
+    // rather than throwing away three minutes of generation because one
+    // brace was wrong.
+    function keepReply(text) {
+      if (typeof text === 'string' && text) ta.value = text;
     }
     genBtn.onclick = runGenerate;
 
@@ -1957,6 +2222,29 @@
     wrap.onclick = function (e) { if (e.target === wrap) close(); };
     host.appendChild(wrap);
     bn.focus();
+
+    // The #plan= arrival, last, once every control above exists. Two paths,
+    // and neither of them dead-ends:
+    //
+    //   key saved  ->  start generating straight away. The traveler tapped
+    //                  "Plan this city" on the trip page; that IS the tap.
+    //   no key     ->  the city is scaffolded and saved regardless, and Build
+    //                  my prompt runs so the prompt is on the clipboard for
+    //                  whichever AI they do use. One line says why.
+    if (autoPlan) {
+      if (loadApiKey()) {
+        runGenerate();
+      } else {
+        // genMsg, not bmsg: Build my prompt writes its own result into bmsg
+        // ("Copied. Paste into Claude...") a microtask later, and putting
+        // this there would either overwrite that or be overwritten by it.
+        genMsg.textContent = 'No Claude API key is saved, so ' + editCity.city.name +
+          ' cannot be generated in the app. Its prompt has been built for you above: ' +
+          'paste it into Claude or ChatGPT, then paste the JSON back into the box below. ' +
+          'Add a key in Profile to generate here instead.';
+        bprompt.click();
+      }
+    }
   }
 
   function openRemoveModal() {
@@ -3049,16 +3337,30 @@
     // (same origin, same sign-in), and wheres is the read-only page the family
     // watches. Naming both here keeps the footer honest about which is which.
     foot.appendChild(document.createTextNode(' · '));
-    var t = el('a', 'foot-trip', 'trip');
+    // Sentence case, like every other label on this line (owner: "don't use
+    // all caps", and a lone lowercase "trip" beside "Feedback and
+    // suggestions" reads as a typo rather than a style).
+    var t = el('a', 'foot-trip', 'Trip');
     t.href = './trip.html';
     t.title = 'Your trip: stops, stays and travel legs';
     foot.appendChild(t);
-    foot.appendChild(document.createTextNode(' · family: '));
+    foot.appendChild(document.createTextNode(' · Family: '));
     var a = el('a', 'foot-wheres', 'wheres.robriggs.com');
     a.href = 'https://wheres.robriggs.com';
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
     foot.appendChild(a);
+    // Owner ask 2026-08-26: "add link in footer to collect feedback,
+    // suggestions". A GitHub issue is the whole intake: it is public, it is
+    // already where this repo's work is tracked, and it costs no service to
+    // run. Sentence case like the rest of the line (see the .foot rules).
+    foot.appendChild(document.createTextNode(' · '));
+    var fb = el('a', 'foot-feedback', 'Feedback and suggestions');
+    fb.href = 'https://github.com/robriggs3/cityops/issues/new';
+    fb.target = '_blank';
+    fb.rel = 'noopener noreferrer';
+    fb.title = 'Open an issue on GitHub';
+    foot.appendChild(fb);
   }
 
   CityOps.onStateChange = function () { renderPanel(); decorateHeader(); decorateFoot(); };
@@ -3073,6 +3375,26 @@
       noteStateChange();
     };
   })();
+
+  // Bound once, from whichever exit start() takes. Every fragment the app
+  // understands has to work from a same-document hash change as well as from
+  // a load: arriving at #profile or #plan= from a page that is already this
+  // one never re-runs start(), and a door that only works on a cold load is
+  // a dead link half the time.
+  function bindHashChange() {
+    window.addEventListener('hashchange', function () {
+      if (String(location.hash || '') === '#profile') {
+        cleanHash();
+        openProfileModal();
+        return;
+      }
+      var plan = hashPlan();
+      if (plan) { consumePlanHash(plan); return; }
+      var id = hashCity();
+      if (id === SEED_ID && !exampleVisible()) return;
+      if (id && has(store.cities, id) && id !== activeId) activateCity(id);
+    });
+  }
 
   function start() {
     // Config first, then the auth fragment, and only then the #city= hash: a
@@ -3101,6 +3423,17 @@
     // #city= rewrite or into history.
     var wantProfile = String(location.hash || '') === '#profile';
     if (wantProfile) cleanHash();
+    // #plan= from a trip stop card. Read after the auth fragment (which must
+    // be consumed first) and before #city=, and it takes the whole boot when
+    // it fires: it scaffolds, activates and starts generating on its own, so
+    // resolveStartCity below would only fight it for the landing city.
+    var planned = consumePlanHash(hashPlan());
+    if (planned) {
+      startSync();
+      if (authNotice) showSyncNotice(authNotice);
+      bindHashChange();
+      return;
+    }
     var wanted = hashCity();
     var target = CityOps.appStore.resolveStartCity(store, wanted);
     // Feature 3: never boot straight into a hidden example. If it hides
@@ -3111,19 +3444,7 @@
       target = fallback.length ? fallback[0] : target;
     }
     activateCity(target);
-    window.addEventListener('hashchange', function () {
-      // Arriving at #profile from a page that is already this one is a
-      // same-document hash change, not a load, so start() never runs again.
-      // The door has to work from either direction or it is a dead link.
-      if (String(location.hash || '') === '#profile') {
-        cleanHash();
-        openProfileModal();
-        return;
-      }
-      var id = hashCity();
-      if (id === SEED_ID && !exampleVisible()) return;
-      if (id && has(store.cities, id) && id !== activeId) activateCity(id);
-    });
+    bindHashChange();
     // After the first render: the engine rewrote #notice during boot, so a
     // sign-in notice has to be appended once that has happened.
     if (authNotice) showSyncNotice(authNotice);

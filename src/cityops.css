@@ -7,14 +7,41 @@
     --blue:#2c5d8a; --blue-soft:#d3e0ee;
     --amber:#8a6d00; --amber-soft:#ede1be;
     --amber-ink:#6b5400; --green-ink:#226428;
+    /* The two numbers BOTH surfaces share (owner ask 2026-08-26: "get header
+       consistent between cityops page and logistics page, cityops is narrow,
+       plan-ahead is full width"). The trip surface repeats these values under
+       the same names in its own stylesheet, which it keeps by design; they
+       have to be edited together or the two headers drift again.
+       960px is the settled measure: cityops was 760 and the trip page 1200,
+       so switching surfaces moved every column on the page. */
+    --content-max:960px; --gutter:16px;
+    /* The side padding a full-bleed band needs so its CONTENT lines up
+       EXACTLY with the column beneath it, at every width.
+       .wrap is border-box, so its content edge sits at
+       (50vw - content-max/2) + gutter once the max-width bites, and at just
+       `gutter` before it does. max() of the two is the whole formula, and it
+       is why the h1 and the first card share an x rather than missing each
+       other by a gutter. */
+    --bleed-pad:max(var(--gutter), calc(50vw - var(--content-max) / 2 + var(--gutter)));
   }
   *{box-sizing:border-box; margin:0; padding:0}
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    background:var(--bg); color:var(--text); line-height:1.5; -webkit-text-size-adjust:100%;}
-  .wrap{max-width:760px; margin:0 auto; padding:0 16px 60px;}
+    background:var(--bg); color:var(--text); line-height:1.5; -webkit-text-size-adjust:100%;
+    /* The full-bleed header below is sized in vw, which on a desktop browser
+       counts the scrollbar the page itself creates. Without this, a page long
+       enough to scroll vertically gains a few px of horizontal scroll too.
+       Nothing in this single-column layout scrolls sideways on purpose. */
+    overflow-x:hidden;}
+  .wrap{max-width:var(--content-max); margin:0 auto; padding:0 var(--gutter) 60px;}
   header{background:linear-gradient(160deg,var(--accent) 0%,var(--accent-hover) 100%); color:#fff;
     padding:26px 20px 22px;}
-  .wrap>header{margin:0 -16px 20px; border-radius:0;}
+  /* Edge to edge of the VIEWPORT, not of .wrap. The negative margins pull the
+     band out past the content column's max-width, and the padding puts its
+     contents back on that column, so the h1 starts exactly where the first
+     card starts at every width. The trip surface's .hero does the same with
+     the same numbers. */
+  .wrap>header{margin:0 calc(50% - 50vw) 20px; border-radius:0;
+    padding-left:var(--bleed-pad); padding-right:var(--bleed-pad);}
   header h1{font-size:1.55rem; letter-spacing:.2px;}
   header .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
   .facts{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;}
@@ -79,8 +106,31 @@
   .lead{font-size:.92rem; color:var(--text-3); margin-bottom:6px;}
   .tag{display:inline-block; font-size:.72rem; font-weight:700; text-transform:uppercase;
     letter-spacing:.4px; color:var(--accent-hover); background:var(--accent-soft); padding:2px 7px; border-radius:5px; margin-right:6px;}
-  .foot{font-size:.78rem; color:var(--text-3); margin-top:24px; text-align:center; line-height:1.6;}
+  /* Owner feedback 2026-08-26: "fix font in footer, currently hard to read,
+     can't distinguish between normal text and links, don't use all caps."
+     .78rem of #666 on a #ccc page is roughly 3:1 against the ground, which is
+     under the readable-text bar; the links inside it inherited the same size
+     and only differed by hue. So: bigger, darker text, and links that carry
+     BOTH the accent colour and an underline, because colour alone is not a
+     distinction a lot of readers can make. */
+  .foot{font-size:.85rem; color:var(--text-2); margin-top:28px; text-align:center; line-height:1.7;}
+  .foot a{color:var(--accent-hover); font-weight:600; text-decoration:underline;
+    text-underline-offset:2px;}
+  .foot a:hover{color:var(--accent);}
   a{color:var(--accent);}
+
+  /* Expand all / Collapse all, once per tab. A footnote in the reading order:
+     muted, small, and set on the baseline the first section heading sits on,
+     so it is there when a long guide needs folding away and does not read as
+     a third row of controls when it does not. Text links rather than pills,
+     which is the exception the house wordless-icon rule makes for a control
+     whose whole meaning is a verb pair. */
+  .xall-row{display:flex; align-items:center; gap:7px; margin:0 0 10px; flex-wrap:wrap;}
+  .xall{font:inherit; font-size:.76rem; font-weight:600; color:var(--text-3);
+    background:none; border:none; padding:2px 0; cursor:pointer; text-decoration:underline;
+    text-underline-offset:2px;}
+  .xall:hover{color:var(--accent-hover);}
+  .xall-sep{font-size:.76rem; color:var(--text-3);}
 
 
   /* --- Plan tab: drag an item to reorder it, or onto another day --- */
@@ -333,8 +383,14 @@
 
   /* narrow phones: trim horizontal chrome so cards get the width */
   @media (max-width: 430px){
-    .wrap{padding:0 10px 48px;}
-    .wrap>header{margin:0 -10px 16px; padding:20px 14px 16px; border-radius:0;}
+    /* Side padding is --gutter at every width now: this tier used to drop it
+       to 10px, which left the two surfaces 6px apart on the one screen Rob
+       actually reads them on (the trip side's phone gutter is the same 16px).
+       Only the VERTICAL rhythm tightens here, which is what the density pass
+       this tier came from was actually about. */
+    .wrap{padding:0 var(--gutter) 48px;}
+    .wrap>header{margin:0 calc(50% - 50vw) 16px; border-radius:0;
+      padding:20px var(--bleed-pad) 16px;}
     header h1{font-size:1.35rem;}
     .facts{gap:6px; margin-top:10px;}
     .chip{padding:4px 9px; font-size:.75rem;}
