@@ -2821,11 +2821,186 @@ test('an exported guide carries no sidecar, because the export never sees one', 
   assert.equal(JSON.stringify(out).indexOf('sk-ant'), -1);
 });
 
+// ---- the GitHub token sidecar (the trip surface's publish credential) ----
+
+test('the GitHub token rides as its own stamped sidecar, on its own stamp', () => {
+  const row = C.syncKit.buildProfileRow({ updated: P_LOCAL }, {
+    apiKey: { value: 'sk-ant-x', updated: P_LOCAL },
+    github: { value: 'github_pat_secret', updated: P_REMOTE }
+  });
+  assert.deepEqual(row.data.github, { value: 'github_pat_secret', updated: P_REMOTE });
+  // The row's own stamp stays the PROFILE's: a token change must not make a
+  // stale interest profile win the next reconcile.
+  assert.equal(row.updated_at, P_LOCAL);
+  // And it comes back out the same way, so a pull can reconcile it alone.
+  assert.deepEqual(C.syncKit.readSidecars(row.data).github,
+    { value: 'github_pat_secret', updated: P_REMOTE });
+});
+
+test('a GitHub token cannot reach the interest profile, a prompt or an export', () => {
+  const row = C.syncKit.buildProfileRow({ interests: ['ramen'], updated: P_LOCAL },
+    { github: { value: 'github_pat_secret', updated: P_LOCAL } });
+  const back = C.profile.normalize(row.data);
+  assert.equal(back.github, undefined);
+  assert.deepEqual(Object.keys(back).sort(),
+    ['avoid', 'factors', 'interests', 'notes', 'schema', 'showExample', 'updated']);
+  assert.equal(C.promptKit.buildInterestsDeltaPrompt(FAKE_RERUN, GOOD, back)
+    .indexOf('github_pat_secret'), -1);
+});
+
+test('an unstamped GitHub token is absent, exactly like an unstamped key', () => {
+  const row = C.syncKit.buildProfileRow({ updated: P_LOCAL }, { github: { value: 'github_pat_x' } });
+  assert.equal(row.data.github, undefined);
+});
+
+// ---- mergeProfileRow: the trip surface pushes credentials, never a profile ----
+
+test('mergeProfileRow keeps the account profile and its stamp untouched', () => {
+  // The trip surface has no Profile UI, so it has no opinion about interests.
+  // A PostgREST upsert replaces the whole row, so "no opinion" must mean
+  // "write back exactly what was there", not "write a blank".
+  const row = {
+    data: { schema: 1, interests: ['ramen', 'ruins'], avoid: ['clubs'], factors: [],
+            notes: 'quiet mornings', showExample: false, updated: P_REMOTE },
+    updated_at: P_REMOTE
+  };
+  const out = C.syncKit.mergeProfileRow(row, { github: { value: 'github_pat_new', updated: P_LOCAL } });
+  assert.deepEqual(out.data.interests, ['ramen', 'ruins']);
+  assert.deepEqual(out.data.avoid, ['clubs']);
+  assert.equal(out.data.notes, 'quiet mornings');
+  assert.equal(out.data.updated, P_REMOTE);
+  assert.equal(out.updated_at, P_REMOTE);
+  assert.deepEqual(out.data.github, { value: 'github_pat_new', updated: P_LOCAL });
+});
+
+test('mergeProfileRow carries forward every sidecar it was not given', () => {
+  // The trip surface knows nothing about genmeta. Dropping it would delete the
+  // account's Add/Edit form metadata on the first credential push.
+  const row = {
+    data: {
+      schema: 1, interests: [], avoid: [], factors: [], notes: '', showExample: false, updated: P_REMOTE,
+      apiKey: { value: 'sk-ant-account', updated: P_REMOTE },
+      genmeta: { value: { 'batumi-2026-08-08': { notes: 'top floor' } }, updated: P_REMOTE }
+    },
+    updated_at: P_REMOTE
+  };
+  const out = C.syncKit.mergeProfileRow(row, { github: { value: 'github_pat_new', updated: P_LOCAL } });
+  assert.deepEqual(out.data.apiKey, { value: 'sk-ant-account', updated: P_REMOTE });
+  assert.deepEqual(out.data.genmeta.value, { 'batumi-2026-08-08': { notes: 'top floor' } });
+  assert.deepEqual(out.data.github, { value: 'github_pat_new', updated: P_LOCAL });
+});
+
+test('mergeProfileRow is newest-wins per credential, both directions', () => {
+  const row = {
+    data: { updated: P_REMOTE, apiKey: { value: 'sk-account-newer', updated: P_REMOTE } },
+    updated_at: P_REMOTE
+  };
+  // P_LOCAL is older than P_REMOTE, so the account's key survives...
+  const older = C.syncKit.mergeProfileRow(row, { apiKey: { value: 'sk-device-older', updated: P_LOCAL } });
+  assert.equal(older.data.apiKey.value, 'sk-account-newer');
+  // ...and a genuinely newer device key replaces it.
+  const newer = C.syncKit.mergeProfileRow(row, { apiKey: { value: 'sk-device-newer', updated: '2030-01-01T00:00:00.000Z' } });
+  assert.equal(newer.data.apiKey.value, 'sk-device-newer');
+});
+
+test('mergeProfileRow against no row at all still writes the credential', () => {
+  const out = C.syncKit.mergeProfileRow(null, { github: { value: 'github_pat_first', updated: P_LOCAL } });
+  assert.deepEqual(out.data.github, { value: 'github_pat_first', updated: P_LOCAL });
+  assert.deepEqual(out.data.interests, []);
+  assert.equal(out.updated_at, C.syncKit.EPOCH);   // no profile edit is being claimed
+});
+
+test('sidecarsWorthPushing says no when the account already has it all', () => {
+  const row = {
+    data: { updated: P_REMOTE, apiKey: { value: 'sk', updated: P_REMOTE },
+            github: { value: 'gh', updated: P_REMOTE } },
+    updated_at: P_REMOTE
+  };
+  assert.equal(C.syncKit.sidecarsWorthPushing(row, {
+    apiKey: { value: 'sk', updated: P_REMOTE }, github: { value: 'gh', updated: P_REMOTE }
+  }), false);
+  // A device with nothing never pushes emptiness over a real credential.
+  assert.equal(C.syncKit.sidecarsWorthPushing(row, { apiKey: null, github: null }), false);
+  // A newer one does.
+  assert.equal(C.syncKit.sidecarsWorthPushing(row, {
+    github: { value: 'gh2', updated: '2030-01-01T00:00:00.000Z' }
+  }), true);
+  // And so does a credential the account has never seen: this is the case that
+  // carries a token out of the old trip blob and up to the account.
+  assert.equal(C.syncKit.sidecarsWorthPushing(null, {
+    github: { value: 'gh', updated: C.syncKit.EPOCH }
+  }), true);
+});
+
+// ---- the trip surface's credential migration ----
+// stripCredentialsFromBlob lives in src/trip-shell.html (it needs localStorage),
+// so what is pinned here is the shape contract it enforces: whatever the trip
+// blob is, the credential fields are not in it, and the built page never
+// mentions them as state.
+test('the built trip page keeps no credential in its trip state shape', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const trip = fs.readFileSync(path.join(__dirname, '..', 'trip.html'), 'utf8');
+  // defaultState() is the whole contract: a field that is not there cannot be
+  // rehydrated by Object.assign from a pulled or imported blob.
+  const def = trip.match(/function defaultState\(\) \{[\s\S]*?\n\}/);
+  assert.ok(def, 'defaultState missing from the built trip page');
+  assert.ok(!/\bapiKey\s*:/.test(def[0]), 'apiKey is back in the trip state');
+  assert.ok(!/\bgithubToken\s*:/.test(def[0]), 'githubToken is back in the trip state');
+  // Nothing anywhere reads a credential off `state` any more.
+  assert.equal(trip.indexOf('state.apiKey'), -1);
+  assert.equal(trip.indexOf('state.githubToken'), -1);
+  // The migration runs on load, on pull, on restore and on import: all four
+  // doors a blob can come through.
+  assert.ok(trip.indexOf('stripCredentialsFromBlob') !== -1);
+  assert.ok((trip.match(/stripCredentialsFromBlob\(/g) || []).length >= 5);
+});
+
+test('the built trip page reads the shared session key, not its own', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const trip = fs.readFileSync(path.join(__dirname, '..', 'trip.html'), 'utf8');
+  assert.ok(/const AUTH_KEY = 'cityops\.auth\.v1'/.test(trip),
+    'the trip surface must share the city app session key');
+  // And it carries no sign-in flow of its own: one GoTrue redirect URL.
+  assert.equal(trip.indexOf('/auth/v1/otp'), -1, 'the trip surface must not send magic links');
+});
+
+test('the published family page is built from a fixed field list', () => {
+  // The family page is public. It is built by naming the fields that go into
+  // it, not by filtering a copy of the state, which is why no credential can
+  // reach it even if one somehow got back into the blob.
+  const fs = require('fs');
+  const path = require('path');
+  const trip = fs.readFileSync(path.join(__dirname, '..', 'trip.html'), 'utf8');
+  const fn = trip.match(/function buildFamilyShareForCurrentState\(\) \{[\s\S]*?\n\}/);
+  assert.ok(fn, 'buildFamilyShareForCurrentState missing from the built trip page');
+  assert.equal(fn[0].indexOf('apiKey'), -1);
+  assert.equal(fn[0].indexOf('githubToken'), -1);
+  assert.equal(fn[0].indexOf('credGet'), -1);
+  // The payload names exactly what family sees.
+  assert.ok(/travelerName:/.test(fn[0]) && /cities: cities/.test(fn[0]) && /transitions: transitions/.test(fn[0]));
+});
+
+test('the built trip page is the engine plus the shell, and nothing else', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const root = path.join(__dirname, '..');
+  const engine = fs.readFileSync(path.join(root, 'src', 'cityops.js'), 'utf8');
+  const trip = fs.readFileSync(path.join(root, 'trip.html'), 'utf8');
+  assert.ok(trip.includes(engine), 'run node tools/assemble.js after editing src/');
+  // The seam links are same-origin: a cross-domain hop here would put the two
+  // halves back on two origins and split the session again.
+  assert.ok(/const CITYOPS_BASE = '\.'/.test(trip));
+  assert.equal(trip.indexOf('https://cityops.robriggs.com/#city='), -1);
+});
+
 test('readSidecars tolerates every shape a stored row can be in', () => {
-  assert.deepEqual(C.syncKit.readSidecars(null), { apiKey: null, genmeta: null });
-  assert.deepEqual(C.syncKit.readSidecars({}), { apiKey: null, genmeta: null });
-  assert.deepEqual(C.syncKit.readSidecars({ apiKey: 'sk-ant-loose' }), { apiKey: null, genmeta: null });
-  assert.deepEqual(C.syncKit.readSidecars({ apiKey: [] }), { apiKey: null, genmeta: null });
+  const none = { apiKey: null, github: null, genmeta: null };
+  assert.deepEqual(C.syncKit.readSidecars(null), none);
+  assert.deepEqual(C.syncKit.readSidecars({}), none);
+  assert.deepEqual(C.syncKit.readSidecars({ apiKey: 'sk-ant-loose' }), none);
+  assert.deepEqual(C.syncKit.readSidecars({ apiKey: [] }), none);
   const good = C.syncKit.readSidecars({ apiKey: { value: 'sk', updated: P_LOCAL } });
   assert.deepEqual(good.apiKey, { value: 'sk', updated: P_LOCAL });
   // A cleared key is a real value: it has to propagate, so an empty string

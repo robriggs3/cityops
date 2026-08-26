@@ -82,6 +82,34 @@ function promptTemplateBlock() {
   return '<script type="text/plain" id="prompt-template">\n' + escaped + '\n</script>';
 }
 
+// The trip surface: the same app, the other half. It brings its own stylesheet
+// (a whole editor's worth, with its own tokens under the same names), so it
+// takes the ENGINE only and no CSS. What it wants from the engine is syncKit:
+// the pure sync decisions the city app already ships and already tests, so the
+// two surfaces cannot drift on whose data is newer.
+//
+// Its script-tag arithmetic differs from the guide shells: the family-share
+// page it generates is a template literal containing its own <script> tags,
+// whose closers are escaped as `<\/script` precisely so they cannot end the
+// authored block. So the balance to check is opens against real closers PLUS
+// escaped ones; an unescaped closer in that literal still shows up as a
+// mismatch, which is the bug the check exists to catch.
+if (fs.existsSync(path.join(root, 'src', 'trip-shell.html'))) {
+  const shellName = 'trip-shell.html';
+  const shell = fs.readFileSync(path.join(root, 'src', shellName), 'utf8');
+  if (shell.indexOf('<!--CITYOPS_ENGINE-->') === -1) throw new Error('engine marker missing in ' + shellName);
+  const opens = (shell.match(/<script[\s>]/g) || []).length;
+  const closes = (shell.match(/<\/script/g) || []).length;
+  const escaped = (shell.match(/<\\\/script/g) || []).length;
+  if (opens !== closes + escaped) {
+    throw new Error(shellName + ': ' + opens + ' script opens vs ' + closes + ' closes and ' +
+      escaped + ' escaped closes; an unescaped closing script sequence in authored code truncates the block');
+  }
+  fs.writeFileSync(path.join(root, 'trip.html'),
+    shell.replace('<!--CITYOPS_ENGINE-->', () => engine));
+  console.log('assembled trip.html');
+}
+
 if (fs.existsSync(path.join(root, 'src', 'app-shell.html'))) {
   build('app-shell.html', 'index.html', function (out, shellName) {
     if (out.indexOf('<!--CITYOPS_TEMPLATE-->') === -1) throw new Error('template marker missing in ' + shellName);
