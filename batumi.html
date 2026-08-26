@@ -27,6 +27,26 @@
   .facts{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;}
   .chip{background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25);
     padding:5px 10px; border-radius:20px; font-size:.8rem;}
+
+  /* --- Header highlights row (sunset + pinned items) ---
+     ONE row, always. flex-wrap:nowrap plus overflow-x:auto is the whole
+     contract: a fifth chip would scroll sideways rather than start a second
+     line, because a highlights block that grows downward is just .facts
+     again. The scrollbar is hidden on every engine that lets us (this sits on
+     a coloured gradient where a track reads as damage) and the chips stay
+     tappable either way. */
+  .hl{display:flex; flex-wrap:nowrap; gap:6px; margin-top:12px; overflow-x:auto;
+    -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:2px;}
+  .hl::-webkit-scrollbar{display:none;}
+  .hl-chip{flex:0 0 auto; display:inline-flex; align-items:center; gap:5px;
+    background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25);
+    color:#fff; font:inherit; font-size:.78rem; font-weight:600;
+    padding:5px 11px; border-radius:20px; white-space:nowrap;}
+  .hl-ic{font-size:.85rem; line-height:1;}
+  .hl-auto{font-variant-numeric:tabular-nums;}
+  button.hl-chip{cursor:pointer; text-align:left;}
+  button.hl-chip:hover{background:rgba(255,255,255,.3); border-color:rgba(255,255,255,.6);}
+  button.hl-chip:focus-visible{outline:2px solid #fff; outline-offset:2px;}
   h2{font-size:1.15rem; margin:26px 0 12px; color:var(--text);
     display:flex; align-items:center; gap:8px;}
   h2 .ic{font-size:1.1rem}
@@ -193,6 +213,16 @@
   h2.collapsed{opacity:.85; margin-bottom:8px;}
   body.share .sec-toggle{pointer-events:none;}
   body.share .sec-toggle .chev{display:none;}
+  /* Add a place, on the header of the section it belongs to. margin-left:auto
+     parks it at the far right of the h2 flex row, away from the toggle that
+     occupies the whole left side, so a thumb reaching for collapse never
+     opens a form instead. */
+  .sec-add{margin-left:auto; flex:0 0 auto; font:inherit; font-size:1.05rem; font-weight:700;
+    line-height:1; color:var(--accent-hover); background:#fff;
+    border:1.5px solid var(--border-light); border-radius:50%;
+    width:30px; height:30px; padding:0; cursor:pointer;}
+  .sec-add:hover{border-color:var(--accent); background:var(--accent-soft);}
+  body.share .sec-add{display:none;}
   .daycard .bd + .bd{border-top:1px dashed var(--border-light);}
   .title-edit{width:100%; font:inherit; font-size:1rem; font-weight:600; padding:8px 10px;
     border:1.5px solid var(--accent); border-radius:8px; margin-top:4px;}
@@ -235,6 +265,36 @@
   /* An icon button that also carries its text (the Plan tab's day-move
      control) is a normal-width pill, not a 36px square. */
   .icon-btn.has-label{min-width:0;}
+
+  /* --- Pin to the header highlights row ---
+     Pinned reads filled and accented; unpinned reads like every other control
+     in the row. Disabled means the row is full: it stays visible and keeps
+     its tooltip, because a control that disappears at the cap teaches the
+     traveler nothing about why. */
+  .pin-btn.pinned{border-color:var(--accent); background:var(--accent-soft);}
+  .ctl.pin-btn:disabled{opacity:.45; cursor:not-allowed;}
+  .ctl.pin-btn:disabled:hover{border-color:var(--border-light);}
+  .ask-btn:hover{border-color:var(--accent); background:var(--accent-soft);}
+  /* On the Info tab an item is a paragraph in a shared block, not a card with
+     a control row, so its pin floats at the start of the line the headline
+     sits on. */
+  .info-card .info-item > .pin-btn{float:right; margin:0 0 4px 8px; min-width:32px;}
+  body.share .info-card .info-item > .pin-btn{display:none;}
+  .info-card .info-item.just-moved{animation:justmoved 1.8s ease-out 1; border-radius:8px;}
+
+  /* Add-a-place form fields: label over control, one per row, so a 390px
+     phone never puts a label and its input on the same line. */
+  .field{margin-top:12px;}
+  .field-label{display:block; font-size:.72rem; font-weight:800; letter-spacing:.6px;
+    text-transform:uppercase; color:var(--text-3); margin-bottom:5px;}
+  .field .date-field, .field select{width:100%;}
+  /* Overrides the 200px monospace JSON-paste box .modal textarea sets: this
+     one holds one sentence about who recommended the place, and at 200px it
+     pushed Add below the fold on a 390px phone. */
+  .modal textarea.note-field{width:100%; font:inherit; font-size:.9rem; padding:8px 10px;
+    min-height:0; height:70px;
+    border:1px solid var(--border-light); border-radius:8px; background:#fff; color:var(--text);}
+  .field-hint{font-size:.75rem; color:var(--text-3); margin-top:4px;}
 
   /* A day move relocates the card under a different day heading, often far
      off screen. The engine scrolls it back into view and adds this class for
@@ -284,6 +344,8 @@
     header h1{font-size:1.35rem;}
     .facts{gap:6px; margin-top:10px;}
     .chip{padding:4px 9px; font-size:.75rem;}
+    .hl{gap:5px; margin-top:10px;}
+    .hl-chip{padding:4px 9px; font-size:.74rem;}
     .card{padding:8px 10px; margin-bottom:6px; border-radius:12px;}
     .daycard{border-radius:12px;}
     .daycard .hd{padding:8px 12px;}
@@ -304,6 +366,11 @@
   }
   @media print{
     .toolbar, .ctl-row, .plangrip, #notice, #secnav, #tabbar{display:none !important;}
+    /* The pin chips are shortcuts to cards the printed page already carries
+       in full, so they print as noise; the sunset is a fact nothing else on
+       the page states, so it stays. Same reasoning for the section + and the
+       Info tab's floating pin: controls do not belong on paper. */
+    .hl-pin, .sec-add, .info-card .info-item > .pin-btn{display:none !important;}
     body{background:#fff;}
     .daycard, .card{box-shadow:none; break-inside:avoid;}
     header{background:var(--accent-hover) !important; -webkit-print-color-adjust:exact;}
@@ -484,6 +551,12 @@
   @media (pointer: coarse){
     .ctl, .ctl-link{min-height:36px;}
     .ctl{display:inline-flex; align-items:center; justify-content:center;}
+    /* The two controls that stand ALONE rather than in a row of siblings get
+       the full 44px thumb target: there is no neighbouring pill to line up
+       with, and a mistap on either has a visible consequence. */
+    .sec-add{width:44px; height:44px;}
+    .info-card .info-item > .pin-btn{min-width:44px; min-height:44px;}
+    .hl-chip{min-height:36px;}
   }
 
 </style>
@@ -1995,6 +2068,84 @@ var CityOps = (function () {
     return { data: out, summary: summary, errors: [] };
   }
 
+  // ---- Add one place by hand ----
+  // Owner scenario, Aug 2026: "i was at dinner my first night, met a couple,
+  // they highly recommended a restaurant, and i'd like to run it into the
+  // system for consideration and comparison to our other options."
+  //
+  // Deliberately NOT a second way to write an item. This builds a one-item
+  // DELTA in exactly the shape an AI pass returns, and the caller hands it to
+  // mergeDelta like any other. So a hand-typed place goes through the same
+  // validateItem, the same duplicate-id rule, the same prototype-safe merge
+  // and the same plan/backup-only status restriction as everything else, and
+  // there is still exactly one function in this file that adds an item to a
+  // guide.
+  //
+  // The id is slugged from the name and suffixed until it is free, because a
+  // human typing "Oda" twice means two restaurants far more often than it
+  // means a mistake, and mergeDelta would silently SKIP the second one as an
+  // existing id. A name that slugs to nothing at all (an all-Cyrillic or
+  // all-Greek name, which this route through the Balkans will produce) falls
+  // back to "place", which is ugly and unique, and the traveler never sees an
+  // id anyway.
+  var PLACE_ID_FALLBACK = 'place';
+
+  function freePlaceId(cityData, name) {
+    var taken = Object.create(null);
+    (cityData && Array.isArray(cityData.items) ? cityData.items : []).forEach(function (it) {
+      if (it && it.id) taken[it.id] = 1;
+    });
+    var base = slug(name) || PLACE_ID_FALLBACK;
+    if (!Object.prototype.hasOwnProperty.call(taken, base)) return base;
+    for (var n = 2; n < 500; n++) {
+      var cand = base + '-' + n;
+      if (!Object.prototype.hasOwnProperty.call(taken, cand)) return cand;
+    }
+    return base + '-' + Date.now();
+  }
+
+  // Returns {delta, id, errors}. errors is the caller-facing list for the
+  // things a FORM can get wrong (no name, no section, a section this city
+  // does not have); everything else is left to mergeDelta, which is the one
+  // that actually decides. delta is null whenever errors is non-empty.
+  //
+  // `note` is where the recommendation itself lands ("recommended by a couple
+  // at dinner"), and it is also what the single-place research pass quotes
+  // back to the AI, which is why it is plain free text and not a tag.
+  function newPlaceDelta(cityData, fields) {
+    var f = fields || {};
+    var errors = [];
+    var name = trimStr(f.name);
+    var section = trimStr(f.section);
+    var status = trimStr(f.status) || 'plan';
+    var note = trimStr(f.note);
+    var day = trimStr(f.day);
+    if (!name) errors.push('A name is required.');
+    var secIds = Object.create(null);
+    (cityData && Array.isArray(cityData.sections) ? cityData.sections : []).forEach(function (s) {
+      if (s && s.id) secIds[s.id] = 1;
+    });
+    if (!section) errors.push('Pick a section.');
+    else if (!Object.prototype.hasOwnProperty.call(secIds, section)) {
+      errors.push('This city has no section "' + section + '".');
+    }
+    if (DELTA_STATUSES.indexOf(status) === -1) {
+      errors.push('A new place starts as plan or backup.');
+    }
+    if (day && !isIso(day)) errors.push('The day must be YYYY-MM-DD.');
+    if (errors.length) return { delta: null, id: null, errors: errors };
+    var id = freePlaceId(cityData, name);
+    var item = { id: id, section: section, status: status, name: name, links: [] };
+    if (note) item.note = note;
+    if (day) item.day = day;
+    // Stamped so the card, the More sheet and the research prompt can all
+    // tell a hand-typed place from a researched one without keeping a second
+    // list somewhere. It is also the honest reason its card carries no rating
+    // badge: nobody has looked it up yet.
+    item.added_by = 'traveler';
+    return { delta: { schema: 1, delta: true, items: [item] }, id: id, errors: [] };
+  }
+
   // Icon-only controls (Phase 3, feature 5): `aria` is the accessible name and
   // title tooltip on every button; `label` is set ONLY on the destructive
   // Archive transition, where a visible text label stays alongside the icon
@@ -2023,6 +2174,7 @@ var CityOps = (function () {
     return { itemStatus: {}, itemDay: {}, itemTitle: {}, dayOrder: {}, dayItemOrder: {},
       sectionItemOrder: {},
       collapsedSections: {}, collapsedPlanDays: {}, viewMode: null, tab: null,
+      pinned: [],
       dataOverride: null, stayOverride: null, updated: null };
   }
 
@@ -2049,6 +2201,14 @@ var CityOps = (function () {
     // Plan groups by DATE across every section, not by section id.
     st.collapsedPlanDays = st.collapsedPlanDays || {};
     st.itemTitle = st.itemTitle || {};
+    // The header highlights row's pinned item ids, in pin order (see the
+    // PIN_CAP block). An ARRAY, so anything that is not one (absent in every
+    // state written before this feature shipped, or garbage from a hand-edited
+    // payload) resets to empty rather than being coerced: a half-understood
+    // pin list is worth less than no pins at all, and re-pinning is one tap.
+    // Deduped and capped here too, so a state that arrives over sync from a
+    // build with a different cap can never render a five-chip row.
+    st.pinned = pinnedIds(st);
     // null always means "unset" and is left alone (see VIEW_MODES comment
     // above). A value that is present but neither null nor one of the three
     // named modes (a stray "bogus" string, or garbage from an old build) is
@@ -2182,6 +2342,146 @@ var CityOps = (function () {
     d.setDate(d.getDate() + n);
     var m = d.getMonth() + 1, day = d.getDate();
     return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
+  }
+
+  // ---- Sunset (pure, no network, no timezone database) ----
+  // The header's one automatic highlight. Owner ask, Aug 2026: "add a few
+  // highlights to the header ... example: sunset time". A traveler on the
+  // ground plans the evening around it, and a guide that already knows where
+  // the city is should not need a network round trip to answer it.
+  //
+  // NOAA's solar position algorithm, the same one the NOAA Solar Calculator
+  // publishes, at the standard sunset zenith of 90.833 degrees (0.833 being
+  // atmospheric refraction plus the sun's own apparent radius, which is why
+  // sunset is the moment the sun's UPPER limb touches the horizon, not its
+  // centre). Two passes: the first locates sunset roughly so the second can
+  // evaluate the sun's declination and the equation of time AT sunset rather
+  // than at midnight, which is worth about a minute in late summer.
+  //
+  // Verified against api.met.no (the Norwegian Meteorological Institute's
+  // sunrise API) for all four of this repo's cities plus an equinox, a
+  // solstice, a southern-hemisphere case and a polar case: agreement is
+  // within one minute everywhere, which is NOAA's own stated accuracy below
+  // 72 degrees of latitude. See tests/run.js for the table.
+  var SUNSET_ZENITH = 90.833;
+  function degToRad(d) { return d * Math.PI / 180; }
+  function radToDeg(r) { return r * 180 / Math.PI; }
+
+  // Julian Day at 00:00 UTC of a YYYY-MM-DD, by the standard Gregorian
+  // formula. Deliberately arithmetic rather than Date-based: a Date would
+  // drag the device's timezone into a calculation that has no business
+  // knowing it, and this same function has to give the same answer on a
+  // phone in Tirana and a laptop in Denver.
+  function julianDayUtc(iso) {
+    var y = +iso.slice(0, 4), m = +iso.slice(5, 7), d = +iso.slice(8, 10);
+    if (m <= 2) { y -= 1; m += 12; }
+    var a = Math.floor(y / 100);
+    var b = 2 - a + Math.floor(a / 4);
+    return Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + d + b - 1524.5;
+  }
+  function julianCentury(jd) { return (jd - 2451545) / 36525; }
+
+  // Obliquity of the ecliptic, corrected for nutation. Shared by the
+  // declination and the equation of time, which is why it is its own step.
+  function obliquityCorrected(t) {
+    var e0 = 23 + (26 + ((21.448 - t * (46.815 + t * (0.00059 - t * 0.001813)))) / 60) / 60;
+    return e0 + 0.00256 * Math.cos(degToRad(125.04 - 1934.136 * t));
+  }
+  function geomMeanLongSun(t) {
+    var l = (280.46646 + t * (36000.76983 + t * 0.0003032)) % 360;
+    return l < 0 ? l + 360 : l;
+  }
+  function geomMeanAnomalySun(t) { return 357.52911 + t * (35999.05029 - 0.0001537 * t); }
+  function earthOrbitEccentricity(t) { return 0.016708634 - t * (0.000042037 + 0.0000001267 * t); }
+
+  // Minutes by which apparent solar time runs ahead of mean solar time.
+  // Around 4 minutes fast in late August, which is exactly the size of error
+  // a naive "noon plus half the day length" sunset would carry.
+  function equationOfTime(t) {
+    var y = Math.tan(degToRad(obliquityCorrected(t)) / 2);
+    y = y * y;
+    var l0 = degToRad(geomMeanLongSun(t));
+    var m = degToRad(geomMeanAnomalySun(t));
+    var e = earthOrbitEccentricity(t);
+    var v = y * Math.sin(2 * l0) - 2 * e * Math.sin(m) + 4 * e * y * Math.sin(m) * Math.cos(2 * l0) -
+      0.5 * y * y * Math.sin(4 * l0) - 1.25 * e * e * Math.sin(2 * m);
+    return radToDeg(v) * 4;
+  }
+
+  function sunDeclination(t) {
+    var m = geomMeanAnomalySun(t);
+    var c = Math.sin(degToRad(m)) * (1.914602 - t * (0.004817 + 0.000014 * t)) +
+      Math.sin(degToRad(2 * m)) * (0.019993 - 0.000101 * t) +
+      Math.sin(degToRad(3 * m)) * 0.000289;
+    var apparent = geomMeanLongSun(t) + c - 0.00569 -
+      0.00478 * Math.sin(degToRad(125.04 - 1934.136 * t));
+    return radToDeg(Math.asin(Math.sin(degToRad(obliquityCorrected(t))) *
+      Math.sin(degToRad(apparent))));
+  }
+
+  // Half the sun's arc above the sunset altitude, in degrees. null when the
+  // sun never reaches that altitude in either direction: midnight sun and
+  // polar night both land here, and both mean "this city has no sunset today",
+  // which is a real answer rather than an error.
+  function sunsetHourAngle(lat, decl) {
+    var x = Math.cos(degToRad(SUNSET_ZENITH)) /
+      (Math.cos(degToRad(lat)) * Math.cos(degToRad(decl))) -
+      Math.tan(degToRad(lat)) * Math.tan(degToRad(decl));
+    if (!(x >= -1 && x <= 1)) return null;
+    return radToDeg(Math.acos(x));
+  }
+
+  // Sunset as MINUTES AFTER 00:00 UTC on the given date, or null where there
+  // is no sunset. Can legitimately fall outside 0..1440 (a far-eastern city's
+  // sunset belongs to the previous UTC day, a far-western one to the next);
+  // callers add it to a UTC midnight Date and let that normalize.
+  //
+  // Longitude is EAST-positive here, the sign convention every one of this
+  // repo's city files uses. NOAA's own published JavaScript is west-positive,
+  // so the two differ by a sign on lng and this is the one place worth saying
+  // so out loud.
+  function sunsetUtcMinutes(iso, lat, lng) {
+    if (!isIso(iso)) return null;
+    if (typeof lat !== 'number' || !isFinite(lat) || lat < -90 || lat > 90) return null;
+    if (typeof lng !== 'number' || !isFinite(lng) || lng < -180 || lng > 180) return null;
+    var jd = julianDayUtc(iso);
+    var t = julianCentury(jd);
+    var ha = sunsetHourAngle(lat, sunDeclination(t));
+    if (ha === null) return null;
+    var mins = 720 - 4 * lng - equationOfTime(t) + 4 * ha;
+    // Second pass at the sunset instant itself, not at UTC midnight.
+    var t2 = julianCentury(jd + mins / 1440);
+    ha = sunsetHourAngle(lat, sunDeclination(t2));
+    if (ha === null) return null;
+    return 720 - 4 * lng - equationOfTime(t2) + 4 * ha;
+  }
+
+  // Where the city IS, for sunset purposes only, at city scale: two venues on
+  // opposite sides of Tirana differ by under two seconds of sunset, so any
+  // point inside the city is as good as any other. Two sources, in order:
+  //
+  //   1. city.accommodation.lat/lng, which Batumi, Yerevan and Ksamil carry.
+  //   2. the first item holding meta.coords, which is how Tirana's real guide
+  //      carries the same fact (its apartment item does, its city block does
+  //      not). Without this fallback the one city the owner is standing in
+  //      would be the one city with no sunset chip.
+  //
+  // null when neither exists, and the caller then omits the chip rather than
+  // guessing a location from the country name.
+  function cityLatLng(data) {
+    function ok(lat, lng) {
+      return typeof lat === 'number' && isFinite(lat) && lat >= -90 && lat <= 90 &&
+        typeof lng === 'number' && isFinite(lng) && lng >= -180 && lng <= 180;
+    }
+    var c = (data && data.city) ? data.city : null;
+    var acc = c && c.accommodation;
+    if (acc && ok(acc.lat, acc.lng)) return { lat: acc.lat, lng: acc.lng };
+    var items = (data && Array.isArray(data.items)) ? data.items : [];
+    for (var i = 0; i < items.length; i++) {
+      var co = items[i] && items[i].meta && items[i].meta.coords;
+      if (co && ok(co.lat, co.lng)) return { lat: co.lat, lng: co.lng };
+    }
+    return null;
   }
 
   // Pure decision for which of the three views to show when the traveler has
@@ -2690,6 +2990,120 @@ var CityOps = (function () {
     if (next === defaultSectionCollapsed(secId, totalItems)) delete state.collapsedSections[secId];
     else state.collapsedSections[secId] = next;
     return state;
+  }
+
+  // ---- Pinned highlights (state.pinned) ----
+  // Owner ask, Aug 2026: "add the ability to bump up specific info for
+  // example, from the info tab, summarized for brevity". A pin promotes one
+  // item into the header's highlights row as a short chip; tapping the chip
+  // goes back to the full card.
+  //
+  // An ARRAY, not a map, and that is the whole design: the order the traveler
+  // pinned things in is the order the row reads in, and a map would throw it
+  // away. It rides the sync payload for free, like every other key on the
+  // state object, and normalizeState fills it in for a state written before
+  // this shipped (absent simply reads as "nothing pinned yet"), the same
+  // upgrade path collapsedSections and dayItemOrder already use.
+  //
+  // The cap is four. One row that never wraps is the whole point of the
+  // feature, a 390px phone fits about four chips of this size before the row
+  // has to scroll sideways, and a highlights row you have to scroll to read
+  // has stopped highlighting anything. At the cap the pin control on OTHER
+  // cards is disabled and says why, rather than silently failing or silently
+  // evicting the oldest pin.
+  var PIN_CAP = 4;
+
+  function pinnedIds(state) {
+    var list = (state && Array.isArray(state.pinned)) ? state.pinned : [];
+    var out = [];
+    var seen = Object.create(null);
+    list.forEach(function (id) {
+      if (typeof id !== 'string' || !id) return;
+      if (Object.prototype.hasOwnProperty.call(seen, id)) return;
+      seen[id] = 1;
+      out.push(id);
+    });
+    return out.slice(0, PIN_CAP);
+  }
+
+  function isPinned(state, id) { return pinnedIds(state).indexOf(id) !== -1; }
+
+  // True when tapping the pin on this item would actually do something: an
+  // already-pinned item can always be UNpinned, and an unpinned one only
+  // while there is room. The UI reads this to disable and explain, never to
+  // let a tap fail.
+  function canTogglePin(state, id) {
+    if (isPinned(state, id)) return true;
+    return pinnedIds(state).length < PIN_CAP;
+  }
+
+  function togglePin(state, id) {
+    var list = pinnedIds(state);
+    var at = list.indexOf(id);
+    if (at !== -1) list.splice(at, 1);
+    else if (list.length < PIN_CAP) list.push(id);
+    state.pinned = list;
+    return state;
+  }
+
+  // The pinned items, in pin order, as they exist in the CURRENT data. An id
+  // the guide no longer has is dropped rather than rendered as an empty chip
+  // or treated as an error: a data update or an Enrich re-run can retire an
+  // item under a pin, and the same forgiving rule mergeDelta uses for an
+  // unknown intel id applies here.
+  function pinnedItems(data, state) {
+    var byId = Object.create(null);
+    (data && Array.isArray(data.items) ? data.items : []).forEach(function (it) {
+      if (it && it.id) byId[it.id] = it;
+    });
+    var out = [];
+    pinnedIds(state).forEach(function (id) {
+      if (Object.prototype.hasOwnProperty.call(byId, id)) out.push(byId[id]);
+    });
+    return out;
+  }
+
+  // The chip's whole visible text, from a name and a note. The Info tab's
+  // real data decided the rules: its names are already short and punchy
+  // ("Tap water", "Fares", "Pay in lek") and the substance lives in the note,
+  // so a chip showing the name alone highlights nothing.
+  //
+  //   - the note is cut at its first sentence or ` · ` clause, because that
+  //     is where these notes put the headline fact;
+  //   - when that fragment already starts with the name (Tirana's "Fares" /
+  //     "Fares rise ~5% after 22:00"), the name is dropped rather than
+  //     stuttered back;
+  //   - the result is capped at PIN_CHIP_MAX characters with a single-glyph
+  //     ellipsis, and a name that alone fills most of the budget simply gets
+  //     no note appended: below PIN_CHIP_MIN_CLAUSE characters of room the
+  //     note contributes half a word and an ellipsis, which is noise wearing
+  //     a separator.
+  var PIN_CHIP_MAX = 44;
+  var PIN_CHIP_MIN_CLAUSE = 12;
+
+  function firstNoteClause(note) {
+    var s = trimStr(note).replace(/\s+/g, ' ');
+    if (!s) return '';
+    var cut = s.length;
+    var dot = s.search(/[.!?](\s|$)/);
+    if (dot !== -1) cut = Math.min(cut, dot + 1);
+    var mid = s.indexOf(' · ');
+    if (mid !== -1) cut = Math.min(cut, mid);
+    return s.slice(0, cut).replace(/[.\s]+$/, '');
+  }
+
+  function pinChipText(name, note) {
+    var n = trimStr(name).replace(/\s+/g, ' ');
+    var clause = firstNoteClause(note);
+    var text = n;
+    if (clause) {
+      if (n && clause.toLowerCase().indexOf(n.toLowerCase()) === 0) text = clause;
+      else if (!n) text = clause;
+      else if (n.length + 3 + PIN_CHIP_MIN_CLAUSE <= PIN_CHIP_MAX) text = n + ' · ' + clause;
+    }
+    if (!text) return '';
+    if (text.length <= PIN_CHIP_MAX) return text;
+    return text.slice(0, PIN_CHIP_MAX - 1).replace(/[\s·]+$/, '') + '…';
   }
 
   function setStayDates(state, from, to) {
@@ -3359,6 +3773,92 @@ var CityOps = (function () {
     return out.join('\n');
   }
 
+  // One roster line per rival: id, name, and whatever is known about how good
+  // it is. This is the half of the single-place prompt that makes the answer
+  // a COMPARISON rather than a review. An item with neither a rating nor
+  // intel is still listed, marked "not researched yet", because the AI has to
+  // be able to say "your list is only half checked" instead of ranking
+  // against a silence it mistook for a bad score.
+  function rosterLines(items, state) {
+    var b = [];
+    (Array.isArray(items) ? items : []).forEach(function (it) {
+      if (!it || !it.id) return;
+      var bits = [];
+      var r = it.rating;
+      if (r && typeof r.stars === 'number') {
+        bits.push(r.stars + '★' + (typeof r.count === 'number' ? ' (' + r.count + ')' : ''));
+      }
+      var st = state ? effectiveStatus(it, state) : it.status;
+      if (st) bits.push(st);
+      b.push('- ' + it.id + ' | ' + trimStr(state ? effectiveName(it, state) : it.name) +
+        (bits.length ? ' | ' + bits.join(' | ') : ''));
+      var intel = it.intel;
+      var said = false;
+      if (intel && typeof intel === 'object') {
+        (intel.verdicts || []).forEach(function (v) {
+          if (v && v.text) { said = true; b.push('    verdict (' + trimStr(v.tier) + '): ' + trimStr(v.text)); }
+        });
+        (intel.tips || []).forEach(function (t) {
+          if (t) { said = true; b.push('    tip: ' + trimStr(t)); }
+        });
+      }
+      if (!said && !(r && typeof r.stars === 'number')) b.push('    not researched yet');
+    });
+    return b;
+  }
+
+  // Assembly order, top to bottom:
+  //   1. one header line saying what this run is
+  //   2. the city block
+  //   3. THE PLACE: the one item this whole prompt is about, with the
+  //      traveler's own note about it (who recommended it, and what they said)
+  //   4. the RERUN:PLACE instructions, verbatim from PROMPT.md
+  //   5. the rest of that item's SECTION, with ratings and intel, which is
+  //      the list the verdict has to rank against
+  //
+  // Scoped to the item's own section on purpose. The owner's question is "is
+  // this better than my other dinner options", not "is this better than the
+  // laundry", and a roster of all 107 Tirana items would bury the seven that
+  // matter. Done and archived rivals stay in the list, unlike the ratings
+  // pass: a place already eaten at is exactly the yardstick worth ranking a
+  // new recommendation against.
+  function buildPlacePassPrompt(templateText, cityData, item, state) {
+    var rerun = sliceLandmark(templateText, 'RERUN:PLACE');
+    if (!item || !item.id) throw new Error('No place to research.');
+    var secId = item.section;
+    var sec = null;
+    (cityData && Array.isArray(cityData.sections) ? cityData.sections : []).forEach(function (s) {
+      if (s && s.id === secId) sec = s;
+    });
+    var others = (cityData && Array.isArray(cityData.items) ? cityData.items : [])
+      .filter(function (it) { return it && it.id && it.id !== item.id && it.section === secId; });
+    var name = trimStr(state ? effectiveName(item, state) : item.name);
+    var out = ['You are checking one place a traveler added by hand to an existing CityOps city guide.', ''];
+    out = out.concat(cityHeaderLines(cityData));
+    out.push('## The place', '');
+    out.push('- **Item id:** ' + item.id);
+    out.push('- **Name as the traveler typed it:** ' + name);
+    out.push('- **Section:** ' + (sec ? trimStr(sec.label) + ' (' + secId + ')' : trimStr(secId)));
+    if (trimStr(item.note)) out.push('- **The traveler\'s note:** ' + trimStr(item.note).replace(/\s+/g, ' '));
+    if (trimStr(item.day)) out.push('- **Pencilled in for:** ' + trimStr(item.day));
+    out.push('');
+    out.push('## What I need', '', rerun, '');
+    out.push('## Others already in this section', '');
+    if (others.length) {
+      out = out.concat(rosterLines(others, state));
+      out.push('');
+      out.push('Each `- ` line above is `id | name | rating | status`, with any intel ' +
+        'this guide already holds indented under it. There are ' + others.length +
+        ' of them. Rank the new place against exactly this list and nothing else, ' +
+        'and return your answer keyed by the item id given under "The place".', '');
+    } else {
+      out.push('There are none: this is the first place in this section, so there is ' +
+        'nothing to rank it against. Say so in `tips` and give the rating and ' +
+        'verdict on their own.', '');
+    }
+    return out.join('\n');
+  }
+
   // ---- AI response parsing (pure) ----
   // Ported from tools/city-input.js so the CLI's .md-ingest path and the
   // in-app "generate with Claude" path (Phase 2) share one rule for finding
@@ -3936,6 +4436,12 @@ var CityOps = (function () {
   // happened" or, worse, "I just deleted that". This is what makes the
   // result of the tap visible.
   var justMoved = null;
+  // Set only by revealItem (a highlight chip's jump), and only so the jump
+  // can NEVER be a silent no-op. A handful of items render on no tab at all
+  // today (an undated, non-task item in a section that maps to Plan, which
+  // groups by date), and for those the scroll finds nothing. Rather than let
+  // the tap do nothing, the next render says in words where the card lives.
+  var revealMiss = null;
   // Item id whose drag grip should hold focus after the next render. A
   // keyboard reorder rebuilds every node, so without this the second arrow
   // press would land on the page instead of on the item being moved.
@@ -3973,9 +4479,11 @@ var CityOps = (function () {
   // id: item ids come from guide data, and a quote or a bracket in one would
   // turn a selector into a thrown exception mid-render.
   function revealJustMoved() {
-    if (!justMoved) return;
+    if (!justMoved) { revealMiss = null; return; }
     var id = justMoved;
+    var miss = revealMiss;
     justMoved = null;
+    revealMiss = null;
     var main = document.getElementById('main');
     if (!main) return;
     var cards = main.querySelectorAll('[data-item-id]');
@@ -3983,7 +4491,31 @@ var CityOps = (function () {
     for (var i = 0; i < cards.length; i++) {
       if (cards[i].getAttribute('data-item-id') === id) { card = cards[i]; break; }
     }
-    if (!card) return;
+    if (!card) {
+      // Only revealItem sets `miss`; a day move always lands on a rendered
+      // card, so this stays silent for every other caller.
+      if (miss) {
+        var n = document.getElementById('notice');
+        if (n) {
+          n.textContent = miss.name + ' has no card on this tab. It sits in ' +
+            (miss.section ? miss.section.label : miss.tab) + ', which the ' +
+            (TABS.filter(function (t) { return t.id === miss.tab; })[0] || { label: miss.tab }).label +
+            ' tab only shows once it has a day.';
+        }
+      }
+      return;
+    }
+    if (miss && miss.okText) {
+      var okn = document.getElementById('notice');
+      if (okn) okn.textContent = miss.okText;
+    }
+    // An archived card lives inside a closed <details>, and scrolling to a
+    // node in a closed subtree lands on the summary with nothing under it.
+    var p = card.parentNode;
+    while (p && p !== main) {
+      if (p.tagName === 'DETAILS') p.open = true;
+      p = p.parentNode;
+    }
     // Deliberately an instant scroll, not a smooth one. A move commonly spans
     // thousands of pixels, and animating that on a phone is a long ride that
     // ends somewhere the traveler did not ask to be. The jump plus the ring
@@ -4201,6 +4733,100 @@ var CityOps = (function () {
   // Archive's text label, which stays, is most of the width. display:none
   // also takes them out of the tab order on a collapsed card, the same rule
   // the collapsed detail panel has always followed.
+  // The pin control, and the ONLY door to pinning or unpinning: the highlight
+  // chip itself just navigates. Wordless icon with a tooltip, like every
+  // other non-destructive control here.
+  //
+  // At the cap the control on an UNpinned card is disabled and its tooltip
+  // says why and what to do about it, rather than being hidden (a control
+  // that vanishes teaches nothing) or left live to fail on tap.
+  function pinBtn(it) {
+    var st = curState || (ctx && ctx.store ? ctx.store.load() : emptyState());
+    var on = isPinned(st, it.id);
+    var can = canTogglePin(st, it.id);
+    // 📌 in BOTH states, filled accent when on (see .pin-btn.pinned) plus
+    // aria-pressed, the same toggle idiom the rest of the app uses. NOT 📍 for
+    // the off state, however tempting the contrast: 📍 is already the map
+    // link's icon and sits in this very row, so the two would read as two
+    // map buttons at 390px (caught in browser QA, not in a test).
+    var b = el('button', 'ctl icon-btn pin-btn' + (on ? ' pinned' : ''), '📌');
+    b.type = 'button';
+    var aria = on ? 'Unpin from highlights'
+      : (can ? 'Pin to highlights' : 'Highlights are full (' + PIN_CAP + ')');
+    b.setAttribute('aria-label', aria);
+    b.setAttribute('aria-pressed', String(on));
+    b.title = can ? aria
+      : 'Highlights hold ' + PIN_CAP + ' items. Unpin one from its own card to make room.';
+    if (!can) {
+      b.disabled = true;
+    } else {
+      b.onclick = function (e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        var s = ctx.store.load();
+        togglePin(s, it.id);
+        ctx.store.save(s);
+        rerender();
+      };
+    }
+    return b;
+  }
+
+  // "Ask Claude about this one place." Offered only where it can actually
+  // succeed, which is two conditions at once:
+  //   - the app shell is present and exposes askPlace. A standalone exported
+  //     guide carries no copy of PROMPT.md and no key, so there is nothing
+  //     behind the button there and it is simply not drawn.
+  //   - the item has neither a rating nor any intel, i.e. nobody has looked
+  //     it up yet. Every hand-added place qualifies by construction, and so
+  //     does anything the generation pass could not verify; a card that
+  //     already carries a verdict and a star count does not need a button
+  //     offering to go and find one.
+  //   - and the item is a PLACE. This one was caught in browser QA on the
+  //     real Tirana guide: without it the button lands on "Fares", "Arrival"
+  //     and "Walking distances", where "look up its Google rating and rank it
+  //     against the section" is not a question with an answer. A section that
+  //     maps to the Info tab is reference material, and a task section is a
+  //     to-do list. Anything the traveler added by hand is exempt: they chose
+  //     to put it there, and they are the ones who would ask.
+  function placeNeedsResearch(it, sec) {
+    if (!it) return false;
+    var rated = it.rating && typeof it.rating.stars === 'number';
+    var intel = it.intel && ((it.intel.verdicts || []).length || (it.intel.tips || []).length);
+    if (rated || intel) return false;
+    if (it.added_by === 'traveler') return true;
+    var tab = tabForSection(sec);
+    return tab === 'eat' || tab === 'do' || tab === 'services';
+  }
+
+  function askPlaceHook() {
+    if (typeof window === 'undefined' || !window) return null;
+    return (window.CityOpsApp && window.CityOpsApp.askPlace) ? window.CityOpsApp.askPlace : null;
+  }
+
+  // Section lookup for a card that only knows its section ID. Rebuilt once per
+  // render (see rerender) rather than scanned per card.
+  var secById = null;
+  function sectionFor(secId) {
+    if (!secById) {
+      secById = Object.create(null);
+      var st = curState || (ctx && ctx.store ? ctx.store.load() : emptyState());
+      var data = ctx ? effectiveData(ctx.base, st) : null;
+      ((data && data.sections) || []).forEach(function (s) { if (s && s.id) secById[s.id] = s; });
+    }
+    return Object.prototype.hasOwnProperty.call(secById, secId) ? secById[secId] : null;
+  }
+
+  function askBtn(it) {
+    var hook = askPlaceHook();
+    if (!hook || !placeNeedsResearch(it, sectionFor(it.section))) return null;
+    var b = el('button', 'ctl icon-btn ask-btn', '✨');
+    b.type = 'button';
+    b.setAttribute('aria-label', 'Ask Claude about this place');
+    b.title = 'Ask Claude to check this place and rank it against the rest of this section';
+    b.onclick = function () { hook(it.id); };
+    return b;
+  }
+
   function itemControlRow(it, status, withDayPicker) {
     var ctl = el('div', 'ctl-row');
     (it.links || []).forEach(function (l) { ctl.appendChild(linkCtl(l)); });
@@ -4250,6 +4876,9 @@ var CityOps = (function () {
       ctl.appendChild(mv);
     }
     if (status !== 'archived') {
+      var ask = askBtn(it);
+      if (ask) ctl.appendChild(ask);
+      ctl.appendChild(pinBtn(it));
       var ed = el('button', 'ctl icon-btn ctl-more', '✎');
       ed.type = 'button';
       ed.setAttribute('aria-label', 'Rename');
@@ -4330,6 +4959,124 @@ var CityOps = (function () {
     return card;
   }
 
+  // ---- The header highlights row ----
+  // Owner ask, Aug 2026: "in addition to our pills/filters, add a few
+  // highlights to the header (not more than one single row). example: sunset
+  // time, or items of interest from my profile build".
+  //
+  // ONE row, hard capped, scrolling sideways if it overflows and never
+  // wrapping to a second line, because a two-line highlights block is just
+  // the .facts chip row again with a different name. Two kinds of chip go in
+  // it, in this order:
+  //   - the sunset, computed locally from the city's coordinates (see
+  //     sunsetUtcMinutes). Automatic, never pinned, and simply absent when
+  //     the city carries no coordinates at all.
+  //   - up to PIN_CAP pinned items, in pin order, each a button that jumps
+  //     to the full card.
+  //
+  // Rendered by the ENGINE, so a standalone exported guide gets the identical
+  // row: the sunset needs only the data the guide already carries, and pins
+  // live in the same per-device state a standalone guide already keeps.
+  //
+  // What is NOT here: a profile-interests chip. The honest signal for one
+  // would be item tags intersecting the traveler's stated interests, and the
+  // real guides in this repo carry tags like "Book ahead" and "Cash only" --
+  // operational notes, not interest categories -- so that intersection is
+  // empty on every city we have. Shipping it would mean inventing a mapping
+  // and calling the output a highlight. Deferred until interest tagging is a
+  // thing the generation pass actually does.
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+  // Sunset for the header, as {text, iso, isToday} or null. The date is
+  // today when today falls inside the stay, and the arrival day otherwise, so
+  // a guide opened three weeks early answers "what are the evenings like
+  // there" rather than showing today's sunset for a city nobody is in.
+  //
+  // The TIME is rendered on the device's own clock. There is no timezone
+  // database here and the city files carry no zone name, so the honest
+  // options were this or nothing; this one is exactly right in the case the
+  // feature exists for (a traveler standing in the city, whose phone has
+  // already picked up the local zone) and the chip's tooltip says whose
+  // clock it is, so it can never quietly mislead from a laptop back home.
+  function sunsetChip(data, state) {
+    var loc = cityLatLng(data);
+    if (!loc) return null;
+    var range = effectiveDates(data, state);
+    var today = todayIso();
+    var iso = (today >= range.from && today <= range.to) ? today : range.from;
+    if (!isIso(iso)) return null;
+    var mins = sunsetUtcMinutes(iso, loc.lat, loc.lng);
+    if (mins === null) return null;
+    var base = Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10), 0, 0, 0);
+    var d = new Date(base + Math.round(mins * 60000));
+    return { text: pad2(d.getHours()) + ':' + pad2(d.getMinutes()), iso: iso, isToday: iso === today };
+  }
+
+  function renderHighlights(data, state) {
+    var row = el('div', 'hl');
+    row.setAttribute('aria-label', 'Highlights');
+    var sun = sunsetChip(data, state);
+    if (sun) {
+      var s = el('span', 'hl-chip hl-auto');
+      s.appendChild(el('span', 'hl-ic', '🌇'));
+      s.appendChild(document.createTextNode(sun.text));
+      s.title = 'Sunset ' + sun.text + (sun.isToday ? ' today' : ' on ' + dayLabel(sun.iso)) +
+        ', on this device\'s clock';
+      row.appendChild(s);
+    }
+    // Share view is a clean read-only page for sending or printing, and a pin
+    // chip is a navigation control for the person who made the pins. The
+    // sunset stays: it is a fact about the city, not a control.
+    (shareOn ? [] : pinnedItems(data, state)).forEach(function (it) {
+      var text = pinChipText(effectiveName(it, state), it.note);
+      if (!text) return;
+      var b = el('button', 'hl-chip hl-pin');
+      b.type = 'button';
+      b.appendChild(el('span', 'hl-ic', '📌'));
+      b.appendChild(document.createTextNode(text));
+      b.setAttribute('aria-label', 'Go to ' + effectiveName(it, state));
+      b.title = 'Go to ' + effectiveName(it, state) + ' (unpin from its card)';
+      b.onclick = function () { revealItem(it.id); };
+      row.appendChild(b);
+    });
+    return row.children.length ? row : null;
+  }
+
+  // Jump from a highlight chip to the item's own card: switch to the tab that
+  // renders it, open its section if the traveler had it collapsed, leave
+  // Share view if that is what is on screen, then hand off to the SAME
+  // scroll-and-ring reveal a day move uses. One door for "put this card in
+  // front of me", not two.
+  // `okText`, when given, is the #notice line to show once the card is
+  // actually on screen. It goes through revealJustMoved rather than being
+  // written here because rerender() rewrites #notice, and because a reveal
+  // that FAILED to find the card must say that instead: a confirmation
+  // sitting above a page where nothing visibly changed is the exact failure
+  // this whole scroll-and-ring mechanism exists to prevent.
+  function revealItem(id, okText) {
+    var st = ctx.store.load();
+    var data = effectiveData(ctx.base, st);
+    var it = null, sec = null;
+    (data.items || []).forEach(function (x) { if (x && x.id === id) it = x; });
+    if (!it) return;
+    (data.sections || []).forEach(function (s) { if (s && s.id === it.section) sec = s; });
+    var totalItems = Array.isArray(data.items) ? data.items.length : 0;
+    var tab = tabForSection(sec);
+    var changed = false;
+    if (effectiveTab(st) !== tab) { setTab(st, tab); changed = true; }
+    if (isSectionCollapsed(st, it.section, totalItems)) {
+      toggleSection(st, it.section, totalItems);
+      changed = true;
+    }
+    if (shareOn) { shareOn = false; document.body.classList.remove('share'); }
+    if (changed) ctx.store.save(st);
+    justMoved = id;
+    revealMiss = { id: id, name: effectiveName(it, st), tab: tab, section: sec,
+      okText: okText || null };
+    rerender();
+  }
+
   function renderHeader(data, state) {
     var c = data.city;
     var dates = effectiveDates(data, state);
@@ -4339,6 +5086,8 @@ var CityOps = (function () {
     var sub = fmtRange(dates) + (c.accommodation && c.accommodation.name ? ' · ' + c.accommodation.name : '');
     if (state.stayOverride) sub += ' · dates adjusted';
     h.appendChild(el('div', 'sub', sub));
+    var hl = renderHighlights(data, state);
+    if (hl) h.appendChild(hl);
     var facts = el('div', 'facts');
     if (c.currency && c.currency.code !== 'USD') {
       facts.appendChild(el('span', 'chip', c.currency.code + ' = $' + c.currency.usd));
@@ -4396,6 +5145,23 @@ var CityOps = (function () {
       rerender();
     };
     h2.appendChild(tbtn);
+    // The primary way in for "someone just told me about a place": it sits on
+    // the header of the section the place belongs to, so the section arrives
+    // filled in and the traveler is already looking at what it has to beat.
+    // A task section never renders a section header (tabForSection sends it
+    // to Plan), so this never offers to add a place to a to-do list.
+    if (!isTaskSection(sv.section)) {
+      var addb = el('button', 'sec-add icon-btn', '+');
+      addb.type = 'button';
+      var aria = 'Add a place to ' + sv.section.label;
+      addb.setAttribute('aria-label', aria);
+      addb.title = aria;
+      addb.onclick = function (e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        openAddPlaceModal(sv.section.id);
+      };
+      h2.appendChild(addb);
+    }
     return { h2: h2, collapsed: collapsed };
   }
 
@@ -4484,6 +5250,14 @@ var CityOps = (function () {
     card.appendChild(el('h3', null, (sv.section.icon ? sv.section.icon + ' ' : '') + sv.section.label));
     items.forEach(function (it) {
       var p = el('p', 'info-item');
+      // The Info tab is where the owner asked for this ("bump up specific
+      // info ... from the info tab"), and it is also the one tab whose items
+      // are paragraphs in a shared block rather than cards with a control
+      // row. So the pin control is appended to the paragraph itself, and the
+      // paragraph carries data-item-id so a highlight chip's jump can find
+      // it exactly like it finds a card.
+      p.setAttribute('data-item-id', it.id);
+      p.appendChild(pinBtn(it));
       p.appendChild(el('strong', null, effectiveName(it, state)));
       if (it.note) {
         // No <br> here, deliberately. The headline is display:block in CSS, so
@@ -5190,6 +5964,7 @@ var CityOps = (function () {
     cancelPlanDrag();
     var state = ctx.store.load();
     curState = state;
+    secById = null;   // the data may have changed under it (see sectionFor)
     var data = effectiveData(ctx.base, state);
     var totalItems = Array.isArray(data.items) ? data.items.length : 0;
     var tab = effectiveTab(state);
@@ -5300,6 +6075,155 @@ var CityOps = (function () {
     });
     var removed = Object.keys(oldIds).length;
     return added + ' added, ' + removed + ' removed, ' + unchanged + ' unchanged';
+  }
+
+  // ---- Add a place by hand ----
+  // Owner scenario: heard about a restaurant over dinner, wants it in the
+  // system tonight, next to the options it has to beat.
+  //
+  // Two entry points, on purpose, because they answer two different moments:
+  //   - the + on a section header, which is where the traveler already IS
+  //     when the thought occurs ("we should try that instead of one of
+  //     these") and which fills the section in for free;
+  //   - a row in the More sheet's "Add and update" cluster, which works from
+  //     the Plan tab and from Share view, where no section header is on
+  //     screen at all.
+  // Both open this one modal and take the same road out of it.
+  //
+  // The road out is mergeDelta, exactly as if an AI pass had returned the
+  // item, so there is no second way into the items array (see newPlaceDelta).
+  // Where the merged guide is WRITTEN depends on what is around it:
+  //   - in the app (window.CityOpsApp.notePlaceAdded present) it goes to the
+  //     city's canonical record and syncs to the traveler's other devices,
+  //     signed in or not.
+  //   - in a standalone exported guide there is no canonical record to write,
+  //     so it goes to state.dataOverride, the same per-device override the
+  //     engine's own "Update data" has always used. The place is real, it
+  //     persists, and Export JSON bakes it in permanently.
+  function openAddPlaceModal(defaultSecId) {
+    var host = document.getElementById('modal');
+    host.innerHTML = '';
+    var st0 = ctx.store.load();
+    var data0 = effectiveData(ctx.base, st0);
+    var sections = (Array.isArray(data0.sections) ? data0.sections : []).filter(function (s) {
+      return s && s.id && !isTaskSection(s);
+    });
+    var wrap = el('div', 'modal-wrap');
+    var box = el('div', 'modal');
+    box.appendChild(el('h3', null, 'Add a place'));
+    box.appendChild(el('p', 'diff', 'Somewhere you heard about and want to weigh against ' +
+      'what is already here. It joins this city like any other item, and nothing ' +
+      'you have already planned moves.'));
+
+    function field(labelText, control, hint) {
+      var w = el('div', 'field');
+      var lab = el('label', 'field-label', labelText);
+      var id = 'ap-' + slug(labelText);
+      control.id = id;
+      lab.setAttribute('for', id);
+      w.appendChild(lab);
+      w.appendChild(control);
+      if (hint) w.appendChild(el('div', 'field-hint', hint));
+      return w;
+    }
+    function select(options, value) {
+      var s = document.createElement('select');
+      s.className = 'date-field';
+      options.forEach(function (o) {
+        var op = document.createElement('option');
+        op.value = o.value;
+        op.textContent = o.label;
+        if (o.value === value) op.selected = true;
+        s.appendChild(op);
+      });
+      return s;
+    }
+
+    var nameIn = document.createElement('input');
+    nameIn.type = 'text';
+    nameIn.className = 'date-field';
+    nameIn.placeholder = 'Name of the place';
+    box.appendChild(field('Name', nameIn));
+
+    // Opened from a section header, the section is known and prefilled.
+    // Opened from the More sheet there is no section on screen to infer one
+    // from, and defaulting to whichever section happens to be listed first
+    // (Tirana's is "Base", its apartment notes) would file a restaurant there
+    // for anyone who did not read the picker. So that case ASKS, and Add
+    // refuses until it is answered.
+    var known = defaultSecId && sections.filter(function (s) { return s.id === defaultSecId; }).length;
+    var secOpts = sections.map(function (s) {
+      return { value: s.id, label: (s.icon ? s.icon + ' ' : '') + s.label };
+    });
+    if (!known) secOpts.unshift({ value: '', label: 'Pick a section' });
+    var secSel = select(secOpts, known ? defaultSecId : '');
+    box.appendChild(field('Section', secSel));
+
+    var statusSel = select([
+      { value: 'plan', label: 'In the plan' },
+      { value: 'backup', label: 'Backup, if it earns it' }
+    ], 'plan');
+    box.appendChild(field('Status', statusSel));
+
+    var dayOpts = [{ value: '', label: 'No day yet' }];
+    stayDates(effectiveDates(data0, st0)).forEach(function (iso) {
+      dayOpts.push({ value: iso, label: dayLabel(iso) });
+    });
+    var daySel = select(dayOpts, '');
+    box.appendChild(field('Day', daySel, 'Optional. You can drop it on a day later.'));
+
+    var noteIn = document.createElement('textarea');
+    noteIn.className = 'note-field';
+    noteIn.placeholder = 'Recommended by a couple at dinner';
+    box.appendChild(field('Note', noteIn, 'Who told you, and what they said. Claude reads this when you ask it to check the place.'));
+
+    var msg = el('div', 'diff', '');
+    box.appendChild(msg);
+
+    var row = el('div', 'mrow');
+    var add = el('button', 'ctl to-done', 'Add');
+    add.type = 'button';
+    add.onclick = function () {
+      var st = ctx.store.load();
+      var data = effectiveData(ctx.base, st);
+      var built = newPlaceDelta(data, {
+        name: nameIn.value, section: secSel.value, status: statusSel.value,
+        note: noteIn.value, day: daySel.value
+      });
+      if (built.errors.length) { msg.textContent = built.errors.join(' '); return; }
+      var res = mergeDelta(data, built.delta);
+      if (!res.data) { msg.textContent = 'Not added:\n' + res.errors.join('\n'); return; }
+      var secLabel = (sections.filter(function (s) { return s.id === secSel.value; })[0] || {}).label ||
+        secSel.value;
+      var placeName = trimStr(nameIn.value);
+      wrap.remove();
+      var hook = (typeof window !== 'undefined' && window && window.CityOpsApp &&
+        window.CityOpsApp.notePlaceAdded) ? window.CityOpsApp.notePlaceAdded : null;
+      if (hook) {
+        hook(res.data, built.id);
+      } else {
+        st.dataOverride = res.data;
+        ctx.store.save(st);
+      }
+      // Not a bare rerender: the new place's section is very often COLLAPSED
+      // (a real guide's 11-item Restaurants block defaults that way), so a
+      // plain rerender would leave the traveler looking at an unchanged
+      // screen with a confirmation over it. revealItem opens the section,
+      // switches to its tab, scrolls the card into view and rings it, and
+      // says something different if it somehow could not.
+      revealItem(built.id, 'Added ' + placeName + ' to ' + secLabel +
+        (askPlaceHook() ? '. Tap ✨ on its card to have Claude check it against the rest.' : '.'));
+    };
+    var cancel = el('button', 'ctl', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = function () { wrap.remove(); };
+    row.appendChild(add);
+    row.appendChild(cancel);
+    box.appendChild(row);
+    wrap.appendChild(box);
+    wrap.onclick = function (e) { if (e.target === wrap) wrap.remove(); };
+    host.appendChild(wrap);
+    try { nameIn.focus(); } catch (e) {}
   }
 
   function openDatesModal() {
@@ -5505,6 +6429,13 @@ var CityOps = (function () {
         } },
       { label: 'Export JSON', desc: 'Your data, portable',
         icon: '💾', group: 'share', order: 30, onClick: doExportJson },
+      // The section-header + is the everyday door to this; the row exists so
+      // the Plan tab and Share view, which show no section header at all,
+      // are not dead ends for the same thought. Order 15 puts it directly
+      // under Enrich, the other "get more into this city" row.
+      { label: 'Add a place', desc: 'One you heard about, by hand',
+        icon: '➕', group: 'work', order: 15,
+        onClick: function () { openAddPlaceModal(null); } },
       { label: 'Update data', desc: 'Replace this city\'s research wholesale',
         icon: '🔄', group: 'work', order: 20, onClick: openUpdateModal },
       { label: 'Edit dates', desc: 'Move the arrival and departure days',
@@ -5703,7 +6634,10 @@ var CityOps = (function () {
       COPY_LINE: PROMPT_COPY_LINE,
       buildInterestsDeltaPrompt: buildInterestsDeltaPrompt,
       buildIntelPassPrompt: buildIntelPassPrompt,
-      buildRatingsPassPrompt: buildRatingsPassPrompt
+      buildRatingsPassPrompt: buildRatingsPassPrompt,
+      // The single-place pass: one item, plus the rest of its section as the
+      // list it has to be ranked against.
+      buildPlacePassPrompt: buildPlacePassPrompt, rosterLines: rosterLines
     },
     extractJsonBlock: extractJsonBlock, RETRY_INSTRUCTION: RETRY_INSTRUCTION,
     isJsonSyntaxError: isJsonSyntaxError, fetchTextToCity: fetchTextToCity,
@@ -5749,7 +6683,22 @@ var CityOps = (function () {
     dayMoveOptions: dayMoveOptions,
     // The More sheet's clustering, pure so the grouping and the within-group
     // order are testable without a DOM.
-    MORE_GROUPS: MORE_GROUPS, moreSheetGroups: moreSheetGroups
+    MORE_GROUPS: MORE_GROUPS, moreSheetGroups: moreSheetGroups,
+    // Add a place by hand: the delta builder only. The write itself still
+    // goes through mergeDelta, which is exported right above.
+    newPlaceDelta: newPlaceDelta,
+    // The header highlights row. sunKit is pure astronomy plus the "where is
+    // this city" resolver; pinKit is the per-city pinned-item state.
+    sunKit: {
+      ZENITH: SUNSET_ZENITH, sunsetUtcMinutes: sunsetUtcMinutes,
+      cityLatLng: cityLatLng, julianDayUtc: julianDayUtc,
+      equationOfTime: equationOfTime, sunDeclination: sunDeclination
+    },
+    pinKit: {
+      CAP: PIN_CAP, CHIP_MAX: PIN_CHIP_MAX,
+      ids: pinnedIds, isPinned: isPinned, canToggle: canTogglePin,
+      toggle: togglePin, items: pinnedItems, chipText: pinChipText
+    }
   };
 })();
 CityOps.init();

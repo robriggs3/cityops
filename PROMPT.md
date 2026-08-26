@@ -580,3 +580,93 @@ Keys of `ratings` and of `intel` are existing item ids. `intel` is optional
 and may name a different, smaller set of items than `ratings` does. Anything
 else in the payload is ignored.
 <!-- /RERUN:RATINGS -->
+
+### One place, checked and ranked
+
+The single-place pass. A traveler heard about somewhere, typed the name into
+the guide by hand, and now wants to know two things: is it any good, and does
+it beat what is already on the list for that night. It runs against ONE item
+and returns a rating plus one intel block for that item alone, where the
+intel carries the comparison verdict.
+
+<!-- RERUN:PLACE -->
+A delta is never a whole guide. Never re-list an item that already exists,
+never restate `city` or `dates`, and never emit `"status": "done"` or
+`"archived"`.
+
+Research the ONE place named above under "The place", in this city, and
+return a rating and a short verdict for it. Everything else in this prompt is
+context for that single judgement. Rules:
+
+- **Look it up. Never guess, never carry a number forward from memory.** The
+  traveler typed this name off a recommendation, possibly misspelled and
+  possibly of a place that does not exist. Finding nothing is a real answer.
+- **Match the right place.** It is a specific venue in this one city. Chains,
+  same-name places in another district, and a similarly named place in
+  another country are the three ways this goes wrong. If you cannot tell
+  which one is meant, say so in `tips` and omit `ratings` entirely rather
+  than rate the wrong venue.
+- `stars` is a number from 0 to 5 with one decimal (`4.8`). `count` is the
+  review count as a whole number with no separators (`5545`); omit `count`
+  rather than estimate one. `source` names where the number came from and
+  when, e.g. `"Google Maps, Aug 2026"`. `checked` is today's date as
+  `YYYY-MM-DD`.
+
+### The comparison, which is the point of this pass
+
+The list under "Others already in this section" is what the traveler would
+otherwise choose from, with each one's current rating and intel. Rank the new
+place against exactly that list and put the ranking in `tips`:
+
+- **Lead with the placement, in plain words.** "Ranks 2nd of your 7 dinner
+  picks" or "Below every dinner option you already have". Use the count of
+  the places actually listed, never a number you invent.
+- **Then one sentence saying what it wins or loses on**, against a named
+  competitor from the list where that helps: "better grilled fish than
+  Oda, louder room".
+- **Rank on what the list gives you.** Where an existing place has no rating
+  and no intel, you have nothing to rank it by; say the comparison is partial
+  rather than pretend the list is complete.
+- **Say when it is not worth the swap.** A traveler who added a place on a
+  recommendation is looking for permission to keep it or drop it, and "your
+  existing picks are all stronger" is the more useful of the two answers.
+- One `verdicts` entry is allowed and encouraged here, unlike the ratings
+  refresh: this pass HAS done the reading. `must` means drop something to fit
+  it in, `good` means a fair swap, `skip` means leave the list alone.
+- Keep the whole intel block short. Two tips at most, one sentence each,
+  under about 22 words. No star counts in the prose (the rating block carries
+  those), no reviewer names.
+
+If the traveler's own note about the place is shown (who recommended it, what
+they said), weigh it but do not repeat it back: they already know it. Say
+whether the reviews agree with it.
+
+Respond with only a JSON code block in this shape, no prose:
+
+```json
+{
+  "schema": 1,
+  "delta": true,
+  "ratings": {
+    "the-item-id-given-above": {
+      "stars": 4.6,
+      "count": 812,
+      "source": "Google Maps, Aug 2026",
+      "checked": "2026-08-26"
+    }
+  },
+  "intel": {
+    "the-item-id-given-above": {
+      "verdicts": [{ "tier": "good", "text": "A fair swap for one dinner night, not a must." }],
+      "tips": ["Ranks 2nd of your 7 dinner picks, behind Oda.", "Reviewers say book the terrace; the indoor room is loud."],
+      "source": "Google Maps reviews, Aug 2026"
+    }
+  }
+}
+```
+
+Both maps are keyed by the ONE item id given above and nothing else. Return
+no `items` and no `sections`: the place is already in the guide, this pass
+only judges it. `ratings` may be omitted when you could not verify the place;
+`intel` should still say so.
+<!-- /RERUN:PLACE -->

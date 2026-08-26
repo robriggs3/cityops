@@ -20,6 +20,26 @@
   .facts{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;}
   .chip{background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25);
     padding:5px 10px; border-radius:20px; font-size:.8rem;}
+
+  /* --- Header highlights row (sunset + pinned items) ---
+     ONE row, always. flex-wrap:nowrap plus overflow-x:auto is the whole
+     contract: a fifth chip would scroll sideways rather than start a second
+     line, because a highlights block that grows downward is just .facts
+     again. The scrollbar is hidden on every engine that lets us (this sits on
+     a coloured gradient where a track reads as damage) and the chips stay
+     tappable either way. */
+  .hl{display:flex; flex-wrap:nowrap; gap:6px; margin-top:12px; overflow-x:auto;
+    -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:2px;}
+  .hl::-webkit-scrollbar{display:none;}
+  .hl-chip{flex:0 0 auto; display:inline-flex; align-items:center; gap:5px;
+    background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25);
+    color:#fff; font:inherit; font-size:.78rem; font-weight:600;
+    padding:5px 11px; border-radius:20px; white-space:nowrap;}
+  .hl-ic{font-size:.85rem; line-height:1;}
+  .hl-auto{font-variant-numeric:tabular-nums;}
+  button.hl-chip{cursor:pointer; text-align:left;}
+  button.hl-chip:hover{background:rgba(255,255,255,.3); border-color:rgba(255,255,255,.6);}
+  button.hl-chip:focus-visible{outline:2px solid #fff; outline-offset:2px;}
   h2{font-size:1.15rem; margin:26px 0 12px; color:var(--text);
     display:flex; align-items:center; gap:8px;}
   h2 .ic{font-size:1.1rem}
@@ -186,6 +206,16 @@
   h2.collapsed{opacity:.85; margin-bottom:8px;}
   body.share .sec-toggle{pointer-events:none;}
   body.share .sec-toggle .chev{display:none;}
+  /* Add a place, on the header of the section it belongs to. margin-left:auto
+     parks it at the far right of the h2 flex row, away from the toggle that
+     occupies the whole left side, so a thumb reaching for collapse never
+     opens a form instead. */
+  .sec-add{margin-left:auto; flex:0 0 auto; font:inherit; font-size:1.05rem; font-weight:700;
+    line-height:1; color:var(--accent-hover); background:#fff;
+    border:1.5px solid var(--border-light); border-radius:50%;
+    width:30px; height:30px; padding:0; cursor:pointer;}
+  .sec-add:hover{border-color:var(--accent); background:var(--accent-soft);}
+  body.share .sec-add{display:none;}
   .daycard .bd + .bd{border-top:1px dashed var(--border-light);}
   .title-edit{width:100%; font:inherit; font-size:1rem; font-weight:600; padding:8px 10px;
     border:1.5px solid var(--accent); border-radius:8px; margin-top:4px;}
@@ -228,6 +258,36 @@
   /* An icon button that also carries its text (the Plan tab's day-move
      control) is a normal-width pill, not a 36px square. */
   .icon-btn.has-label{min-width:0;}
+
+  /* --- Pin to the header highlights row ---
+     Pinned reads filled and accented; unpinned reads like every other control
+     in the row. Disabled means the row is full: it stays visible and keeps
+     its tooltip, because a control that disappears at the cap teaches the
+     traveler nothing about why. */
+  .pin-btn.pinned{border-color:var(--accent); background:var(--accent-soft);}
+  .ctl.pin-btn:disabled{opacity:.45; cursor:not-allowed;}
+  .ctl.pin-btn:disabled:hover{border-color:var(--border-light);}
+  .ask-btn:hover{border-color:var(--accent); background:var(--accent-soft);}
+  /* On the Info tab an item is a paragraph in a shared block, not a card with
+     a control row, so its pin floats at the start of the line the headline
+     sits on. */
+  .info-card .info-item > .pin-btn{float:right; margin:0 0 4px 8px; min-width:32px;}
+  body.share .info-card .info-item > .pin-btn{display:none;}
+  .info-card .info-item.just-moved{animation:justmoved 1.8s ease-out 1; border-radius:8px;}
+
+  /* Add-a-place form fields: label over control, one per row, so a 390px
+     phone never puts a label and its input on the same line. */
+  .field{margin-top:12px;}
+  .field-label{display:block; font-size:.72rem; font-weight:800; letter-spacing:.6px;
+    text-transform:uppercase; color:var(--text-3); margin-bottom:5px;}
+  .field .date-field, .field select{width:100%;}
+  /* Overrides the 200px monospace JSON-paste box .modal textarea sets: this
+     one holds one sentence about who recommended the place, and at 200px it
+     pushed Add below the fold on a 390px phone. */
+  .modal textarea.note-field{width:100%; font:inherit; font-size:.9rem; padding:8px 10px;
+    min-height:0; height:70px;
+    border:1px solid var(--border-light); border-radius:8px; background:#fff; color:var(--text);}
+  .field-hint{font-size:.75rem; color:var(--text-3); margin-top:4px;}
 
   /* A day move relocates the card under a different day heading, often far
      off screen. The engine scrolls it back into view and adds this class for
@@ -277,6 +337,8 @@
     header h1{font-size:1.35rem;}
     .facts{gap:6px; margin-top:10px;}
     .chip{padding:4px 9px; font-size:.75rem;}
+    .hl{gap:5px; margin-top:10px;}
+    .hl-chip{padding:4px 9px; font-size:.74rem;}
     .card{padding:8px 10px; margin-bottom:6px; border-radius:12px;}
     .daycard{border-radius:12px;}
     .daycard .hd{padding:8px 12px;}
@@ -297,6 +359,11 @@
   }
   @media print{
     .toolbar, .ctl-row, .plangrip, #notice, #secnav, #tabbar{display:none !important;}
+    /* The pin chips are shortcuts to cards the printed page already carries
+       in full, so they print as noise; the sunset is a fact nothing else on
+       the page states, so it stays. Same reasoning for the section + and the
+       Info tab's floating pin: controls do not belong on paper. */
+    .hl-pin, .sec-add, .info-card .info-item > .pin-btn{display:none !important;}
     body{background:#fff;}
     .daycard, .card{box-shadow:none; break-inside:avoid;}
     header{background:var(--accent-hover) !important; -webkit-print-color-adjust:exact;}
@@ -477,5 +544,11 @@
   @media (pointer: coarse){
     .ctl, .ctl-link{min-height:36px;}
     .ctl{display:inline-flex; align-items:center; justify-content:center;}
+    /* The two controls that stand ALONE rather than in a row of siblings get
+       the full 44px thumb target: there is no neighbouring pill to line up
+       with, and a mistap on either has a visible consequence. */
+    .sec-add{width:44px; height:44px;}
+    .info-card .info-item > .pin-btn{min-width:44px; min-height:44px;}
+    .hl-chip{min-height:36px;}
   }
 

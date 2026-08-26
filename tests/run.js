@@ -1417,7 +1417,11 @@ const FAKE_RERUN = [
   '',
   '<' + '!-- RERUN:RATINGS -->',
   'Look up the CURRENT Google Maps rating for each item listed below.',
-  '<' + '!-- /RERUN:RATINGS -->'
+  '<' + '!-- /RERUN:RATINGS -->',
+  '',
+  '<' + '!-- RERUN:PLACE -->',
+  'Research the ONE place named above and rank it against the section list below.',
+  '<' + '!-- /RERUN:PLACE -->'
 ].join('\n');
 
 const PROFILE = { interests: ['climbing gyms', 'live jazz'], avoid: ['nightclubs'], notes: 'Vegetarian most days.' };
@@ -1500,7 +1504,8 @@ test('the real PROMPT.md carries every landmark the builders slice', () => {
   const fs = require('fs');
   const path = require('path');
   const prompt = fs.readFileSync(path.join(__dirname, '..', 'PROMPT.md'), 'utf8');
-  ['RULES:INTEL', 'CONTRACT:ITEM', 'RERUN:INTERESTS', 'RERUN:INTEL', 'RERUN:RATINGS'].forEach((name) => {
+  ['RULES:INTEL', 'CONTRACT:ITEM', 'RERUN:INTERESTS', 'RERUN:INTEL', 'RERUN:RATINGS',
+    'RERUN:PLACE'].forEach((name) => {
     assert.ok(prompt.indexOf('<' + '!-- ' + name + ' -->') !== -1, 'missing open ' + name);
     assert.ok(prompt.indexOf('<' + '!-- /' + name + ' -->') !== -1, 'missing close ' + name);
   });
@@ -3116,5 +3121,673 @@ test('a row with no group is shown, never dropped', () => {
   assert.equal(shown[shown.length - 1], 'Remove city');
 });
 
-console.log(pass + ' passed, ' + fail + ' failed');
-if (fail) process.exit(1);
+
+// ---------------------------------------------------------------------------
+// Header highlights, feature A: sunset
+// ---------------------------------------------------------------------------
+// The reference column is api.met.no (the Norwegian Meteorological Institute's
+// sunrise API), queried once by hand for each row and pasted here so the test
+// makes no network call of its own. met.no reports to the minute; the tolerance
+// below is 90 seconds, which is NOAA's own stated accuracy for latitudes under
+// 72 degrees plus met.no's own rounding. Every row here agreed to within a
+// single minute when the implementation landed.
+const SUNSET_CASES = [
+  // [label, iso, lat, lng, met.no sunset UTC 'HH:MM']
+  ['Tirana, the owner\'s city, late August', '2026-08-26', 41.33, 19.8101, '17:23'],
+  ['Ksamil, the next stop', '2026-08-30', 39.7686, 20.0042, '17:14'],
+  ['Batumi', '2026-08-10', 41.64, 41.61, '16:20'],
+  ['Yerevan', '2026-08-18', 40.17, 44.52, '15:55'],
+  ['the equator on the March equinox', '2026-03-20', 0, 0, '18:10'],
+  ['Greenwich on the June solstice', '2026-06-21', 51.4779, 0, '20:20'],
+  ['Sydney on the December solstice', '2026-12-21', -33.8688, 151.2093, '09:05']
+];
+
+test('sunsetUtcMinutes matches published sunset times within 90 seconds', () => {
+  SUNSET_CASES.forEach(([label, iso, lat, lng, ref]) => {
+    const got = C.sunKit.sunsetUtcMinutes(iso, lat, lng);
+    assert.equal(typeof got, 'number', label + ': expected a time');
+    const want = (+ref.slice(0, 2)) * 60 + (+ref.slice(3, 5));
+    const offBySeconds = Math.abs(got - want) * 60;
+    assert.ok(offBySeconds <= 90,
+      label + ': got ' + got.toFixed(2) + ' min UTC, met.no says ' + ref +
+      ' (' + want + '), off by ' + offBySeconds.toFixed(0) + 's');
+  });
+});
+
+test('Tirana in late August sets just after 19:20 local, which is what the chip shows', () => {
+  // The owner's own sanity check: "Tirana late Aug sunset ~19:3x local".
+  // Albania runs UTC+2 in August, so the chip reads the UTC answer plus two
+  // hours. Asserted as a range rather than a string because the chip renders
+  // on the DEVICE clock and this test has no device timezone to speak for.
+  const utcMin = C.sunKit.sunsetUtcMinutes('2026-08-26', 41.33, 19.8101);
+  const localMin = utcMin + 120;
+  assert.ok(localMin > 19 * 60 + 15 && localMin < 19 * 60 + 35,
+    'expected roughly 19:20-19:30 local, got ' + Math.floor(localMin / 60) + ':' +
+    Math.round(localMin % 60));
+});
+
+test('sunset shortens through the stay, which is the whole reason it is a daily chip', () => {
+  const first = C.sunKit.sunsetUtcMinutes('2026-08-22', 41.33, 19.8101);
+  const last = C.sunKit.sunsetUtcMinutes('2026-08-29', 41.33, 19.8101);
+  assert.ok(last < first, 'late August evenings get shorter, not longer');
+  // Roughly 10 minutes over the week at this latitude; a wildly different
+  // number would mean the declination term is wrong even if one date matches.
+  const lost = first - last;
+  assert.ok(lost > 6 && lost < 16, 'expected 6-16 minutes lost over the week, got ' + lost.toFixed(1));
+});
+
+test('a polar day has no sunset, and that is an answer rather than an error', () => {
+  // Longyearbyen at midsummer: met.no returns no sunset at all for this date.
+  assert.equal(C.sunKit.sunsetUtcMinutes('2026-06-21', 78.22, 15.65), null);
+  // And polar night, the other side of the same fact.
+  assert.equal(C.sunKit.sunsetUtcMinutes('2026-12-21', 78.22, 15.65), null);
+});
+
+test('sunsetUtcMinutes refuses anything that is not a date and a real coordinate', () => {
+  assert.equal(C.sunKit.sunsetUtcMinutes('2026-8-26', 41.33, 19.81), null);
+  assert.equal(C.sunKit.sunsetUtcMinutes('', 41.33, 19.81), null);
+  assert.equal(C.sunKit.sunsetUtcMinutes(null, 41.33, 19.81), null);
+  assert.equal(C.sunKit.sunsetUtcMinutes('2026-08-26', '41.33', 19.81), null);
+  assert.equal(C.sunKit.sunsetUtcMinutes('2026-08-26', 91, 19.81), null);
+  assert.equal(C.sunKit.sunsetUtcMinutes('2026-08-26', 41.33, 181), null);
+  assert.equal(C.sunKit.sunsetUtcMinutes('2026-08-26', NaN, 19.81), null);
+});
+
+test('julianDayUtc and the equation of time hold their known anchors', () => {
+  // J2000.0 is Julian Day 2451545.0 at 2000-01-01 12:00 UTC, so midnight that
+  // day is exactly half a day earlier. If this drifts, every sunset drifts.
+  assert.equal(C.sunKit.julianDayUtc('2000-01-01'), 2451544.5);
+  assert.equal(C.sunKit.julianDayUtc('2026-08-26'), 2461278.5);
+  // The equation of time crosses zero four times a year and reaches about
+  // -14 minutes in mid-February and +16 in early November.
+  const feb = C.sunKit.equationOfTime((C.sunKit.julianDayUtc('2026-02-11') - 2451545) / 36525);
+  const nov = C.sunKit.equationOfTime((C.sunKit.julianDayUtc('2026-11-03') - 2451545) / 36525);
+  assert.ok(feb < -13 && feb > -15, 'mid-February should be near -14 min, got ' + feb.toFixed(2));
+  assert.ok(nov > 15 && nov < 17, 'early November should be near +16 min, got ' + nov.toFixed(2));
+  // Declination is near zero at an equinox and near the obliquity at a solstice.
+  const eq = C.sunKit.sunDeclination((C.sunKit.julianDayUtc('2026-03-20') - 2451545) / 36525);
+  const sol = C.sunKit.sunDeclination((C.sunKit.julianDayUtc('2026-06-21') - 2451545) / 36525);
+  assert.ok(Math.abs(eq) < 0.6, 'equinox declination should be near 0, got ' + eq.toFixed(3));
+  assert.ok(sol > 23.2 && sol < 23.6, 'solstice declination should be near 23.44, got ' + sol.toFixed(3));
+});
+
+test('cityLatLng prefers the accommodation and falls back to the first item with coords', () => {
+  assert.deepEqual(C.sunKit.cityLatLng(GOOD), { lat: 41.64, lng: 41.61 });
+  // Tirana's real shape: no city.accommodation at all, coordinates only on the
+  // apartment item. Without this fallback the city the owner is standing in
+  // would be the one city with no sunset chip.
+  const noAcc = clone(GOOD);
+  delete noAcc.city.accommodation;
+  noAcc.items[0].meta = { coords: { lat: 41.33, lng: 19.8101 } };
+  assert.deepEqual(C.sunKit.cityLatLng(noAcc), { lat: 41.33, lng: 19.8101 });
+  // Nothing anywhere: null, and the header simply omits the chip.
+  const bare = clone(GOOD);
+  delete bare.city.accommodation;
+  assert.equal(C.sunKit.cityLatLng(bare), null);
+  // A half-filled or out-of-range coordinate is not a location.
+  const half = clone(GOOD);
+  half.city.accommodation = { name: 'Somewhere', lat: 41.64 };
+  assert.equal(C.sunKit.cityLatLng(half), null);
+  half.city.accommodation = { name: 'Somewhere', lat: 200, lng: 10 };
+  assert.equal(C.sunKit.cityLatLng(half), null);
+  assert.equal(C.sunKit.cityLatLng(null), null);
+});
+
+test('the real city files all resolve to a location, so every guide gets the chip', () => {
+  const fs = require('fs');
+  const path = require('path');
+  ['batumi', 'yerevan', 'tirana', 'ksamil'].forEach((name) => {
+    const city = JSON.parse(fs.readFileSync(
+      path.join(__dirname, '..', 'cities', name + '.json'), 'utf8'));
+    const loc = C.sunKit.cityLatLng(city);
+    assert.ok(loc, name + ' resolves to no location, so its header would show no sunset');
+    const mins = C.sunKit.sunsetUtcMinutes(city.city.dates.from, loc.lat, loc.lng);
+    assert.equal(typeof mins, 'number', name + ' has a location but no computable sunset');
+  });
+});
+
+test('sunsetUtcMinutes is pure: same answer twice, arguments untouched', () => {
+  const a = C.sunKit.sunsetUtcMinutes('2026-08-26', 41.33, 19.8101);
+  const b = C.sunKit.sunsetUtcMinutes('2026-08-26', 41.33, 19.8101);
+  assert.equal(a, b);
+  const snap = JSON.stringify(GOOD);
+  C.sunKit.cityLatLng(GOOD);
+  assert.equal(JSON.stringify(GOOD), snap);
+});
+
+// ---------------------------------------------------------------------------
+// Header highlights, feature B: pinned items
+// ---------------------------------------------------------------------------
+
+test('a state written before pins existed reads as nothing pinned', () => {
+  const old = { itemStatus: {}, itemDay: {}, collapsedSections: {}, viewMode: null };
+  assert.deepEqual(C.normalizeState(old).pinned, []);
+  assert.deepEqual(C.emptyState().pinned, []);
+  // Garbage in that slot resets rather than coerces: a half-understood pin
+  // list is worth less than no pins, and re-pinning is one tap.
+  assert.deepEqual(C.normalizeState({ pinned: 'brasserie' }).pinned, []);
+  assert.deepEqual(C.normalizeState({ pinned: null }).pinned, []);
+  assert.deepEqual(C.normalizeState({ pinned: { brasserie: 1 } }).pinned, []);
+  // Non-string entries and duplicates are dropped, order otherwise kept.
+  assert.deepEqual(C.normalizeState({ pinned: ['a', 'a', 3, '', null, 'b'] }).pinned, ['a', 'b']);
+});
+
+test('pins round-trip through a store, which is what makes them sync', () => {
+  // The state object is what syncKit pushes as one payload, so a key that
+  // survives save/load/normalize is a key that reaches the other device.
+  const mem = {};
+  const LS = {
+    getItem: (k) => (Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null),
+    setItem: (k, v) => { mem[k] = String(v); },
+    removeItem: (k) => { delete mem[k]; }
+  };
+  const s1 = C.makeStore('tirana-2026-08-22', LS);
+  const st = s1.load();
+  C.pinKit.toggle(st, 'safety-01');
+  C.pinKit.toggle(st, 'money-03');
+  s1.save(st);
+  // A brand new store instance, exactly as a reload or another tab gets.
+  const s2 = C.makeStore('tirana-2026-08-22', LS);
+  const back = s2.load();
+  assert.deepEqual(back.pinned, ['safety-01', 'money-03']);
+  assert.equal(C.pinKit.isPinned(back, 'safety-01'), true);
+  assert.equal(C.pinKit.isPinned(back, 'nothing'), false);
+  // And the raw stored payload really carries it, not just the in-memory copy.
+  assert.deepEqual(JSON.parse(mem['cityops.tirana-2026-08-22.v1']).pinned,
+    ['safety-01', 'money-03']);
+});
+
+test('the pin cap holds at four and refuses a fifth without evicting anything', () => {
+  const st = C.emptyState();
+  assert.equal(C.pinKit.CAP, 4);
+  ['a', 'b', 'c', 'd'].forEach((id) => {
+    assert.equal(C.pinKit.canToggle(st, id), true);
+    C.pinKit.toggle(st, id);
+  });
+  assert.deepEqual(st.pinned, ['a', 'b', 'c', 'd']);
+  // At the cap the control on a NEW item is dead, and says so; the oldest pin
+  // is not silently thrown away to make room.
+  assert.equal(C.pinKit.canToggle(st, 'e'), false);
+  C.pinKit.toggle(st, 'e');
+  assert.deepEqual(st.pinned, ['a', 'b', 'c', 'd']);
+  // Unpinning an already-pinned one is always allowed, cap or no cap.
+  assert.equal(C.pinKit.canToggle(st, 'b'), true);
+  C.pinKit.toggle(st, 'b');
+  assert.deepEqual(st.pinned, ['a', 'c', 'd']);
+  // And now there is room again.
+  assert.equal(C.pinKit.canToggle(st, 'e'), true);
+  C.pinKit.toggle(st, 'e');
+  assert.deepEqual(st.pinned, ['a', 'c', 'd', 'e']);
+});
+
+test('pinnedItems keeps pin order and drops ids the guide no longer has', () => {
+  const st = C.emptyState();
+  C.pinKit.toggle(st, 'nord');
+  C.pinKit.toggle(st, 'ghost');       // never existed
+  C.pinKit.toggle(st, 'brasserie');
+  const got = C.pinKit.items(GOOD, st);
+  assert.deepEqual(got.map((i) => i.id), ['nord', 'brasserie']);
+  // An enrich re-run or a data update can retire an item under a pin. That is
+  // a dropped chip, not an error and not an empty chip.
+  const shrunk = clone(GOOD);
+  shrunk.items = shrunk.items.filter((i) => i.id !== 'nord');
+  assert.deepEqual(C.pinKit.items(shrunk, st).map((i) => i.id), ['brasserie']);
+  assert.deepEqual(C.pinKit.items({ items: [] }, st), []);
+});
+
+test('a chip summarises a name and note the way the real Info data reads', () => {
+  const chip = C.pinKit.chipText;
+  // The common Info shape: short name, note carrying the fact.
+  assert.equal(chip('Tap water', 'Meaningfully better than Morocco. Brush teeth, shower, and wash produce freely; drink bottled.'),
+    'Tap water · Meaningfully better than Morocco');
+  // When the note repeats the name back, the name is dropped rather than
+  // stuttered: Tirana's real "Fares" / "Fares rise ~5% after 22:00".
+  assert.equal(chip('Fares', 'Fares rise ~5% after 22:00. Tirana is the cheapest taxi market in Albania.'),
+    'Fares rise ~5% after 22:00');
+  // A ` · ` clause ends the fragment too, since these notes use it as a
+  // separator between whole facts.
+  assert.equal(chip('Mental math', 'Drop two zeros, add 20%. (1,800 L) · Multiply by 8'),
+    'Mental math · Drop two zeros, add 20%');
+  // A name that already fills the budget gets no note appended.
+  assert.equal(chip('Fake police near Skanderbeg Square', 'Plainclothes person asks to inspect wallet.'),
+    'Fake police near Skanderbeg Square');
+  // Nothing longer than the cap ever reaches the row, and a truncation always
+  // says it truncated.
+  const long = chip('Departure', 'Leave base by 08:45 for Tirana North and South Bus Terminal in Kashar, six km west');
+  assert.ok(long.length <= C.pinKit.CHIP_MAX, 'chip was ' + long.length + ' chars: ' + long);
+  assert.ok(long.slice(-1) === '…', 'a cut chip must say it was cut: ' + long);
+  // No note at all is fine; so is no name.
+  assert.equal(chip('Walking distances', ''), 'Walking distances');
+  assert.equal(chip('Walking distances', null), 'Walking distances');
+  assert.equal(chip('', 'Bolt does NOT operate anywhere in Albania.'), 'Bolt does NOT operate anywhere in Albania');
+  assert.equal(chip('', ''), '');
+  // Whitespace and newlines in a note never reach the row.
+  assert.equal(chip('Payment', '  May be cash\n  to on-site staff. Confirm in advance.'),
+    'Payment · May be cash to on-site staff');
+});
+
+test('every real Info item produces a chip that fits the row', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const city = JSON.parse(fs.readFileSync(
+    path.join(__dirname, '..', 'cities', 'tirana.json'), 'utf8'));
+  let checked = 0;
+  city.items.forEach((it) => {
+    const sec = city.sections.filter((s) => s.id === it.section)[0];
+    if (C.tabForSection(sec) !== 'info') return;
+    const text = C.pinKit.chipText(it.name, it.note);
+    assert.ok(text, it.id + ' produces an empty chip');
+    assert.ok(text.length <= C.pinKit.CHIP_MAX,
+      it.id + ' chip is ' + text.length + ' chars: ' + text);
+    assert.equal(text.indexOf('\n'), -1, it.id + ' chip carries a newline');
+    checked++;
+  });
+  assert.ok(checked > 20, 'expected the real Info tab to be worth checking, saw ' + checked);
+});
+
+// ---------------------------------------------------------------------------
+// Add a place by hand
+// ---------------------------------------------------------------------------
+
+test('newPlaceDelta builds a delta mergeDelta accepts, and the place lands intact', () => {
+  const built = C.newPlaceDelta(GOOD, {
+    name: 'Oda Garden', section: 'dinner', status: 'plan',
+    note: 'recommended by a couple at dinner', day: '2026-08-12'
+  });
+  assert.deepEqual(built.errors, []);
+  assert.equal(built.id, 'oda-garden');
+  assert.equal(built.delta.schema, 1);
+  assert.equal(built.delta.delta, true);
+  assert.equal(built.delta.items.length, 1);
+  // The whole point of routing through a delta: the same validateItem every
+  // AI payload faces has to pass it.
+  const res = C.mergeDelta(GOOD, built.delta);
+  assert.deepEqual(res.errors, []);
+  assert.equal(res.summary.added, 1);
+  assert.equal(res.summary.skipped, 0);
+  const added = res.data.items.filter((i) => i.id === 'oda-garden')[0];
+  assert.equal(added.name, 'Oda Garden');
+  assert.equal(added.section, 'dinner');
+  assert.equal(added.status, 'plan');
+  assert.equal(added.day, '2026-08-12');
+  assert.equal(added.note, 'recommended by a couple at dinner');
+  assert.equal(added.added_by, 'traveler');
+  assert.deepEqual(added.links, []);
+  // Normalized like every merged item, so nothing downstream sees a new shape.
+  assert.equal(added.place_id, null);
+  assert.equal(added.verified, null);
+  // And the merged guide is still a valid guide.
+  assert.deepEqual(C.validate(res.data), []);
+  // Nothing already there moved.
+  assert.equal(res.data.items.length, GOOD.items.length + 1);
+  GOOD.items.forEach((orig, i) => assert.equal(res.data.items[i].id, orig.id));
+});
+
+test('the same name twice makes two places, not one silent skip', () => {
+  // A human typing "Oda" twice means two restaurants far more often than it
+  // means a mistake, and mergeDelta would count a repeated id as `skipped`.
+  let city = GOOD;
+  const first = C.newPlaceDelta(city, { name: 'Oda', section: 'dinner' });
+  city = C.mergeDelta(city, first.delta).data;
+  const second = C.newPlaceDelta(city, { name: 'Oda', section: 'dinner' });
+  assert.equal(first.id, 'oda');
+  assert.equal(second.id, 'oda-2');
+  const res = C.mergeDelta(city, second.delta);
+  assert.equal(res.summary.added, 1);
+  assert.equal(res.summary.skipped, 0);
+  const third = C.newPlaceDelta(res.data, { name: 'Oda', section: 'dinner' });
+  assert.equal(third.id, 'oda-3');
+  // A collision with an id the guide already holds for another reason.
+  const clash = C.newPlaceDelta(GOOD, { name: 'Nord Specialty Coffee', section: 'coffee' });
+  assert.equal(clash.id, 'nord-specialty-coffee');
+  const clash2 = C.newPlaceDelta(GOOD, { name: 'brasserie', section: 'dinner' });
+  assert.equal(clash2.id, 'brasserie-2');
+});
+
+test('a name that slugs to nothing still gets a usable id', () => {
+  // This route runs through Georgia, Armenia and Albania; a name typed in the
+  // local script slugs to an empty string.
+  const a = C.newPlaceDelta(GOOD, { name: 'ხაჭაპური', section: 'dinner' });
+  assert.equal(a.id, 'place');
+  assert.deepEqual(C.mergeDelta(GOOD, a.delta).errors, []);
+  const city = C.mergeDelta(GOOD, a.delta).data;
+  const b = C.newPlaceDelta(city, { name: 'Ոսկե', section: 'dinner' });
+  assert.equal(b.id, 'place-2');
+});
+
+test('the add form refuses what a form can get wrong, before mergeDelta ever runs', () => {
+  const bad = (f) => C.newPlaceDelta(GOOD, f);
+  assert.deepEqual(bad({ name: '', section: 'dinner' }).errors, ['A name is required.']);
+  assert.deepEqual(bad({ name: '   ', section: 'dinner' }).errors, ['A name is required.']);
+  assert.equal(bad({ name: 'X', section: '' }).errors[0], 'Pick a section.');
+  assert.equal(bad({ name: 'X', section: 'nope' }).errors[0], 'This city has no section "nope".');
+  assert.equal(bad({ name: 'X', section: 'dinner', day: 'tonight' }).errors[0],
+    'The day must be YYYY-MM-DD.');
+  // done and archived are traveler states, never a starting one, exactly as
+  // mergeDelta insists for an AI payload.
+  assert.equal(bad({ name: 'X', section: 'dinner', status: 'done' }).errors[0],
+    'A new place starts as plan or backup.');
+  assert.equal(bad({ name: 'X', section: 'dinner', status: 'archived' }).errors[0],
+    'A new place starts as plan or backup.');
+  // Every failing case returns no delta at all, so a caller cannot half-apply.
+  ['', '   '].forEach((n) => assert.equal(bad({ name: n, section: 'dinner' }).delta, null));
+  // Defaults: status plan, no day, no note.
+  const ok = C.newPlaceDelta(GOOD, { name: 'Somewhere', section: 'coffee' });
+  assert.deepEqual(ok.errors, []);
+  assert.equal(ok.delta.items[0].status, 'plan');
+  assert.equal(ok.delta.items[0].day, undefined);
+  assert.equal(ok.delta.items[0].note, undefined);
+  // Backup is the other legal start.
+  assert.equal(C.newPlaceDelta(GOOD, { name: 'Y', section: 'coffee', status: 'backup' })
+    .delta.items[0].status, 'backup');
+});
+
+test('newPlaceDelta is pure: it reads the city and changes nothing', () => {
+  const snap = JSON.stringify(GOOD);
+  C.newPlaceDelta(GOOD, { name: 'Oda Garden', section: 'dinner', note: 'x' });
+  assert.equal(JSON.stringify(GOOD), snap);
+});
+
+// ---------------------------------------------------------------------------
+// Ask Claude about one place
+// ---------------------------------------------------------------------------
+
+const RIVALS = (() => {
+  const c = clone(GOOD);
+  c.items.filter((i) => i.id === 'brasserie')[0].intel =
+    { verdicts: [{ tier: 'must', text: 'The duck is the reason to come.' }], source: 'reviews' };
+  c.items.filter((i) => i.id === 'brasserie')[0].rating = { stars: 4.8, count: 5545 };
+  c.items.filter((i) => i.id === 'tanini')[0].rating = { stars: 4.2 };
+  return c;
+})();
+
+test('buildPlacePassPrompt names one place and rosters exactly its own section', () => {
+  const built = C.newPlaceDelta(RIVALS, {
+    name: 'Oda Garden', section: 'dinner', status: 'plan',
+    note: 'recommended by a couple at dinner'
+  });
+  const city = C.mergeDelta(RIVALS, built.delta).data;
+  const item = city.items.filter((i) => i.id === built.id)[0];
+  const out = C.promptKit.buildPlacePassPrompt(FAKE_RERUN, city, item, C.emptyState());
+
+  assert.ok(out.startsWith('You are checking one place a traveler added by hand'));
+  assert.ok(out.includes('- **City:** Batumi'));
+  assert.ok(out.includes('## The place'));
+  assert.ok(out.includes('- **Item id:** oda-garden'));
+  assert.ok(out.includes('- **Name as the traveler typed it:** Oda Garden'));
+  assert.ok(out.includes('- **Section:** Dinner (dinner)'));
+  assert.ok(out.includes('- **The traveler\'s note:** recommended by a couple at dinner'));
+  assert.ok(out.includes('Research the ONE place named above'));
+  assert.equal(out.indexOf('RERUN:PLACE'), -1);
+
+  // The roster: every OTHER dinner item, with what is known about it.
+  assert.ok(out.includes('## Others already in this section'));
+  assert.ok(out.includes('- brasserie | Brasserie 1900 | 4.8★ (5545) | plan'));
+  assert.ok(out.includes('    verdict (must): The duck is the reason to come.'));
+  assert.ok(out.includes('- tanini | Tanini | 4.2★ | plan'));
+  assert.ok(out.includes('- sisters | At the Sisters | backup'));
+  // An unresearched rival says so, so the answer can admit a partial ranking
+  // instead of reading silence as a bad score.
+  assert.ok(out.includes('    not researched yet'));
+  // The count the verdict is told to use is the real one.
+  assert.ok(out.includes('There are 3 of them.'));
+  // Another section's items are not the comparison and are not in the prompt.
+  assert.equal(out.indexOf('Nord Specialty Coffee'), -1);
+  // Never its own rival.
+  assert.equal(out.indexOf('- oda-garden | Oda Garden'), -1);
+});
+
+test('a place with no rivals says so instead of pretending to rank', () => {
+  const city = clone(GOOD);
+  city.sections.push({ id: 'bars', label: 'Bars' });
+  const built = C.newPlaceDelta(city, { name: 'Lonely Bar', section: 'bars' });
+  const merged = C.mergeDelta(city, built.delta).data;
+  const item = merged.items.filter((i) => i.id === built.id)[0];
+  const out = C.promptKit.buildPlacePassPrompt(FAKE_RERUN, merged, item, C.emptyState());
+  assert.ok(out.includes('- **Section:** Bars (bars)'));
+  assert.ok(out.includes('There are none: this is the first place in this section'));
+  assert.equal(out.indexOf('There are 0 of them'), -1);
+});
+
+test('the place prompt reads the traveler\'s renames and status changes, not the file', () => {
+  const st = C.emptyState();
+  C.setTitle(st, 'brasserie', 'Brasserie (the good one)');
+  C.setStatus(st, 'tanini', 'done');
+  const item = RIVALS.items.filter((i) => i.id === 'sisters')[0];
+  const out = C.promptKit.buildPlacePassPrompt(FAKE_RERUN, RIVALS, item, st);
+  assert.ok(out.includes('- brasserie | Brasserie (the good one) | 4.8★ (5545) | plan'));
+  // A place already eaten at stays in the roster: it is exactly the yardstick
+  // a new recommendation has to beat.
+  assert.ok(out.includes('- tanini | Tanini | 4.2★ | done'));
+  // With no state at all the file's own names and statuses are used.
+  const bare = C.promptKit.buildPlacePassPrompt(FAKE_RERUN, RIVALS, item, null);
+  assert.ok(bare.includes('- brasserie | Brasserie 1900 | 4.8★ (5545) | plan'));
+});
+
+test('buildPlacePassPrompt is pure and fails loudly on a template with no landmark', () => {
+  const item = RIVALS.items[0];
+  const snap = JSON.stringify(RIVALS);
+  C.promptKit.buildPlacePassPrompt(FAKE_RERUN, RIVALS, item, C.emptyState());
+  assert.equal(JSON.stringify(RIVALS), snap);
+  assert.throws(() => C.promptKit.buildPlacePassPrompt('# nothing here', RIVALS, item),
+    /no RERUN:PLACE block/);
+  assert.throws(() => C.promptKit.buildPlacePassPrompt(FAKE_RERUN, RIVALS, null),
+    /No place to research/);
+});
+
+test('the real PROMPT.md builds a place pass that demands a ranking and a lookup', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const prompt = fs.readFileSync(path.join(__dirname, '..', 'PROMPT.md'), 'utf8');
+  const built = C.newPlaceDelta(RIVALS, {
+    name: 'Oda Garden', section: 'dinner', note: 'recommended by a couple at dinner'
+  });
+  const city = C.mergeDelta(RIVALS, built.delta).data;
+  const item = city.items.filter((i) => i.id === built.id)[0];
+  const out = C.promptKit.buildPlacePassPrompt(prompt, city, item, C.emptyState());
+  // The contract the app's Apply path depends on.
+  assert.ok(out.includes('"schema": 1'));
+  assert.ok(out.includes('"delta": true'));
+  assert.ok(out.includes('"ratings": {'));
+  assert.ok(out.includes('"intel": {'));
+  // The comparison, which is the whole point of this pass.
+  assert.ok(out.includes('Lead with the placement, in plain words.'));
+  assert.ok(out.includes('Ranks 2nd of your 7 dinner picks'));
+  assert.ok(out.includes('Never guess, never carry a number forward from memory.'));
+  assert.ok(out.includes('Match the right place.'));
+  // A delta is never a whole guide, said in this block as in every other.
+  assert.ok(out.includes('A delta is never a whole guide.'));
+  // And the roster it has to rank against is really in there.
+  assert.ok(out.includes('- brasserie | Brasserie 1900 | 4.8★ (5545) | plan'));
+});
+
+test('the whole add-then-ask round trip lands a rating and a ranking on the new card', () => {
+  // Exactly the owner's dinner scenario, end to end, with the AI reply
+  // simulated: add the place, build its prompt, paste back what the contract
+  // asks for, and merge it through the one door the app uses.
+  const fs = require('fs');
+  const path = require('path');
+  const prompt = fs.readFileSync(path.join(__dirname, '..', 'PROMPT.md'), 'utf8');
+  const built = C.newPlaceDelta(RIVALS, {
+    name: 'Oda Garden', section: 'dinner', status: 'plan',
+    note: 'recommended by a couple at dinner'
+  });
+  const withPlace = C.mergeDelta(RIVALS, built.delta).data;
+  const item = withPlace.items.filter((i) => i.id === built.id)[0];
+  const promptText = C.promptKit.buildPlacePassPrompt(prompt, withPlace, item, C.emptyState());
+  assert.ok(promptText.includes('oda-garden'));
+
+  // What Claude sends back, in the shape RERUN:PLACE specifies.
+  const reply = [
+    'I looked it up.', '', '```json',
+    JSON.stringify({
+      schema: 1, delta: true,
+      ratings: { 'oda-garden': { stars: 4.6, count: 812, source: 'Google Maps, Aug 2026', checked: '2026-08-26' } },
+      intel: {
+        'oda-garden': {
+          verdicts: [{ tier: 'good', text: 'A fair swap for one dinner night, not a must.' }],
+          tips: ['Ranks 2nd of your 4 dinner picks, behind Brasserie 1900.'],
+          source: 'Google Maps reviews, Aug 2026'
+        }
+      }
+    }, null, 2),
+    '```'
+  ].join('\n');
+
+  const block = C.extractJsonBlock(reply);
+  assert.ok(block, 'the reply must carry a parseable json fence');
+  const res = C.mergeDelta(withPlace, JSON.parse(block));
+  assert.deepEqual(res.errors, []);
+  assert.equal(res.summary.added, 0);          // the place is already there
+  assert.equal(res.summary.ratingsApplied, 1);
+  assert.equal(res.summary.intelApplied, 1);
+  const done = res.data.items.filter((i) => i.id === 'oda-garden')[0];
+  assert.equal(done.rating.stars, 4.6);
+  assert.equal(done.rating.count, 812);
+  assert.equal(done.intel.tips[0], 'Ranks 2nd of your 4 dinner picks, behind Brasserie 1900.');
+  assert.equal(done.intel.verdicts[0].tier, 'good');
+  // Nothing the traveler had already researched was touched.
+  const rival = res.data.items.filter((i) => i.id === 'brasserie')[0];
+  assert.equal(rival.rating.stars, 4.8);
+  assert.equal(rival.intel.verdicts[0].text, 'The duck is the reason to come.');
+  assert.deepEqual(C.validate(res.data), []);
+  // The card now carries research, so the engine stops offering to go get it.
+  assert.ok(done.rating && typeof done.rating.stars === 'number');
+});
+
+test('a place pass reply that names the wrong id changes nothing, and says so', () => {
+  const built = C.newPlaceDelta(RIVALS, { name: 'Oda Garden', section: 'dinner' });
+  const city = C.mergeDelta(RIVALS, built.delta).data;
+  const res = C.mergeDelta(city, {
+    schema: 1, delta: true,
+    ratings: { 'oda-gardens': { stars: 4.6 } },
+    intel: { 'oda-gardens': { tips: ['Ranks 1st'] } }
+  });
+  assert.deepEqual(res.errors, []);
+  assert.equal(res.summary.ratingsSkipped, 1);
+  assert.equal(res.summary.intelSkipped, 1);
+  assert.equal(res.data.items.filter((i) => i.id === 'oda-garden')[0].rating, undefined);
+});
+
+// ---------------------------------------------------------------------------
+// The in-app transport, with a mocked fetch (no key, no network, no cost)
+// ---------------------------------------------------------------------------
+// callClaudeStream lives in the app shell rather than the engine, so it is
+// pulled out of the assembled index.html by name and run against a fake
+// streaming response. This is what proves the one-tap path parses a real
+// Anthropic SSE stream into the fenced JSON the Apply path then merges,
+// without spending anything to find out.
+function loadCallClaudeStream(fetchImpl) {
+  const fs = require('fs');
+  const path = require('path');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const start = html.indexOf('function callClaudeStream(');
+  assert.ok(start !== -1, 'callClaudeStream is missing from the assembled app');
+  const end = html.indexOf('\n  }\n', start);
+  assert.ok(end !== -1, 'could not find the end of callClaudeStream');
+  const src = html.slice(start, end + 4);
+  const fn = new Function('fetch', 'TextDecoder', 'CLAUDE_MODEL', 'CLAUDE_MAX_TOKENS',
+    src + '\nreturn callClaudeStream;');
+  return fn(fetchImpl, TextDecoder, 'claude-test', 1000);
+}
+
+function sseBody(events) {
+  // Chunked at awkward boundaries on purpose: the real stream splits wherever
+  // the network feels like it, and the parser has to survive an event cut in
+  // half. Every chunk here is 7 bytes.
+  const text = events.map((e) => 'event: ' + e.type + '\ndata: ' + JSON.stringify(e) + '\n\n').join('');
+  const bytes = new TextEncoder().encode(text);
+  let at = 0;
+  return {
+    getReader: () => ({
+      read: () => {
+        if (at >= bytes.length) return Promise.resolve({ done: true });
+        const slice = bytes.slice(at, at + 7);
+        at += 7;
+        return Promise.resolve({ done: false, value: slice });
+      }
+    })
+  };
+}
+
+let asyncPending = 0, asyncFail = 0;
+function asyncTest(name, fn) {
+  asyncPending++;
+  fn().then(() => { pass++; console.log('PASS ' + name); },
+    (e) => { fail++; asyncFail++; console.log('FAIL ' + name + '\n  ' + (e && e.message)); })
+    .then(() => { asyncPending--; });
+}
+
+asyncTest('callClaudeStream turns a streamed reply into the delta the Apply path merges', () => {
+  const delta = {
+    schema: 1, delta: true,
+    ratings: { 'oda-garden': { stars: 4.6, count: 812 } },
+    intel: { 'oda-garden': { tips: ['Ranks 2nd of your 4 dinner picks.'] } }
+  };
+  const answer = 'Checked it.\n\n```json\n' + JSON.stringify(delta) + '\n```';
+  let seenRequest = null;
+  const events = [
+    { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'weighing it up' } }
+  ].concat(answer.match(/[\s\S]{1,20}/g).map((chunk) => (
+    { type: 'content_block_delta', delta: { type: 'text_delta', text: chunk } }
+  )));
+  const call = loadCallClaudeStream((url, opts) => {
+    seenRequest = { url: url, opts: opts };
+    return Promise.resolve({ ok: true, body: sseBody(events) });
+  });
+  const progress = [];
+  return call('THE PROMPT', 'sk-test-not-a-real-key', (p) => progress.push(p)).then((text) => {
+    // The request itself: the browser-direct header and the key, and the
+    // prompt the engine built, verbatim.
+    assert.equal(seenRequest.url, 'https://api.anthropic.com/v1/messages');
+    assert.equal(seenRequest.opts.headers['x-api-key'], 'sk-test-not-a-real-key');
+    assert.equal(seenRequest.opts.headers['anthropic-dangerous-direct-browser-access'], 'true');
+    assert.equal(JSON.parse(seenRequest.opts.body).messages[0].content, 'THE PROMPT');
+    // Thinking never contributes to the text the caller parses.
+    assert.equal(text, answer);
+    assert.ok(progress.filter((p) => p.kind === 'thinking').length >= 1);
+    assert.ok(progress.filter((p) => p.kind === 'text').length >= 2);
+    // And the parse-and-merge the app does next really works on it.
+    const block = C.extractJsonBlock(text);
+    const built = C.newPlaceDelta(RIVALS, { name: 'Oda Garden', section: 'dinner' });
+    const city = C.mergeDelta(RIVALS, built.delta).data;
+    const res = C.mergeDelta(city, JSON.parse(block));
+    assert.deepEqual(res.errors, []);
+    assert.equal(res.summary.ratingsApplied, 1);
+    assert.equal(res.data.items.filter((i) => i.id === 'oda-garden')[0].rating.stars, 4.6);
+  });
+});
+
+asyncTest('a Claude API error surfaces as a message the modal can show as-is', () => {
+  const call = loadCallClaudeStream(() => Promise.resolve({
+    ok: false, status: 401,
+    text: () => Promise.resolve(JSON.stringify({ error: { message: 'invalid x-api-key' } }))
+  }));
+  return call('p', 'bad-key', null).then(
+    () => { throw new Error('expected a rejection'); },
+    (e) => {
+      assert.ok(/401/.test(e.message), e.message);
+      assert.ok(/invalid x-api-key/.test(e.message), e.message);
+    });
+});
+
+asyncTest('a reply with no JSON fence is reported, never half applied', () => {
+  const events = 'I could not find that place anywhere.'.match(/[\s\S]{1,9}/g)
+    .map((t) => ({ type: 'content_block_delta', delta: { type: 'text_delta', text: t } }));
+  const call = loadCallClaudeStream(() => Promise.resolve({ ok: true, body: sseBody(events) }));
+  return call('p', 'k', null).then((text) => {
+    assert.equal(text, 'I could not find that place anywhere.');
+    assert.equal(C.extractJsonBlock(text), null);
+    assert.ok(/single ```json code block/.test(C.RETRY_INSTRUCTION));
+  });
+});
+
+
+// The async tests above resolve on a microtask, so the summary has to wait
+// for them or it reports before they have run and the exit code lies.
+function finish() {
+  if (asyncPending > 0) { setTimeout(finish, 5); return; }
+  console.log(pass + ' passed, ' + fail + ' failed');
+  if (fail) process.exit(1);
+}
+finish();
