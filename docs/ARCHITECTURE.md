@@ -48,9 +48,14 @@ traveler did with it) never mix:
 - Data: schema v1 JSON, validated on every entry path. The app never
   mutates it in place.
 - State: a per-city object (`itemStatus`, `itemDay`, `itemTitle`,
-  `dayOrder`, `collapsedSections`, `viewMode`, `stayOverride`) stored
-  under its own key and merged at render time. State wins per item;
-  stale state for removed items is ignored silently.
+  `dayOrder`, `dayItemOrder`, `sectionItemOrder`, `collapsedSections`,
+  `collapsedPlanDays`, `pinned`, `tab`, `viewMode`, `stayOverride`,
+  `dataOverride`) stored under its own key and merged at render time.
+  State wins per item; stale state for removed items is ignored
+  silently. `normalizeState` fills in every key a state written by an
+  older build is missing, which is what lets the whole object be the
+  sync payload: a new feature adds a key, and last month's saved state
+  reads as "that feature has not been used yet" rather than as an error.
 
 This split is what makes every risky operation safe by construction:
 re-pasting updated city data, applying an AI-generated delta, or syncing
