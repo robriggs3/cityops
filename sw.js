@@ -1,6 +1,10 @@
 // CityOps app-shell service worker. Bump CACHE on each release.
-var CACHE = 'cityops-app-v3';
-var SHELL = ['./', './index.html'];
+var CACHE = 'cityops-app-v4';
+// Both surfaces of the app, because both are things a traveler opens with no
+// signal. The fetch handler is cache-first with a background refresh, so
+// without the bump above a phone would serve the previous build once after
+// every release; activate deletes the older cache outright.
+var SHELL = ['./', './index.html', './trip.html'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); }));
 });
