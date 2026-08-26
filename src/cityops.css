@@ -274,6 +274,7 @@
   .info-card .info-item > .pin-btn{float:right; margin:0 0 4px 8px; min-width:32px;}
   body.share .info-card .info-item > .pin-btn{display:none;}
   .info-card .info-item.just-moved{animation:justmoved 1.8s ease-out 1; border-radius:8px;}
+  .task-row.just-moved{animation:justmoved 1.8s ease-out 1;}
 
   /* Add-a-place form fields: label over control, one per row, so a 390px
      phone never puts a label and its input on the same line. */

@@ -1211,7 +1211,18 @@
   // commitCityData exactly like Enrich's Apply does. There is no second place
   // in this app that writes a delta into a city.
   function openAskPlaceModal(itemId) {
-    if (!activeId || !has(store.cities, activeId)) return;
+    // Neither of these should be reachable: the ✨ is only drawn on a card of
+    // the active city. They are here because a tap that opens nothing and
+    // says nothing is the one outcome a control is never allowed to have, and
+    // an unexplained dead button is worse than an odd sentence.
+    function nope(msg) {
+      var n = document.getElementById('notice');
+      if (n) n.textContent = msg;
+    }
+    if (!activeId || !has(store.cities, activeId)) {
+      nope('No city is open, so there is nothing to check.');
+      return;
+    }
     function currentData() {
       var st = CityOps.liveState() || CityOps.makeStore(activeId, LS).load();
       return CityOps.effectiveData(store.cities[activeId], st);
@@ -1219,7 +1230,10 @@
     var data = currentData();
     var item = null;
     (data.items || []).forEach(function (x) { if (x && x.id === itemId) item = x; });
-    if (!item) return;
+    if (!item) {
+      nope('That place is no longer in this guide, so there is nothing to check.');
+      return;
+    }
     var liveSt = CityOps.liveState();
     var shownName = liveSt ? CityOps.effectiveName(item, liveSt) : item.name;
     var siblings = (data.items || []).filter(function (x) {
@@ -3006,10 +3020,13 @@
   // control for ONLY when it is present, so a standalone exported guide (no
   // CityOpsApp at all) simply never shows a button that has nothing behind
   // it: no Claude key, no embedded PROMPT.md, no canonical city record.
-  //   askPlace(id)              -> the ✨ on an un-researched card
-  //   notePlaceAdded(data, id)  -> where a hand-added place gets written when
-  //                                the app is around; without it the engine
-  //                                falls back to its own state.dataOverride
+  //   askPlace(id)         -> the ✨ on an un-researched card
+  //   notePlaceAdded(data)  -> where a hand-added place gets written when the
+  //                            app is around; without it the engine falls
+  //                            back to its own state.dataOverride. The engine
+  //                            also passes the new item's id as a second
+  //                            argument; nothing here needs it, because the
+  //                            engine does its own reveal after this returns.
   window.CityOpsApp = {
     exportStandalone: exportStandalone, moreActions: moreActions,
     askPlace: openAskPlaceModal,
