@@ -89,6 +89,15 @@ trip back through paste is lossless by test. **Update data** and
 research wholesale, Enrich merges a delta (new interest matches, or an
 intel pass) without touching anything you've done.
 
+Somewhere recommended over dinner goes in by hand from the **+** on any
+section header, and the card that appears carries an **Ask Claude**
+control that looks the place up and ranks it against the rest of that
+section: "ranks 2nd of your 11 dinner picks". The header carries a
+single row of highlights above the city's facts: today's sunset,
+computed on the device from the city's coordinates with no network call,
+and up to four **pinned** items, so the tap-water rule sits in the header
+instead of eleven screens down the Info tab.
+
 ## Engineering notes, briefly
 
 The short version of [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md):
