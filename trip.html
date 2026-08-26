@@ -1699,11 +1699,18 @@
         <div id="github-setup-block" style="display:none;margin-top:14px;padding:14px;background:var(--bg-softer);border:1px dashed var(--border);border-radius:8px">
           <div style="font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-3);margin-bottom:10px">GitHub publishing setup</div>
           <div style="font-size:12px;color:var(--text-2);line-height:1.6;margin-bottom:12px">
-            1. Go to <a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noopener" style="color:var(--accent)">github.com/settings/tokens</a> → "Generate new token (fine-grained)"<br>
-            2. Set <strong>Repository access → Only select repositories</strong> → pick your plan-ahead repo<br>
-            3. Set <strong>Repository permissions → Contents → Read and write</strong><br>
-            4. Set short expiration (90 days recommended); copy the token<br>
-            5. Paste below. Token is stored in your browser only — never sent to anywhere except api.github.com.
+            1. Go to <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener" style="color:var(--accent)">github.com/settings/personal-access-tokens/new</a> (fine-grained, never classic)<br>
+            2. <strong>Repository access → Only select repositories</strong> → the one repo you publish into<br>
+            3. <strong>Repository permissions → Contents → Read and write</strong>. Nothing else: leave every other permission on No access<br>
+            4. Set an expiry, copy the token, paste it below<br>
+            5. Publish makes exactly two calls with it, both on the one file: GET the current version, PUT the new one.
+          </div>
+          <div style="font-size:12px;color:var(--text-2);line-height:1.6;margin-bottom:12px;padding:9px 11px;background:var(--bg-card);border:1px solid var(--border-light);border-radius:6px">
+            <strong>Where the token goes.</strong> It is saved on this device, and while you are signed in it also
+            syncs to your own account so your other devices can publish too. It rides in its own protected row,
+            never inside your trip data: it cannot reach a snapshot, an export, or the page your family reads.
+            It is sent to api.github.com and nowhere else. Revoke it any time at
+            <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener" style="color:var(--accent)">github.com/settings/personal-access-tokens</a>.
           </div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
@@ -1726,7 +1733,7 @@
           </div>
 
           <div style="font-size:11px;color:var(--text-3);font-family:'JetBrains Mono',monospace;margin-top:6px">
-            <strong style="color:var(--accent)">Security:</strong> token has commit access to the selected repo. Revoke anytime at github.com/settings/tokens. Use fine-grained scope, never classic.
+            <strong style="color:var(--accent)">Security:</strong> a classic token can write every repo you own. A fine-grained one scoped to Contents on a single repo can write one file. Use the second.
           </div>
         </div>
 
