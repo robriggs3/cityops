@@ -9651,7 +9651,7 @@ function renderCityCard(city, hasIssue, hasAlert, isPast) {
         // does before he gets there rather than after (owner ask 2026-08-27).
         const onSite = (city.accommodations || []).reduce((s, a) => s + stayCashDue(a), 0);
         if (onSite > 0) {
-          lines.push(`<div class="cost-line cl-onsite" title="Booked but not paid: have this much in cash or on a card when you arrive"><span class="cl-label">On site</span><span class="cl-val">${fmtCurrency(onSite,'USD')}</span></div>`);
+          lines.push(`<div class="cost-line cl-onsite" title="Booked but not paid: have this much in cash or on a card when you arrive"><span class="cl-label">Pay on site</span><span class="cl-val">${fmtCurrency(onSite,'USD')}</span></div>`);
         }
         return `<div class="cost-breakdown" title="Stays = max(estimate, booked rooms). Travel = booked transit departing this city.">${lines.join('')}</div>${buildPerMonthSub(total, nights)}`;
       })()}</div>
