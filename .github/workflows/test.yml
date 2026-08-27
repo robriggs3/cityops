@@ -22,8 +22,4 @@ jobs:
       - name: Unit tests
         run: node tests/run.js
       - name: City datasets validate
-        run: |
-          node tests/validate-city.js cities/batumi.json
-          node tests/validate-city.js cities/yerevan.json
-          node tests/validate-city.js cities/tirana.json
-          node tests/validate-city.js cities/ksamil.json
+        run: node tests/validate-city.js cities/example.json

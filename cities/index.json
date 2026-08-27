@@ -1,0 +1,5 @@
+{
+  "cities": [
+    {"file": "example.json", "name": "Example City", "dates": "Jan 1-7, 2026"}
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "city": {
+    "name": "Example City",
+    "country": "XX",
+    "dates": {
+      "from": "2026-01-01",
+      "to": "2026-01-07"
+    },
+    "accommodation": {
+      "name": "Example Stay",
+      "lat": 0,
+      "lng": 0
+    },
+    "currency": {
+      "code": "USD",
+      "usd": 1
+    },
+    "notes": [
+      "This is an example city. Tap the city name above, then Add city, and paste your own generated JSON."
+    ]
+  },
+  "sections": [
+    {
+      "id": "dinner",
+      "label": "Dinner",
+      "icon": "🍽️"
+    }
+  ],
+  "items": [
+    {
+      "id": "example",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-01-02",
+      "when": "First evening",
+      "name": "Example Restaurant",
+      "price": {
+        "text": "~$20"
+      },
+      "note": "Replace me. This item exists so the empty template renders.",
+      "hours": {
+        "text": "12:00-23:00 daily",
+        "class": "late"
+      },
+      "tags": [],
+      "links": [],
+      "place_id": null,
+      "verified": null
+    }
+  ]
+}

@@ -14,11 +14,13 @@ half the value is discovered on the ground. CityOps owns the layer between
 AI research and the actual week: a guide with a working memory.
 
 **Live app:** [cityops.robriggs.com](https://cityops.robriggs.com) ·
-**Trip:** [/trip.html](https://cityops.robriggs.com/trip.html) ·
-**Example guides:** [Yerevan](https://cityops.robriggs.com/yerevan.html)
-(currently being lived in) and
-[Batumi](https://cityops.robriggs.com/batumi.html) (the field-tested
-original) · **Deep dive:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+**Example guide:** [example.html](https://cityops.robriggs.com/example.html) ·
+**Deep dive:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+
+This public repo ships the app plus one bundled example city. The real
+city guides it was built around (and field-tested on) are personal travel
+data and live out-of-repo by design, in a private deployment of the same
+code.
 
 | Planner | Review-verified intel | Calendar view |
 |---|---|---|
@@ -45,9 +47,9 @@ original) · **Deep dive:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
   your device and Anthropic's API, billed to your key.
 - **Review-verified intel.** Cards carry `must / good / skip` verdicts on
   specific dishes and specifics-of-the-thing (which route, which seats,
-  which add-on), plus tips and a source line. The shipped Yerevan guide
-  includes a real pass: 25 items, 73 verdicts, built from per-dish review
-  data, which corrected the guide's own prose in four places.
+  which add-on), plus tips and a source line. A real pass on a lived-in
+  guide produced 25 items with 73 verdicts, built from per-dish review
+  data, and corrected the guide's own prose in four places.
 - **Local-first sync.** Optional magic-link login puts cities, progress,
   and your profile behind your account with row-level security. Offline
   and logged-out modes are fully functional; sync reconciles newest-wins
