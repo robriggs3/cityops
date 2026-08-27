@@ -3,7 +3,40 @@ const fs = require('fs');
 const path = require('path');
 const root = path.join(__dirname, '..');
 const engine = fs.readFileSync(path.join(root, 'src', 'cityops.js'), 'utf8');
-const css = fs.readFileSync(path.join(root, 'src', 'cityops.css'), 'utf8').replace(/\n$/, '');
+
+// ---- the shared header ----
+// One header DOM and one header stylesheet, assembled into BOTH surfaces.
+// Before this each surface hand-built its own red band and they drifted twice.
+// The CI drift guard (assemble, then `git diff --exit-code`) is what keeps
+// them from drifting again: editing either copy in the built HTML is caught.
+const headerHtml = fs.readFileSync(path.join(root, 'src', 'header.html'), 'utf8').replace(/\n$/, '');
+const headerCss = fs.readFileSync(path.join(root, 'src', 'header.css'), 'utf8').replace(/\n$/, '');
+const HEADER_MARK = '<!--CITYOPS_HEADER-->';
+const HEADER_CSS_MARK = '/*CITYOPS_HEADER_CSS*/';
+
+// The header stylesheet goes in wherever a surface asks for it, and a surface
+// that asks twice would ship it twice, so this is a single replace and the
+// count is checked.
+function withHeaderCss(text, name) {
+  const hits = text.split(HEADER_CSS_MARK).length - 1;
+  if (hits !== 1) {
+    throw new Error(name + ': expected exactly one ' + HEADER_CSS_MARK + ' marker, found ' + hits);
+  }
+  return text.replace(HEADER_CSS_MARK, () => headerCss);
+}
+
+function withHeaderHtml(text, name) {
+  const hits = text.split(HEADER_MARK).length - 1;
+  if (hits !== 1) {
+    throw new Error(name + ': expected exactly one ' + HEADER_MARK + ' marker, found ' + hits);
+  }
+  return text.replace(HEADER_MARK, () => headerHtml);
+}
+
+const css = withHeaderCss(
+  fs.readFileSync(path.join(root, 'src', 'cityops.css'), 'utf8').replace(/\n$/, ''),
+  'cityops.css'
+);
 
 function inline(shell, shellName) {
   if (shell.indexOf('<!--CITYOPS_ENGINE-->') === -1) throw new Error('engine marker missing in ' + shellName);
@@ -105,8 +138,14 @@ if (fs.existsSync(path.join(root, 'src', 'trip-shell.html'))) {
     throw new Error(shellName + ': ' + opens + ' script opens vs ' + closes + ' closes and ' +
       escaped + ' escaped closes; an unescaped closing script sequence in authored code truncates the block');
   }
+  // The trip surface keeps its own stylesheet by design, so it takes the
+  // shared HEADER css and html the same way the guide side does, at its own
+  // two markers. That is the whole mechanism behind "one header, two
+  // surfaces": neither shell owns the band any more.
+  let tripOut = withHeaderCss(shell, shellName);
+  tripOut = withHeaderHtml(tripOut, shellName);
   fs.writeFileSync(path.join(root, 'trip.html'),
-    shell.replace('<!--CITYOPS_ENGINE-->', () => engine));
+    tripOut.replace('<!--CITYOPS_ENGINE-->', () => engine));
   console.log('assembled trip.html');
 }
 
@@ -114,7 +153,7 @@ if (fs.existsSync(path.join(root, 'src', 'app-shell.html'))) {
   build('app-shell.html', 'index.html', function (out, shellName) {
     if (out.indexOf('<!--CITYOPS_TEMPLATE-->') === -1) throw new Error('template marker missing in ' + shellName);
     if (out.indexOf('<!--CITYOPS_PROMPT-->') === -1) throw new Error('prompt marker missing in ' + shellName);
-    return out
+    return withHeaderHtml(out, shellName)
       .replace('<!--CITYOPS_TEMPLATE-->', () => guideTemplateBlock())
       .replace('<!--CITYOPS_PROMPT-->', () => promptTemplateBlock());
   });

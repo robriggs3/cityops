@@ -51,6 +51,108 @@
     padding-left:var(--bleed-pad); padding-right:var(--bleed-pad);}
   header h1{font-size:1.55rem; letter-spacing:.2px;}
   header .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
+
+/* ==========================================================================
+   THE SHARED HEADER
+   One source, assembled into both stylesheets by tools/assemble.js at the
+   /*CITYOPS_HEADER_CSS* / marker. Written against tokens BOTH surfaces already
+   declare under the same names (--accent, --accent-hover, --gutter,
+   --content-max, --bleed-pad), so it needs nothing that is not already there.
+
+   The band is full bleed: the negative side margins pull it past the content
+   column's max-width, and --bleed-pad puts its CONTENTS back on that column,
+   so the h1 and the first card below it share an x at every width.
+
+   It sits FLUSH to the top of the viewport (owner ask 2026-08-27: "cleanup the
+   margin at the top, there's something separating the red header from the top
+   of the browser window"). That is why margin-top is 0 here and why both
+   shells put this element first inside .wrap: an empty notice line above it
+   used to collapse its 8px top margin out through .wrap and body and push the
+   whole page, band included, 8px down.
+   ========================================================================== */
+.apphdr{
+  background:linear-gradient(160deg,var(--accent) 0%,var(--accent-hover) 100%);
+  color:#fff; border-radius:0;
+  margin:0 calc(50% - 50vw) 20px;
+  padding:0 var(--bleed-pad) 22px;
+}
+
+/* --- the peer row: which surface you are on, and the app-level doors --- */
+.apphdr-bar{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:12px; flex-wrap:wrap;
+  padding:10px 0 12px;
+  border-bottom:1px solid rgba(255,255,255,.18);
+  margin-bottom:16px;
+}
+
+/* Cities and Trip are PEERS, not a chip and a title. They were a one-off chip
+   on each side ("Trip" on the guide, "City guides" on the trip page), which
+   read as a link off to somewhere else rather than as the two halves of one
+   app. A segmented pair says what it is: you are in one of these two places. */
+.surfsw{display:inline-flex; background:rgba(0,0,0,.18); border-radius:20px; padding:2px;}
+.surfsw .surf{
+  font:inherit; font-size:.78rem; font-weight:600; letter-spacing:.02em;
+  color:rgba(255,255,255,.78); text-decoration:none;
+  padding:6px 14px; border-radius:18px; white-space:nowrap;
+  display:inline-flex; align-items:center; cursor:pointer;
+}
+.surfsw .surf:hover{color:#fff;}
+/* The current surface. aria-current is the fact; the styling follows it, so
+   there is no separate "active" class to forget to move. */
+.surfsw .surf[aria-current="page"]{
+  background:rgba(255,255,255,.92); color:var(--accent-hover); cursor:default;
+}
+
+.apphdr-acts{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+
+/* One chip vocabulary for every app-level door, on both surfaces. */
+.hdr-chip{
+  background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3);
+  color:#fff; font:inherit; font-size:.78rem; padding:5px 11px; border-radius:20px;
+  cursor:pointer; text-decoration:none; white-space:nowrap;
+  display:inline-flex; align-items:center; gap:5px;
+}
+.hdr-chip:hover{background:rgba(255,255,255,.28); border-color:rgba(255,255,255,.55);}
+.hdr-chip:disabled{opacity:.55; cursor:default;}
+/* Sync state colours the chip rather than adding a line: green when the
+   account has this device's work, amber when sync has stopped, plain
+   translucent white when the traveler is signed out on purpose. */
+.hdr-chip.ok{background:rgba(212,232,213,.22); border-color:rgba(212,232,213,.6);}
+.hdr-chip.warn{background:rgba(237,225,190,.26); border-color:rgba(237,225,190,.7);}
+
+/* --- the per-surface middle --- */
+.apphdr-mid h1{font-size:1.55rem; letter-spacing:.2px; line-height:1.15;}
+.apphdr-mid .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
+
+/* "Last touched" is a FACT, not a door, and it was wearing a pill that cost
+   more width than the words (owner ask 2026-08-27: "that takes a lot of room.
+   let's make that smaller, just text, no pill"). Plain muted text now: no
+   border, no background, no padding. */
+.hdr-meta{
+  font-size:.72rem; color:rgba(255,255,255,.72); letter-spacing:.02em;
+  white-space:nowrap; align-self:center;
+}
+
+@media (max-width: 430px){
+  .apphdr{margin:0 calc(50% - 50vw) 16px; padding:0 var(--bleed-pad) 16px;}
+  .apphdr-bar{padding:8px 0 10px; margin-bottom:12px; gap:8px;}
+  .surfsw .surf{font-size:.74rem; padding:7px 13px;}
+  .hdr-chip{font-size:.74rem; padding:5px 10px;}
+  .apphdr-mid h1{font-size:1.35rem;}
+  .hdr-meta{font-size:.68rem;}
+}
+
+/* A door gets a thumb on a touch screen. The width test is here as well as the
+   pointer test on purpose: desktop Chrome at 390px reports a fine pointer, and
+   Rob's phone is 390px, so width is the reliable signal of the two. */
+@media (hover: none), (pointer: coarse){
+  .surfsw .surf, .hdr-chip{min-height:44px;}
+}
+@media (max-width: 430px){
+  .surfsw .surf, .hdr-chip{min-height:44px;}
+}
+
   .facts{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;}
   .chip{background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25);
     padding:5px 10px; border-radius:20px; font-size:.8rem;}
@@ -179,6 +281,15 @@
   .planday.drop-into{background:var(--accent-soft); border-radius:12px;
     box-shadow:0 0 0 2px var(--accent);}
   .planday.drop-into > h2{color:var(--accent-hover);}
+  /* A past day everything on which is done folds itself away and then gets
+     OUT OF THE WAY: same as the app fades a done card, so the eye lands on
+     what is still coming rather than on a row of finished dates. Still fully
+     legible and still one tap from opening, which is why this is opacity and
+     weight rather than a smaller type size. */
+  .planday-settled > .sec-toggle{opacity:.62; font-weight:600;}
+  .planday-settled > .sec-toggle:hover,
+  .planday-settled > .sec-toggle:focus-visible{opacity:1;}
+  .planday-settled .sec-count{color:var(--green-ink); font-weight:700;}
   /* "Nothing planned yet" must not sit under the card being dropped on it. */
   .planlist.has-drop > .empty-note{display:none;}
   /* A section tab's card list. Purely a drag container: it carries the
@@ -246,6 +357,14 @@
     padding:14px 16px; margin:20px 0; font-size:.9rem;}
   .errcard b{color:var(--accent-hover);}
   #notice{font-size:.78rem; color:var(--text-3); margin:8px 0;}
+  /* An EMPTY notice line is the normal case, and an empty block with a margin
+     and no height self-collapses: its 8px top margin escaped through .wrap
+     (padding-top:0) and body and pushed the whole page, red band included, 8px
+     off the top of the window. Owner ask 2026-08-27: "cleanup the margin at
+     the top... was only intended to be left/right." Taking it out of flow when
+     it has nothing to say is the fix, and it also stops an empty line eating
+     16px of vertical rhythm above the first card. */
+  #notice:empty{display:none;}
   .when-line{font-size:.8rem; color:var(--text-3); font-style:italic; margin-top:2px;}
   .modal-wrap{position:fixed; inset:0; background:rgba(36,36,36,.5); display:flex;
     align-items:center; justify-content:center; padding:16px; z-index:100;}
@@ -627,24 +746,16 @@
   #hdr{position:relative;}
   #hdr h1{cursor:pointer; display:inline-flex; align-items:center; gap:2px;}
   .hdr-chev{font-size:.85rem; opacity:.85;}
-  /* Profile and + Add city are both app-level, top-of-header controls (not
-     inside the per-city switcher menu): Profile holds ONE interest profile
-     and ONE Claude key for every city, so it lives here rather than inside
-     the city dropdown, which would read as "this city's profile". */
-  /* #hdr is full-bleed since the 2026-08-26 header pass, so `right` here is
-     measured off the VIEWPORT edge. --bleed-pad is the header's own side
-     padding, so these chips end where the content column ends rather than
-     drifting out to the screen edge on a wide monitor. */
-  .hdr-actions{position:absolute; top:24px; right:var(--bleed-pad); display:flex; gap:6px;}
-  .hdr-chip{font:inherit; font-size:.75rem; font-weight:700;
-    color:#fff; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.4);
-    border-radius:20px; padding:5px 11px; cursor:pointer; white-space:nowrap;}
-  .hdr-chip:hover{background:rgba(255,255,255,.25);}
-  /* The Trip door is a real link (middle-click, open-in-new-tab, and a visible
-     target in the status bar all matter for a crossing between surfaces), so
-     it has to be talked back into looking like the sibling buttons. */
-  a.hdr-chip{display:inline-flex; align-items:center; text-decoration:none;}
-  a.hdr-chip:hover{color:#fff;}
+  /* Profile, sync and + Add city are app-level controls (not per-city ones):
+     Profile holds ONE interest profile and ONE Claude key for every city, so
+     it lives in the header rather than inside the city dropdown, which would
+     read as "this city's profile".
+
+     They used to be absolutely positioned over the band, which is why they
+     had a `top` per breakpoint and why the city title had to leave room for
+     them. They now sit in the shared header's own peer row (#hdr-acts), which
+     lays them out; .hdr-chip itself is defined once in src/header.css and
+     shared with the trip surface. */
 
   /* Dropdown panel: floats directly under the header (does not add header
      height); #citybar is its host, positioned inside .wrap right after
@@ -736,10 +847,6 @@
      look like the rest of the muted helper text. */
   .modal .acct-off{color:var(--amber-ink); background:var(--amber-soft);
     border-radius:8px; padding:8px 10px; font-weight:600;}
-  @media (max-width: 430px){
-    .hdr-actions{top:17px; gap:4px;}
-    .hdr-chip{padding:4px 9px; font-size:.7rem;}
-  }
 
   /* --- Past cities in the switcher (owner ask 2026-08-26) ---
      "need the ability to archive cities previously visited in cityops page
@@ -773,12 +880,56 @@
 </head>
 <body>
 <div class="wrap">
+  <!-- The shared header is the FIRST thing in .wrap, on both surfaces, and
+       that is load-bearing rather than tidy: the notice line used to sit above
+       it, and an EMPTY notice line self-collapses and pushes its 8px top margin
+       out through .wrap and body, which moved the whole page (red band
+       included) 8px down from the top of the window. Owner ask 2026-08-27:
+       "cleanup the margin at the top". Measured: the band's rect.top is 0 at
+       390px and at 1440px. -->
+  <!-- The ONE header, assembled into both surfaces.
+     Owner ask 2026-08-27: "possible to use a shared header between cityops and
+     plan-ahead? that would make the apps feel more cohesive."
+
+     Before this, each surface hand-built its own red band: same colours, same
+     bleed, different DOM, different class names, two stylesheets to keep in
+     step. They had already drifted twice (the content column, then the gutter),
+     and each fix had to be made twice.
+
+     Now tools/assemble.js injects this exact block into app-shell.html and
+     trip-shell.html at their header marker, and src/header.css into both
+     stylesheets at the matching CSS marker. (Neither marker is spelled out in
+     this file: the injected copy would then carry a second one, and the
+     assembler's "exactly one marker" check exists precisely to catch a stray.)
+     The CI drift guard re-runs
+     assemble and diffs, so the two surfaces cannot drift again without the
+     build going red.
+
+     What is SHARED: the band itself, the Cities|Trip switch, the sync chip and
+     the Profile door. What each surface fills in is #hdr-mid: the guide side
+     writes the city title, its dates and its highlights row; the trip side
+     writes the trip title and the NOW chip. Same box, different contents.
+
+     #hdr-mid exists so the engine can keep wiping its own half with
+     innerHTML='' on every render without taking the shared chrome with it. A
+     standalone exported guide has no shared header at all (guide-shell.html
+     does not carry this marker), which is why renderHeader falls back to #hdr
+     when #hdr-mid is absent. -->
+<header class="apphdr" id="hdr">
+  <div class="apphdr-bar">
+    <nav class="surfsw" id="surfsw" aria-label="App surface">
+      <a class="surf" id="surf-cities" href="./">Cities</a>
+      <a class="surf" id="surf-trip" href="./trip.html">Trip</a>
+    </nav>
+    <div class="apphdr-acts" id="hdr-acts"></div>
+  </div>
+  <div class="apphdr-mid" id="hdr-mid"></div>
+</header>
   <div id="notice"></div>
   <!-- App-owned and never touched by the engine (which rewrites #notice on
        every render): the one place a stopped sync can say so and still be
        there after the next tap. -->
   <div id="syncalert"></div>
-  <header id="hdr"></header>
   <div id="citybar"></div>
   <div class="toolbar" id="toolbar"></div>
   <nav class="tabbar" id="tabbar" aria-label="Guide sections" hidden></nav>
@@ -1147,6 +1298,40 @@ var CityOps = (function () {
   // id anyway.
   var PLACE_ID_FALLBACK = 'place';
 
+  // Telling a MAP link from a plain website, for the icon the card draws.
+  // Matching on the HOST (with a leading-dot boundary) rather than anywhere in
+  // the string is what stops "evil.example/?x=google.com/maps" being filed as
+  // a map. Two shapes, because Google's share sheet hands out both: a host
+  // that is a map and nothing else, and a host that is a map only on its map
+  // PATH.
+  var MAP_ONLY_HOST_RE = /^(maps\.[a-z0-9.-]+|maps\.app\.goo\.gl)$/;
+  var MAP_PATH_HOST_RE = /(^|\.)(google\.[a-z.]+|goo\.gl|openstreetmap\.org|osm\.org|apple\.com)$/;
+  var MAP_PATH_RE = /^\/(maps|place|local)(\/|\?|$)/;
+
+  // 'map' | 'web' | null. null means "not something a browser can open as a
+  // web page", which is the only case the Add-a-place form rejects: a tel: or
+  // a bare "pizzarte" would both be accepted by safeHref (one is a real
+  // scheme, the other is a relative URL) and neither is a research link.
+  function researchLinkKind(raw) {
+    var s = trimStr(raw);
+    if (!s) return null;
+    if (!safeHref(s)) return null;
+    var probe = s.replace(/[\u0000-\u0020]/g, '');
+    if (!/^https?:\/\//i.test(probe)) return null;
+    var rest = probe.replace(/^https?:\/\//i, '');
+    var cut = rest.search(/[\/?#]/);
+    var host = (cut === -1 ? rest : rest.slice(0, cut)).toLowerCase();
+    var path = cut === -1 ? '/' : rest.slice(cut);
+    var at = host.lastIndexOf('@');        // strip any userinfo before the host
+    if (at !== -1) host = host.slice(at + 1);
+    var port = host.indexOf(':');
+    if (port !== -1) host = host.slice(0, port);
+    if (!host) return null;
+    if (MAP_ONLY_HOST_RE.test(host)) return 'map';
+    if (MAP_PATH_HOST_RE.test(host) && MAP_PATH_RE.test(path)) return 'map';
+    return 'web';
+  }
+
   function freePlaceId(cityData, name) {
     var taken = Object.create(null);
     (cityData && Array.isArray(cityData.items) ? cityData.items : []).forEach(function (it) {
@@ -1183,6 +1368,17 @@ var CityOps = (function () {
     var status = trimStr(f.status) || 'plan';
     var note = trimStr(f.note);
     var day = trimStr(f.day);
+    // Optional research link (owner ask 2026-08-27: the single-place pass
+    // "couldn't find info on Pizzarté"). A small independent restaurant with
+    // no web presence is unsearchable by name; a Google Maps pin or the
+    // place's own site is the one thing that makes it findable. It is stored
+    // as a real links[] entry so the card renders it like any other link, and
+    // it is quoted to Claude as a research hint (see buildPlacePassPrompt).
+    var link = trimStr(f.link);
+    var linkKind = link ? researchLinkKind(link) : null;
+    if (link && !linkKind) {
+      errors.push('That link is not a web address CityOps can open. Paste a link starting with http:// or https://.');
+    }
     if (!name) errors.push('A name is required.');
     var secIds = Object.create(null);
     (cityData && Array.isArray(cityData.sections) ? cityData.sections : []).forEach(function (s) {
@@ -1199,6 +1395,12 @@ var CityOps = (function () {
     if (errors.length) return { delta: null, id: null, errors: errors };
     var id = freePlaceId(cityData, name);
     var item = { id: id, section: section, status: status, name: name, links: [] };
+    if (linkKind) {
+      // Labelled the way the guide's own generated links are, so the card's
+      // link row reads the same whether the place came from Claude or from a
+      // paste: an icon and a short word, not a raw URL.
+      item.links.push({ kind: linkKind, label: linkKind === 'map' ? 'Map' : 'Website', href: link });
+    }
     if (note) item.note = note;
     if (day) item.day = day;
     // Stamped so the card, the More sheet and the research prompt can all
@@ -1754,22 +1956,80 @@ var CityOps = (function () {
     return (state && state.tab && TAB_IDS.indexOf(state.tab) !== -1) ? state.tab : 'plan';
   }
 
-  // Per-day collapse in the Plan tab's "remaining days" list. Same tri-state
-  // read as isSectionCollapsed (explicit override wins, otherwise a computed
-  // default). Owner feedback 2026-08-25: every day now defaults to EXPANDED
-  // on page load (was collapsed); the traveler's own explicit choice, once
-  // made, still sticks (that's what collapsedPlanDays persists).
-  function isPlanDayCollapsed(state, iso) {
-    var explicit = ownProp(state.collapsedPlanDays, iso);
-    if (explicit === true || explicit === false) return explicit;
-    return false;
+  // ---- Per-day collapse in the Plan tab's day list ----
+  // Same tri-state read as isSectionCollapsed: an explicit override wins,
+  // otherwise a computed default. That default was a flat "expanded" from
+  // 2026-08-25 (owner feedback: every day open on page load), and it now has
+  // one exception, below. The traveler's own explicit choice still sticks
+  // either way, which is what collapsedPlanDays persists.
+
+  // A day the traveler has finished with, and which is behind them.
+  // Owner ask 2026-08-27: "auto-collapse past days when all activities have
+  // been accomplished". Three conditions, all of them required:
+  //   - the day is STRICTLY before today. Today and every day ahead stay
+  //     expanded whatever their contents, because the point of the Plan tab
+  //     is what is still coming.
+  //   - it has at least one item. An empty past day has nothing to
+  //     congratulate you for, and a header reading "0 done" is worse than the
+  //     empty group it replaced.
+  //   - every one of those items is settled: done, or archived. (Day groups
+  //     drop archived items today, so in practice this reads "all done"; the
+  //     archived arm is there so the rule stays true if that ever changes,
+  //     rather than quietly meaning something different.)
+  // `entries` are planModel's per-day rows, each {sec, it, status}.
+  function planDayAutoCollapsed(iso, entries, todayIsoStr) {
+    if (!iso || !todayIsoStr || iso >= todayIsoStr) return false;
+    var list = Array.isArray(entries) ? entries : [];
+    if (!list.length) return false;
+    for (var i = 0; i < list.length; i++) {
+      var s = list[i] && list[i].status;
+      if (s !== 'done' && s !== 'archived') return false;
+    }
+    return true;
   }
 
-  function togglePlanDay(state, iso) {
+  function planDayDoneCount(entries) {
+    var n = 0;
+    (Array.isArray(entries) ? entries : []).forEach(function (e) {
+      if (e && (e.status === 'done' || e.status === 'archived')) n++;
+    });
+    return n;
+  }
+
+  // Tri-state read, same shape as isSectionCollapsed: the traveler's own
+  // explicit choice always wins, and absent falls back to the computed
+  // default. `auto` is that default (planDayAutoCollapsed above); omitting it
+  // keeps the old behaviour of "expanded", which is what every caller that
+  // does not group by date wants.
+  function isPlanDayCollapsed(state, iso, auto) {
+    var explicit = ownProp(state.collapsedPlanDays, iso);
+    if (explicit === true || explicit === false) return explicit;
+    return auto === true;
+  }
+
+  // Toggling back to whatever the default currently is DELETES the override
+  // rather than writing it, so collapsedPlanDays only ever holds genuine
+  // departures. That matters more now than it did when the default was always
+  // "expanded": a past day the traveler expanded by hand keeps a stored false
+  // (it is a real departure), but re-collapsing it lets the auto rule own it
+  // again, so finishing one more item on an older day still folds it away.
+  function togglePlanDay(state, iso, auto) {
     state.collapsedPlanDays = state.collapsedPlanDays || {};
-    var next = !isPlanDayCollapsed(state, iso);
-    if (next === false) delete state.collapsedPlanDays[iso]; // back to the default (expanded)
+    var next = !isPlanDayCollapsed(state, iso, auto);
+    if (next === (auto === true)) delete state.collapsedPlanDays[iso];
     else state.collapsedPlanDays[iso] = next;
+    return state;
+  }
+
+  // "Put this day on screen", used by the two places that must show a card
+  // sitting on a folded day (a highlight-chip reveal, and a drop onto a
+  // collapsed day). Not togglePlanDay: on an auto-collapsed day a toggle that
+  // deletes the override would leave the day folded again on the next render,
+  // which is exactly the invisible-result failure both callers exist to avoid.
+  function expandPlanDay(state, iso, auto) {
+    state.collapsedPlanDays = state.collapsedPlanDays || {};
+    if (auto === true) state.collapsedPlanDays[iso] = false;
+    else delete state.collapsedPlanDays[iso];
     return state;
   }
 
@@ -1987,8 +2247,13 @@ var CityOps = (function () {
     });
     var stayIsos = stayDates(range);
     var otherDays = stayIsos.filter(function (iso) { return iso !== today; }).map(function (iso) {
-      return { iso: iso, label: dayLabel(iso),
-        items: orderDayItems(byIso[iso] || [], dayItemOrderFor(state, iso)) };
+      var items = orderDayItems(byIso[iso] || [], dayItemOrderFor(state, iso));
+      return { iso: iso, label: dayLabel(iso), items: items,
+        // What the day header needs to render itself compactly when it folds:
+        // how many of its items are settled, and whether it folds by default.
+        done: planDayDoneCount(items),
+        past: iso < today,
+        auto: planDayAutoCollapsed(iso, items, today) };
     });
     // Three task buckets, one per outcome a task can reach: still open, done,
     // and declined. Declined is the EXISTING archived status, not a fourth
@@ -2029,6 +2294,17 @@ var CityOps = (function () {
       doneTasks: doneTasks,
       declinedTasks: declinedTasks
     };
+  }
+
+  // One day's computed collapse default, looked up through the same planModel
+  // the renderer reads, so a caller that only has an iso in hand cannot get a
+  // different answer from the one on screen.
+  function planDayAutoFor(data, state, iso) {
+    var pm = planModel(data, state);
+    for (var i = 0; i < pm.days.length; i++) {
+      if (pm.days[i].iso === iso) return !!pm.days[i].auto;
+    }
+    return false;
   }
 
   // Phase 3, feature 4: the "what matters today" view. Three buckets, all
@@ -2118,12 +2394,18 @@ var CityOps = (function () {
   }
 
   // The Plan tab's twin of the above, over dates instead of section ids.
-  function setPlanDaysCollapsed(state, isos, collapsed) {
+  // `autos` maps iso -> that day's computed default (planDayAutoCollapsed).
+  // Without it every default is "expanded", which is exactly what this did
+  // before past days could fold themselves away. With it, Expand all writes a
+  // real `false` on a day that would otherwise re-collapse itself, so the link
+  // does what it says on a stay whose first half is already behind you.
+  function setPlanDaysCollapsed(state, isos, collapsed, autos) {
     state.collapsedPlanDays = state.collapsedPlanDays || {};
     (Array.isArray(isos) ? isos : []).forEach(function (iso) {
       if (!iso) return;
-      if (collapsed === false) delete state.collapsedPlanDays[iso];
-      else state.collapsedPlanDays[iso] = true;
+      var auto = !!(autos && Object.prototype.hasOwnProperty.call(autos, iso) && autos[iso]);
+      if (!!collapsed === auto) delete state.collapsedPlanDays[iso];
+      else state.collapsedPlanDays[iso] = !!collapsed;
     });
     return state;
   }
@@ -3043,6 +3325,18 @@ var CityOps = (function () {
   // matter. Done and archived rivals stay in the list, unlike the ratings
   // pass: a place already eaten at is exactly the yardstick worth ranking a
   // new recommendation against.
+  // The item's own map/website links, as bare hrefs, for a prompt to quote.
+  // Only what a browser could open: a tel: number is not a research hint.
+  function researchLinks(item) {
+    var out = [];
+    ((item && Array.isArray(item.links)) ? item.links : []).forEach(function (l) {
+      if (!l || (l.kind !== 'map' && l.kind !== 'web')) return;
+      var h = trimStr(l.href);
+      if (h && safeHref(h) && out.indexOf(h) === -1) out.push(h);
+    });
+    return out;
+  }
+
   function buildPlacePassPrompt(templateText, cityData, item, state) {
     var rerun = sliceLandmark(templateText, 'RERUN:PLACE');
     if (!item || !item.id) throw new Error('No place to research.');
@@ -3062,6 +3356,19 @@ var CityOps = (function () {
     out.push('- **Section:** ' + (sec ? trimStr(sec.label) + ' (' + secId + ')' : trimStr(secId)));
     if (trimStr(item.note)) out.push('- **The traveler\'s note:** ' + trimStr(item.note).replace(/\s+/g, ' '));
     if (trimStr(item.day)) out.push('- **Pencilled in for:** ' + trimStr(item.day));
+    // The research hint. A small independent place is often unfindable by
+    // name alone (the run that prompted this could not find Pizzarté in
+    // Tirana), so when the traveler pasted a map pin or the place's own site
+    // while adding it, the pass is TOLD to start there rather than left to
+    // search a name that returns nothing.
+    var hints = researchLinks(item);
+    if (hints.length) {
+      out.push('- **The user provided this link for the place:** ' + hints.join(' , '));
+      out.push('  Start from that link. It is the traveler\'s own reference for this exact ' +
+        'place, so prefer what it says over a search result for a similar name, and say so ' +
+        'in `source`. If the link is dead or is plainly a different place, say that in `tips` ' +
+        'rather than guessing.');
+    }
     out.push('');
     out.push('## What I need', '', rerun, '');
     out.push('## Others already in this section', '');
@@ -3078,6 +3385,110 @@ var CityOps = (function () {
         'verdict on their own.', '');
     }
     return out.join('\n');
+  }
+
+  // ---- the trip surface's door back to the guides (pure) ----
+  // Owner report 2026-08-27: "my 'now' city is showing an archived city. also
+  // fix the city I'm navigated to when clicking 'city guides'."
+  //
+  // The trip half knows its own stops; the guide half knows which guides
+  // exist. The chip and the Cities door both have to answer one question from
+  // those two facts: WHICH GUIDE should this open? It has to be answered
+  // against the guides as they exist NOW, so a guide that was removed (its
+  // row is gone) or archived (a city the traveler has left) is not a
+  // destination, even when the stop covering today names it.
+  //
+  // Lives here, not in the trip shell, for two reasons: the engine already
+  // ships into trip.html, and a pure function here is one the Node tests can
+  // reach. The shell keeps the fetch and the DOM.
+
+  // cityops' own id shape: slug(name) + '-' + arrival date.
+  function guideIdFor(name, fromIso) {
+    var s = slug(String(name || ''));
+    if (!s || !fromIso) return '';
+    return s + '-' + fromIso;
+  }
+
+  // One stop -> the id of a LIVE guide for it, or '' when there is none.
+  // Exact match first (same city, same arrival). Then the same city on a
+  // different date, nearest wins: Rob shifts a check-in by a day far more
+  // often than he visits the same city twice, and a guide for "Ohrid, arrived
+  // the 3rd" is still the right guide when the stop now says the 4th.
+  //
+  // `index` is {ids: [...], archived: {id: true}}. An archived id is skipped
+  // exactly like a missing one: it is a city he has left, so it is never what
+  // "where am I going next" should open.
+  function liveGuideIdForStop(stop, index) {
+    var ids = (index && Array.isArray(index.ids)) ? index.ids : [];
+    if (!ids.length) return '';
+    var archived = (index && index.archived && typeof index.archived === 'object') ? index.archived : {};
+    function live(id) {
+      return !!id && ids.indexOf(id) !== -1 &&
+        !(Object.prototype.hasOwnProperty.call(archived, id) && archived[id]);
+    }
+    var name = stop && stop.name;
+    var s = slug(String(name || ''));
+    if (!s) return '';
+    var exact = guideIdFor(name, stop && stop.checkIn);
+    if (live(exact)) return exact;
+    var prefix = s + '-';
+    var siblings = ids.filter(function (id) { return id.indexOf(prefix) === 0 && live(id); });
+    if (!siblings.length) return '';
+    var want = isoMs(stop && stop.checkIn);
+    if (want === null) return siblings[0];
+    var best = siblings[0], bestGap = Infinity;
+    siblings.forEach(function (id) {
+      var at = isoMs(id.slice(prefix.length));
+      var gap = (at === null) ? Infinity : Math.abs(at - want);
+      if (gap < bestGap) { bestGap = gap; best = id; }
+    });
+    return best;
+  }
+
+  // The whole resolution, as one decision.
+  //
+  //   stops       the trip's own city list ({name, checkIn, checkOut}, any
+  //               order, any amount of junk in it)
+  //   index       {ids, archived} as above
+  //   todayIsoStr today
+  //
+  // Returns { when, stop, guideId, kind }:
+  //   kind 'guide'  guideId names a live guide; open it. `when` is 'NOW' when
+  //                 that stop covers today, 'NEXT' when it is ahead.
+  //   kind 'plan'   there is a stop worth naming but no live guide anywhere
+  //                 ahead; the door opens the guide half so one can be added.
+  //   kind 'root'   there is nothing dated to say anything about; the door
+  //                 opens the guide half on whatever city it was last showing.
+  //
+  // The order is deliberate: the stop you are STANDING IN first, then the
+  // ones ahead of you in date order. With Rob's data on 2026-08-27 (in Tirana
+  // until the 29th, Tirana's guide removed, Ksamil ahead) that lands on
+  // Ksamil, which is the guide he would actually want open.
+  function resolveGuideDoor(stops, index, todayIsoStr) {
+    var today = todayIsoStr || todayIso();
+    var named = (Array.isArray(stops) ? stops : []).filter(function (c) {
+      return c && typeof c.name === 'string' && trimStr(c.name);
+    });
+    var here = null;
+    named.forEach(function (c) {
+      if (here) return;
+      if (c.checkIn && c.checkOut && c.checkIn <= today && c.checkOut > today) here = c;
+    });
+    var ahead = named.filter(function (c) { return c.checkIn && c.checkIn > today; })
+      .sort(function (a, b) { return a.checkIn < b.checkIn ? -1 : (a.checkIn > b.checkIn ? 1 : 0); });
+    var order = (here ? [{ stop: here, when: 'NOW' }] : [])
+      .concat(ahead.map(function (c) { return { stop: c, when: 'NEXT' }; }));
+    for (var i = 0; i < order.length; i++) {
+      var id = liveGuideIdForStop(order[i].stop, index);
+      if (id) return { when: order[i].when, stop: order[i].stop, guideId: id, kind: 'guide' };
+    }
+    // Nothing ahead has a guide. Still name the stop rather than go quiet: a
+    // door that opens the guide half so one can be written is a real answer,
+    // and it is the one this app already offered on a stop card.
+    if (order.length) {
+      return { when: order[0].when, stop: order[0].stop, guideId: '', kind: 'plan' };
+    }
+    return { when: null, stop: null, guideId: '', kind: 'root' };
   }
 
   // ---- AI response parsing (pure) ----
@@ -3246,6 +3657,7 @@ var CityOps = (function () {
   var KEY_VALUE_CAP = 4000;      // a Claude key is ~108 chars; this is a sanity bound
   var GENMETA_FIELD_CAP = 2000;  // one free-text form field
   var GENMETA_CITY_CAP = 100;    // cities carried in the map
+  var TOMB_CAP = 300;            // removed-city tombstones carried in the map
 
   function stampedBlock(raw, valueFn) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
@@ -3288,6 +3700,131 @@ var CityOps = (function () {
     return stampedBlock(raw, normalizeGenMetaValue);
   }
 
+  // ---- removal tombstones (the `removed` sidecar) ----
+  // Removing a city used to be a LOCAL erasure: the device dropped its copy
+  // and refused to pull it back for the rest of the session, but the account's
+  // cities/city_state rows lived on, so the next device to open the app pushed
+  // its own copy straight back and the removal undid itself on refresh. Owner
+  // report 2026-08-27: "I'm repeatedly removing a city but it keeps adding back
+  // when I refresh."
+  //
+  // A removal is now a FACT about the account, carried the same way every other
+  // cross-device fact is: `removed` is a map of cityId -> the ISO instant that
+  // city was removed, riding the profile row beside apiKey/github/genmeta.
+  // Unlike those three it does NOT reconcile as a whole block, because two
+  // devices can remove two different cities and a whole-block newest-wins
+  // would silently throw one of the removals away. It merges per ENTRY.
+  //
+  // The map is built on a null prototype and every read goes through
+  // hasOwnProperty, so a city genuinely named "constructor" is an ordinary key
+  // rather than a function that answers true to every lookup.
+  function normalizeTombValue(v) {
+    var src = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+    var out = Object.create(null);
+    var n = 0;
+    Object.keys(src).forEach(function (cityId) {
+      if (n >= TOMB_CAP) return;
+      if (!cityId) return;
+      var at = src[cityId];
+      // A tombstone with no readable stamp cannot be reconciled against a row,
+      // so it is not a usable tombstone: dropped rather than kept as "removed
+      // at the beginning of time", which would delete a live city.
+      if (typeof at !== 'string' || isoMs(at) === null) return;
+      out[cityId] = at;
+      n++;
+    });
+    return out;
+  }
+
+  function normalizeTombBlock(raw) {
+    return stampedBlock(raw, normalizeTombValue);
+  }
+
+  // The stamp on one entry, or null when this map has never heard of the city.
+  function tombstoneAt(tombs, cityId) {
+    if (!tombs || typeof tombs !== 'object' || !cityId) return null;
+    if (!Object.prototype.hasOwnProperty.call(tombs, cityId)) return null;
+    var at = tombs[cityId];
+    return (typeof at === 'string' && isoMs(at) !== null) ? at : null;
+  }
+
+  // Per-entry newest-wins UNION of two tombstone maps. Both sides are plain
+  // maps (not stamped blocks): the caller unwraps. Never loses an entry that
+  // only one side knows about, which is the whole reason this is not
+  // newerBlock().
+  function mergeTombValues(mine, theirs) {
+    var a = normalizeTombValue(mine);
+    var b = normalizeTombValue(theirs);
+    var out = Object.create(null);
+    [a, b].forEach(function (m) {
+      Object.keys(m).forEach(function (id) {
+        var cur = tombstoneAt(out, id);
+        if (cur === null || isoMs(m[id]) > isoMs(cur)) out[id] = m[id];
+      });
+    });
+    return out;
+  }
+
+  // True when the union says something this device's map does not already say,
+  // i.e. when adopting the account's copy would actually change anything here.
+  // Used in both directions: to decide whether to write the merge locally, and
+  // to decide whether a push has anything to carry up.
+  function tombValuesDiffer(base, merged) {
+    var a = normalizeTombValue(base);
+    var b = normalizeTombValue(merged);
+    var ka = Object.keys(a), kb = Object.keys(b);
+    if (ka.length !== kb.length) return true;
+    for (var i = 0; i < kb.length; i++) {
+      if (a[kb[i]] !== b[kb[i]]) return true;
+    }
+    return false;
+  }
+
+  // The whole tombstone reconcile, as one pure decision.
+  //
+  //   tombs         cityId -> removal ISO (this device's map, already merged
+  //                 with the account's)
+  //   localStamps   cityId -> data stamp, for every city this device HOLDS
+  //   remoteStamps  cityId -> updated_at, for every row the cities table
+  //                 actually returned
+  //
+  // Returns four lists, and the one rule that produces them: a row or a local
+  // copy that is NEWER than the tombstone is a genuine re-add (someone added
+  // the city again after removing it), and a re-add wins over the removal, so
+  // the tombstone is cleared and nothing is deleted. Otherwise the removal
+  // wins and the stale copies go, server side and locally.
+  //
+  // A tie goes to the REMOVAL. The alternative (tie resurrects) is the exact
+  // bug this exists to fix: a device that pushed a city and removed it in the
+  // same millisecond would resurrect it forever.
+  //
+  //   dropRemote   ids whose cities/city_state rows must be DELETEd
+  //   dropLocal    ids this device still holds and must forget
+  //   clearTombs   ids whose tombstone must be dropped (re-added since)
+  //   skipPush     {id:1} for every id this device must not push
+  function planTombstones(tombs, localStamps, remoteStamps) {
+    var t = normalizeTombValue(tombs);
+    var local = localStamps || {};
+    var remote = remoteStamps || {};
+    var out = { dropRemote: [], dropLocal: [], clearTombs: [], skipPush: Object.create(null) };
+    Object.keys(t).sort().forEach(function (id) {
+      var T = isoMs(t[id]);
+      var hasLocal = Object.prototype.hasOwnProperty.call(local, id);
+      var hasRemote = Object.prototype.hasOwnProperty.call(remote, id);
+      var L = hasLocal ? isoMs(local[id]) : null;
+      var R = hasRemote ? isoMs(remote[id]) : null;
+      // A copy stamped after the removal is a re-add, wherever it lives.
+      if ((R !== null && R > T) || (L !== null && L > T)) {
+        out.clearTombs.push(id);
+        return;
+      }
+      out.skipPush[id] = 1;
+      if (hasRemote) out.dropRemote.push(id);
+      if (hasLocal) out.dropLocal.push(id);
+    });
+    return out;
+  }
+
   // sidecars: {apiKey, github, genmeta}, each {value, updated} or absent.
   //
   // `github` is the GitHub personal access token the trip surface publishes the
@@ -3306,6 +3843,11 @@ var CityOps = (function () {
     if (gh) data.github = gh;
     var gm = normalizeGenMetaBlock(s.genmeta);
     if (gm) data.genmeta = gm;
+    // The removal tombstones. Written even when the map is empty is pointless,
+    // so an empty one is left out entirely: a device that has never removed a
+    // city says nothing about removals rather than asserting "none".
+    var rm = normalizeTombBlock(s.removed);
+    if (rm && Object.keys(rm.value).length) data.removed = rm;
     return { data: data, updated_at: p.updated || EPOCH_ISO };
   }
 
@@ -3317,13 +3859,28 @@ var CityOps = (function () {
     return {
       apiKey: normalizeKeyBlock(src.apiKey),
       github: normalizeKeyBlock(src.github),
-      genmeta: normalizeGenMetaBlock(src.genmeta)
+      genmeta: normalizeGenMetaBlock(src.genmeta),
+      removed: normalizeTombBlock(src.removed)
     };
   }
 
   // Newest-wins per sidecar. `mine` and `theirs` are each {value, updated} or
   // null; a null side never wins, and a tie keeps the account's copy (the same
   // "ties keep what is already there" rule decideSync uses).
+  // The tombstone twin of newerBlock: a UNION of the two maps, stamped with
+  // the newest entry it holds so the block still carries a comparable stamp.
+  // Returns null only when neither side has a single usable tombstone.
+  function mergeTombBlocks(mine, theirs) {
+    var value = mergeTombValues(mine && mine.value, theirs && theirs.value);
+    var ids = Object.keys(value);
+    if (!ids.length) return null;
+    var newest = null;
+    ids.forEach(function (id) {
+      if (newest === null || isoMs(value[id]) > isoMs(newest)) newest = value[id];
+    });
+    return { value: value, updated: newest };
+  }
+
   function newerBlock(mine, theirs) {
     if (!mine) return theirs || null;
     if (!theirs) return mine;
@@ -3345,7 +3902,10 @@ var CityOps = (function () {
     var merged = {
       apiKey: newerBlock(normalizeKeyBlock(m.apiKey), theirs.apiKey),
       github: newerBlock(normalizeKeyBlock(m.github), theirs.github),
-      genmeta: newerBlock(normalizeGenMetaBlock(m.genmeta), theirs.genmeta)
+      genmeta: newerBlock(normalizeGenMetaBlock(m.genmeta), theirs.genmeta),
+      // Union, not newest-wins: see mergeTombValues. Two devices removing two
+      // different cities must end up with BOTH removals, not the later one.
+      removed: mergeTombBlocks(normalizeTombBlock(m.removed), theirs.removed)
     };
     var profile = normalizeProfile(row && row.data);
     // Keep the ACCOUNT's profile stamp. This device did not edit the profile,
@@ -3372,6 +3932,12 @@ var CityOps = (function () {
       var mineBlock = pairs[i][0], theirBlock = pairs[i][1];
       if (mineBlock && decideSync(mineBlock.updated, theirBlock ? theirBlock.updated : null) === 'push') return true;
     }
+    // Tombstones do not reconcile on a block stamp, so neither does the
+    // question "is a push worth making": a push is worth making exactly when
+    // this device knows about a removal the account's row does not.
+    var mineT = normalizeTombBlock(m.removed);
+    var mergedT = mergeTombBlocks(mineT, theirs.removed);
+    if (tombValuesDiffer(theirs.removed && theirs.removed.value, mergedT && mergedT.value)) return true;
     return false;
   }
 
@@ -4361,9 +4927,12 @@ var CityOps = (function () {
     // page with no card on it, and the miss line then said the item needed a
     // day, which it had. Reachable on the real Tirana guide.
     var itDay = effectiveDay(it, st);
-    if (tab === 'plan' && itDay && isPlanDayCollapsed(st, itDay)) {
-      togglePlanDay(st, itDay);
-      changed = true;
+    if (tab === 'plan' && itDay) {
+      var itAuto = planDayAutoFor(data, st, itDay);
+      if (isPlanDayCollapsed(st, itDay, itAuto)) {
+        expandPlanDay(st, itDay, itAuto);
+        changed = true;
+      }
     }
     if (shareOn) { shareOn = false; document.body.classList.remove('share'); }
     if (changed) ctx.store.save(st);
@@ -4376,7 +4945,12 @@ var CityOps = (function () {
   function renderHeader(data, state) {
     var c = data.city;
     var dates = effectiveDates(data, state);
-    var h = document.getElementById('hdr');
+    // The app surfaces carry the SHARED header (src/header.html), whose band,
+    // surface switch and app-level doors must survive this render: the engine
+    // owns only the middle. A standalone exported guide has no shared header
+    // and no second surface to switch to, so there #hdr is the whole thing and
+    // the engine keeps owning it outright.
+    var h = document.getElementById('hdr-mid') || document.getElementById('hdr');
     h.innerHTML = '';
     h.appendChild(el('h1', null, c.name));
     var sub = fmtRange(dates) + (c.accommodation && c.accommodation.name ? ' · ' + c.accommodation.name : '');
@@ -4903,7 +5477,7 @@ var CityOps = (function () {
       // day (their collapse choice is one tap to restore, and they just chose
       // this day deliberately) and reveal the card, so the drop has the same
       // visible result every other drop has.
-      if (isPlanDayCollapsed(st, toIso)) togglePlanDay(st, toIso);
+      if (isPlanDayCollapsed(st, toIso, day && day.auto)) expandPlanDay(st, toIso, day && day.auto);
       offscreen = true;
     } else {
       toIso = d.list.getAttribute('data-day-iso');
@@ -5258,8 +5832,10 @@ var CityOps = (function () {
     // never collapsing the day you are standing in), so a link that claimed
     // to act on "all" of them would be lying about one.
     var dayIsos = pm.days.map(function (d) { return d.iso; }).filter(Boolean);
+    var dayAutos = {};
+    pm.days.forEach(function (d) { if (d.iso) dayAutos[d.iso] = !!d.auto; });
     var xall = renderExpandAll(dayIsos.length > 1, function (st, collapsed) {
-      setPlanDaysCollapsed(st, dayIsos, collapsed);
+      setPlanDaysCollapsed(st, dayIsos, collapsed, dayAutos);
     });
     if (xall) main.appendChild(xall);
     // Today wears the same visual language as the wheres tracker's
@@ -5274,17 +5850,23 @@ var CityOps = (function () {
     main.appendChild(todayGroup);
     pm.days.forEach(function (d) {
       var group = planDayGroup(d.iso);
-      var collapsed = isPlanDayCollapsed(state, d.iso);
-      var h2 = el('h2', collapsed ? 'collapsed' : null);
+      var collapsed = isPlanDayCollapsed(state, d.iso, d.auto);
+      // A finished past day says so in three words and gets out of the way.
+      // Any other collapsed day keeps the plain item count it always had: "n
+      // done" on a day with anything still open would be a lie of omission.
+      var settled = d.auto && collapsed;
+      var h2 = el('h2', 'planday-hd' + (collapsed ? ' collapsed' : '') + (settled ? ' planday-settled' : ''));
       var tbtn = el('button', 'sec-toggle');
       tbtn.type = 'button';
       tbtn.setAttribute('aria-expanded', String(!collapsed));
       tbtn.appendChild(el('span', 'chev', collapsed ? '▸' : '▾'));
       tbtn.appendChild(document.createTextNode(' ' + d.label + ' '));
-      tbtn.appendChild(el('span', 'sec-count', '(' + d.items.length + (d.items.length === 1 ? ' item' : ' items') + ')'));
+      tbtn.appendChild(el('span', 'sec-count',
+        settled ? '(' + d.done + ' done ✓)'
+                : '(' + d.items.length + (d.items.length === 1 ? ' item' : ' items') + ')'));
       tbtn.onclick = function () {
         var st = ctx.store.load();
-        togglePlanDay(st, d.iso);
+        togglePlanDay(st, d.iso, d.auto);
         ctx.store.save(st);
         rerender();
       };
@@ -5547,6 +6129,18 @@ var CityOps = (function () {
     var daySel = select(dayOpts, '');
     box.appendChild(field('Day', daySel, 'Optional. You can drop it on a day later.'));
 
+    // The research link. Optional, and the single highest-value optional
+    // field on this form: a small independent place is often unfindable by
+    // name (Pizzarté, Tirana, 2026-08-27), and one Google Maps pin turns a
+    // failed research pass into a good one. It is stored as a real links[]
+    // entry, so the card shows it whether or not Claude is ever asked.
+    var linkIn = document.createElement('input');
+    linkIn.type = 'url';
+    linkIn.className = 'date-field';
+    linkIn.placeholder = 'https://maps.app.goo.gl/...';
+    box.appendChild(field('Map or website link', linkIn,
+      'Optional, and it helps Claude find it. Paste the Google Maps pin or the place\'s own site.'));
+
     var noteIn = document.createElement('textarea');
     noteIn.className = 'note-field';
     noteIn.placeholder = 'Recommended by a couple at dinner';
@@ -5573,7 +6167,7 @@ var CityOps = (function () {
       var data = effectiveData(ctx.base, st);
       var built = newPlaceDelta(data, {
         name: nameIn.value, section: secSel.value, status: statusSel.value,
-        note: noteIn.value, day: daySel.value
+        note: noteIn.value, day: daySel.value, link: linkIn.value
       });
       if (built.errors.length) { msg.textContent = built.errors.join(' '); return; }
       var res = mergeDelta(data, built.delta);
@@ -6035,6 +6629,12 @@ var CityOps = (function () {
       // list it has to be ranked against.
       buildPlacePassPrompt: buildPlacePassPrompt, rosterLines: rosterLines
     },
+    // The trip surface's door back to the guides: which guide a stop should
+    // open, skipping the ones that are archived or no longer there. Pure, and
+    // shared so both halves of the app answer it identically.
+    guideDoorKit: {
+      idFor: guideIdFor, liveIdForStop: liveGuideIdForStop, resolve: resolveGuideDoor
+    },
     extractJsonBlock: extractJsonBlock, RETRY_INSTRUCTION: RETRY_INSTRUCTION,
     isJsonSyntaxError: isJsonSyntaxError, fetchTextToCity: fetchTextToCity,
     syncKit: {
@@ -6047,7 +6647,15 @@ var CityOps = (function () {
       // The trip surface's push path: it owns credentials but not the interest
       // profile, so it merges rather than replaces.
       mergeProfileRow: mergeProfileRow, sidecarsWorthPushing: sidecarsWorthPushing,
-      refreshFailure: refreshFailure
+      refreshFailure: refreshFailure,
+      // Removal tombstones: a removed city stays removed, on every device.
+      // All pure, all unit tested; the shell owns the DELETE calls and the
+      // localStorage key, exactly as it owns every other piece of transport.
+      tombKit: {
+        normalize: normalizeTombValue, block: normalizeTombBlock,
+        at: tombstoneAt, merge: mergeTombValues, mergeBlocks: mergeTombBlocks,
+        differ: tombValuesDiffer, plan: planTombstones, CAP: TOMB_CAP
+      }
     },
     safeHref: safeHref,
     onStateChange: null, liveState: liveState,
@@ -6077,6 +6685,11 @@ var CityOps = (function () {
     // and the Plan tab's own model, all pure and unit-tested on their own.
     TABS: TABS, tabForSection: tabForSection, setTab: setTab, effectiveTab: effectiveTab,
     planModel: planModel, isPlanDayCollapsed: isPlanDayCollapsed, togglePlanDay: togglePlanDay,
+    // A past day everything on which is settled folds itself away, and says
+    // "n done ✓" instead of an item count. Pure, so the rule is one function
+    // and one set of tests rather than a condition buried in the renderer.
+    planDayAutoCollapsed: planDayAutoCollapsed, planDayDoneCount: planDayDoneCount,
+    expandPlanDay: expandPlanDay, planDayAutoFor: planDayAutoFor,
     // Plan-tab within-day item order (drag to reorder), pure and unit-tested.
     orderDayItems: orderDayItems, setDayItemOrder: setDayItemOrder, whenClock: whenClock,
     dayItemOrderFor: dayItemOrderFor,
@@ -6167,6 +6780,108 @@ CityOps.init();
     padding-left:var(--bleed-pad); padding-right:var(--bleed-pad);}
   header h1{font-size:1.55rem; letter-spacing:.2px;}
   header .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
+
+/* ==========================================================================
+   THE SHARED HEADER
+   One source, assembled into both stylesheets by tools/assemble.js at the
+   /*CITYOPS_HEADER_CSS* / marker. Written against tokens BOTH surfaces already
+   declare under the same names (--accent, --accent-hover, --gutter,
+   --content-max, --bleed-pad), so it needs nothing that is not already there.
+
+   The band is full bleed: the negative side margins pull it past the content
+   column's max-width, and --bleed-pad puts its CONTENTS back on that column,
+   so the h1 and the first card below it share an x at every width.
+
+   It sits FLUSH to the top of the viewport (owner ask 2026-08-27: "cleanup the
+   margin at the top, there's something separating the red header from the top
+   of the browser window"). That is why margin-top is 0 here and why both
+   shells put this element first inside .wrap: an empty notice line above it
+   used to collapse its 8px top margin out through .wrap and body and push the
+   whole page, band included, 8px down.
+   ========================================================================== */
+.apphdr{
+  background:linear-gradient(160deg,var(--accent) 0%,var(--accent-hover) 100%);
+  color:#fff; border-radius:0;
+  margin:0 calc(50% - 50vw) 20px;
+  padding:0 var(--bleed-pad) 22px;
+}
+
+/* --- the peer row: which surface you are on, and the app-level doors --- */
+.apphdr-bar{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:12px; flex-wrap:wrap;
+  padding:10px 0 12px;
+  border-bottom:1px solid rgba(255,255,255,.18);
+  margin-bottom:16px;
+}
+
+/* Cities and Trip are PEERS, not a chip and a title. They were a one-off chip
+   on each side ("Trip" on the guide, "City guides" on the trip page), which
+   read as a link off to somewhere else rather than as the two halves of one
+   app. A segmented pair says what it is: you are in one of these two places. */
+.surfsw{display:inline-flex; background:rgba(0,0,0,.18); border-radius:20px; padding:2px;}
+.surfsw .surf{
+  font:inherit; font-size:.78rem; font-weight:600; letter-spacing:.02em;
+  color:rgba(255,255,255,.78); text-decoration:none;
+  padding:6px 14px; border-radius:18px; white-space:nowrap;
+  display:inline-flex; align-items:center; cursor:pointer;
+}
+.surfsw .surf:hover{color:#fff;}
+/* The current surface. aria-current is the fact; the styling follows it, so
+   there is no separate "active" class to forget to move. */
+.surfsw .surf[aria-current="page"]{
+  background:rgba(255,255,255,.92); color:var(--accent-hover); cursor:default;
+}
+
+.apphdr-acts{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+
+/* One chip vocabulary for every app-level door, on both surfaces. */
+.hdr-chip{
+  background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3);
+  color:#fff; font:inherit; font-size:.78rem; padding:5px 11px; border-radius:20px;
+  cursor:pointer; text-decoration:none; white-space:nowrap;
+  display:inline-flex; align-items:center; gap:5px;
+}
+.hdr-chip:hover{background:rgba(255,255,255,.28); border-color:rgba(255,255,255,.55);}
+.hdr-chip:disabled{opacity:.55; cursor:default;}
+/* Sync state colours the chip rather than adding a line: green when the
+   account has this device's work, amber when sync has stopped, plain
+   translucent white when the traveler is signed out on purpose. */
+.hdr-chip.ok{background:rgba(212,232,213,.22); border-color:rgba(212,232,213,.6);}
+.hdr-chip.warn{background:rgba(237,225,190,.26); border-color:rgba(237,225,190,.7);}
+
+/* --- the per-surface middle --- */
+.apphdr-mid h1{font-size:1.55rem; letter-spacing:.2px; line-height:1.15;}
+.apphdr-mid .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
+
+/* "Last touched" is a FACT, not a door, and it was wearing a pill that cost
+   more width than the words (owner ask 2026-08-27: "that takes a lot of room.
+   let's make that smaller, just text, no pill"). Plain muted text now: no
+   border, no background, no padding. */
+.hdr-meta{
+  font-size:.72rem; color:rgba(255,255,255,.72); letter-spacing:.02em;
+  white-space:nowrap; align-self:center;
+}
+
+@media (max-width: 430px){
+  .apphdr{margin:0 calc(50% - 50vw) 16px; padding:0 var(--bleed-pad) 16px;}
+  .apphdr-bar{padding:8px 0 10px; margin-bottom:12px; gap:8px;}
+  .surfsw .surf{font-size:.74rem; padding:7px 13px;}
+  .hdr-chip{font-size:.74rem; padding:5px 10px;}
+  .apphdr-mid h1{font-size:1.35rem;}
+  .hdr-meta{font-size:.68rem;}
+}
+
+/* A door gets a thumb on a touch screen. The width test is here as well as the
+   pointer test on purpose: desktop Chrome at 390px reports a fine pointer, and
+   Rob's phone is 390px, so width is the reliable signal of the two. */
+@media (hover: none), (pointer: coarse){
+  .surfsw .surf, .hdr-chip{min-height:44px;}
+}
+@media (max-width: 430px){
+  .surfsw .surf, .hdr-chip{min-height:44px;}
+}
+
   .facts{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;}
   .chip{background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25);
     padding:5px 10px; border-radius:20px; font-size:.8rem;}
@@ -6295,6 +7010,15 @@ CityOps.init();
   .planday.drop-into{background:var(--accent-soft); border-radius:12px;
     box-shadow:0 0 0 2px var(--accent);}
   .planday.drop-into > h2{color:var(--accent-hover);}
+  /* A past day everything on which is done folds itself away and then gets
+     OUT OF THE WAY: same as the app fades a done card, so the eye lands on
+     what is still coming rather than on a row of finished dates. Still fully
+     legible and still one tap from opening, which is why this is opacity and
+     weight rather than a smaller type size. */
+  .planday-settled > .sec-toggle{opacity:.62; font-weight:600;}
+  .planday-settled > .sec-toggle:hover,
+  .planday-settled > .sec-toggle:focus-visible{opacity:1;}
+  .planday-settled .sec-count{color:var(--green-ink); font-weight:700;}
   /* "Nothing planned yet" must not sit under the card being dropped on it. */
   .planlist.has-drop > .empty-note{display:none;}
   /* A section tab's card list. Purely a drag container: it carries the
@@ -6362,6 +7086,14 @@ CityOps.init();
     padding:14px 16px; margin:20px 0; font-size:.9rem;}
   .errcard b{color:var(--accent-hover);}
   #notice{font-size:.78rem; color:var(--text-3); margin:8px 0;}
+  /* An EMPTY notice line is the normal case, and an empty block with a margin
+     and no height self-collapses: its 8px top margin escaped through .wrap
+     (padding-top:0) and body and pushed the whole page, red band included, 8px
+     off the top of the window. Owner ask 2026-08-27: "cleanup the margin at
+     the top... was only intended to be left/right." Taking it out of flow when
+     it has nothing to say is the fix, and it also stops an empty line eating
+     16px of vertical rhythm above the first card. */
+  #notice:empty{display:none;}
   .when-line{font-size:.8rem; color:var(--text-3); font-style:italic; margin-top:2px;}
   .modal-wrap{position:fixed; inset:0; background:rgba(36,36,36,.5); display:flex;
     align-items:center; justify-content:center; padding:16px; z-index:100;}
@@ -7109,6 +7841,40 @@ var CityOps = (function () {
   // id anyway.
   var PLACE_ID_FALLBACK = 'place';
 
+  // Telling a MAP link from a plain website, for the icon the card draws.
+  // Matching on the HOST (with a leading-dot boundary) rather than anywhere in
+  // the string is what stops "evil.example/?x=google.com/maps" being filed as
+  // a map. Two shapes, because Google's share sheet hands out both: a host
+  // that is a map and nothing else, and a host that is a map only on its map
+  // PATH.
+  var MAP_ONLY_HOST_RE = /^(maps\.[a-z0-9.-]+|maps\.app\.goo\.gl)$/;
+  var MAP_PATH_HOST_RE = /(^|\.)(google\.[a-z.]+|goo\.gl|openstreetmap\.org|osm\.org|apple\.com)$/;
+  var MAP_PATH_RE = /^\/(maps|place|local)(\/|\?|$)/;
+
+  // 'map' | 'web' | null. null means "not something a browser can open as a
+  // web page", which is the only case the Add-a-place form rejects: a tel: or
+  // a bare "pizzarte" would both be accepted by safeHref (one is a real
+  // scheme, the other is a relative URL) and neither is a research link.
+  function researchLinkKind(raw) {
+    var s = trimStr(raw);
+    if (!s) return null;
+    if (!safeHref(s)) return null;
+    var probe = s.replace(/[\u0000-\u0020]/g, '');
+    if (!/^https?:\/\//i.test(probe)) return null;
+    var rest = probe.replace(/^https?:\/\//i, '');
+    var cut = rest.search(/[\/?#]/);
+    var host = (cut === -1 ? rest : rest.slice(0, cut)).toLowerCase();
+    var path = cut === -1 ? '/' : rest.slice(cut);
+    var at = host.lastIndexOf('@');        // strip any userinfo before the host
+    if (at !== -1) host = host.slice(at + 1);
+    var port = host.indexOf(':');
+    if (port !== -1) host = host.slice(0, port);
+    if (!host) return null;
+    if (MAP_ONLY_HOST_RE.test(host)) return 'map';
+    if (MAP_PATH_HOST_RE.test(host) && MAP_PATH_RE.test(path)) return 'map';
+    return 'web';
+  }
+
   function freePlaceId(cityData, name) {
     var taken = Object.create(null);
     (cityData && Array.isArray(cityData.items) ? cityData.items : []).forEach(function (it) {
@@ -7145,6 +7911,17 @@ var CityOps = (function () {
     var status = trimStr(f.status) || 'plan';
     var note = trimStr(f.note);
     var day = trimStr(f.day);
+    // Optional research link (owner ask 2026-08-27: the single-place pass
+    // "couldn't find info on Pizzarté"). A small independent restaurant with
+    // no web presence is unsearchable by name; a Google Maps pin or the
+    // place's own site is the one thing that makes it findable. It is stored
+    // as a real links[] entry so the card renders it like any other link, and
+    // it is quoted to Claude as a research hint (see buildPlacePassPrompt).
+    var link = trimStr(f.link);
+    var linkKind = link ? researchLinkKind(link) : null;
+    if (link && !linkKind) {
+      errors.push('That link is not a web address CityOps can open. Paste a link starting with http:// or https://.');
+    }
     if (!name) errors.push('A name is required.');
     var secIds = Object.create(null);
     (cityData && Array.isArray(cityData.sections) ? cityData.sections : []).forEach(function (s) {
@@ -7161,6 +7938,12 @@ var CityOps = (function () {
     if (errors.length) return { delta: null, id: null, errors: errors };
     var id = freePlaceId(cityData, name);
     var item = { id: id, section: section, status: status, name: name, links: [] };
+    if (linkKind) {
+      // Labelled the way the guide's own generated links are, so the card's
+      // link row reads the same whether the place came from Claude or from a
+      // paste: an icon and a short word, not a raw URL.
+      item.links.push({ kind: linkKind, label: linkKind === 'map' ? 'Map' : 'Website', href: link });
+    }
     if (note) item.note = note;
     if (day) item.day = day;
     // Stamped so the card, the More sheet and the research prompt can all
@@ -7716,22 +8499,80 @@ var CityOps = (function () {
     return (state && state.tab && TAB_IDS.indexOf(state.tab) !== -1) ? state.tab : 'plan';
   }
 
-  // Per-day collapse in the Plan tab's "remaining days" list. Same tri-state
-  // read as isSectionCollapsed (explicit override wins, otherwise a computed
-  // default). Owner feedback 2026-08-25: every day now defaults to EXPANDED
-  // on page load (was collapsed); the traveler's own explicit choice, once
-  // made, still sticks (that's what collapsedPlanDays persists).
-  function isPlanDayCollapsed(state, iso) {
-    var explicit = ownProp(state.collapsedPlanDays, iso);
-    if (explicit === true || explicit === false) return explicit;
-    return false;
+  // ---- Per-day collapse in the Plan tab's day list ----
+  // Same tri-state read as isSectionCollapsed: an explicit override wins,
+  // otherwise a computed default. That default was a flat "expanded" from
+  // 2026-08-25 (owner feedback: every day open on page load), and it now has
+  // one exception, below. The traveler's own explicit choice still sticks
+  // either way, which is what collapsedPlanDays persists.
+
+  // A day the traveler has finished with, and which is behind them.
+  // Owner ask 2026-08-27: "auto-collapse past days when all activities have
+  // been accomplished". Three conditions, all of them required:
+  //   - the day is STRICTLY before today. Today and every day ahead stay
+  //     expanded whatever their contents, because the point of the Plan tab
+  //     is what is still coming.
+  //   - it has at least one item. An empty past day has nothing to
+  //     congratulate you for, and a header reading "0 done" is worse than the
+  //     empty group it replaced.
+  //   - every one of those items is settled: done, or archived. (Day groups
+  //     drop archived items today, so in practice this reads "all done"; the
+  //     archived arm is there so the rule stays true if that ever changes,
+  //     rather than quietly meaning something different.)
+  // `entries` are planModel's per-day rows, each {sec, it, status}.
+  function planDayAutoCollapsed(iso, entries, todayIsoStr) {
+    if (!iso || !todayIsoStr || iso >= todayIsoStr) return false;
+    var list = Array.isArray(entries) ? entries : [];
+    if (!list.length) return false;
+    for (var i = 0; i < list.length; i++) {
+      var s = list[i] && list[i].status;
+      if (s !== 'done' && s !== 'archived') return false;
+    }
+    return true;
   }
 
-  function togglePlanDay(state, iso) {
+  function planDayDoneCount(entries) {
+    var n = 0;
+    (Array.isArray(entries) ? entries : []).forEach(function (e) {
+      if (e && (e.status === 'done' || e.status === 'archived')) n++;
+    });
+    return n;
+  }
+
+  // Tri-state read, same shape as isSectionCollapsed: the traveler's own
+  // explicit choice always wins, and absent falls back to the computed
+  // default. `auto` is that default (planDayAutoCollapsed above); omitting it
+  // keeps the old behaviour of "expanded", which is what every caller that
+  // does not group by date wants.
+  function isPlanDayCollapsed(state, iso, auto) {
+    var explicit = ownProp(state.collapsedPlanDays, iso);
+    if (explicit === true || explicit === false) return explicit;
+    return auto === true;
+  }
+
+  // Toggling back to whatever the default currently is DELETES the override
+  // rather than writing it, so collapsedPlanDays only ever holds genuine
+  // departures. That matters more now than it did when the default was always
+  // "expanded": a past day the traveler expanded by hand keeps a stored false
+  // (it is a real departure), but re-collapsing it lets the auto rule own it
+  // again, so finishing one more item on an older day still folds it away.
+  function togglePlanDay(state, iso, auto) {
     state.collapsedPlanDays = state.collapsedPlanDays || {};
-    var next = !isPlanDayCollapsed(state, iso);
-    if (next === false) delete state.collapsedPlanDays[iso]; // back to the default (expanded)
+    var next = !isPlanDayCollapsed(state, iso, auto);
+    if (next === (auto === true)) delete state.collapsedPlanDays[iso];
     else state.collapsedPlanDays[iso] = next;
+    return state;
+  }
+
+  // "Put this day on screen", used by the two places that must show a card
+  // sitting on a folded day (a highlight-chip reveal, and a drop onto a
+  // collapsed day). Not togglePlanDay: on an auto-collapsed day a toggle that
+  // deletes the override would leave the day folded again on the next render,
+  // which is exactly the invisible-result failure both callers exist to avoid.
+  function expandPlanDay(state, iso, auto) {
+    state.collapsedPlanDays = state.collapsedPlanDays || {};
+    if (auto === true) state.collapsedPlanDays[iso] = false;
+    else delete state.collapsedPlanDays[iso];
     return state;
   }
 
@@ -7949,8 +8790,13 @@ var CityOps = (function () {
     });
     var stayIsos = stayDates(range);
     var otherDays = stayIsos.filter(function (iso) { return iso !== today; }).map(function (iso) {
-      return { iso: iso, label: dayLabel(iso),
-        items: orderDayItems(byIso[iso] || [], dayItemOrderFor(state, iso)) };
+      var items = orderDayItems(byIso[iso] || [], dayItemOrderFor(state, iso));
+      return { iso: iso, label: dayLabel(iso), items: items,
+        // What the day header needs to render itself compactly when it folds:
+        // how many of its items are settled, and whether it folds by default.
+        done: planDayDoneCount(items),
+        past: iso < today,
+        auto: planDayAutoCollapsed(iso, items, today) };
     });
     // Three task buckets, one per outcome a task can reach: still open, done,
     // and declined. Declined is the EXISTING archived status, not a fourth
@@ -7991,6 +8837,17 @@ var CityOps = (function () {
       doneTasks: doneTasks,
       declinedTasks: declinedTasks
     };
+  }
+
+  // One day's computed collapse default, looked up through the same planModel
+  // the renderer reads, so a caller that only has an iso in hand cannot get a
+  // different answer from the one on screen.
+  function planDayAutoFor(data, state, iso) {
+    var pm = planModel(data, state);
+    for (var i = 0; i < pm.days.length; i++) {
+      if (pm.days[i].iso === iso) return !!pm.days[i].auto;
+    }
+    return false;
   }
 
   // Phase 3, feature 4: the "what matters today" view. Three buckets, all
@@ -8080,12 +8937,18 @@ var CityOps = (function () {
   }
 
   // The Plan tab's twin of the above, over dates instead of section ids.
-  function setPlanDaysCollapsed(state, isos, collapsed) {
+  // `autos` maps iso -> that day's computed default (planDayAutoCollapsed).
+  // Without it every default is "expanded", which is exactly what this did
+  // before past days could fold themselves away. With it, Expand all writes a
+  // real `false` on a day that would otherwise re-collapse itself, so the link
+  // does what it says on a stay whose first half is already behind you.
+  function setPlanDaysCollapsed(state, isos, collapsed, autos) {
     state.collapsedPlanDays = state.collapsedPlanDays || {};
     (Array.isArray(isos) ? isos : []).forEach(function (iso) {
       if (!iso) return;
-      if (collapsed === false) delete state.collapsedPlanDays[iso];
-      else state.collapsedPlanDays[iso] = true;
+      var auto = !!(autos && Object.prototype.hasOwnProperty.call(autos, iso) && autos[iso]);
+      if (!!collapsed === auto) delete state.collapsedPlanDays[iso];
+      else state.collapsedPlanDays[iso] = !!collapsed;
     });
     return state;
   }
@@ -9005,6 +9868,18 @@ var CityOps = (function () {
   // matter. Done and archived rivals stay in the list, unlike the ratings
   // pass: a place already eaten at is exactly the yardstick worth ranking a
   // new recommendation against.
+  // The item's own map/website links, as bare hrefs, for a prompt to quote.
+  // Only what a browser could open: a tel: number is not a research hint.
+  function researchLinks(item) {
+    var out = [];
+    ((item && Array.isArray(item.links)) ? item.links : []).forEach(function (l) {
+      if (!l || (l.kind !== 'map' && l.kind !== 'web')) return;
+      var h = trimStr(l.href);
+      if (h && safeHref(h) && out.indexOf(h) === -1) out.push(h);
+    });
+    return out;
+  }
+
   function buildPlacePassPrompt(templateText, cityData, item, state) {
     var rerun = sliceLandmark(templateText, 'RERUN:PLACE');
     if (!item || !item.id) throw new Error('No place to research.');
@@ -9024,6 +9899,19 @@ var CityOps = (function () {
     out.push('- **Section:** ' + (sec ? trimStr(sec.label) + ' (' + secId + ')' : trimStr(secId)));
     if (trimStr(item.note)) out.push('- **The traveler\'s note:** ' + trimStr(item.note).replace(/\s+/g, ' '));
     if (trimStr(item.day)) out.push('- **Pencilled in for:** ' + trimStr(item.day));
+    // The research hint. A small independent place is often unfindable by
+    // name alone (the run that prompted this could not find Pizzarté in
+    // Tirana), so when the traveler pasted a map pin or the place's own site
+    // while adding it, the pass is TOLD to start there rather than left to
+    // search a name that returns nothing.
+    var hints = researchLinks(item);
+    if (hints.length) {
+      out.push('- **The user provided this link for the place:** ' + hints.join(' , '));
+      out.push('  Start from that link. It is the traveler\'s own reference for this exact ' +
+        'place, so prefer what it says over a search result for a similar name, and say so ' +
+        'in `source`. If the link is dead or is plainly a different place, say that in `tips` ' +
+        'rather than guessing.');
+    }
     out.push('');
     out.push('## What I need', '', rerun, '');
     out.push('## Others already in this section', '');
@@ -9040,6 +9928,110 @@ var CityOps = (function () {
         'verdict on their own.', '');
     }
     return out.join('\n');
+  }
+
+  // ---- the trip surface's door back to the guides (pure) ----
+  // Owner report 2026-08-27: "my 'now' city is showing an archived city. also
+  // fix the city I'm navigated to when clicking 'city guides'."
+  //
+  // The trip half knows its own stops; the guide half knows which guides
+  // exist. The chip and the Cities door both have to answer one question from
+  // those two facts: WHICH GUIDE should this open? It has to be answered
+  // against the guides as they exist NOW, so a guide that was removed (its
+  // row is gone) or archived (a city the traveler has left) is not a
+  // destination, even when the stop covering today names it.
+  //
+  // Lives here, not in the trip shell, for two reasons: the engine already
+  // ships into trip.html, and a pure function here is one the Node tests can
+  // reach. The shell keeps the fetch and the DOM.
+
+  // cityops' own id shape: slug(name) + '-' + arrival date.
+  function guideIdFor(name, fromIso) {
+    var s = slug(String(name || ''));
+    if (!s || !fromIso) return '';
+    return s + '-' + fromIso;
+  }
+
+  // One stop -> the id of a LIVE guide for it, or '' when there is none.
+  // Exact match first (same city, same arrival). Then the same city on a
+  // different date, nearest wins: Rob shifts a check-in by a day far more
+  // often than he visits the same city twice, and a guide for "Ohrid, arrived
+  // the 3rd" is still the right guide when the stop now says the 4th.
+  //
+  // `index` is {ids: [...], archived: {id: true}}. An archived id is skipped
+  // exactly like a missing one: it is a city he has left, so it is never what
+  // "where am I going next" should open.
+  function liveGuideIdForStop(stop, index) {
+    var ids = (index && Array.isArray(index.ids)) ? index.ids : [];
+    if (!ids.length) return '';
+    var archived = (index && index.archived && typeof index.archived === 'object') ? index.archived : {};
+    function live(id) {
+      return !!id && ids.indexOf(id) !== -1 &&
+        !(Object.prototype.hasOwnProperty.call(archived, id) && archived[id]);
+    }
+    var name = stop && stop.name;
+    var s = slug(String(name || ''));
+    if (!s) return '';
+    var exact = guideIdFor(name, stop && stop.checkIn);
+    if (live(exact)) return exact;
+    var prefix = s + '-';
+    var siblings = ids.filter(function (id) { return id.indexOf(prefix) === 0 && live(id); });
+    if (!siblings.length) return '';
+    var want = isoMs(stop && stop.checkIn);
+    if (want === null) return siblings[0];
+    var best = siblings[0], bestGap = Infinity;
+    siblings.forEach(function (id) {
+      var at = isoMs(id.slice(prefix.length));
+      var gap = (at === null) ? Infinity : Math.abs(at - want);
+      if (gap < bestGap) { bestGap = gap; best = id; }
+    });
+    return best;
+  }
+
+  // The whole resolution, as one decision.
+  //
+  //   stops       the trip's own city list ({name, checkIn, checkOut}, any
+  //               order, any amount of junk in it)
+  //   index       {ids, archived} as above
+  //   todayIsoStr today
+  //
+  // Returns { when, stop, guideId, kind }:
+  //   kind 'guide'  guideId names a live guide; open it. `when` is 'NOW' when
+  //                 that stop covers today, 'NEXT' when it is ahead.
+  //   kind 'plan'   there is a stop worth naming but no live guide anywhere
+  //                 ahead; the door opens the guide half so one can be added.
+  //   kind 'root'   there is nothing dated to say anything about; the door
+  //                 opens the guide half on whatever city it was last showing.
+  //
+  // The order is deliberate: the stop you are STANDING IN first, then the
+  // ones ahead of you in date order. With Rob's data on 2026-08-27 (in Tirana
+  // until the 29th, Tirana's guide removed, Ksamil ahead) that lands on
+  // Ksamil, which is the guide he would actually want open.
+  function resolveGuideDoor(stops, index, todayIsoStr) {
+    var today = todayIsoStr || todayIso();
+    var named = (Array.isArray(stops) ? stops : []).filter(function (c) {
+      return c && typeof c.name === 'string' && trimStr(c.name);
+    });
+    var here = null;
+    named.forEach(function (c) {
+      if (here) return;
+      if (c.checkIn && c.checkOut && c.checkIn <= today && c.checkOut > today) here = c;
+    });
+    var ahead = named.filter(function (c) { return c.checkIn && c.checkIn > today; })
+      .sort(function (a, b) { return a.checkIn < b.checkIn ? -1 : (a.checkIn > b.checkIn ? 1 : 0); });
+    var order = (here ? [{ stop: here, when: 'NOW' }] : [])
+      .concat(ahead.map(function (c) { return { stop: c, when: 'NEXT' }; }));
+    for (var i = 0; i < order.length; i++) {
+      var id = liveGuideIdForStop(order[i].stop, index);
+      if (id) return { when: order[i].when, stop: order[i].stop, guideId: id, kind: 'guide' };
+    }
+    // Nothing ahead has a guide. Still name the stop rather than go quiet: a
+    // door that opens the guide half so one can be written is a real answer,
+    // and it is the one this app already offered on a stop card.
+    if (order.length) {
+      return { when: order[0].when, stop: order[0].stop, guideId: '', kind: 'plan' };
+    }
+    return { when: null, stop: null, guideId: '', kind: 'root' };
   }
 
   // ---- AI response parsing (pure) ----
@@ -9208,6 +10200,7 @@ var CityOps = (function () {
   var KEY_VALUE_CAP = 4000;      // a Claude key is ~108 chars; this is a sanity bound
   var GENMETA_FIELD_CAP = 2000;  // one free-text form field
   var GENMETA_CITY_CAP = 100;    // cities carried in the map
+  var TOMB_CAP = 300;            // removed-city tombstones carried in the map
 
   function stampedBlock(raw, valueFn) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
@@ -9250,6 +10243,131 @@ var CityOps = (function () {
     return stampedBlock(raw, normalizeGenMetaValue);
   }
 
+  // ---- removal tombstones (the `removed` sidecar) ----
+  // Removing a city used to be a LOCAL erasure: the device dropped its copy
+  // and refused to pull it back for the rest of the session, but the account's
+  // cities/city_state rows lived on, so the next device to open the app pushed
+  // its own copy straight back and the removal undid itself on refresh. Owner
+  // report 2026-08-27: "I'm repeatedly removing a city but it keeps adding back
+  // when I refresh."
+  //
+  // A removal is now a FACT about the account, carried the same way every other
+  // cross-device fact is: `removed` is a map of cityId -> the ISO instant that
+  // city was removed, riding the profile row beside apiKey/github/genmeta.
+  // Unlike those three it does NOT reconcile as a whole block, because two
+  // devices can remove two different cities and a whole-block newest-wins
+  // would silently throw one of the removals away. It merges per ENTRY.
+  //
+  // The map is built on a null prototype and every read goes through
+  // hasOwnProperty, so a city genuinely named "constructor" is an ordinary key
+  // rather than a function that answers true to every lookup.
+  function normalizeTombValue(v) {
+    var src = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+    var out = Object.create(null);
+    var n = 0;
+    Object.keys(src).forEach(function (cityId) {
+      if (n >= TOMB_CAP) return;
+      if (!cityId) return;
+      var at = src[cityId];
+      // A tombstone with no readable stamp cannot be reconciled against a row,
+      // so it is not a usable tombstone: dropped rather than kept as "removed
+      // at the beginning of time", which would delete a live city.
+      if (typeof at !== 'string' || isoMs(at) === null) return;
+      out[cityId] = at;
+      n++;
+    });
+    return out;
+  }
+
+  function normalizeTombBlock(raw) {
+    return stampedBlock(raw, normalizeTombValue);
+  }
+
+  // The stamp on one entry, or null when this map has never heard of the city.
+  function tombstoneAt(tombs, cityId) {
+    if (!tombs || typeof tombs !== 'object' || !cityId) return null;
+    if (!Object.prototype.hasOwnProperty.call(tombs, cityId)) return null;
+    var at = tombs[cityId];
+    return (typeof at === 'string' && isoMs(at) !== null) ? at : null;
+  }
+
+  // Per-entry newest-wins UNION of two tombstone maps. Both sides are plain
+  // maps (not stamped blocks): the caller unwraps. Never loses an entry that
+  // only one side knows about, which is the whole reason this is not
+  // newerBlock().
+  function mergeTombValues(mine, theirs) {
+    var a = normalizeTombValue(mine);
+    var b = normalizeTombValue(theirs);
+    var out = Object.create(null);
+    [a, b].forEach(function (m) {
+      Object.keys(m).forEach(function (id) {
+        var cur = tombstoneAt(out, id);
+        if (cur === null || isoMs(m[id]) > isoMs(cur)) out[id] = m[id];
+      });
+    });
+    return out;
+  }
+
+  // True when the union says something this device's map does not already say,
+  // i.e. when adopting the account's copy would actually change anything here.
+  // Used in both directions: to decide whether to write the merge locally, and
+  // to decide whether a push has anything to carry up.
+  function tombValuesDiffer(base, merged) {
+    var a = normalizeTombValue(base);
+    var b = normalizeTombValue(merged);
+    var ka = Object.keys(a), kb = Object.keys(b);
+    if (ka.length !== kb.length) return true;
+    for (var i = 0; i < kb.length; i++) {
+      if (a[kb[i]] !== b[kb[i]]) return true;
+    }
+    return false;
+  }
+
+  // The whole tombstone reconcile, as one pure decision.
+  //
+  //   tombs         cityId -> removal ISO (this device's map, already merged
+  //                 with the account's)
+  //   localStamps   cityId -> data stamp, for every city this device HOLDS
+  //   remoteStamps  cityId -> updated_at, for every row the cities table
+  //                 actually returned
+  //
+  // Returns four lists, and the one rule that produces them: a row or a local
+  // copy that is NEWER than the tombstone is a genuine re-add (someone added
+  // the city again after removing it), and a re-add wins over the removal, so
+  // the tombstone is cleared and nothing is deleted. Otherwise the removal
+  // wins and the stale copies go, server side and locally.
+  //
+  // A tie goes to the REMOVAL. The alternative (tie resurrects) is the exact
+  // bug this exists to fix: a device that pushed a city and removed it in the
+  // same millisecond would resurrect it forever.
+  //
+  //   dropRemote   ids whose cities/city_state rows must be DELETEd
+  //   dropLocal    ids this device still holds and must forget
+  //   clearTombs   ids whose tombstone must be dropped (re-added since)
+  //   skipPush     {id:1} for every id this device must not push
+  function planTombstones(tombs, localStamps, remoteStamps) {
+    var t = normalizeTombValue(tombs);
+    var local = localStamps || {};
+    var remote = remoteStamps || {};
+    var out = { dropRemote: [], dropLocal: [], clearTombs: [], skipPush: Object.create(null) };
+    Object.keys(t).sort().forEach(function (id) {
+      var T = isoMs(t[id]);
+      var hasLocal = Object.prototype.hasOwnProperty.call(local, id);
+      var hasRemote = Object.prototype.hasOwnProperty.call(remote, id);
+      var L = hasLocal ? isoMs(local[id]) : null;
+      var R = hasRemote ? isoMs(remote[id]) : null;
+      // A copy stamped after the removal is a re-add, wherever it lives.
+      if ((R !== null && R > T) || (L !== null && L > T)) {
+        out.clearTombs.push(id);
+        return;
+      }
+      out.skipPush[id] = 1;
+      if (hasRemote) out.dropRemote.push(id);
+      if (hasLocal) out.dropLocal.push(id);
+    });
+    return out;
+  }
+
   // sidecars: {apiKey, github, genmeta}, each {value, updated} or absent.
   //
   // `github` is the GitHub personal access token the trip surface publishes the
@@ -9268,6 +10386,11 @@ var CityOps = (function () {
     if (gh) data.github = gh;
     var gm = normalizeGenMetaBlock(s.genmeta);
     if (gm) data.genmeta = gm;
+    // The removal tombstones. Written even when the map is empty is pointless,
+    // so an empty one is left out entirely: a device that has never removed a
+    // city says nothing about removals rather than asserting "none".
+    var rm = normalizeTombBlock(s.removed);
+    if (rm && Object.keys(rm.value).length) data.removed = rm;
     return { data: data, updated_at: p.updated || EPOCH_ISO };
   }
 
@@ -9279,13 +10402,28 @@ var CityOps = (function () {
     return {
       apiKey: normalizeKeyBlock(src.apiKey),
       github: normalizeKeyBlock(src.github),
-      genmeta: normalizeGenMetaBlock(src.genmeta)
+      genmeta: normalizeGenMetaBlock(src.genmeta),
+      removed: normalizeTombBlock(src.removed)
     };
   }
 
   // Newest-wins per sidecar. `mine` and `theirs` are each {value, updated} or
   // null; a null side never wins, and a tie keeps the account's copy (the same
   // "ties keep what is already there" rule decideSync uses).
+  // The tombstone twin of newerBlock: a UNION of the two maps, stamped with
+  // the newest entry it holds so the block still carries a comparable stamp.
+  // Returns null only when neither side has a single usable tombstone.
+  function mergeTombBlocks(mine, theirs) {
+    var value = mergeTombValues(mine && mine.value, theirs && theirs.value);
+    var ids = Object.keys(value);
+    if (!ids.length) return null;
+    var newest = null;
+    ids.forEach(function (id) {
+      if (newest === null || isoMs(value[id]) > isoMs(newest)) newest = value[id];
+    });
+    return { value: value, updated: newest };
+  }
+
   function newerBlock(mine, theirs) {
     if (!mine) return theirs || null;
     if (!theirs) return mine;
@@ -9307,7 +10445,10 @@ var CityOps = (function () {
     var merged = {
       apiKey: newerBlock(normalizeKeyBlock(m.apiKey), theirs.apiKey),
       github: newerBlock(normalizeKeyBlock(m.github), theirs.github),
-      genmeta: newerBlock(normalizeGenMetaBlock(m.genmeta), theirs.genmeta)
+      genmeta: newerBlock(normalizeGenMetaBlock(m.genmeta), theirs.genmeta),
+      // Union, not newest-wins: see mergeTombValues. Two devices removing two
+      // different cities must end up with BOTH removals, not the later one.
+      removed: mergeTombBlocks(normalizeTombBlock(m.removed), theirs.removed)
     };
     var profile = normalizeProfile(row && row.data);
     // Keep the ACCOUNT's profile stamp. This device did not edit the profile,
@@ -9334,6 +10475,12 @@ var CityOps = (function () {
       var mineBlock = pairs[i][0], theirBlock = pairs[i][1];
       if (mineBlock && decideSync(mineBlock.updated, theirBlock ? theirBlock.updated : null) === 'push') return true;
     }
+    // Tombstones do not reconcile on a block stamp, so neither does the
+    // question "is a push worth making": a push is worth making exactly when
+    // this device knows about a removal the account's row does not.
+    var mineT = normalizeTombBlock(m.removed);
+    var mergedT = mergeTombBlocks(mineT, theirs.removed);
+    if (tombValuesDiffer(theirs.removed && theirs.removed.value, mergedT && mergedT.value)) return true;
     return false;
   }
 
@@ -10323,9 +11470,12 @@ var CityOps = (function () {
     // page with no card on it, and the miss line then said the item needed a
     // day, which it had. Reachable on the real Tirana guide.
     var itDay = effectiveDay(it, st);
-    if (tab === 'plan' && itDay && isPlanDayCollapsed(st, itDay)) {
-      togglePlanDay(st, itDay);
-      changed = true;
+    if (tab === 'plan' && itDay) {
+      var itAuto = planDayAutoFor(data, st, itDay);
+      if (isPlanDayCollapsed(st, itDay, itAuto)) {
+        expandPlanDay(st, itDay, itAuto);
+        changed = true;
+      }
     }
     if (shareOn) { shareOn = false; document.body.classList.remove('share'); }
     if (changed) ctx.store.save(st);
@@ -10338,7 +11488,12 @@ var CityOps = (function () {
   function renderHeader(data, state) {
     var c = data.city;
     var dates = effectiveDates(data, state);
-    var h = document.getElementById('hdr');
+    // The app surfaces carry the SHARED header (src/header.html), whose band,
+    // surface switch and app-level doors must survive this render: the engine
+    // owns only the middle. A standalone exported guide has no shared header
+    // and no second surface to switch to, so there #hdr is the whole thing and
+    // the engine keeps owning it outright.
+    var h = document.getElementById('hdr-mid') || document.getElementById('hdr');
     h.innerHTML = '';
     h.appendChild(el('h1', null, c.name));
     var sub = fmtRange(dates) + (c.accommodation && c.accommodation.name ? ' · ' + c.accommodation.name : '');
@@ -10865,7 +12020,7 @@ var CityOps = (function () {
       // day (their collapse choice is one tap to restore, and they just chose
       // this day deliberately) and reveal the card, so the drop has the same
       // visible result every other drop has.
-      if (isPlanDayCollapsed(st, toIso)) togglePlanDay(st, toIso);
+      if (isPlanDayCollapsed(st, toIso, day && day.auto)) expandPlanDay(st, toIso, day && day.auto);
       offscreen = true;
     } else {
       toIso = d.list.getAttribute('data-day-iso');
@@ -11220,8 +12375,10 @@ var CityOps = (function () {
     // never collapsing the day you are standing in), so a link that claimed
     // to act on "all" of them would be lying about one.
     var dayIsos = pm.days.map(function (d) { return d.iso; }).filter(Boolean);
+    var dayAutos = {};
+    pm.days.forEach(function (d) { if (d.iso) dayAutos[d.iso] = !!d.auto; });
     var xall = renderExpandAll(dayIsos.length > 1, function (st, collapsed) {
-      setPlanDaysCollapsed(st, dayIsos, collapsed);
+      setPlanDaysCollapsed(st, dayIsos, collapsed, dayAutos);
     });
     if (xall) main.appendChild(xall);
     // Today wears the same visual language as the wheres tracker's
@@ -11236,17 +12393,23 @@ var CityOps = (function () {
     main.appendChild(todayGroup);
     pm.days.forEach(function (d) {
       var group = planDayGroup(d.iso);
-      var collapsed = isPlanDayCollapsed(state, d.iso);
-      var h2 = el('h2', collapsed ? 'collapsed' : null);
+      var collapsed = isPlanDayCollapsed(state, d.iso, d.auto);
+      // A finished past day says so in three words and gets out of the way.
+      // Any other collapsed day keeps the plain item count it always had: "n
+      // done" on a day with anything still open would be a lie of omission.
+      var settled = d.auto && collapsed;
+      var h2 = el('h2', 'planday-hd' + (collapsed ? ' collapsed' : '') + (settled ? ' planday-settled' : ''));
       var tbtn = el('button', 'sec-toggle');
       tbtn.type = 'button';
       tbtn.setAttribute('aria-expanded', String(!collapsed));
       tbtn.appendChild(el('span', 'chev', collapsed ? '▸' : '▾'));
       tbtn.appendChild(document.createTextNode(' ' + d.label + ' '));
-      tbtn.appendChild(el('span', 'sec-count', '(' + d.items.length + (d.items.length === 1 ? ' item' : ' items') + ')'));
+      tbtn.appendChild(el('span', 'sec-count',
+        settled ? '(' + d.done + ' done ✓)'
+                : '(' + d.items.length + (d.items.length === 1 ? ' item' : ' items') + ')'));
       tbtn.onclick = function () {
         var st = ctx.store.load();
-        togglePlanDay(st, d.iso);
+        togglePlanDay(st, d.iso, d.auto);
         ctx.store.save(st);
         rerender();
       };
@@ -11509,6 +12672,18 @@ var CityOps = (function () {
     var daySel = select(dayOpts, '');
     box.appendChild(field('Day', daySel, 'Optional. You can drop it on a day later.'));
 
+    // The research link. Optional, and the single highest-value optional
+    // field on this form: a small independent place is often unfindable by
+    // name (Pizzarté, Tirana, 2026-08-27), and one Google Maps pin turns a
+    // failed research pass into a good one. It is stored as a real links[]
+    // entry, so the card shows it whether or not Claude is ever asked.
+    var linkIn = document.createElement('input');
+    linkIn.type = 'url';
+    linkIn.className = 'date-field';
+    linkIn.placeholder = 'https://maps.app.goo.gl/...';
+    box.appendChild(field('Map or website link', linkIn,
+      'Optional, and it helps Claude find it. Paste the Google Maps pin or the place\'s own site.'));
+
     var noteIn = document.createElement('textarea');
     noteIn.className = 'note-field';
     noteIn.placeholder = 'Recommended by a couple at dinner';
@@ -11535,7 +12710,7 @@ var CityOps = (function () {
       var data = effectiveData(ctx.base, st);
       var built = newPlaceDelta(data, {
         name: nameIn.value, section: secSel.value, status: statusSel.value,
-        note: noteIn.value, day: daySel.value
+        note: noteIn.value, day: daySel.value, link: linkIn.value
       });
       if (built.errors.length) { msg.textContent = built.errors.join(' '); return; }
       var res = mergeDelta(data, built.delta);
@@ -11997,6 +13172,12 @@ var CityOps = (function () {
       // list it has to be ranked against.
       buildPlacePassPrompt: buildPlacePassPrompt, rosterLines: rosterLines
     },
+    // The trip surface's door back to the guides: which guide a stop should
+    // open, skipping the ones that are archived or no longer there. Pure, and
+    // shared so both halves of the app answer it identically.
+    guideDoorKit: {
+      idFor: guideIdFor, liveIdForStop: liveGuideIdForStop, resolve: resolveGuideDoor
+    },
     extractJsonBlock: extractJsonBlock, RETRY_INSTRUCTION: RETRY_INSTRUCTION,
     isJsonSyntaxError: isJsonSyntaxError, fetchTextToCity: fetchTextToCity,
     syncKit: {
@@ -12009,7 +13190,15 @@ var CityOps = (function () {
       // The trip surface's push path: it owns credentials but not the interest
       // profile, so it merges rather than replaces.
       mergeProfileRow: mergeProfileRow, sidecarsWorthPushing: sidecarsWorthPushing,
-      refreshFailure: refreshFailure
+      refreshFailure: refreshFailure,
+      // Removal tombstones: a removed city stays removed, on every device.
+      // All pure, all unit tested; the shell owns the DELETE calls and the
+      // localStorage key, exactly as it owns every other piece of transport.
+      tombKit: {
+        normalize: normalizeTombValue, block: normalizeTombBlock,
+        at: tombstoneAt, merge: mergeTombValues, mergeBlocks: mergeTombBlocks,
+        differ: tombValuesDiffer, plan: planTombstones, CAP: TOMB_CAP
+      }
     },
     safeHref: safeHref,
     onStateChange: null, liveState: liveState,
@@ -12039,6 +13228,11 @@ var CityOps = (function () {
     // and the Plan tab's own model, all pure and unit-tested on their own.
     TABS: TABS, tabForSection: tabForSection, setTab: setTab, effectiveTab: effectiveTab,
     planModel: planModel, isPlanDayCollapsed: isPlanDayCollapsed, togglePlanDay: togglePlanDay,
+    // A past day everything on which is settled folds itself away, and says
+    // "n done ✓" instead of an item count. Pure, so the rule is one function
+    // and one set of tests rather than a condition buried in the renderer.
+    planDayAutoCollapsed: planDayAutoCollapsed, planDayDoneCount: planDayDoneCount,
+    expandPlanDay: expandPlanDay, planDayAutoFor: planDayAutoFor,
     // Plan-tab within-day item order (drag to reorder), pure and unit-tested.
     orderDayItems: orderDayItems, setDayItemOrder: setDayItemOrder, whenClock: whenClock,
     dayItemOrderFor: dayItemOrderFor,
@@ -12805,6 +13999,10 @@ only judges it. `ratings` may be omitted when you could not verify the place;
   // an Edit opened on the phone shows what was typed on the laptop.
   var GENMETA_KEY = 'cityops.genmeta.v1';
   var GENMETA_AT = 'cityops.genmeta.updated.v1';           // ISO stamp for the reconcile
+  // cityId -> ISO of the removal. Each entry carries its own stamp because
+  // two devices can remove two different cities and the reconcile is a union,
+  // not a newest-wins over the whole map. Rides the profile row as `removed`.
+  var TOMB_KEY = 'cityops.removed.v1';
 
   // Bundled first-run city: the same example block standalone template.html ships
   // with, so a stranger opening the app sees a working guide immediately.
@@ -12867,10 +14065,18 @@ only judges it. `ratings` may be omitted when you could not verify the place;
   }
 
   function renderEmptyState() {
-    var hdr = document.getElementById('hdr');
+    // Only the MIDDLE, never the whole header: the band, the Cities|Trip
+    // switch and the app-level doors are shared chrome (src/header.html) and
+    // wiping them here left the surface with no way to cross to the trip half
+    // and no Profile door, on the one screen where a new traveler needs both.
+    // The engine's renderHeader observes the same boundary.
+    var hdr = document.getElementById('hdr-mid') || document.getElementById('hdr');
     hdr.innerHTML = '';
     hdr.appendChild(el('h1', null, 'CityOps'));
     hdr.appendChild(el('div', 'sub', 'No cities yet'));
+    // Nothing renders through the engine in this state, so the hook that
+    // normally refills the action slot never fires: do it here.
+    decorateHeader();
     document.getElementById('toolbar').innerHTML = '';
     var main = document.getElementById('main');
     main.innerHTML = '';
@@ -12999,6 +14205,64 @@ only judges it. `ratings` may be omitted when you could not verify the place;
     all[cityId] = meta;
     writeGenMeta(all, new Date().toISOString());
     schedulePush('profile');
+  }
+
+  // ---- removal tombstones ----
+  // A removal is a fact about the ACCOUNT, not about this device. Before this,
+  // Remove city dropped the local copy and refused to pull it back for the
+  // rest of the session, but the cities/city_state rows lived on, so the next
+  // pull (or the next device) put it straight back. Owner report 2026-08-27:
+  // "I'm repeatedly removing a city but it keeps adding back when I refresh."
+  //
+  // The map lives here, cityId -> ISO of the removal, and rides the profile
+  // row as the `removed` sidecar. It is written whether or not the device is
+  // signed in, so a removal made on a plane goes up with the next sync rather
+  // than being lost with the session. The reconcile itself is pure and lives
+  // in the engine (syncKit.tombKit).
+  function loadTombs() {
+    var raw = readLS(TOMB_KEY);
+    if (!raw) return {};
+    try { return CityOps.syncKit.tombKit.normalize(JSON.parse(raw)); }
+    catch (e) { return {}; }
+  }
+
+  function writeTombs(map) {
+    writeLS(TOMB_KEY, JSON.stringify(CityOps.syncKit.tombKit.normalize(map)));
+  }
+
+  // The stamped block this device contributes to the profile row. No entries
+  // means no opinion: buildProfileRow leaves the field out entirely rather
+  // than writing an empty map over the account's real one.
+  function localTombBlock() {
+    var map = loadTombs();
+    return CityOps.syncKit.tombKit.mergeBlocks({ value: map, updated: CityOps.syncKit.EPOCH }, null);
+  }
+
+  // Records a removal and queues it for the account. The write is local and
+  // synchronous, and the push is the debounced one every other edit uses, so a
+  // removal made with no signal survives the reload and rides the next sync;
+  // that is the whole reason this is not "delete the rows and hope". `at` is
+  // an injection point for a fixed clock; real callers omit it.
+  function addTomb(cityId, at) {
+    if (!cityId) return;
+    var map = loadTombs();
+    map[cityId] = at || new Date().toISOString();
+    writeTombs(map);
+    schedulePush('profile');
+  }
+
+  // Re-adding a city with the same id must work, so an add always clears the
+  // tombstone: the traveler changed their mind, and the removal is no longer
+  // the newest thing said about that city. Silent when there was none, which
+  // is the ordinary case for every add.
+  function clearTomb(cityId) {
+    if (!cityId) return false;
+    var map = loadTombs();
+    if (!Object.prototype.hasOwnProperty.call(map, cityId)) return false;
+    delete map[cityId];
+    writeTombs(map);
+    schedulePush('profile');
+    return true;
   }
 
   function el(tag, cls, text) {
@@ -13328,6 +14592,11 @@ only judges it. `ratings` may be omitted when you could not verify the place;
     h1.setAttribute('role', 'button');
     h1.setAttribute('tabindex', '0');
     h1.setAttribute('aria-expanded', String(panelOpen));
+    // Idempotent: this used to run exactly once per engine render (which wipes
+    // the h1 first), and it now also runs when the sync alert changes, which
+    // does not. Appending unconditionally gave the city two chevrons.
+    var oldChev = h1.querySelector('.hdr-chev');
+    if (oldChev) oldChev.remove();
     h1.appendChild(el('span', 'hdr-chev', panelOpen ? ' ▴' : ' ▾'));
     h1.onclick = function () {
       panelOpen = !panelOpen;
@@ -13337,15 +14606,16 @@ only judges it. `ratings` may be omitted when you could not verify the place;
     h1.onkeydown = function (e) {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); h1.click(); }
     };
-    var actions = el('div', 'hdr-actions');
-    // The trip door (2026-08-26). Both surfaces are one app on one origin now,
-    // so the header carries the crossing rather than a footer link: this is
-    // the guide half, and Trip is where the stops, stays and legs live.
-    var tripBtn = el('a', 'hdr-chip', 'Trip');
-    tripBtn.href = './trip.html';
-    tripBtn.title = 'Your trip: stops, stays and travel legs';
-    tripBtn.onclick = function (e) { e.stopPropagation(); };
-    actions.appendChild(tripBtn);
+    // The shared header's own action slot. It survives an engine render (the
+    // engine only wipes #hdr-mid now), but this function still rebuilds the
+    // chips each time so their labels and sync state stay current.
+    var actions = document.getElementById('hdr-acts');
+    if (!actions) return;
+    actions.innerHTML = '';
+    // The crossing between surfaces is the Cities|Trip switch in the shared
+    // bar, not a chip: see markSurface() below. What is left here is what is
+    // genuinely app-level rather than surface-level.
+    actions.appendChild(syncChip());
     // Feature 7: Profile is app-level (one interest profile, one Claude key
     // for every city), so it is a top-level header control, not a row inside
     // the per-city switcher menu.
@@ -13369,7 +14639,57 @@ only judges it. `ratings` may be omitted when you could not verify the place;
       openAddModal();
     };
     actions.appendChild(add);
-    h.appendChild(actions);
+  }
+
+  // Which surface you are on, said in the shared switch. aria-current is the
+  // fact and the CSS follows it, so there is no second "active" class that
+  // could point somewhere else. The peer link stays a real <a> (middle-click,
+  // open in a new tab, a visible target in the status bar all matter for a
+  // crossing between two halves of one app).
+  function markSurface() {
+    var me = document.getElementById('surf-cities');
+    var other = document.getElementById('surf-trip');
+    if (!me || !other) return;
+    me.setAttribute('aria-current', 'page');
+    me.removeAttribute('href');
+    me.title = 'You are here: the city guides';
+    other.title = 'Your trip: stops, stays and travel legs';
+  }
+
+  // The sync-status chip, in the shared header on BOTH surfaces (the trip side
+  // has had one since 2026-08-26; the guide side kept its sync state inside
+  // the Profile modal, so a stopped sync was one tap out of sight). Same
+  // vocabulary either side: plain when signed out on purpose, green when the
+  // account has this device's work, amber when sync has stopped.
+  function syncChip() {
+    var b = el('button', 'hdr-chip', 'Local only');
+    b.type = 'button';
+    if (!syncOn()) {
+      b.disabled = true;
+      b.title = 'Sync is not configured in this build.';
+      return b;
+    }
+    if (!session) {
+      b.title = 'Tap to sign in and carry your cities to your other devices.';
+    } else if (readSyncAlert()) {
+      b.textContent = 'Sync stuck';
+      b.className = 'hdr-chip warn';
+      b.title = 'Sync has stopped. Nothing is lost; open Profile for what to do.';
+    } else {
+      b.textContent = 'Synced';
+      b.className = 'hdr-chip ok';
+      b.title = lastSyncIso
+        ? 'Last synced ' + new Date(lastSyncIso).toLocaleString()
+        : 'Signed in. Your cities carry across your devices.';
+    }
+    b.onclick = function (e) {
+      e.stopPropagation();
+      panelOpen = false;
+      updateHeaderExpanded();
+      renderPanel();
+      openProfileModal();
+    };
+    return b;
   }
 
   // ---- interest profile (app-only data; the engine owns its shape) ----
@@ -14142,7 +15462,13 @@ only judges it. `ratings` may be omitted when you could not verify the place;
     // Phase 4, item 7: Remove city moves here from the city-switcher panel,
     // keeping its existing type-to-confirm modal unchanged.
     if (activeId && has(store.cities, activeId)) {
-      actions.push({ label: 'Remove city', desc: 'Deletes this city and its progress here',
+      // The description follows the fact: since 2026-08-27 a removal is a
+      // fact about the ACCOUNT (it deletes the rows and records a tombstone),
+      // so "its progress here" would now be an understatement of what the tap
+      // does, on the one control where that matters most.
+      actions.push({ label: 'Remove city',
+        desc: session ? 'Deletes this city everywhere you are signed in'
+                      : 'Deletes this city and its progress here',
         icon: '🗑️', group: 'city', order: 20, onClick: openRemoveModal, cls: 'danger' });
     }
     return actions;
@@ -14825,7 +16151,9 @@ only judges it. `ratings` may be omitted when you could not verify the place;
     var wrap = el('div', 'modal-wrap');
     var box = el('div', 'modal');
     box.appendChild(el('h3', null, 'Remove ' + name));
-    box.appendChild(el('p', 'diff', 'This deletes the city and its saved progress on this device. ' +
+    box.appendChild(el('p', 'diff', (session
+      ? 'This deletes the city and its saved progress from your account, on every device you are signed in on. '
+      : 'This deletes the city and its saved progress on this device, and removes it from your account the next time you sign in. ') +
       'Type the city name exactly to enable the Remove button.'));
     var inp = document.createElement('input');
     inp.type = 'text';
@@ -14848,9 +16176,20 @@ only judges it. `ratings` may be omitted when you could not verify the place;
       var gone = activeId;
       store = CityOps.appStore.remove(store, gone);
       if (LS) { try { LS.removeItem('cityops.' + gone + '.v1'); } catch (e) {} }
-      // Removal does not propagate to other devices in v1 (see the report), but
-      // it must not be undone here either: this device refuses to pull the city
-      // back for the rest of the session.
+      // A removal is a fact about the ACCOUNT now, not just about this device.
+      // Three things happen, in this order, and the order matters:
+      //   1. the tombstone is written LOCALLY first, so a removal made
+      //      offline (or signed out) survives the reload and rides the next
+      //      sync rather than being lost with the session;
+      //   2. the account's rows are DELETEd, so no other device can find a
+      //      copy to push back;
+      //   3. this session refuses to pull it back regardless, which is the
+      //      belt to the tombstone's braces and covers the window between the
+      //      delete going out and it landing.
+      // Owner report 2026-08-27: "anything removed should remain removed, and
+      // sync the removal across all devices."
+      addTomb(gone);
+      deleteCityRows(gone);
       removedIds[gone] = 1;
       delete stateStamp[gone];
       // An explicit removal means the user owns this device's city list now:
@@ -15033,6 +16372,10 @@ only judges it. `ratings` may be omitted when you could not verify the place;
   function renderSyncAlert() {
     var host = document.getElementById('syncalert');
     if (!host) return;
+    // The header's sync chip reads the same alert, so it is repainted from the
+    // one place that knows the alert changed. It no-ops before the first
+    // engine render (there is no header title to decorate yet).
+    decorateHeader();
     host.innerHTML = '';
     var a = readSyncAlert();
     if (!a || alertHiddenForNow || !syncOn()) return;
@@ -15282,6 +16625,24 @@ only judges it. `ratings` may be omitted when you could not verify the place;
       .catch(function (e) { warn('push ' + kind + ' failed', e); });
   }
 
+  // Deletes one city's rows from the account. RLS scopes the filter to this
+  // user's rows, so `city_id=eq.<id>` cannot reach anyone else's; user_id is
+  // deliberately NOT sent for the same reason it is never sent on a write.
+  //
+  // Fails soft, like every other call here: the tombstone is already written
+  // locally, so a delete that never lands is retried by the next pull's
+  // reconcile (planTombstones asks for it again as long as the row is there).
+  // That is why this is not queued or retried on a timer.
+  function deleteCityRows(cityId) {
+    if (!syncOn() || !session || !cityId) return Promise.resolve(false);
+    var q = '?city_id=eq.' + encodeURIComponent(cityId);
+    return Promise.all([
+      api('/rest/v1/cities' + q, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } }),
+      api('/rest/v1/city_state' + q, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } })
+    ]).then(function () { stampSync(); return true; })
+      .catch(function (e) { warn('delete rows for ' + cityId + ' failed', e); return false; });
+  }
+
   // This device's sidecars, in the shape syncKit.buildProfileRow expects. A
   // null block means "this device has no opinion", and buildProfileRow leaves
   // the field out entirely rather than writing an empty one.
@@ -15292,7 +16653,10 @@ only judges it. `ratings` may be omitted when you could not verify the place;
     return {
       apiKey: keyAt ? { value: loadApiKey(), updated: keyAt } : null,
       github: ghAt ? { value: loadGithubToken(), updated: ghAt } : null,
-      genmeta: gmAt ? { value: loadGenMeta(), updated: gmAt } : null
+      genmeta: gmAt ? { value: loadGenMeta(), updated: gmAt } : null,
+      // Tombstones carry their own per-entry stamps, so the block's own stamp
+      // is derived from them by the engine rather than kept beside them here.
+      removed: localTombBlock()
     };
   }
 
@@ -15320,6 +16684,16 @@ only judges it. `ratings` may be omitted when you could not verify the place;
     if (remote.genmeta && CityOps.syncKit.decide(genMetaStamp(), remote.genmeta.updated) === 'pull') {
       writeGenMeta(remote.genmeta.value, remote.genmeta.updated);
       changed.push('city form details');
+    }
+    // Tombstones UNION rather than replace: this device may know about a
+    // removal the account does not (made offline), and the account may know
+    // about one made on the phone. Whole-block newest-wins would throw one of
+    // them away, and a removal that comes back is the bug this exists to fix.
+    // Written back before any push, which is what makes the push carry both.
+    var mergedT = CityOps.syncKit.tombKit.mergeBlocks(localTombBlock(), remote.removed);
+    var mine = loadTombs();
+    if (CityOps.syncKit.tombKit.differ(mine, mergedT && mergedT.value)) {
+      writeTombs(mergedT ? mergedT.value : {});
     }
     return changed;
   }
@@ -15370,7 +16744,15 @@ only judges it. `ratings` may be omitted when you could not verify the place;
     var row = CityOps.syncKit.buildProfileRow(store.profile, localSidecars());
     // Nothing this device has ever set: pushing an empty profile with no
     // sidecars would overwrite a real one with this device's blank.
-    if (!row.data.updated && !row.data.apiKey && !row.data.github && !row.data.genmeta) return;
+    //
+    // `removed` belongs in this list. Without it, a traveler who has never
+    // filled in a profile and never saved a Claude key removes a city, the
+    // tombstone is built into the row, and the row is then dropped here as
+    // "nothing to say" - so the removal never reaches the account and the
+    // other device pushes the city straight back. Caught in the mocked
+    // remove-then-pull walkthrough, 2026-08-27.
+    if (!row.data.updated && !row.data.apiKey && !row.data.github &&
+        !row.data.genmeta && !row.data.removed) return;
     api('/rest/v1/profile?on_conflict=user_id', {
       method: 'POST',
       headers: {
@@ -15398,6 +16780,16 @@ only judges it. `ratings` may be omitted when you could not verify the place;
   // one upsert. A failed flush is NOT retried on a timer; local stays newer
   // than the server, so the next pull's reconcile pushes it. Local is the queue.
   function schedulePush(kind, id) {
+    // Re-adding a city with the same id must work, and so must editing one
+    // back into existence. Both arrive here, and both mean the same thing: a
+    // copy of this city exists on this device NOW, so the removal is no longer
+    // the newest thing said about it. Doing it here rather than at each of the
+    // three add paths is the one-door rule: a fourth add path cannot forget.
+    //
+    // Above the signed-out guard on purpose: a re-add made offline has to
+    // clear the tombstone locally too, or the next sync would delete the city
+    // the traveler just put back.
+    if (kind === 'data' && id) clearTomb(id);
     if (!syncOn() || !session) return;
     if (kind === 'profile') pushQueueProfile = true;
     else if (!id) return;
@@ -15565,6 +16957,14 @@ only judges it. `ratings` may be omitted when you could not verify the place;
   }
 
   function applyPull(cityRows, stateRows, profileRows) {
+    // The account's REMOVALS have to be in hand before anything is decided
+    // about a city, so the sidecars are adopted here rather than waiting for
+    // applyProfilePull at the bottom. Adoption is idempotent (every branch is
+    // a newest-wins comparison), so the later call is a no-op on these and
+    // still does its own job: the profile half and the push decision.
+    if (Array.isArray(profileRows) && profileRows.length) {
+      adoptSidecars(profileRows[0] && profileRows[0].data);
+    }
     var remoteData = {}, remoteState = {};
     var remoteDataStamps = stampMap(cityRows, remoteData);
     var remoteStateStamps = stampMap(stateRows, remoteState);
@@ -15576,8 +16976,64 @@ only judges it. `ratings` may be omitted when you could not verify the place;
       if (s) localStateStamps[id] = s;
     });
 
-    var dataPlan = CityOps.syncKit.plan(localDataStamps, remoteDataStamps, removedIds);
-    var statePlan = CityOps.syncKit.plan(localStateStamps, remoteStateStamps, removedIds);
+    // ---- removals first ----
+    // The account's tombstones were adopted at the top of this pull (see
+    // adoptSidecars, which applyProfilePull runs), so this device's map is
+    // already the union of both sides before anything is decided about a city.
+    //
+    // Ordering matters: a tombstoned id must be off the table BEFORE the
+    // newer-wins reconcile runs, or a row this device has never seen would
+    // look like a city arriving from another device and be pulled in.
+    var tombPlan = CityOps.syncKit.tombKit.plan(loadTombs(), localDataStamps, remoteDataStamps);
+    // A city genuinely re-added since the removal (its row or this device's
+    // copy is stamped after the tombstone) wins: drop the tombstone and let it
+    // reconcile like any other city.
+    if (tombPlan.clearTombs.length) {
+      var t = loadTombs();
+      tombPlan.clearTombs.forEach(function (id) { delete t[id]; });
+      writeTombs(t);
+      schedulePush('profile');
+    }
+    // Rows the removal outlives: delete them server side so no other device
+    // finds a copy to push back. Idempotent, and cheap when there is nothing
+    // to do (the common case is an empty list).
+    tombPlan.dropRemote.forEach(function (id) {
+      delete remoteData[id];
+      delete remoteDataStamps[id];
+      delete remoteState[id];
+      delete remoteStateStamps[id];
+      deleteCityRows(id);
+    });
+    // The second-device case: this device still HOLDS a city the account says
+    // was removed. It forgets it here rather than pushing it back up, which is
+    // the exact loop Rob was watching ("it keeps adding back when I refresh").
+    var forgot = [];
+    tombPlan.dropLocal.forEach(function (id) {
+      if (!has(store.cities, id)) return;
+      forgot.push(store.cities[id].city.name);
+      store = CityOps.appStore.remove(store, id);
+      if (LS) { try { LS.removeItem('cityops.' + id + '.v1'); } catch (e) {} }
+      delete localDataStamps[id];
+      delete localStateStamps[id];
+      delete stateStamp[id];
+      removedIds[id] = 1;
+    });
+    if (forgot.length) {
+      saveStore(store);
+      // An explicit removal on ANY device means the traveler owns the city
+      // list now: never auto-seed the example city here either, or removing
+      // the last city on the phone would grow an example one on the laptop.
+      try { if (LS) LS.setItem('cityops.app.hadcities', '1'); } catch (e) {}
+      if (removedIds[activeId]) activeId = null;
+    }
+    // Every tombstoned id is off-limits to a push this round, whether or not
+    // it was in either list above.
+    var skip = {};
+    Object.keys(removedIds).forEach(function (id) { skip[id] = 1; });
+    Object.keys(tombPlan.skipPush).forEach(function (id) { skip[id] = 1; });
+
+    var dataPlan = CityOps.syncKit.plan(localDataStamps, remoteDataStamps, skip);
+    var statePlan = CityOps.syncKit.plan(localStateStamps, remoteStateStamps, skip);
 
     var pulledNames = [];
     var rebootActive = false;
@@ -15645,6 +17101,17 @@ only judges it. `ratings` may be omitted when you could not verify the place;
       // The device was showing the empty state and the pull just delivered
       // cities: activate the first one.
       activateCity(store.order[0]);
+    } else if (forgot.length && !store.order.length) {
+      // The city this device was showing was removed on another device, and it
+      // was the last one. The empty state is the honest screen here; leaving
+      // the old city's cards on the page would show data that no longer exists
+      // anywhere.
+      activateCity(null);
+    }
+    if (forgot.length) {
+      showSyncNotice(forgot.join(', ') + (forgot.length === 1 ? ' was' : ' were') +
+        ' removed on another device, so ' + (forgot.length === 1 ? 'it is' : 'they are') +
+        ' gone from here too');
     }
     if (pulledNames.length) {
       showSyncNotice('Synced: ' + pulledNames.join(', ') + ' updated from your other device');
@@ -15931,6 +17398,10 @@ only judges it. `ratings` may be omitted when you could not verify the place;
     fb.title = 'Open an issue on GitHub';
     foot.appendChild(fb);
   }
+
+  // The surface switch is shared chrome: it is not rebuilt per render, so it
+  // is marked once, as soon as the shell script runs.
+  markSurface();
 
   CityOps.onStateChange = function () { renderPanel(); decorateHeader(); decorateFoot(); };
 
