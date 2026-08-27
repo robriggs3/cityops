@@ -1,0 +1,100 @@
+/* ==========================================================================
+   THE SHARED HEADER
+   One source, assembled into both stylesheets by tools/assemble.js at the
+   /*CITYOPS_HEADER_CSS* / marker. Written against tokens BOTH surfaces already
+   declare under the same names (--accent, --accent-hover, --gutter,
+   --content-max, --bleed-pad), so it needs nothing that is not already there.
+
+   The band is full bleed: the negative side margins pull it past the content
+   column's max-width, and --bleed-pad puts its CONTENTS back on that column,
+   so the h1 and the first card below it share an x at every width.
+
+   It sits FLUSH to the top of the viewport (owner ask 2026-08-27: "cleanup the
+   margin at the top, there's something separating the red header from the top
+   of the browser window"). That is why margin-top is 0 here and why both
+   shells put this element first inside .wrap: an empty notice line above it
+   used to collapse its 8px top margin out through .wrap and body and push the
+   whole page, band included, 8px down.
+   ========================================================================== */
+.apphdr{
+  background:linear-gradient(160deg,var(--accent) 0%,var(--accent-hover) 100%);
+  color:#fff; border-radius:0;
+  margin:0 calc(50% - 50vw) 20px;
+  padding:0 var(--bleed-pad) 22px;
+}
+
+/* --- the peer row: which surface you are on, and the app-level doors --- */
+.apphdr-bar{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:12px; flex-wrap:wrap;
+  padding:10px 0 12px;
+  border-bottom:1px solid rgba(255,255,255,.18);
+  margin-bottom:16px;
+}
+
+/* Cities and Trip are PEERS, not a chip and a title. They were a one-off chip
+   on each side ("Trip" on the guide, "City guides" on the trip page), which
+   read as a link off to somewhere else rather than as the two halves of one
+   app. A segmented pair says what it is: you are in one of these two places. */
+.surfsw{display:inline-flex; background:rgba(0,0,0,.18); border-radius:20px; padding:2px;}
+.surfsw .surf{
+  font:inherit; font-size:.78rem; font-weight:600; letter-spacing:.02em;
+  color:rgba(255,255,255,.78); text-decoration:none;
+  padding:6px 14px; border-radius:18px; white-space:nowrap;
+  display:inline-flex; align-items:center; cursor:pointer;
+}
+.surfsw .surf:hover{color:#fff;}
+/* The current surface. aria-current is the fact; the styling follows it, so
+   there is no separate "active" class to forget to move. */
+.surfsw .surf[aria-current="page"]{
+  background:rgba(255,255,255,.92); color:var(--accent-hover); cursor:default;
+}
+
+.apphdr-acts{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+
+/* One chip vocabulary for every app-level door, on both surfaces. */
+.hdr-chip{
+  background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3);
+  color:#fff; font:inherit; font-size:.78rem; padding:5px 11px; border-radius:20px;
+  cursor:pointer; text-decoration:none; white-space:nowrap;
+  display:inline-flex; align-items:center; gap:5px;
+}
+.hdr-chip:hover{background:rgba(255,255,255,.28); border-color:rgba(255,255,255,.55);}
+.hdr-chip:disabled{opacity:.55; cursor:default;}
+/* Sync state colours the chip rather than adding a line: green when the
+   account has this device's work, amber when sync has stopped, plain
+   translucent white when the traveler is signed out on purpose. */
+.hdr-chip.ok{background:rgba(212,232,213,.22); border-color:rgba(212,232,213,.6);}
+.hdr-chip.warn{background:rgba(237,225,190,.26); border-color:rgba(237,225,190,.7);}
+
+/* --- the per-surface middle --- */
+.apphdr-mid h1{font-size:1.55rem; letter-spacing:.2px; line-height:1.15;}
+.apphdr-mid .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
+
+/* "Last touched" is a FACT, not a door, and it was wearing a pill that cost
+   more width than the words (owner ask 2026-08-27: "that takes a lot of room.
+   let's make that smaller, just text, no pill"). Plain muted text now: no
+   border, no background, no padding. */
+.hdr-meta{
+  font-size:.72rem; color:rgba(255,255,255,.72); letter-spacing:.02em;
+  white-space:nowrap; align-self:center;
+}
+
+@media (max-width: 430px){
+  .apphdr{margin:0 calc(50% - 50vw) 16px; padding:0 var(--bleed-pad) 16px;}
+  .apphdr-bar{padding:8px 0 10px; margin-bottom:12px; gap:8px;}
+  .surfsw .surf{font-size:.74rem; padding:7px 13px;}
+  .hdr-chip{font-size:.74rem; padding:5px 10px;}
+  .apphdr-mid h1{font-size:1.35rem;}
+  .hdr-meta{font-size:.68rem;}
+}
+
+/* A door gets a thumb on a touch screen. The width test is here as well as the
+   pointer test on purpose: desktop Chrome at 390px reports a fine pointer, and
+   Rob's phone is 390px, so width is the reliable signal of the two. */
+@media (hover: none), (pointer: coarse){
+  .surfsw .surf, .hdr-chip{min-height:44px;}
+}
+@media (max-width: 430px){
+  .surfsw .surf, .hdr-chip{min-height:44px;}
+}

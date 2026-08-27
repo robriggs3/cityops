@@ -1,0 +1,38 @@
+<!-- The ONE header, assembled into both surfaces.
+     Owner ask 2026-08-27: "possible to use a shared header between cityops and
+     plan-ahead? that would make the apps feel more cohesive."
+
+     Before this, each surface hand-built its own red band: same colours, same
+     bleed, different DOM, different class names, two stylesheets to keep in
+     step. They had already drifted twice (the content column, then the gutter),
+     and each fix had to be made twice.
+
+     Now tools/assemble.js injects this exact block into app-shell.html and
+     trip-shell.html at their header marker, and src/header.css into both
+     stylesheets at the matching CSS marker. (Neither marker is spelled out in
+     this file: the injected copy would then carry a second one, and the
+     assembler's "exactly one marker" check exists precisely to catch a stray.)
+     The CI drift guard re-runs
+     assemble and diffs, so the two surfaces cannot drift again without the
+     build going red.
+
+     What is SHARED: the band itself, the Cities|Trip switch, the sync chip and
+     the Profile door. What each surface fills in is #hdr-mid: the guide side
+     writes the city title, its dates and its highlights row; the trip side
+     writes the trip title and the NOW chip. Same box, different contents.
+
+     #hdr-mid exists so the engine can keep wiping its own half with
+     innerHTML='' on every render without taking the shared chrome with it. A
+     standalone exported guide has no shared header at all (guide-shell.html
+     does not carry this marker), which is why renderHeader falls back to #hdr
+     when #hdr-mid is absent. -->
+<header class="apphdr" id="hdr">
+  <div class="apphdr-bar">
+    <nav class="surfsw" id="surfsw" aria-label="App surface">
+      <a class="surf" id="surf-cities" href="./">Cities</a>
+      <a class="surf" id="surf-trip" href="./trip.html">Trip</a>
+    </nav>
+    <div class="apphdr-acts" id="hdr-acts"></div>
+  </div>
+  <div class="apphdr-mid" id="hdr-mid"></div>
+</header>

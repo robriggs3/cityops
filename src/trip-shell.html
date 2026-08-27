@@ -117,22 +117,33 @@
      little more left/right margin on plan-ahead page"), and the same 16px
      cityops uses at every width, so a card's left edge does not shift when
      you cross surfaces. */
-  .wrap { max-width: var(--content-max); margin: 0 auto; padding: var(--space-7) var(--gutter) 80px; }
+  /* Top padding is 0 because the SHARED header is the first thing inside
+     .wrap and has to sit flush against the top of the window (owner ask
+     2026-08-27). The band used to be pulled back up by a negative margin
+     exactly equal to this padding, which worked but meant two numbers that had
+     to agree at every breakpoint; one of them being zero is fewer ways to be
+     wrong. The first non-header child gets its own top spacing instead. */
+  .wrap { max-width: var(--content-max); margin: 0 auto; padding: 0 var(--gutter) 80px; }
 
-  /* HERO */
-  .hero {
-    display: flex; align-items: flex-end; justify-content: space-between;
-    margin-bottom: 40px; gap: 24px; flex-wrap: wrap;
-  }
-  .hero-left h1 {
+  /* HERO
+     The red band itself now lives in src/header.css, shared with the guide
+     surface and injected at the CSS marker further down this file. What is
+     left here is only the trip side's own MIDDLE: the title's serif face and
+     the one-line strapline under it. Everything that used to be .hero-*
+     (the band, the chips, the sync colours, the coarse-pointer minimums) is
+     the shared header's job now, under the shared class names. */
+  .apphdr-mid h1 {
     font-family: 'Fraunces', Georgia, serif;
-    font-size: var(--fs-display); line-height: 1; letter-spacing: -0.03em;
-    font-weight: 500; margin-bottom: 8px;
+    line-height: 1.05; letter-spacing: -0.02em; font-weight: 500;
   }
-  .hero-left h1 .accent { color: var(--accent); font-style: italic; }
-  .hero-left .sub { color: var(--text-2); font-size: var(--fs-body); }
-  .hero-right { text-align: right; color: var(--text-3); font-size: 13px; font-family: 'JetBrains Mono', monospace; }
-  .hero-right .last-session { font-size: 11px; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .apphdr-mid h1 .accent { color: #ffffff; opacity: 0.72; font-style: italic; }
+  .hdr-facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
+  .hdr-chip .chip-sub { opacity: 0.72; }
+  /* display:inline-flex on .hdr-chip beats the hidden attribute, and a chip
+     with nothing in it still takes a chip's worth of width. The city chip
+     hides itself when there is no stop to name, so this has to actually hide
+     it. */
+  .hdr-chip[hidden] { display: none; }
 
   /* SECTIONS */
   .section { margin-bottom: var(--space-8); }
@@ -399,6 +410,10 @@
   .cost-line.cl-total { border-top: 1px solid var(--border-light); margin-top: 2px; padding-top: 2px; }
   .cost-line.cl-total .cl-label { color: var(--text-2); }
   .cost-line.cl-total .cl-val { color: var(--text); font-weight: 600; }
+  /* Cash owed on arrival. Amber, like every other "needs your attention,
+     nothing is broken" signal in this app: an unpaid booking is not a fault. */
+  .cost-line.cl-onsite .cl-label,
+  .cost-line.cl-onsite .cl-val { color: var(--amber-ink, #6b5400); font-weight: 600; }
   .city-chev {
     color: var(--text-3); font-size: 16px; transition: transform 0.2s;
   }
@@ -637,14 +652,42 @@
     border-color: var(--border);
     box-shadow: 0 2px 8px rgba(0,0,0,0.05);
   }
+  /* name | dates | status | paid | delete | chevron. The paid column joined in
+     2026-08; every other column keeps the width it had. */
   .accom-row1 {
-    display: grid; grid-template-columns: 1fr auto auto auto auto; gap: 12px; align-items: center;
+    display: grid; grid-template-columns: 1fr auto auto auto auto auto; gap: 12px; align-items: center;
   }
   /* Date range on a stay header — mirrors the leg's right-aligned date placement */
   .accom-summary-date {
     font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-3);
     letter-spacing: 0.02em; white-space: nowrap; text-align: right;
   }
+  /* --- Paid / pay on site (owner ask 2026-08-27) -----------------------
+     A stay is either settled or it is money Rob has to have on him when he
+     arrives. Green reads as done everywhere else in this app; amber reads as
+     "your attention, nothing is broken", which is exactly right for cash that
+     is owed but not yet late. Never red: an unpaid booking is not a fault. */
+  /* The control IS the state: a pill with a checkbox in it, so a stay row
+     shows its paid state and changes it in one thing rather than in a chip
+     beside a checkbox that say the same in different words. */
+  .paid-toggle {
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 3px 9px; border-radius: 20px; border: 1px solid transparent;
+    cursor: pointer; user-select: none; color: var(--text-2);
+  }
+  .paid-toggle input { accent-color: var(--green); cursor: pointer; margin: 0; }
+  .paid-toggle.paid { background: var(--green-soft); color: var(--green-ink, #226428); border-color: var(--green); }
+  .paid-toggle.due { background: var(--amber-soft); color: var(--amber-ink, #6b5400); border-color: var(--amber); }
+  /* Disabled says WHY (title), and looks unavailable rather than broken. */
+  .paid-toggle.off { color: var(--text-3); opacity: 0.55; cursor: default; border-color: var(--border-light); }
+  .paid-toggle.off input { cursor: default; }
+  @media (hover: none), (pointer: coarse) {
+    .paid-toggle { min-height: 38px; }
+    .paid-toggle input { width: 18px; height: 18px; }
+  }
+
   .accom-body { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-light); }
   .accom-name {
     font-weight: 500; outline: none; padding: 2px 4px; border-radius: 3px; font-size: 14px;
@@ -1287,11 +1330,7 @@
   @media (max-width: 430px) {
     /* Side padding is --gutter at every width now (see .wrap above), so this
        tier only tightens the vertical rhythm. */
-    .wrap { padding: 18px var(--gutter) 56px; }
-    .hero { margin-bottom: 24px; gap: 12px; }
-    .hero-left h1 { font-size: 38px; }
-    .hero-left .sub { font-size: 13px; }
-    .hero-right { text-align: left; font-size: 12px; }
+    .wrap { padding: 0 var(--gutter) 56px; }
     .section { margin-bottom: 28px; }
     .section-head { margin-bottom: 12px; gap: 8px; }
     .section-head h2 { font-size: 19px; }
@@ -1329,64 +1368,16 @@
      ================================================================== */
 
   /* --- The header block ------------------------------------------------
-     Was: a 56px Fraunces headline sitting on the grey page with a
-     right-aligned monospace date, i.e. no header at all, just a title.
-     Now: cityops' full-bleed accent gradient with the facts as chips.
-     The negative margins cancel .wrap's padding so the block touches
-     three edges of the viewport; the values are kept in lockstep with
-     .wrap's own padding at each breakpoint below. */
-  /* Edge to edge of the VIEWPORT, not of .wrap, and identical to cityops'
-     .wrap>header rule: the negative side margins pull the band past the
-     content column's max-width, and --bleed-pad puts its contents back onto
-     that column. So the h1 and the chip row start exactly where the first
-     section below them starts, at the same x on both surfaces. */
-  .hero {
-    display: block;
-    background: linear-gradient(160deg, var(--accent) 0%, var(--accent-hover) 100%);
-    color: #ffffff;
-    margin: calc(-1 * var(--space-7)) calc(50% - 50vw) var(--space-8);
-    padding: 26px var(--bleed-pad) 22px;
-    border-radius: 0;
-  }
-  .hero-left h1 {
-    font-size: 34px; line-height: 1.05; margin-bottom: 6px; color: #ffffff;
-  }
-  /* "ahead." was accent-red on grey. On the red block it has to become the
-     light half of the pair or it disappears into its own background. */
-  .hero-left h1 .accent { color: #ffffff; opacity: 0.72; font-style: italic; }
-  .hero-left .sub { color: rgba(255,255,255,0.9); font-size: 14px; }
-
-  /* cityops .facts / .chip: the dense control row under the title. Every
-     fact and every cross-app door lives here, so the header answers
-     "when is it, when did I last touch this, is it syncing, where is the
-     city guide" in one glance instead of four scattered places. */
-  .hero-facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
-  .hero-chip {
-    background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25);
-    padding: 5px 11px; border-radius: 20px; font-size: 12px; color: #ffffff;
-    font-family: 'JetBrains Mono', monospace; letter-spacing: 0.03em;
-    display: inline-flex; align-items: center; gap: 6px;
-  }
-  .hero-chip .chip-sub { opacity: 0.72; }
-  /* display:inline-flex above beats the hidden attribute, and a chip with
-     nothing in it still takes a chip's worth of width. The city chip hides
-     itself when there is no stop to name, so this has to actually hide it. */
-  .hero-chip[hidden] { display: none; }
-  /* A chip that is a door, not a fact: same shape, but it lifts on hover and
-     carries the 44px coarse-pointer minimum (see the pointer block below). */
-  a.hero-chip, button.hero-chip {
-    text-decoration: none; cursor: pointer; font: inherit; font-size: 12px;
-    font-family: 'JetBrains Mono', monospace; color: #ffffff;
-  }
-  a.hero-chip:hover, button.hero-chip:hover {
-    background: rgba(255,255,255,0.28); border-color: rgba(255,255,255,0.55);
-  }
-  button.hero-chip:disabled { opacity: 0.5; cursor: default; }
-  /* Sync state colours the chip rather than adding a line: green when the
-     account has this device's work, amber when sync has stopped, plain
-     translucent white when Rob is signed out on purpose. */
-  .hero-chip.ok { background: rgba(212,232,213,0.22); border-color: rgba(212,232,213,0.6); }
-  .hero-chip.warn { background: rgba(237,225,190,0.26); border-color: rgba(237,225,190,0.7); }
+     Was: a whole second copy of cityops' red band, written in .hero-* class
+     names against the same tokens, kept in lockstep with the guide side by
+     hand. It drifted twice (the content column, then the gutter) and each fix
+     had to be made in two files.
+     Now: ONE header, src/header.html plus src/header.css, injected into both
+     surfaces by tools/assemble.js at the markers below. The CI drift guard
+     re-runs assemble and diffs the built files, so the two copies cannot come
+     back without the build going red. Owner ask 2026-08-27: "possible to use a
+     shared header between cityops and plan-ahead?" */
+/*CITYOPS_HEADER_CSS*/
 
   /* --- The persistent sync alert (cityops .syncalert) -------------------
      Amber, never red: nothing is lost when sync stops, the device still
@@ -1440,31 +1431,19 @@
   .city.past > .city-header:hover { opacity: 1; }
   .city.past.open > .city-header { opacity: 1; }
 
-  /* --- Coarse pointers: 44px on every door in the header --------------- */
+  /* --- Coarse pointers: 44px on every door OUTSIDE the header ----------
+     The header's own doors carry this in src/header.css, once, for both
+     surfaces. What is left here is this page's own controls. */
   @media (hover: none), (pointer: coarse) {
-    a.hero-chip, button.hero-chip { min-height: 44px; padding: 8px 14px; }
     .ctl, .guide-link { min-height: 40px; padding: 8px 14px; }
     .syncalert-acts .btn-secondary { min-height: 44px; }
   }
 
   /* --- 390px first ------------------------------------------------------
-     Rob reads this on a phone mid-trip. The header keeps its full bleed at
-     the narrow padding, so these margins track .wrap's 12px exactly. */
+     Rob reads this on a phone mid-trip. The header's own narrow tier lives in
+     src/header.css alongside the rest of it. */
   @media (max-width: 430px) {
-    .hero {
-      /* Still full-bleed; only the vertical padding tightens. The side
-         padding stays --bleed-pad, which is --gutter at this width. */
-      margin: -18px calc(50% - 50vw) 24px;
-      padding: 20px var(--bleed-pad) 16px;
-    }
-    .hero-left h1 { font-size: 27px; }
-    .hero-left .sub { font-size: 13px; }
-    .hero-facts { gap: 6px; margin-top: 11px; }
-    .hero-chip { padding: 4px 9px; font-size: 11px; }
-    /* A door gets a thumb at this width whatever the pointer media query
-       reports. Desktop Chrome at 390px claims a fine pointer, and Rob's phone
-       is 390px: the width is the reliable signal here, not the pointer. */
-    a.hero-chip, button.hero-chip { font-size: 11px; min-height: 44px; padding: 8px 13px; }
+    .hdr-facts { gap: 6px; margin-top: 11px; }
     .syncalert { padding: 11px 12px; font-size: 12.5px; }
     .guide-link { font-size: 9px; padding: 4px 8px; }
   }
@@ -1474,28 +1453,14 @@
 
 <div class="wrap">
 
-  <!-- HERO: cityops' deep-red header block. The facts and both cross-app doors
-       (city guides, sync) live in the chip row so the top of the page answers
-       "when is it, is my work safe, where is the city guide" at one glance. -->
-  <header class="hero">
-    <div class="hero-left">
-      <h1>Plan <span class="accent">ahead.</span></h1>
-      <p class="sub">The antidote to "where am I sleeping next week?"</p>
-    </div>
-    <div class="hero-facts">
-      <span class="hero-chip" id="hero-date"></span>
-      <span class="hero-chip" id="hero-last">LAST TOUCHED</span>
-      <button class="hero-chip" id="hero-sync" type="button" onclick="onHeroSyncClick()"
-              title="Sync across your devices">Local only</button>
-      <!-- The door back to the guide half, and the one piece of context worth
-           the width: which city you are actually in (or headed to). Filled in
-           by updateCityChip(); it stays hidden until there is a stop to name,
-           because a chip that says nothing costs the same space as one that
-           does. -->
-      <a class="hero-chip" id="hero-city" href="./" hidden></a>
-      <a class="hero-chip" href="./" title="City guides: what to eat, see and do once you are in a city">City guides &#8594;</a>
-    </div>
-  </header>
+  <!-- The SHARED header (src/header.html), the same block the guide surface
+       gets, injected here by tools/assemble.js. Its middle (#hdr-mid) and its
+       action slot (#hdr-acts) are filled in by buildTripHeader() below: this
+       page is rendered by script anyway, and a static copy of the middle here
+       would be a second thing to keep in step with the fragment.
+       It is the FIRST child of .wrap on both surfaces so the band sits flush
+       against the top of the window. -->
+  <!--CITYOPS_HEADER-->
 
   <!-- Sync alert host. Nothing else writes here, so a "sync stopped" bar
        survives every repaint and every reload until it is resolved. -->
@@ -2840,6 +2805,69 @@ function populateCountries() {
 
 // ==================== HERO ====================
 
+// Fills the SHARED header's two slots with this surface's own contents. Runs
+// once: the slots are chrome, and updateHero() repaints what is inside them.
+// The guide surface does the same thing from its own shell (decorateHeader),
+// against the same ids and the same classes, which is the whole point of the
+// shared fragment.
+function buildTripHeader() {
+  const mid = document.getElementById('hdr-mid');
+  if (mid) {
+    mid.innerHTML =
+      '<h1>Plan <span class="accent">ahead.</span></h1>' +
+      '<p class="sub">The antidote to "where am I sleeping next week?"</p>' +
+      '<div class="hdr-facts">' +
+        '<span class="hdr-chip" id="hero-date"></span>' +
+        // Which city you are actually in, or headed to, and the door straight
+        // into its guide. Hidden until there is a stop to name: a chip that
+        // says nothing costs the same width as one that does.
+        '<a class="hdr-chip" id="hero-city" href="./" hidden></a>' +
+        // "Last touched" is a fact, not a door, so it is plain muted text
+        // rather than a pill (owner ask 2026-08-27: "that takes a lot of room.
+        // let's make that smaller, just text, no pill").
+        '<span class="hdr-meta" id="hero-last"></span>' +
+      '</div>';
+  }
+  const acts = document.getElementById('hdr-acts');
+  if (acts) {
+    acts.innerHTML = '';
+    const sync = document.createElement('button');
+    sync.className = 'hdr-chip';
+    sync.id = 'hero-sync';
+    sync.type = 'button';
+    sync.textContent = 'Local only';
+    sync.title = 'Sync across your devices';
+    sync.onclick = onHeroSyncClick;
+    acts.appendChild(sync);
+    // Profile is app-level: ONE interest profile and ONE Claude key for the
+    // whole app, and it already lives on the guide side behind #profile. A
+    // second implementation here would be a second place for the key to live,
+    // so this is a door to the one that exists rather than a copy of it.
+    const prof = document.createElement('a');
+    prof.className = 'hdr-chip';
+    prof.href = './#profile';
+    prof.textContent = 'Profile';
+    prof.title = 'Your interests, your Claude key and your account, on the guide side';
+    acts.appendChild(prof);
+  }
+  markSurface();
+}
+
+// Which surface you are on. Same function name, same markup and same
+// aria-current contract as the guide shell's: the switch is shared chrome, so
+// the two surfaces cannot disagree about how "you are here" is expressed.
+function markSurface() {
+  const me = document.getElementById('surf-trip');
+  const other = document.getElementById('surf-cities');
+  if (!me || !other) return;
+  me.setAttribute('aria-current', 'page');
+  me.removeAttribute('href');
+  me.title = 'You are here: your trip';
+  // The Cities peer opens the guide that is actually worth opening, not
+  // whichever city the guide side last happened to show. See updateCityChip.
+  other.title = 'City guides: what to eat, see and do once you are in a city';
+}
+
 function updateHero() {
   const now = new Date();
   // Short form: this is a chip in a dense row now, not a right-aligned column.
@@ -2870,41 +2898,52 @@ function updateHero() {
   }
   const lastEl = document.getElementById('hero-last');
   if (lastEl) {
+    // Sentence case, not the old uppercase monospace: this is now plain text
+    // sitting beside the chips rather than a pill competing with them.
     lastEl.textContent = state.lastSession
-      ? 'LAST TOUCHED ' + new Date(state.lastSession).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-      : 'NOT TOUCHED YET';
+      ? 'Updated ' + new Date(state.lastSession).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+      : 'Not updated yet';
   }
   updateCityChip();
 }
 
-// The stop you are standing in, or the next one you are not standing in yet.
-// Returns null when the itinerary has nothing dated ahead of or around today.
-function currentOrNextStop() {
-  const today = todayISO();
-  const named = (state.cities || []).filter(c => c && c.name);
-  const here = named.find(c => c.checkIn && c.checkOut && c.checkIn <= today && c.checkOut > today);
-  if (here) return { city: here, when: 'NOW' };
-  const ahead = named
-    .filter(c => c.checkIn && c.checkIn > today)
-    .sort((a, b) => a.checkIn.localeCompare(b.checkIn));
-  return ahead.length ? { city: ahead[0], when: 'NEXT' } : null;
+// Where the guide half should open FROM THIS PAGE. One answer, used by both
+// doors that ask the question: the NOW/NEXT chip and the Cities peer in the
+// shared switch.
+//
+// The decision itself is CityOps.guideDoorKit.resolve, in the engine, pure and
+// unit tested. What lives here is only what it needs: the trip's own stops,
+// and the cached index of which guides exist and which of them are archived.
+// Owner report 2026-08-27: "my 'now' city is showing an archived city. also
+// fix the city I'm navigated to when clicking 'city guides'."
+function resolveGuideDoor() {
+  return CityOps.guideDoorKit.resolve(state.cities || [], loadGuideIndex(), todayISO());
 }
 
 // The context half of the door back to the guides: it names the city rather
-// than making Rob open the switcher to remember which one he is in, and when a
-// guide for that city exists it goes straight there instead of to the root.
+// than making Rob open the switcher to remember which one he is in, and it
+// goes straight to that city's guide when a live one exists.
 function updateCityChip() {
   const chip = document.getElementById('hero-city');
+  const door = resolveGuideDoor();
+  // The Cities peer in the shared switch points at the same place. Without
+  // this it opened the app root, which activates whichever city the guide side
+  // was last showing: after removing Tirana that was neither where Rob is nor
+  // where he is going.
+  const peer = document.getElementById('surf-cities');
+  if (peer) {
+    peer.href = door.kind === 'guide' ? cityopsGuideURL(door.guideId) : CITYOPS_BASE + '/';
+  }
   if (!chip) return;
-  const stop = currentOrNextStop();
-  if (!stop) { chip.hidden = true; return; }
-  const guideId = guideIdForStop(stop.city);
+  if (!door.stop) { chip.hidden = true; return; }
   chip.hidden = false;
-  chip.href = guideId ? cityopsGuideURL(guideId) : cityopsPlanURL(stop.city);
-  chip.innerHTML = escapeHTML(stop.when) + '<span class="chip-sub">' + escapeHTML(stop.city.name) + '</span>';
-  chip.title = guideId
-    ? 'Open the city guide for ' + stop.city.name
-    : 'No city guide for ' + stop.city.name + ' yet. Opens the guide side so you can add one.';
+  chip.href = door.kind === 'guide'
+    ? cityopsGuideURL(door.guideId)
+    : cityopsPlanURL(door.stop);
+  chip.innerHTML = escapeHTML(door.when) + '<span class="chip-sub">' + escapeHTML(door.stop.name) + '</span>';
+  chip.title = door.kind === 'guide'
+    ? 'Open the city guide for ' + door.stop.name
+    : 'No city guide for ' + door.stop.name + ' yet. Opens the guide side so you can add one.';
 }
 
 // Tick the hero every 60 seconds so the displayed time stays current without a manual refresh.
@@ -3687,6 +3726,14 @@ function renderCityCard(city, hasIssue, hasAlert, isPast) {
           lines.push(`<div class="cost-line"><span class="cl-label">Travel</span><span class="cl-val">${fmtCurrency(transitCost,'USD')}</span></div>`);
           lines.push(`<div class="cost-line cl-total"><span class="cl-label">Total</span><span class="cl-val">${fmtCurrency(total,'USD')}</span></div>`);
         }
+        // Cash owed on arrival, on the COLLAPSED card: booking.com lets a host
+        // take payment on site, so this is money Rob has to physically have
+        // when he lands, and it is the one cost figure that changes what he
+        // does before he gets there rather than after (owner ask 2026-08-27).
+        const onSite = (city.accommodations || []).reduce((s, a) => s + stayCashDue(a), 0);
+        if (onSite > 0) {
+          lines.push(`<div class="cost-line cl-onsite" title="Booked but not paid: have this much in cash or on a card when you arrive"><span class="cl-label">On site</span><span class="cl-val">${fmtCurrency(onSite,'USD')}</span></div>`);
+        }
         return `<div class="cost-breakdown" title="Stays = max(estimate, booked rooms). Travel = booked transit departing this city.">${lines.join('')}</div>${buildPerMonthSub(total, nights)}`;
       })()}</div>
     </div>
@@ -3916,6 +3963,11 @@ function buildStayAndTravel(city) {
   if (bookedStay > 0) money.push(fmtCurrency(bookedStay, 'USD') + ' stays');
   if (bookedTransit > 0) money.push(fmtCurrency(bookedTransit, 'USD') + ' travel');
   if (money.length) subParts.push(money.join(' · ') + ' booked');
+  // The cash-planning answer, at the level Rob actually asks it: "how much do
+  // I need on me when I get to this city?" A per-stay chip answers one stay;
+  // this answers the stop, which is the unit a cash withdrawal is planned in.
+  const cashDue = (city.accommodations || []).reduce((s, a) => s + stayCashDue(a), 0);
+  if (cashDue > 0) subParts.push(fmtCurrency(cashDue, 'USD') + ' due on site');
   const subtitle = subParts.join(' — ');
 
   const headerHTML =
@@ -4081,6 +4133,64 @@ function buildAccommodations(city) {
   return wrap;
 }
 
+// ---- the paid dimension on a stay ----
+// isPaid / isPayOnSite are the two questions the rest of the page asks. They
+// are functions rather than `a.paid` reads so the "only booked stays have a
+// paid state" rule lives in ONE place: a stay that was booked, marked paid,
+// then knocked back to considering must not keep claiming to be paid.
+function isBookedStay(a) { return !!a && a.status === 'booked'; }
+function isPaidStay(a) { return isBookedStay(a) && a.paid === true; }
+function isPayOnSiteStay(a) { return isBookedStay(a) && a.paid !== true; }
+
+// What a pay-on-site stay will cost in cash, as a number, or 0 when the stay
+// carries no price. There is no new price field here: accommodations already
+// have `cost` and `currency`, and adding a second money field for the same
+// money is how two numbers start disagreeing.
+function stayCashDue(a) {
+  if (!isPayOnSiteStay(a)) return 0;
+  return Number(a.cost) || 0;
+}
+
+// The control, which is ALSO the state. One thing on the row, not a chip
+// saying "Pay on site €420" beside a checkbox saying the same in fewer words.
+// It is a checkbox with a visible label rather than an icon: this writes
+// money-shaped state and a mistap costs Rob a wrong cash plan, which is the
+// same reason destructive controls keep their words.
+//
+// The LABEL follows the state, and on the unpaid side it carries the amount,
+// which is the number the whole feature exists to surface: "Pay on site €420"
+// is a cash plan, "unpaid" is a status.
+function paidControl(cityId, acc) {
+  const wrap = document.createElement('label');
+  const paid = isPaidStay(acc);
+  const due = stayCashDue(acc);
+  wrap.className = 'paid-toggle' + (isBookedStay(acc) ? (paid ? ' paid' : ' due') : ' off');
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.checked = paid;
+  box.setAttribute('aria-label', 'Paid for ' + (acc.name || 'this stay'));
+  box.onclick = (e) => e.stopPropagation();
+  box.onchange = () => updateAccom(cityId, acc.id, 'paid', box.checked);
+  wrap.appendChild(box);
+  const text = !isBookedStay(acc)
+    ? 'Paid'
+    : (paid ? 'Paid' : ('Pay on site' + (due > 0 ? ' ' + fmtCurrency(due, acc.currency || 'USD') : '')));
+  wrap.appendChild(document.createTextNode(text));
+  wrap.onclick = (e) => e.stopPropagation();
+  if (!isBookedStay(acc)) {
+    // Never offer an action that cannot succeed: on a stay that is not booked
+    // the flag would mean nothing, so the control says why instead of failing
+    // on the tap.
+    box.disabled = true;
+    wrap.title = 'Mark the stay Booked first, then say whether it is paid.';
+  } else {
+    wrap.title = paid
+      ? 'Paid already. Untick if the host still wants money on arrival.'
+      : 'Not paid yet: cash or card due on arrival. Tick once it is settled.';
+  }
+  return wrap;
+}
+
 function buildAccommodation(city, acc) {
   const item = document.createElement('div');
   item.className = 'accom-item' + (openAccomIds.has(acc.id) ? ' open' : '');
@@ -4225,6 +4335,26 @@ function buildAccommodation(city, acc) {
   });
   statusSel.onchange = () => updateAccom(cityId, accId, 'status', statusSel.value);
   row1.appendChild(statusSel);
+
+  // ---- Paid, or pay on site ----
+  // Owner ask 2026-08-27: "for lodging, could we give an option to mark as
+  // paid? ... booking.com allows the host to accept cash on site, so I need to
+  // plan to have cash according to needs."
+  //
+  // A SEPARATE flag, not a fifth status. Booked+paid and booked+unpaid are
+  // both real and both common; considering+paid is not a thing. Folding the
+  // two into one enum would need a migration of every existing row, would let
+  // an impossible combination be typed, and would make "is it booked" a
+  // two-value question everywhere it is asked today (the cost totals, the
+  // uncovered-nights panel, the auto-promote rule, the family page). A
+  // boolean beside the enum leaves every one of those reading exactly what it
+  // read before, and an accommodation with no `paid` key at all means
+  // "unpaid", which is what every existing row is.
+  //
+  // Shown only on a BOOKED stay: on anything else it would be a control that
+  // cannot mean anything, and the answer to "have I paid for a place I have
+  // not booked" is not a checkbox.
+  row1.appendChild(paidControl(cityId, acc));
 
   const del = document.createElement('button');
   del.className = 'icon-btn delete';
@@ -6983,7 +7113,7 @@ function addAccommodation(cityId) {
   c.accommodations.unshift({
     id, name: '', link: '', neighborhood: '', city: '',
     checkIn: '', checkOut: '',
-    cost: '', currency: 'USD', status: 'considering', notes: ''
+    cost: '', currency: 'USD', status: 'considering', paid: false, notes: ''
   });
   openAccomIds.add(id);   // open it immediately as an editable box
   saveState();
@@ -9797,64 +9927,84 @@ function cityopsSlug(name) {
   return CityOps.slug(String(name || ''));
 }
 
-// cityops' cityId is slug(city.name) + '-' + city.dates.from.
-function cityopsIdFor(name, fromISO) {
-  const slug = cityopsSlug(name);
-  if (!slug || !fromISO) return '';
-  return slug + '-' + fromISO;
+// The id derivation that used to live here (slug + '-' + arrival) moved into
+// the engine as guideDoorKit.idFor when the whole stop-to-guide resolution did,
+// so there is one implementation of it and one set of tests.
+
+// The cached index of the guide half, in the shape the engine's resolver wants:
+// {ids, archived}. `archived` is a map, not a list, so a lookup is a
+// hasOwnProperty rather than an indexOf over every guide.
+//
+// Two facts, not one, since 2026-08-27: which guides EXIST (the cities table)
+// and which of them the traveler has already left (state.archived on the
+// city_state row). A city he has left is not where "where am I going next"
+// should send him, and neither is one he removed.
+function loadGuideIndex() {
+  const cached = readLSJSON(GUIDES_KEY);
+  const ids = (cached && Array.isArray(cached.ids)) ? cached.ids : [];
+  const archived = Object.create(null);
+  const list = (cached && Array.isArray(cached.archived)) ? cached.archived : [];
+  list.forEach(id => { if (typeof id === 'string' && id) archived[id] = true; });
+  return { ids: ids, archived: archived };
 }
 
+// Kept for the stop cards, which ask a narrower question ("is there a guide
+// for THIS stop") and which deliberately still link an archived guide: a city
+// you have left still has a guide worth rereading, and the card is a record of
+// the stop rather than a suggestion of where to go next.
 function loadGuideIds() {
   const cached = readLSJSON(GUIDES_KEY);
   return (cached && Array.isArray(cached.ids)) ? cached.ids : null;
 }
 
-// Reads cityops' city list for the signed-in user. Fails soft in every
-// direction: no session, no table, offline, or a non-array answer all leave the
-// previous cache exactly as it was (a null read is not an empty account, same
-// rule as the itinerary pull).
+// Reads cityops' city list for the signed-in user, plus the per-city state
+// rows the archived flag rides on. Fails soft in every direction: no session,
+// no table, offline, or a non-array answer all leave the previous cache
+// exactly as it was (a null read is not an empty account, same rule as the
+// itinerary pull).
+//
+// The two reads are one round: a cities answer with no state answer would say
+// "no guide is archived", which is a claim, not an absence, and it would send
+// the NOW chip back to a city Rob has left.
 function refreshGuideIndex() {
   if (!syncOn() || !syncSignedIn()) return Promise.resolve(null);
-  return syncApi('/rest/v1/cities?select=city_id')
-    .then(rows => {
-      if (!Array.isArray(rows)) return null;
-      const ids = rows
-        .map(r => (r && typeof r.city_id === 'string') ? r.city_id : null)
-        .filter(Boolean);
-      writeLSJSON(GUIDES_KEY, { ids: ids, at: new Date().toISOString() });
-      repaint();          // stop cards re-render with the right door
-      return ids;
+  return Promise.all([
+    syncApi('/rest/v1/cities?select=city_id'),
+    // A missing or unreadable city_state must not fail the whole round: the
+    // ids are still worth caching, and "nothing known to be archived" is the
+    // honest fallback when the state read itself did not answer.
+    syncApi('/rest/v1/city_state?select=city_id,state').catch(e => {
+      syncWarn('city_state read failed (archived guides will not be skipped)', e);
+      return null;
     })
-    .catch(e => { syncWarn('city guide index read failed (links fall back to Plan this city)', e); return null; });
+  ]).then(([rows, stateRows]) => {
+    if (!Array.isArray(rows)) return null;
+    const ids = rows
+      .map(r => (r && typeof r.city_id === 'string') ? r.city_id : null)
+      .filter(Boolean);
+    const archived = [];
+    (Array.isArray(stateRows) ? stateRows : []).forEach(r => {
+      if (!r || typeof r.city_id !== 'string' || !r.city_id) return;
+      // Tri-state on the row: true (archived by hand), false (explicitly not),
+      // null/absent (the dates decide). Only an explicit true counts here; the
+      // date-derived "past" case is the guide side's own display rule and a
+      // stop that is genuinely behind us is already filtered out by date.
+      if (r.state && r.state.archived === true) archived.push(r.city_id);
+    });
+    writeLSJSON(GUIDES_KEY, { ids: ids, archived: archived, at: new Date().toISOString() });
+    repaint();          // stop cards re-render with the right door
+    updateCityChip();   // and so does the header's NOW chip
+    return ids;
+  }).catch(e => { syncWarn('city guide index read failed (links fall back to Plan this city)', e); return null; });
 }
 
 // Resolve one stop to a cityops guide id, or '' when there is no guide for it.
-// Exact match first (same name, same arrival date). Then a same-city match on a
-// different date: Rob shifts a check-in by a day far more often than he visits
-// the same city twice, and a guide for "Ohrid, arrived the 3rd" is still the
-// right guide when the stop now says the 4th. Nearest date wins.
+// The matching rule (exact id, then the same city on the nearest other date)
+// lives in the engine as guideDoorKit.liveIdForStop, so the stop cards and the
+// header chip cannot disagree about which guide belongs to a stop. This caller
+// passes NO archived map on purpose: see loadGuideIds above.
 function guideIdForStop(city) {
-  const ids = loadGuideIds();
-  if (!ids || !ids.length) return '';
-  const slug = cityopsSlug(city && city.name);
-  if (!slug) return '';
-  const exact = cityopsIdFor(city.name, city.checkIn);
-  if (exact && ids.indexOf(exact) !== -1) return exact;
-
-  const prefix = slug + '-';
-  const siblings = ids.filter(id => id.indexOf(prefix) === 0);
-  if (!siblings.length) return '';
-  if (!city.checkIn || siblings.length === 1) return siblings[0];
-  const want = isoMs(city.checkIn);
-  if (want === null) return siblings[0];
-  let best = siblings[0];
-  let bestGap = Infinity;
-  siblings.forEach(id => {
-    const at = isoMs(id.slice(prefix.length));
-    const gap = (at === null) ? Infinity : Math.abs(at - want);
-    if (gap < bestGap) { bestGap = gap; best = id; }
-  });
-  return best;
+  return CityOps.guideDoorKit.liveIdForStop(city, { ids: loadGuideIds() || [], archived: {} });
 }
 
 function cityopsGuideURL(guideId) {
@@ -9944,6 +10094,10 @@ const addInEl = document.getElementById('add-city-checkin');
 const addOutEl = document.getElementById('add-city-checkout');
 linkDatePair(addInEl, addOutEl);
 
+// The shared header's slots are filled BEFORE the first render: updateHero()
+// (which renderAll calls) writes into #hero-date and friends, and those only
+// exist once this has run.
+buildTripHeader();
 populateCountries();
 setupProfile();
 // Refresh Schengen scores on load — they may be stale if other cities were

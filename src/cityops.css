@@ -44,6 +44,9 @@
     padding-left:var(--bleed-pad); padding-right:var(--bleed-pad);}
   header h1{font-size:1.55rem; letter-spacing:.2px;}
   header .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
+
+/*CITYOPS_HEADER_CSS*/
+
   .facts{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;}
   .chip{background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25);
     padding:5px 10px; border-radius:20px; font-size:.8rem;}
@@ -172,6 +175,15 @@
   .planday.drop-into{background:var(--accent-soft); border-radius:12px;
     box-shadow:0 0 0 2px var(--accent);}
   .planday.drop-into > h2{color:var(--accent-hover);}
+  /* A past day everything on which is done folds itself away and then gets
+     OUT OF THE WAY: same as the app fades a done card, so the eye lands on
+     what is still coming rather than on a row of finished dates. Still fully
+     legible and still one tap from opening, which is why this is opacity and
+     weight rather than a smaller type size. */
+  .planday-settled > .sec-toggle{opacity:.62; font-weight:600;}
+  .planday-settled > .sec-toggle:hover,
+  .planday-settled > .sec-toggle:focus-visible{opacity:1;}
+  .planday-settled .sec-count{color:var(--green-ink); font-weight:700;}
   /* "Nothing planned yet" must not sit under the card being dropped on it. */
   .planlist.has-drop > .empty-note{display:none;}
   /* A section tab's card list. Purely a drag container: it carries the
@@ -239,6 +251,14 @@
     padding:14px 16px; margin:20px 0; font-size:.9rem;}
   .errcard b{color:var(--accent-hover);}
   #notice{font-size:.78rem; color:var(--text-3); margin:8px 0;}
+  /* An EMPTY notice line is the normal case, and an empty block with a margin
+     and no height self-collapses: its 8px top margin escaped through .wrap
+     (padding-top:0) and body and pushed the whole page, red band included, 8px
+     off the top of the window. Owner ask 2026-08-27: "cleanup the margin at
+     the top... was only intended to be left/right." Taking it out of flow when
+     it has nothing to say is the fix, and it also stops an empty line eating
+     16px of vertical rhythm above the first card. */
+  #notice:empty{display:none;}
   .when-line{font-size:.8rem; color:var(--text-3); font-style:italic; margin-top:2px;}
   .modal-wrap{position:fixed; inset:0; background:rgba(36,36,36,.5); display:flex;
     align-items:center; justify-content:center; padding:16px; z-index:100;}

@@ -554,11 +554,45 @@ test('template.html contains src/cityops.js verbatim (assembler sync)', () => {
 test('template.html and index.html contain src/cityops.css verbatim (assembler sync)', () => {
   const fs = require('fs');
   const path = require('path');
-  const css = fs.readFileSync(path.join(__dirname, '..', 'src', 'cityops.css'), 'utf8').replace(/\n$/, '');
+  // cityops.css carries the shared-header marker, which the assembler fills
+  // with src/header.css. The drift guard is over what actually SHIPS, so the
+  // expected text is the assembled form, built here the same way.
+  const raw = fs.readFileSync(path.join(__dirname, '..', 'src', 'cityops.css'), 'utf8').replace(/\n$/, '');
+  const headerCss = fs.readFileSync(path.join(__dirname, '..', 'src', 'header.css'), 'utf8').replace(/\n$/, '');
+  assert.equal(raw.split('/*CITYOPS_HEADER_CSS*/').length - 1, 1,
+    'cityops.css must carry exactly one shared-header CSS marker');
+  const css = raw.replace('/*CITYOPS_HEADER_CSS*/', () => headerCss);
   ['template.html', 'index.html'].forEach(name => {
     const html = fs.readFileSync(path.join(__dirname, '..', name), 'utf8');
     assert.ok(html.includes(css), name + ': run node tools/assemble.js after editing src/');
   });
+});
+
+// The shared header is the whole point of items 3 and 7: ONE source, both
+// surfaces. A copy pasted into either shell would pass every other test in
+// this file and quietly reintroduce the drift the extraction removed.
+test('both surfaces ship the SAME header, from one source', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const root = path.join(__dirname, '..');
+  const frag = fs.readFileSync(path.join(root, 'src', 'header.html'), 'utf8').replace(/\n$/, '');
+  const headerCss = fs.readFileSync(path.join(root, 'src', 'header.css'), 'utf8').replace(/\n$/, '');
+  ['index.html', 'trip.html'].forEach(name => {
+    const html = fs.readFileSync(path.join(root, name), 'utf8');
+    assert.ok(html.includes(frag), name + ': shared header fragment missing (run node tools/assemble.js)');
+    assert.ok(html.includes(headerCss), name + ': shared header CSS missing (run node tools/assemble.js)');
+    // Exactly once. Twice would mean a hand-written copy survived beside the
+    // injected one, which is the failure mode this whole extraction removes.
+    assert.equal(html.split('id="hdr-mid"').length - 1, 1, name + ': more than one header middle');
+    assert.equal(html.split('id="surfsw"').length - 1, 1, name + ': more than one surface switch');
+    // No unfilled markers left anywhere in a shipped file.
+    assert.equal(html.indexOf('<!--CITYOPS_HEADER-->'), -1, name + ': unfilled header marker');
+    assert.equal(html.indexOf('/*CITYOPS_HEADER_CSS*/'), -1, name + ': unfilled header CSS marker');
+  });
+  // The standalone guide has no second surface to switch to and no account, so
+  // it carries the header CSS (it rides cityops.css) but NOT the shared block.
+  const tpl = fs.readFileSync(path.join(root, 'template.html'), 'utf8');
+  assert.equal(tpl.indexOf('id="surfsw"'), -1, 'a standalone guide must not offer a surface switch');
 });
 test('index.html embeds the standalone template, escaped and reversible', () => {
   const fs = require('fs');
@@ -3123,7 +3157,7 @@ test('the built trip page is the engine plus the shell, and nothing else', () =>
 });
 
 test('readSidecars tolerates every shape a stored row can be in', () => {
-  const none = { apiKey: null, github: null, genmeta: null };
+  const none = { apiKey: null, github: null, genmeta: null, removed: null };
   assert.deepEqual(C.syncKit.readSidecars(null), none);
   assert.deepEqual(C.syncKit.readSidecars({}), none);
   assert.deepEqual(C.syncKit.readSidecars({ apiKey: 'sk-ant-loose' }), none);
@@ -4137,6 +4171,550 @@ function sseBody(events) {
     })
   };
 }
+
+
+// ==========================================================================
+// Removal tombstones: a removed city stays removed, on every device.
+// ==========================================================================
+// The bug (owner report 2026-08-27): "I'm repeatedly removing a city (Tirana)
+// but it keeps adding back when I refresh." Removal was local-only, so the
+// account's rows survived and the next pull put the city straight back.
+
+const T_OLD = '2026-08-27T09:00:00.000Z';
+const T_MID = '2026-08-27T10:00:00.000Z';
+const T_NEW = '2026-08-27T11:00:00.000Z';
+const TK = () => C.syncKit.tombKit;
+
+test('a tombstone map keeps only entries with a readable stamp', () => {
+  const m = TK().normalize({
+    'tirana-2026-08-22': T_MID,
+    'nostamp-2026-01-01': null,
+    'bad-2026-01-01': 'not a date',
+    '': T_MID,
+    'numeric-2026-01-01': 1756288800000
+  });
+  assert.deepEqual(Object.keys(m), ['tirana-2026-08-22']);
+  // A tombstone with no usable stamp cannot be compared against a row, and
+  // treating it as "removed at the beginning of time" would delete a live
+  // city. It is dropped instead.
+  assert.equal(TK().at(m, 'nostamp-2026-01-01'), null);
+  assert.equal(TK().at(m, 'tirana-2026-08-22'), T_MID);
+});
+
+test('a city named constructor is an ordinary key, not a booby trap', () => {
+  // Every plain object already answers to these. A map built with {} and read
+  // with a bare property access would report "constructor" as tombstoned in
+  // EVERY account, and would delete a city nobody removed.
+  const m = TK().normalize({ constructor: T_MID, toString: T_NEW });
+  assert.equal(TK().at(m, 'constructor'), T_MID);
+  assert.equal(TK().at(m, 'toString'), T_NEW);
+  assert.equal(TK().at(m, 'hasOwnProperty'), null);
+  assert.equal(TK().at(TK().normalize({}), 'constructor'), null);
+  assert.equal(TK().at(TK().normalize({}), 'valueOf'), null);
+  // And it survives the merge and the plan the same way.
+  const merged = TK().merge({ constructor: T_OLD }, { constructor: T_NEW });
+  assert.equal(TK().at(merged, 'constructor'), T_NEW);
+  const plan = TK().plan({ constructor: T_NEW }, {}, { constructor: T_OLD });
+  assert.deepEqual(plan.dropRemote, ['constructor']);
+  assert.deepEqual(plan.clearTombs, []);
+});
+
+test('two devices removing two different cities keep BOTH removals', () => {
+  // The reason tombstones do not reconcile as a whole block. Newest-wins over
+  // the map would throw one of these away and resurrect that city.
+  const mine = { 'tirana-2026-08-22': T_MID };
+  const theirs = { 'batumi-2026-08-08': T_NEW };
+  const u = TK().merge(mine, theirs);
+  assert.deepEqual(Object.keys(u).sort(), ['batumi-2026-08-08', 'tirana-2026-08-22']);
+  assert.equal(TK().at(u, 'tirana-2026-08-22'), T_MID);
+  assert.equal(TK().at(u, 'batumi-2026-08-08'), T_NEW);
+  // Per ENTRY, newest wins.
+  const both = TK().merge({ x: T_OLD }, { x: T_NEW });
+  assert.equal(TK().at(both, 'x'), T_NEW);
+  assert.equal(TK().at(TK().merge({ x: T_NEW }, { x: T_OLD }), 'x'), T_NEW);
+});
+
+test('differ says exactly whether a merge added anything', () => {
+  assert.equal(TK().differ({ a: T_MID }, { a: T_MID }), false);
+  assert.equal(TK().differ({ a: T_MID }, { a: T_NEW }), true);
+  assert.equal(TK().differ({ a: T_MID }, { a: T_MID, b: T_MID }), true);
+  assert.equal(TK().differ({ a: T_MID, b: T_MID }, { a: T_MID }), true);
+  assert.equal(TK().differ(null, null), false);
+  assert.equal(TK().differ(null, { a: T_MID }), true);
+});
+
+test('remove then pull does not resurrect: the row is deleted, not adopted', () => {
+  // Rob removes Tirana at 10:00. The account still holds the row he pushed at
+  // 09:00. The pull must NOT bring it back, and must delete it so no other
+  // device can either.
+  const plan = TK().plan(
+    { 'tirana-2026-08-22': T_MID },
+    {},                                    // this device no longer holds it
+    { 'tirana-2026-08-22': T_OLD }         // the account still does
+  );
+  assert.deepEqual(plan.dropRemote, ['tirana-2026-08-22']);
+  assert.deepEqual(plan.dropLocal, []);
+  assert.deepEqual(plan.clearTombs, []);
+  assert.equal(plan.skipPush['tirana-2026-08-22'], 1);
+});
+
+test('the second device deletes its copy locally instead of pushing it back', () => {
+  // The laptop still holds Tirana, stamped before the removal Rob made on the
+  // phone. This is the loop he was watching: without this the laptop's next
+  // pull sees a city the server does not have and pushes it straight back up.
+  const plan = TK().plan(
+    { 'tirana-2026-08-22': T_MID },
+    { 'tirana-2026-08-22': T_OLD },        // the laptop's stale copy
+    {}                                      // the row is already gone
+  );
+  assert.deepEqual(plan.dropLocal, ['tirana-2026-08-22']);
+  assert.deepEqual(plan.dropRemote, []);
+  assert.equal(plan.skipPush['tirana-2026-08-22'], 1);
+  // And with the row still there, BOTH copies go.
+  const both = TK().plan(
+    { 'tirana-2026-08-22': T_MID },
+    { 'tirana-2026-08-22': T_OLD },
+    { 'tirana-2026-08-22': T_OLD }
+  );
+  assert.deepEqual(both.dropLocal, ['tirana-2026-08-22']);
+  assert.deepEqual(both.dropRemote, ['tirana-2026-08-22']);
+});
+
+test('re-adding the same city later clears the tombstone rather than deleting it', () => {
+  // Rob changes his mind and adds Tirana back with the same id. The copy is
+  // now stamped AFTER the removal, so the removal is no longer the newest
+  // thing said about that city.
+  const fromRemote = TK().plan(
+    { 'tirana-2026-08-22': T_MID },
+    {},
+    { 'tirana-2026-08-22': T_NEW }         // re-added on another device
+  );
+  assert.deepEqual(fromRemote.clearTombs, ['tirana-2026-08-22']);
+  assert.deepEqual(fromRemote.dropRemote, []);
+  assert.deepEqual(fromRemote.dropLocal, []);
+  assert.equal(fromRemote.skipPush['tirana-2026-08-22'], undefined);
+
+  const fromLocal = TK().plan(
+    { 'tirana-2026-08-22': T_MID },
+    { 'tirana-2026-08-22': T_NEW },        // re-added here
+    {}
+  );
+  assert.deepEqual(fromLocal.clearTombs, ['tirana-2026-08-22']);
+  assert.deepEqual(fromLocal.dropLocal, []);
+});
+
+test('a tie goes to the removal, never to the resurrection', () => {
+  // A device that pushed a city and removed it inside the same millisecond
+  // would otherwise resurrect it on every single pull, forever.
+  const plan = TK().plan(
+    { 'tirana-2026-08-22': T_MID },
+    {},
+    { 'tirana-2026-08-22': T_MID }
+  );
+  assert.deepEqual(plan.dropRemote, ['tirana-2026-08-22']);
+  assert.deepEqual(plan.clearTombs, []);
+});
+
+test('cities nobody removed are untouched by the tombstone plan', () => {
+  const plan = TK().plan(
+    { 'tirana-2026-08-22': T_MID },
+    { 'ksamil-2026-08-29': T_OLD },
+    { 'ksamil-2026-08-29': T_OLD, 'batumi-2026-08-08': T_NEW }
+  );
+  assert.deepEqual(plan.dropRemote, []);
+  assert.deepEqual(plan.dropLocal, []);
+  assert.deepEqual(plan.clearTombs, []);
+  assert.deepEqual(Object.keys(plan.skipPush), ['tirana-2026-08-22']);
+  // An empty tombstone map decides nothing at all, which is the state every
+  // account is in until the first removal.
+  const none = TK().plan({}, { a: T_OLD }, { b: T_NEW });
+  assert.deepEqual(none.dropRemote, []);
+  assert.deepEqual(none.dropLocal, []);
+  assert.deepEqual(none.clearTombs, []);
+  assert.deepEqual(Object.keys(none.skipPush), []);
+});
+
+test('tombstones ride the profile row and never blank the rest of it', () => {
+  const row = C.syncKit.buildProfileRow({ updated: P_LOCAL, interests: ['ruins'] },
+    { removed: { value: { 'tirana-2026-08-22': T_MID }, updated: T_MID } });
+  assert.deepEqual(row.data.removed.value, { 'tirana-2026-08-22': T_MID });
+  // The ROW's stamp stays the profile's: a removal must not make an otherwise
+  // stale profile win a reconcile, same rule the key and genmeta sidecars follow.
+  assert.equal(row.updated_at, P_LOCAL);
+  assert.deepEqual(row.data.interests, ['ruins']);
+  // An empty map is no opinion at all, not an assertion that nothing was
+  // removed: writing one would delete the account's real tombstones.
+  const empty = C.syncKit.buildProfileRow({ updated: P_LOCAL },
+    { removed: { value: {}, updated: T_MID } });
+  assert.equal(empty.data.removed, undefined);
+  // And the sidecars never leak into the profile itself.
+  assert.equal(C.profile.normalize(row.data).removed, undefined);
+});
+
+test('the trip surface merges tombstones into the row instead of replacing them', () => {
+  // mergeProfileRow is the credentials-only push path. A whole-row upsert
+  // built from this device's map alone would delete the account's other
+  // removals, which is the same class of bug as blanking the Claude key.
+  const account = {
+    data: {
+      interests: ['ruins'],
+      removed: { value: { 'batumi-2026-08-08': T_NEW }, updated: T_NEW }
+    },
+    updated_at: P_REMOTE
+  };
+  const row = C.syncKit.mergeProfileRow(account, {
+    removed: { value: { 'tirana-2026-08-22': T_MID }, updated: T_MID }
+  });
+  assert.deepEqual(Object.keys(row.data.removed.value).sort(),
+    ['batumi-2026-08-08', 'tirana-2026-08-22']);
+  assert.deepEqual(row.data.interests, ['ruins']);
+  assert.equal(row.updated_at, P_REMOTE);   // the account keeps its profile stamp
+});
+
+test('a row that carries ONLY tombstones is still worth pushing', () => {
+  // The bug the mocked remove-then-pull walkthrough caught on 2026-08-27: the
+  // shell refuses to push a profile row with "nothing to say", and a traveler
+  // who has never filled in a profile and never saved a Claude key has exactly
+  // that row plus one tombstone. Dropping it there meant the removal never
+  // reached the account and the other device pushed the city straight back.
+  const row = C.syncKit.buildProfileRow({}, {
+    removed: { value: { 'tirana-2026-08-22': T_MID }, updated: T_MID }
+  });
+  assert.equal(row.data.updated, undefined, 'no profile has ever been saved');
+  assert.equal(row.data.apiKey, undefined);
+  assert.equal(row.data.genmeta, undefined);
+  // ...and yet the row carries the one thing that has to go up.
+  assert.ok(row.data.removed, 'the tombstone survives into the payload');
+  assert.deepEqual(row.data.removed.value, { 'tirana-2026-08-22': T_MID });
+  // A row with genuinely nothing to say carries no sidecar at all, which is
+  // what the shell's "is this worth pushing" guard actually reads.
+  const empty = C.syncKit.buildProfileRow({}, {});
+  assert.equal(empty.data.removed, undefined);
+  assert.equal(empty.data.updated, undefined);
+  assert.equal(empty.data.apiKey, undefined);
+});
+
+test('a push is worth making exactly when this device knows a removal the account does not', () => {
+  const account = { data: { removed: { value: { a: T_MID }, updated: T_MID } }, updated_at: P_REMOTE };
+  // Nothing new to say.
+  assert.equal(C.syncKit.sidecarsWorthPushing(account, { removed: { value: { a: T_MID }, updated: T_MID } }), false);
+  // A removal the account has never heard of.
+  assert.equal(C.syncKit.sidecarsWorthPushing(account, { removed: { value: { a: T_MID, b: T_NEW }, updated: T_NEW } }), true);
+  // A newer stamp on a removal it already knows.
+  assert.equal(C.syncKit.sidecarsWorthPushing(account, { removed: { value: { a: T_NEW }, updated: T_NEW } }), true);
+  // An account that holds a removal this device does not is a PULL, not a push.
+  assert.equal(C.syncKit.sidecarsWorthPushing(account, {}), false);
+});
+
+// ==========================================================================
+// The trip surface's door back to the guides (items 6a and 7)
+// ==========================================================================
+
+const IDX = (ids, archived) => ({
+  ids: ids,
+  archived: (archived || []).reduce((m, id) => { m[id] = true; return m; }, Object.create(null))
+});
+// Rob's real shape on 2026-08-27: in Tirana until the 29th, Ksamil next.
+const STOPS = [
+  { name: 'Batumi', checkIn: '2026-08-08', checkOut: '2026-08-15' },
+  { name: 'Tirana', checkIn: '2026-08-22', checkOut: '2026-08-29' },
+  { name: 'Ksamil', checkIn: '2026-08-29', checkOut: '2026-09-05' }
+];
+const TODAY = '2026-08-27';
+
+test('the door opens the guide for the stop you are standing in', () => {
+  const d = C.guideDoorKit.resolve(STOPS,
+    IDX(['tirana-2026-08-22', 'ksamil-2026-08-29']), TODAY);
+  assert.equal(d.kind, 'guide');
+  assert.equal(d.when, 'NOW');
+  assert.equal(d.stop.name, 'Tirana');
+  assert.equal(d.guideId, 'tirana-2026-08-22');
+});
+
+test('a REMOVED guide is skipped and the door offers the next stop instead', () => {
+  // Exactly Rob's data after removing Tirana: he is still IN Tirana, but its
+  // guide is gone, so the useful door is Ksamil.
+  const d = C.guideDoorKit.resolve(STOPS, IDX(['ksamil-2026-08-29']), TODAY);
+  assert.equal(d.kind, 'guide');
+  assert.equal(d.when, 'NEXT');
+  assert.equal(d.stop.name, 'Ksamil');
+  assert.equal(d.guideId, 'ksamil-2026-08-29');
+});
+
+test('an ARCHIVED guide is skipped exactly like a removed one', () => {
+  // Owner report: "my 'now' city is showing an archived city". A city he has
+  // left is never the answer to "where am I going next".
+  const d = C.guideDoorKit.resolve(STOPS,
+    IDX(['tirana-2026-08-22', 'ksamil-2026-08-29'], ['tirana-2026-08-22']), TODAY);
+  assert.equal(d.when, 'NEXT');
+  assert.equal(d.stop.name, 'Ksamil');
+  assert.equal(d.guideId, 'ksamil-2026-08-29');
+});
+
+test('with no live guide anywhere ahead, the door still names a stop', () => {
+  // Never a dead end: it opens the guide half so a guide can be written,
+  // which is the same door a stop card offers.
+  const d = C.guideDoorKit.resolve(STOPS, IDX([]), TODAY);
+  assert.equal(d.kind, 'plan');
+  assert.equal(d.when, 'NOW');
+  assert.equal(d.stop.name, 'Tirana');
+  assert.equal(d.guideId, '');
+  // Archived-only is the same as none, for this question.
+  const arch = C.guideDoorKit.resolve(STOPS,
+    IDX(['tirana-2026-08-22'], ['tirana-2026-08-22']), TODAY);
+  assert.equal(arch.kind, 'plan');
+});
+
+test('nothing dated at all falls back to the app root, and says so', () => {
+  assert.deepEqual(C.guideDoorKit.resolve([], IDX(['x-2026-01-01']), TODAY),
+    { when: null, stop: null, guideId: '', kind: 'root' });
+  // Every stop behind us is the same case: there is no NOW and no NEXT.
+  const past = [{ name: 'Batumi', checkIn: '2026-08-08', checkOut: '2026-08-15' }];
+  assert.equal(C.guideDoorKit.resolve(past, IDX(['batumi-2026-08-08']), TODAY).kind, 'root');
+  // Junk in the stop list is skipped rather than thrown on.
+  assert.equal(C.guideDoorKit.resolve([null, {}, { name: '   ' }], IDX([]), TODAY).kind, 'root');
+});
+
+test('a shifted check-in still finds the guide it belongs to', () => {
+  // Rob moves an arrival by a day far more often than he visits a city twice,
+  // so a guide filed under the old date is still the right guide. Nearest wins.
+  const stops = [{ name: 'Ohrid', checkIn: '2026-09-04', checkOut: '2026-09-10' }];
+  const d = C.guideDoorKit.resolve(stops,
+    IDX(['ohrid-2026-08-01', 'ohrid-2026-09-03']), '2026-09-01');
+  assert.equal(d.guideId, 'ohrid-2026-09-03');
+  // And an archived near guide loses to a live far one rather than winning on
+  // distance: an archived guide is not a destination at all.
+  const d2 = C.guideDoorKit.resolve(stops,
+    IDX(['ohrid-2026-08-01', 'ohrid-2026-09-03'], ['ohrid-2026-09-03']), '2026-09-01');
+  assert.equal(d2.guideId, 'ohrid-2026-08-01');
+});
+
+test('the resolver walks upcoming stops in date order, whatever order they arrive in', () => {
+  const shuffled = [STOPS[2], STOPS[0], STOPS[1]];
+  const d = C.guideDoorKit.resolve(shuffled, IDX(['ksamil-2026-08-29']), TODAY);
+  assert.equal(d.stop.name, 'Ksamil');
+  // Two upcoming stops, only the later one has a guide: it is still found.
+  const stops = [
+    { name: 'Ksamil', checkIn: '2026-08-29', checkOut: '2026-09-05' },
+    { name: 'Ohrid', checkIn: '2026-09-05', checkOut: '2026-09-12' }
+  ];
+  const d2 = C.guideDoorKit.resolve(stops, IDX(['ohrid-2026-09-05']), TODAY);
+  assert.equal(d2.stop.name, 'Ohrid');
+  assert.equal(d2.when, 'NEXT');
+});
+
+test('liveIdForStop and idFor agree with the guide side on what an id is', () => {
+  assert.equal(C.guideDoorKit.idFor('Tirana', '2026-08-22'), 'tirana-2026-08-22');
+  assert.equal(C.guideDoorKit.idFor('  Ksamil ', '2026-08-29'), 'ksamil-2026-08-29');
+  assert.equal(C.guideDoorKit.idFor('', '2026-08-22'), '');
+  assert.equal(C.guideDoorKit.idFor('Tirana', ''), '');
+  // The id the guide half actually derives, for the same city.
+  const city = C.appStore.blankCity('Tirana', 'AL', '2026-08-22', '2026-08-29');
+  assert.equal(C.cityId(city), C.guideDoorKit.idFor('Tirana', '2026-08-22'));
+  assert.equal(C.guideDoorKit.liveIdForStop({ name: 'Nowhere' }, IDX(['x-2026-01-01'])), '');
+});
+
+// ==========================================================================
+// Plan tab: a finished past day folds itself away (item 2)
+// ==========================================================================
+
+test('a past day whose items are all settled collapses by default', () => {
+  const done = [{ status: 'done' }, { status: 'done' }];
+  assert.equal(C.planDayAutoCollapsed('2026-08-25', done, '2026-08-27'), true);
+  // Archived counts as settled too (day groups drop archived items today, so
+  // this arm is future-proofing rather than a live path).
+  assert.equal(C.planDayAutoCollapsed('2026-08-25',
+    [{ status: 'done' }, { status: 'archived' }], '2026-08-27'), true);
+});
+
+test('a past day with anything still open stays expanded', () => {
+  assert.equal(C.planDayAutoCollapsed('2026-08-25',
+    [{ status: 'done' }, { status: 'plan' }], '2026-08-27'), false);
+  assert.equal(C.planDayAutoCollapsed('2026-08-25', [{ status: 'plan' }], '2026-08-27'), false);
+});
+
+test('today and every day ahead never auto-collapse, however finished', () => {
+  const done = [{ status: 'done' }];
+  assert.equal(C.planDayAutoCollapsed('2026-08-27', done, '2026-08-27'), false);
+  assert.equal(C.planDayAutoCollapsed('2026-08-28', done, '2026-08-27'), false);
+  // An EMPTY past day has nothing to congratulate you for, and "0 done" is a
+  // worse header than the empty group it would replace.
+  assert.equal(C.planDayAutoCollapsed('2026-08-25', [], '2026-08-27'), false);
+  assert.equal(C.planDayAutoCollapsed('2026-08-25', null, '2026-08-27'), false);
+  assert.equal(C.planDayAutoCollapsed(null, done, '2026-08-27'), false);
+});
+
+test('planDayDoneCount counts what the folded header claims', () => {
+  assert.equal(C.planDayDoneCount([{ status: 'done' }, { status: 'archived' }, { status: 'plan' }]), 2);
+  assert.equal(C.planDayDoneCount([]), 0);
+  assert.equal(C.planDayDoneCount(null), 0);
+});
+
+test('the traveler\'s own choice beats the computed default, both ways', () => {
+  const st = C.emptyState();
+  // Auto-collapsed, opened by hand: the override sticks, and it is a REAL
+  // stored false (not an absence), or the next render folds it again.
+  assert.equal(C.isPlanDayCollapsed(st, '2026-08-25', true), true);
+  C.togglePlanDay(st, '2026-08-25', true);
+  assert.equal(st.collapsedPlanDays['2026-08-25'], false);
+  assert.equal(C.isPlanDayCollapsed(st, '2026-08-25', true), false);
+  // Collapsing it again hands the day back to the auto rule rather than
+  // pinning it: finishing one more item on an older day still folds it.
+  C.togglePlanDay(st, '2026-08-25', true);
+  assert.equal(Object.prototype.hasOwnProperty.call(st.collapsedPlanDays, '2026-08-25'), false);
+  assert.equal(C.isPlanDayCollapsed(st, '2026-08-25', true), true);
+  // A day with no auto default behaves exactly as it did before any of this.
+  C.togglePlanDay(st, '2026-08-28');
+  assert.equal(st.collapsedPlanDays['2026-08-28'], true);
+  C.togglePlanDay(st, '2026-08-28');
+  assert.equal(Object.prototype.hasOwnProperty.call(st.collapsedPlanDays, '2026-08-28'), false);
+});
+
+test('expandPlanDay always ends up expanded, whatever the default was', () => {
+  const st = C.emptyState();
+  C.expandPlanDay(st, '2026-08-25', true);
+  assert.equal(C.isPlanDayCollapsed(st, '2026-08-25', true), false);
+  // On a day with no auto default it clears the override rather than storing
+  // a redundant false.
+  st.collapsedPlanDays['2026-08-28'] = true;
+  C.expandPlanDay(st, '2026-08-28', false);
+  assert.equal(Object.prototype.hasOwnProperty.call(st.collapsedPlanDays, '2026-08-28'), false);
+});
+
+test('Expand all beats the auto rule, and Collapse all hands it back', () => {
+  const st = C.emptyState();
+  const isos = ['2026-08-25', '2026-08-28'];
+  const autos = { '2026-08-25': true, '2026-08-28': false };
+  C.setPlanDaysCollapsed(st, isos, false, autos);
+  assert.equal(st.collapsedPlanDays['2026-08-25'], false);   // a real departure
+  assert.equal(Object.prototype.hasOwnProperty.call(st.collapsedPlanDays, '2026-08-28'), false);
+  assert.equal(C.isPlanDayCollapsed(st, '2026-08-25', true), false);
+  C.setPlanDaysCollapsed(st, isos, true, autos);
+  assert.equal(Object.prototype.hasOwnProperty.call(st.collapsedPlanDays, '2026-08-25'), false);
+  assert.equal(st.collapsedPlanDays['2026-08-28'], true);
+  // With no autos passed it is exactly the old function.
+  const st2 = C.emptyState();
+  C.setPlanDaysCollapsed(st2, isos, true);
+  assert.deepEqual(st2.collapsedPlanDays, { '2026-08-25': true, '2026-08-28': true });
+  C.setPlanDaysCollapsed(st2, isos, false);
+  assert.deepEqual(st2.collapsedPlanDays, {});
+});
+
+test('planModel hands the renderer the auto flag and the done count per day', () => {
+  const data = clone(GOOD);
+  const st = C.emptyState();
+  // 2026-08-10 holds Tanini; mark it done so that whole day is settled.
+  C.setStatus(st, 'tanini', 'done');
+  const pm = C.planModel(data, st, '2026-08-14');
+  const d10 = pm.days.filter(d => d.iso === '2026-08-10')[0];
+  assert.ok(d10, 'the stay includes 2026-08-10');
+  assert.equal(d10.past, true);
+  assert.equal(d10.auto, true);
+  assert.equal(d10.done, 1);
+  // 2026-08-13 holds Brasserie, still in the plan: past, but not settled.
+  const d13 = pm.days.filter(d => d.iso === '2026-08-13')[0];
+  assert.equal(d13.past, true);
+  assert.equal(d13.auto, false);
+  assert.equal(d13.done, 0);
+  // A day ahead of "today" is never auto, and neither is an empty past day.
+  const ahead = pm.days.filter(d => d.iso === '2026-08-15')[0];
+  assert.equal(ahead.auto, false);
+  const emptyPast = pm.days.filter(d => d.iso === '2026-08-09')[0];
+  assert.equal(emptyPast.items.length, 0);
+  assert.equal(emptyPast.auto, false);
+  // And the lookup the two reveal paths use agrees with the model.
+  assert.equal(C.planDayAutoFor(data, st, '2026-08-10'), true);
+  assert.equal(C.planDayAutoFor(data, st, '2026-08-13'), false);
+  assert.equal(C.planDayAutoFor(data, st, '2999-01-01'), false);
+});
+
+// ==========================================================================
+// Add a place: the research link (item 5)
+// ==========================================================================
+
+test('a map link lands as a map link and a website as a website', () => {
+  const map = C.newPlaceDelta(GOOD, {
+    name: 'Pizzarté', section: 'dinner',
+    link: 'https://maps.app.goo.gl/abc123'
+  });
+  assert.deepEqual(map.errors, []);
+  assert.deepEqual(map.delta.items[0].links,
+    [{ kind: 'map', label: 'Map', href: 'https://maps.app.goo.gl/abc123' }]);
+  const web = C.newPlaceDelta(GOOD, {
+    name: 'Pizzarté', section: 'dinner', link: 'https://pizzarte.al/menu'
+  });
+  assert.equal(web.delta.items[0].links[0].kind, 'web');
+  assert.equal(web.delta.items[0].links[0].label, 'Website');
+  // google.com is only a map on its map paths; anywhere else it is a website.
+  const g = C.newPlaceDelta(GOOD, { name: 'X', section: 'dinner', link: 'https://www.google.com/maps/place/Pizzart%C3%A9' });
+  assert.equal(g.delta.items[0].links[0].kind, 'map');
+  const g2 = C.newPlaceDelta(GOOD, { name: 'Y', section: 'dinner', link: 'https://www.google.com/search?q=pizzarte' });
+  assert.equal(g2.delta.items[0].links[0].kind, 'web');
+  // A host that merely MENTIONS a map host in its query is not a map link.
+  const fake = C.newPlaceDelta(GOOD, { name: 'Z', section: 'dinner', link: 'https://evil.example/?x=google.com/maps' });
+  assert.equal(fake.delta.items[0].links[0].kind, 'web');
+});
+
+test('the link field is optional, and refuses what a browser could not open', () => {
+  const none = C.newPlaceDelta(GOOD, { name: 'Pizzarté', section: 'dinner' });
+  assert.deepEqual(none.errors, []);
+  assert.deepEqual(none.delta.items[0].links, []);
+  assert.deepEqual(C.newPlaceDelta(GOOD, { name: 'A', section: 'dinner', link: '   ' }).delta.items[0].links, []);
+  // A bare word is a relative URL, which safeHref would happily accept and
+  // which would resolve against this app's own origin. Not a research link.
+  ['pizzarte', 'javascript:alert(1)', 'tel:+355691234567', 'ftp://x.example/a'].forEach(bad => {
+    const r = C.newPlaceDelta(GOOD, { name: 'A', section: 'dinner', link: bad });
+    assert.equal(r.delta, null, bad + ' should be refused');
+    assert.ok(/http/.test(r.errors.join(' ')), bad + ' should say what is wanted');
+  });
+});
+
+test('diacritics survive the id, the name and the prompt', () => {
+  // The place that prompted this whole item. Its accent must not break the id
+  // slug, and it must reach Claude spelled the way Rob typed it.
+  const built = C.newPlaceDelta(GOOD, {
+    name: 'Pizzarté', section: 'dinner', note: 'Recommended at dinner',
+    link: 'https://maps.app.goo.gl/pizzarte'
+  });
+  assert.deepEqual(built.errors, []);
+  // slug() DROPS a diacritic rather than transliterating it, so the id is
+  // "pizzart". That is fine and it is what every other id in this app already
+  // does (Tirane's own guide is filed under "tiran-"), but it is pinned here
+  // so a future slug change cannot silently re-file every existing city.
+  assert.equal(built.id, 'pizzart');
+  assert.equal(built.id.indexOf(' '), -1);
+  const merged = C.mergeDelta(clone(GOOD), built.delta);
+  assert.deepEqual(merged.errors, []);
+  const item = merged.data.items.filter(i => i.id === built.id)[0];
+  assert.equal(item.name, 'Pizzarté');
+  const tpl = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'PROMPT.md'), 'utf8');
+  const prompt = C.promptKit.buildPlacePassPrompt(tpl, merged.data, item, C.emptyState());
+  assert.ok(prompt.indexOf('Pizzarté') !== -1, 'the name reaches the prompt intact');
+  assert.ok(prompt.indexOf('https://maps.app.goo.gl/pizzarte') !== -1, 'the link reaches the prompt');
+  assert.ok(/user provided this link/i.test(prompt), 'and is named as a research hint');
+  assert.ok(prompt.indexOf('- **Item id:** ' + built.id) !== -1);
+});
+
+test('a place with no link says nothing about links in its prompt', () => {
+  const built = C.newPlaceDelta(GOOD, { name: 'Somewhere', section: 'dinner' });
+  const merged = C.mergeDelta(clone(GOOD), built.delta);
+  const item = merged.data.items.filter(i => i.id === built.id)[0];
+  const tpl = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'PROMPT.md'), 'utf8');
+  const prompt = C.promptKit.buildPlacePassPrompt(tpl, merged.data, item, C.emptyState());
+  assert.equal(/user provided this link/i.test(prompt), false);
+});
+
+test('an item that already carried links offers them to the research pass', () => {
+  // Brasserie 1900 arrived from a generated guide with a map link on it. A
+  // re-run of the place pass should hand that link over too.
+  const tpl = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'PROMPT.md'), 'utf8');
+  const item = GOOD.items.filter(i => i.id === 'brasserie')[0];
+  const prompt = C.promptKit.buildPlacePassPrompt(tpl, GOOD, item, C.emptyState());
+  assert.ok(prompt.indexOf('https://maps.google.com/?cid=895365817124148954') !== -1);
+});
 
 let asyncPending = 0;
 function asyncTest(name, fn) {

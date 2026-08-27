@@ -17,24 +17,16 @@
   #hdr{position:relative;}
   #hdr h1{cursor:pointer; display:inline-flex; align-items:center; gap:2px;}
   .hdr-chev{font-size:.85rem; opacity:.85;}
-  /* Profile and + Add city are both app-level, top-of-header controls (not
-     inside the per-city switcher menu): Profile holds ONE interest profile
-     and ONE Claude key for every city, so it lives here rather than inside
-     the city dropdown, which would read as "this city's profile". */
-  /* #hdr is full-bleed since the 2026-08-26 header pass, so `right` here is
-     measured off the VIEWPORT edge. --bleed-pad is the header's own side
-     padding, so these chips end where the content column ends rather than
-     drifting out to the screen edge on a wide monitor. */
-  .hdr-actions{position:absolute; top:24px; right:var(--bleed-pad); display:flex; gap:6px;}
-  .hdr-chip{font:inherit; font-size:.75rem; font-weight:700;
-    color:#fff; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.4);
-    border-radius:20px; padding:5px 11px; cursor:pointer; white-space:nowrap;}
-  .hdr-chip:hover{background:rgba(255,255,255,.25);}
-  /* The Trip door is a real link (middle-click, open-in-new-tab, and a visible
-     target in the status bar all matter for a crossing between surfaces), so
-     it has to be talked back into looking like the sibling buttons. */
-  a.hdr-chip{display:inline-flex; align-items:center; text-decoration:none;}
-  a.hdr-chip:hover{color:#fff;}
+  /* Profile, sync and + Add city are app-level controls (not per-city ones):
+     Profile holds ONE interest profile and ONE Claude key for every city, so
+     it lives in the header rather than inside the city dropdown, which would
+     read as "this city's profile".
+
+     They used to be absolutely positioned over the band, which is why they
+     had a `top` per breakpoint and why the city title had to leave room for
+     them. They now sit in the shared header's own peer row (#hdr-acts), which
+     lays them out; .hdr-chip itself is defined once in src/header.css and
+     shared with the trip surface. */
 
   /* Dropdown panel: floats directly under the header (does not add header
      height); #citybar is its host, positioned inside .wrap right after
@@ -126,10 +118,6 @@
      look like the rest of the muted helper text. */
   .modal .acct-off{color:var(--amber-ink); background:var(--amber-soft);
     border-radius:8px; padding:8px 10px; font-weight:600;}
-  @media (max-width: 430px){
-    .hdr-actions{top:17px; gap:4px;}
-    .hdr-chip{padding:4px 9px; font-size:.7rem;}
-  }
 
   /* --- Past cities in the switcher (owner ask 2026-08-26) ---
      "need the ability to archive cities previously visited in cityops page
@@ -163,12 +151,19 @@
 </head>
 <body>
 <div class="wrap">
+  <!-- The shared header is the FIRST thing in .wrap, on both surfaces, and
+       that is load-bearing rather than tidy: the notice line used to sit above
+       it, and an EMPTY notice line self-collapses and pushes its 8px top margin
+       out through .wrap and body, which moved the whole page (red band
+       included) 8px down from the top of the window. Owner ask 2026-08-27:
+       "cleanup the margin at the top". Measured: the band's rect.top is 0 at
+       390px and at 1440px. -->
+  <!--CITYOPS_HEADER-->
   <div id="notice"></div>
   <!-- App-owned and never touched by the engine (which rewrites #notice on
        every render): the one place a stopped sync can say so and still be
        there after the next tap. -->
   <div id="syncalert"></div>
-  <header id="hdr"></header>
   <div id="citybar"></div>
   <div class="toolbar" id="toolbar"></div>
   <nav class="tabbar" id="tabbar" aria-label="Guide sections" hidden></nav>
@@ -236,6 +231,10 @@
   // an Edit opened on the phone shows what was typed on the laptop.
   var GENMETA_KEY = 'cityops.genmeta.v1';
   var GENMETA_AT = 'cityops.genmeta.updated.v1';           // ISO stamp for the reconcile
+  // cityId -> ISO of the removal. Each entry carries its own stamp because
+  // two devices can remove two different cities and the reconcile is a union,
+  // not a newest-wins over the whole map. Rides the profile row as `removed`.
+  var TOMB_KEY = 'cityops.removed.v1';
 
   // Bundled first-run city: the same example block standalone template.html ships
   // with, so a stranger opening the app sees a working guide immediately.
@@ -298,10 +297,18 @@
   }
 
   function renderEmptyState() {
-    var hdr = document.getElementById('hdr');
+    // Only the MIDDLE, never the whole header: the band, the Cities|Trip
+    // switch and the app-level doors are shared chrome (src/header.html) and
+    // wiping them here left the surface with no way to cross to the trip half
+    // and no Profile door, on the one screen where a new traveler needs both.
+    // The engine's renderHeader observes the same boundary.
+    var hdr = document.getElementById('hdr-mid') || document.getElementById('hdr');
     hdr.innerHTML = '';
     hdr.appendChild(el('h1', null, 'CityOps'));
     hdr.appendChild(el('div', 'sub', 'No cities yet'));
+    // Nothing renders through the engine in this state, so the hook that
+    // normally refills the action slot never fires: do it here.
+    decorateHeader();
     document.getElementById('toolbar').innerHTML = '';
     var main = document.getElementById('main');
     main.innerHTML = '';
@@ -430,6 +437,64 @@
     all[cityId] = meta;
     writeGenMeta(all, new Date().toISOString());
     schedulePush('profile');
+  }
+
+  // ---- removal tombstones ----
+  // A removal is a fact about the ACCOUNT, not about this device. Before this,
+  // Remove city dropped the local copy and refused to pull it back for the
+  // rest of the session, but the cities/city_state rows lived on, so the next
+  // pull (or the next device) put it straight back. Owner report 2026-08-27:
+  // "I'm repeatedly removing a city but it keeps adding back when I refresh."
+  //
+  // The map lives here, cityId -> ISO of the removal, and rides the profile
+  // row as the `removed` sidecar. It is written whether or not the device is
+  // signed in, so a removal made on a plane goes up with the next sync rather
+  // than being lost with the session. The reconcile itself is pure and lives
+  // in the engine (syncKit.tombKit).
+  function loadTombs() {
+    var raw = readLS(TOMB_KEY);
+    if (!raw) return {};
+    try { return CityOps.syncKit.tombKit.normalize(JSON.parse(raw)); }
+    catch (e) { return {}; }
+  }
+
+  function writeTombs(map) {
+    writeLS(TOMB_KEY, JSON.stringify(CityOps.syncKit.tombKit.normalize(map)));
+  }
+
+  // The stamped block this device contributes to the profile row. No entries
+  // means no opinion: buildProfileRow leaves the field out entirely rather
+  // than writing an empty map over the account's real one.
+  function localTombBlock() {
+    var map = loadTombs();
+    return CityOps.syncKit.tombKit.mergeBlocks({ value: map, updated: CityOps.syncKit.EPOCH }, null);
+  }
+
+  // Records a removal and queues it for the account. The write is local and
+  // synchronous, and the push is the debounced one every other edit uses, so a
+  // removal made with no signal survives the reload and rides the next sync;
+  // that is the whole reason this is not "delete the rows and hope". `at` is
+  // an injection point for a fixed clock; real callers omit it.
+  function addTomb(cityId, at) {
+    if (!cityId) return;
+    var map = loadTombs();
+    map[cityId] = at || new Date().toISOString();
+    writeTombs(map);
+    schedulePush('profile');
+  }
+
+  // Re-adding a city with the same id must work, so an add always clears the
+  // tombstone: the traveler changed their mind, and the removal is no longer
+  // the newest thing said about that city. Silent when there was none, which
+  // is the ordinary case for every add.
+  function clearTomb(cityId) {
+    if (!cityId) return false;
+    var map = loadTombs();
+    if (!Object.prototype.hasOwnProperty.call(map, cityId)) return false;
+    delete map[cityId];
+    writeTombs(map);
+    schedulePush('profile');
+    return true;
   }
 
   function el(tag, cls, text) {
@@ -759,6 +824,11 @@
     h1.setAttribute('role', 'button');
     h1.setAttribute('tabindex', '0');
     h1.setAttribute('aria-expanded', String(panelOpen));
+    // Idempotent: this used to run exactly once per engine render (which wipes
+    // the h1 first), and it now also runs when the sync alert changes, which
+    // does not. Appending unconditionally gave the city two chevrons.
+    var oldChev = h1.querySelector('.hdr-chev');
+    if (oldChev) oldChev.remove();
     h1.appendChild(el('span', 'hdr-chev', panelOpen ? ' ▴' : ' ▾'));
     h1.onclick = function () {
       panelOpen = !panelOpen;
@@ -768,15 +838,16 @@
     h1.onkeydown = function (e) {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); h1.click(); }
     };
-    var actions = el('div', 'hdr-actions');
-    // The trip door (2026-08-26). Both surfaces are one app on one origin now,
-    // so the header carries the crossing rather than a footer link: this is
-    // the guide half, and Trip is where the stops, stays and legs live.
-    var tripBtn = el('a', 'hdr-chip', 'Trip');
-    tripBtn.href = './trip.html';
-    tripBtn.title = 'Your trip: stops, stays and travel legs';
-    tripBtn.onclick = function (e) { e.stopPropagation(); };
-    actions.appendChild(tripBtn);
+    // The shared header's own action slot. It survives an engine render (the
+    // engine only wipes #hdr-mid now), but this function still rebuilds the
+    // chips each time so their labels and sync state stay current.
+    var actions = document.getElementById('hdr-acts');
+    if (!actions) return;
+    actions.innerHTML = '';
+    // The crossing between surfaces is the Cities|Trip switch in the shared
+    // bar, not a chip: see markSurface() below. What is left here is what is
+    // genuinely app-level rather than surface-level.
+    actions.appendChild(syncChip());
     // Feature 7: Profile is app-level (one interest profile, one Claude key
     // for every city), so it is a top-level header control, not a row inside
     // the per-city switcher menu.
@@ -800,7 +871,57 @@
       openAddModal();
     };
     actions.appendChild(add);
-    h.appendChild(actions);
+  }
+
+  // Which surface you are on, said in the shared switch. aria-current is the
+  // fact and the CSS follows it, so there is no second "active" class that
+  // could point somewhere else. The peer link stays a real <a> (middle-click,
+  // open in a new tab, a visible target in the status bar all matter for a
+  // crossing between two halves of one app).
+  function markSurface() {
+    var me = document.getElementById('surf-cities');
+    var other = document.getElementById('surf-trip');
+    if (!me || !other) return;
+    me.setAttribute('aria-current', 'page');
+    me.removeAttribute('href');
+    me.title = 'You are here: the city guides';
+    other.title = 'Your trip: stops, stays and travel legs';
+  }
+
+  // The sync-status chip, in the shared header on BOTH surfaces (the trip side
+  // has had one since 2026-08-26; the guide side kept its sync state inside
+  // the Profile modal, so a stopped sync was one tap out of sight). Same
+  // vocabulary either side: plain when signed out on purpose, green when the
+  // account has this device's work, amber when sync has stopped.
+  function syncChip() {
+    var b = el('button', 'hdr-chip', 'Local only');
+    b.type = 'button';
+    if (!syncOn()) {
+      b.disabled = true;
+      b.title = 'Sync is not configured in this build.';
+      return b;
+    }
+    if (!session) {
+      b.title = 'Tap to sign in and carry your cities to your other devices.';
+    } else if (readSyncAlert()) {
+      b.textContent = 'Sync stuck';
+      b.className = 'hdr-chip warn';
+      b.title = 'Sync has stopped. Nothing is lost; open Profile for what to do.';
+    } else {
+      b.textContent = 'Synced';
+      b.className = 'hdr-chip ok';
+      b.title = lastSyncIso
+        ? 'Last synced ' + new Date(lastSyncIso).toLocaleString()
+        : 'Signed in. Your cities carry across your devices.';
+    }
+    b.onclick = function (e) {
+      e.stopPropagation();
+      panelOpen = false;
+      updateHeaderExpanded();
+      renderPanel();
+      openProfileModal();
+    };
+    return b;
   }
 
   // ---- interest profile (app-only data; the engine owns its shape) ----
@@ -1573,7 +1694,13 @@
     // Phase 4, item 7: Remove city moves here from the city-switcher panel,
     // keeping its existing type-to-confirm modal unchanged.
     if (activeId && has(store.cities, activeId)) {
-      actions.push({ label: 'Remove city', desc: 'Deletes this city and its progress here',
+      // The description follows the fact: since 2026-08-27 a removal is a
+      // fact about the ACCOUNT (it deletes the rows and records a tombstone),
+      // so "its progress here" would now be an understatement of what the tap
+      // does, on the one control where that matters most.
+      actions.push({ label: 'Remove city',
+        desc: session ? 'Deletes this city everywhere you are signed in'
+                      : 'Deletes this city and its progress here',
         icon: '🗑️', group: 'city', order: 20, onClick: openRemoveModal, cls: 'danger' });
     }
     return actions;
@@ -2256,7 +2383,9 @@
     var wrap = el('div', 'modal-wrap');
     var box = el('div', 'modal');
     box.appendChild(el('h3', null, 'Remove ' + name));
-    box.appendChild(el('p', 'diff', 'This deletes the city and its saved progress on this device. ' +
+    box.appendChild(el('p', 'diff', (session
+      ? 'This deletes the city and its saved progress from your account, on every device you are signed in on. '
+      : 'This deletes the city and its saved progress on this device, and removes it from your account the next time you sign in. ') +
       'Type the city name exactly to enable the Remove button.'));
     var inp = document.createElement('input');
     inp.type = 'text';
@@ -2279,9 +2408,20 @@
       var gone = activeId;
       store = CityOps.appStore.remove(store, gone);
       if (LS) { try { LS.removeItem('cityops.' + gone + '.v1'); } catch (e) {} }
-      // Removal does not propagate to other devices in v1 (see the report), but
-      // it must not be undone here either: this device refuses to pull the city
-      // back for the rest of the session.
+      // A removal is a fact about the ACCOUNT now, not just about this device.
+      // Three things happen, in this order, and the order matters:
+      //   1. the tombstone is written LOCALLY first, so a removal made
+      //      offline (or signed out) survives the reload and rides the next
+      //      sync rather than being lost with the session;
+      //   2. the account's rows are DELETEd, so no other device can find a
+      //      copy to push back;
+      //   3. this session refuses to pull it back regardless, which is the
+      //      belt to the tombstone's braces and covers the window between the
+      //      delete going out and it landing.
+      // Owner report 2026-08-27: "anything removed should remain removed, and
+      // sync the removal across all devices."
+      addTomb(gone);
+      deleteCityRows(gone);
       removedIds[gone] = 1;
       delete stateStamp[gone];
       // An explicit removal means the user owns this device's city list now:
@@ -2464,6 +2604,10 @@
   function renderSyncAlert() {
     var host = document.getElementById('syncalert');
     if (!host) return;
+    // The header's sync chip reads the same alert, so it is repainted from the
+    // one place that knows the alert changed. It no-ops before the first
+    // engine render (there is no header title to decorate yet).
+    decorateHeader();
     host.innerHTML = '';
     var a = readSyncAlert();
     if (!a || alertHiddenForNow || !syncOn()) return;
@@ -2713,6 +2857,24 @@
       .catch(function (e) { warn('push ' + kind + ' failed', e); });
   }
 
+  // Deletes one city's rows from the account. RLS scopes the filter to this
+  // user's rows, so `city_id=eq.<id>` cannot reach anyone else's; user_id is
+  // deliberately NOT sent for the same reason it is never sent on a write.
+  //
+  // Fails soft, like every other call here: the tombstone is already written
+  // locally, so a delete that never lands is retried by the next pull's
+  // reconcile (planTombstones asks for it again as long as the row is there).
+  // That is why this is not queued or retried on a timer.
+  function deleteCityRows(cityId) {
+    if (!syncOn() || !session || !cityId) return Promise.resolve(false);
+    var q = '?city_id=eq.' + encodeURIComponent(cityId);
+    return Promise.all([
+      api('/rest/v1/cities' + q, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } }),
+      api('/rest/v1/city_state' + q, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } })
+    ]).then(function () { stampSync(); return true; })
+      .catch(function (e) { warn('delete rows for ' + cityId + ' failed', e); return false; });
+  }
+
   // This device's sidecars, in the shape syncKit.buildProfileRow expects. A
   // null block means "this device has no opinion", and buildProfileRow leaves
   // the field out entirely rather than writing an empty one.
@@ -2723,7 +2885,10 @@
     return {
       apiKey: keyAt ? { value: loadApiKey(), updated: keyAt } : null,
       github: ghAt ? { value: loadGithubToken(), updated: ghAt } : null,
-      genmeta: gmAt ? { value: loadGenMeta(), updated: gmAt } : null
+      genmeta: gmAt ? { value: loadGenMeta(), updated: gmAt } : null,
+      // Tombstones carry their own per-entry stamps, so the block's own stamp
+      // is derived from them by the engine rather than kept beside them here.
+      removed: localTombBlock()
     };
   }
 
@@ -2751,6 +2916,16 @@
     if (remote.genmeta && CityOps.syncKit.decide(genMetaStamp(), remote.genmeta.updated) === 'pull') {
       writeGenMeta(remote.genmeta.value, remote.genmeta.updated);
       changed.push('city form details');
+    }
+    // Tombstones UNION rather than replace: this device may know about a
+    // removal the account does not (made offline), and the account may know
+    // about one made on the phone. Whole-block newest-wins would throw one of
+    // them away, and a removal that comes back is the bug this exists to fix.
+    // Written back before any push, which is what makes the push carry both.
+    var mergedT = CityOps.syncKit.tombKit.mergeBlocks(localTombBlock(), remote.removed);
+    var mine = loadTombs();
+    if (CityOps.syncKit.tombKit.differ(mine, mergedT && mergedT.value)) {
+      writeTombs(mergedT ? mergedT.value : {});
     }
     return changed;
   }
@@ -2801,7 +2976,15 @@
     var row = CityOps.syncKit.buildProfileRow(store.profile, localSidecars());
     // Nothing this device has ever set: pushing an empty profile with no
     // sidecars would overwrite a real one with this device's blank.
-    if (!row.data.updated && !row.data.apiKey && !row.data.github && !row.data.genmeta) return;
+    //
+    // `removed` belongs in this list. Without it, a traveler who has never
+    // filled in a profile and never saved a Claude key removes a city, the
+    // tombstone is built into the row, and the row is then dropped here as
+    // "nothing to say" - so the removal never reaches the account and the
+    // other device pushes the city straight back. Caught in the mocked
+    // remove-then-pull walkthrough, 2026-08-27.
+    if (!row.data.updated && !row.data.apiKey && !row.data.github &&
+        !row.data.genmeta && !row.data.removed) return;
     api('/rest/v1/profile?on_conflict=user_id', {
       method: 'POST',
       headers: {
@@ -2829,6 +3012,16 @@
   // one upsert. A failed flush is NOT retried on a timer; local stays newer
   // than the server, so the next pull's reconcile pushes it. Local is the queue.
   function schedulePush(kind, id) {
+    // Re-adding a city with the same id must work, and so must editing one
+    // back into existence. Both arrive here, and both mean the same thing: a
+    // copy of this city exists on this device NOW, so the removal is no longer
+    // the newest thing said about it. Doing it here rather than at each of the
+    // three add paths is the one-door rule: a fourth add path cannot forget.
+    //
+    // Above the signed-out guard on purpose: a re-add made offline has to
+    // clear the tombstone locally too, or the next sync would delete the city
+    // the traveler just put back.
+    if (kind === 'data' && id) clearTomb(id);
     if (!syncOn() || !session) return;
     if (kind === 'profile') pushQueueProfile = true;
     else if (!id) return;
@@ -2996,6 +3189,14 @@
   }
 
   function applyPull(cityRows, stateRows, profileRows) {
+    // The account's REMOVALS have to be in hand before anything is decided
+    // about a city, so the sidecars are adopted here rather than waiting for
+    // applyProfilePull at the bottom. Adoption is idempotent (every branch is
+    // a newest-wins comparison), so the later call is a no-op on these and
+    // still does its own job: the profile half and the push decision.
+    if (Array.isArray(profileRows) && profileRows.length) {
+      adoptSidecars(profileRows[0] && profileRows[0].data);
+    }
     var remoteData = {}, remoteState = {};
     var remoteDataStamps = stampMap(cityRows, remoteData);
     var remoteStateStamps = stampMap(stateRows, remoteState);
@@ -3007,8 +3208,64 @@
       if (s) localStateStamps[id] = s;
     });
 
-    var dataPlan = CityOps.syncKit.plan(localDataStamps, remoteDataStamps, removedIds);
-    var statePlan = CityOps.syncKit.plan(localStateStamps, remoteStateStamps, removedIds);
+    // ---- removals first ----
+    // The account's tombstones were adopted at the top of this pull (see
+    // adoptSidecars, which applyProfilePull runs), so this device's map is
+    // already the union of both sides before anything is decided about a city.
+    //
+    // Ordering matters: a tombstoned id must be off the table BEFORE the
+    // newer-wins reconcile runs, or a row this device has never seen would
+    // look like a city arriving from another device and be pulled in.
+    var tombPlan = CityOps.syncKit.tombKit.plan(loadTombs(), localDataStamps, remoteDataStamps);
+    // A city genuinely re-added since the removal (its row or this device's
+    // copy is stamped after the tombstone) wins: drop the tombstone and let it
+    // reconcile like any other city.
+    if (tombPlan.clearTombs.length) {
+      var t = loadTombs();
+      tombPlan.clearTombs.forEach(function (id) { delete t[id]; });
+      writeTombs(t);
+      schedulePush('profile');
+    }
+    // Rows the removal outlives: delete them server side so no other device
+    // finds a copy to push back. Idempotent, and cheap when there is nothing
+    // to do (the common case is an empty list).
+    tombPlan.dropRemote.forEach(function (id) {
+      delete remoteData[id];
+      delete remoteDataStamps[id];
+      delete remoteState[id];
+      delete remoteStateStamps[id];
+      deleteCityRows(id);
+    });
+    // The second-device case: this device still HOLDS a city the account says
+    // was removed. It forgets it here rather than pushing it back up, which is
+    // the exact loop Rob was watching ("it keeps adding back when I refresh").
+    var forgot = [];
+    tombPlan.dropLocal.forEach(function (id) {
+      if (!has(store.cities, id)) return;
+      forgot.push(store.cities[id].city.name);
+      store = CityOps.appStore.remove(store, id);
+      if (LS) { try { LS.removeItem('cityops.' + id + '.v1'); } catch (e) {} }
+      delete localDataStamps[id];
+      delete localStateStamps[id];
+      delete stateStamp[id];
+      removedIds[id] = 1;
+    });
+    if (forgot.length) {
+      saveStore(store);
+      // An explicit removal on ANY device means the traveler owns the city
+      // list now: never auto-seed the example city here either, or removing
+      // the last city on the phone would grow an example one on the laptop.
+      try { if (LS) LS.setItem('cityops.app.hadcities', '1'); } catch (e) {}
+      if (removedIds[activeId]) activeId = null;
+    }
+    // Every tombstoned id is off-limits to a push this round, whether or not
+    // it was in either list above.
+    var skip = {};
+    Object.keys(removedIds).forEach(function (id) { skip[id] = 1; });
+    Object.keys(tombPlan.skipPush).forEach(function (id) { skip[id] = 1; });
+
+    var dataPlan = CityOps.syncKit.plan(localDataStamps, remoteDataStamps, skip);
+    var statePlan = CityOps.syncKit.plan(localStateStamps, remoteStateStamps, skip);
 
     var pulledNames = [];
     var rebootActive = false;
@@ -3076,6 +3333,17 @@
       // The device was showing the empty state and the pull just delivered
       // cities: activate the first one.
       activateCity(store.order[0]);
+    } else if (forgot.length && !store.order.length) {
+      // The city this device was showing was removed on another device, and it
+      // was the last one. The empty state is the honest screen here; leaving
+      // the old city's cards on the page would show data that no longer exists
+      // anywhere.
+      activateCity(null);
+    }
+    if (forgot.length) {
+      showSyncNotice(forgot.join(', ') + (forgot.length === 1 ? ' was' : ' were') +
+        ' removed on another device, so ' + (forgot.length === 1 ? 'it is' : 'they are') +
+        ' gone from here too');
     }
     if (pulledNames.length) {
       showSyncNotice('Synced: ' + pulledNames.join(', ') + ' updated from your other device');
@@ -3362,6 +3630,10 @@
     fb.title = 'Open an issue on GitHub';
     foot.appendChild(fb);
   }
+
+  // The surface switch is shared chrome: it is not rebuilt per render, so it
+  // is marked once, as soon as the shell script runs.
+  markSurface();
 
   CityOps.onStateChange = function () { renderPanel(); decorateHeader(); decorateFoot(); };
 
