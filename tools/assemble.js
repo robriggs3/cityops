@@ -115,6 +115,55 @@ function promptTemplateBlock() {
   return '<script type="text/plain" id="prompt-template">\n' + escaped + '\n</script>';
 }
 
+// ---- the public share page ----
+// src/share-shell.html is the ONE source of the family-facing page, and it has
+// two lives: share/index.html on the site (which fetches a snapshot by token)
+// and the standalone HTML the trip surface can still hand you as a download
+// (which carries its snapshot inside it). The download is produced by embedding
+// this exact file in the trip surface, the same way the guide template rides in
+// the city app, so the two can never drift into two different-looking pages.
+//
+// It takes no engine and no shared CSS: it is a read-only page for people with
+// no account, and pulling 280KB of editor engine into it would be 280KB of code
+// with nothing to do.
+function buildSharePage() {
+  const shellName = 'share-shell.html';
+  const shell = fs.readFileSync(path.join(root, 'src', shellName), 'utf8');
+  const opens = (shell.match(/<script[\s>]/g) || []).length;
+  const closes = (shell.match(/<\/script/g) || []).length;
+  if (opens !== closes) {
+    throw new Error(shellName + ': ' + opens + ' script opens vs ' + closes + ' closes');
+  }
+  if (shell.indexOf('<!--') !== -1) {
+    throw new Error(shellName + ': HTML comments are not allowed here. This file is embedded in a ' +
+      'text/plain block inside the trip surface, where `<!--` followed by a literal <script opener ' +
+      'puts the tokenizer into double-escaped state and the real closing tag goes inert. Use a CSS ' +
+      'or JS comment instead.');
+  }
+  fs.mkdirSync(path.join(root, 'share'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'share', 'index.html'), shell);
+  console.log('assembled share/index.html');
+  return shell;
+}
+const sharePage = buildSharePage();
+
+// The share page as the trip surface carries it: the snapshot block replaced by
+// a marker the app fills at download time. Same mechanism, same escaping and the
+// same symmetric guard as guideTemplateBlock above.
+function shareTemplateBlock() {
+  const marked = sharePage.replace(
+    /(<script type="application\/json" id="share-data">)[\s\S]*?(<\/script>)/,
+    (m, open, close) => open + '\n__SHARE_DATA__\n' + close
+  );
+  if (marked === sharePage) throw new Error('share-data block not found in share/index.html');
+  if (marked.indexOf('<\\/script') !== -1) {
+    throw new Error('marked share page already contains an escaped <\\/script sequence');
+  }
+  const escaped = marked.replace(/<\/script/g, '<\\/script');
+  if (escaped.indexOf('</script') !== -1) throw new Error('unescaped </script survived in the share page');
+  return '<script type="text/plain" id="share-template">\n' + escaped + '\n</script>';
+}
+
 // The trip surface: the same app, the other half. It brings its own stylesheet
 // (a whole editor's worth, with its own tokens under the same names), so it
 // takes the ENGINE only and no CSS. What it wants from the engine is syncKit:
@@ -144,6 +193,8 @@ if (fs.existsSync(path.join(root, 'src', 'trip-shell.html'))) {
   // surfaces": neither shell owns the band any more.
   let tripOut = withHeaderCss(shell, shellName);
   tripOut = withHeaderHtml(tripOut, shellName);
+  if (tripOut.indexOf('<!--CITYOPS_SHARE-->') === -1) throw new Error('share marker missing in ' + shellName);
+  tripOut = tripOut.replace('<!--CITYOPS_SHARE-->', () => shareTemplateBlock());
   // The trip surface is a DIRECTORY now, so its public address is /trip/ with
   // no .html: Pages serves trip/index.html for it. The old trip.html is still
   // committed at the root as a hand-written redirect stub. It is deliberately

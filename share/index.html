@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Travel plan</title>
+<link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%23c72027'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,ital,wght@9..144,0,400;9..144,0,500;9..144,0,600;9..144,1,400;9..144,1,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root {
+  --bg: #cccccc; --bg-card: #ffffff; --bg-soft: #bdbdbd; --bg-softer: #e8e8e8;
+  --border: #a8a8a8; --border-light: #d0d0d0;
+  --text: #242424; --text-2: #4a4a4a;
+  /* Was #666666 (3.58:1 on this page's own --bg, fails WCAG AA 4.5:1 for
+     normal text; same gap PR #1 fixed in the main app's --text-3). Same fix,
+     same value: #525252 reads as the same "quiet label" tier and passes on
+     --bg, --bg-softer, and --bg-card. */
+  --text-3: #525252;
+  --accent: #c72027; --accent-hover: #9c181d; --accent-soft: #f3d1d3;
+  --green: #2d7d34; --green-soft: #d4e8d5;
+  --blue: #2c5d8a; --blue-soft: #d3e0ee;
+  --amber: #8a6d00; --amber-soft: #ede1be;
+  /* "-strong" text variants, same pattern and values as PR #1's main-app fix:
+     the base color reads fine as a border/icon/large glyph, but at pill/badge
+     size on its own "-soft" tinted background (or this doc's gray page bg) it
+     falls under 4.5:1. Used for text only; base colors are unchanged for
+     borders, the map's dot markers, and large text (e.g. the hero italic). */
+  --green-strong: #235f29;
+  --amber-strong: #6b5500;
+  --accent-strong: #8a161c;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.08);
+  --shadow-md: 0 2px 8px rgba(0,0,0,.10);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 0 0 60px; -webkit-font-smoothing: antialiased; }
+.doc { max-width: 880px; margin: 0 auto; padding: 0 20px; }
+/* The cityops header block: square, deep red, edge to edge, with the facts as
+   chips. Same treatment as the editor, so the page family reads and the page Rob
+   edits are visibly one product. The negative margins cancel .doc's padding. */
+.hero { background: linear-gradient(160deg, var(--accent) 0%, var(--accent-hover) 100%); color: #fff;
+  margin: 0 -20px 32px; padding: 26px 20px 22px; position: relative; }
+.hero h1 { font-family: 'Fraunces', Georgia, serif; font-size: 40px; font-weight: 400; line-height: 1.05; letter-spacing: -0.02em; color: #fff; }
+.hero h1 .em { color: #fff; opacity: 0.75; font-style: italic; font-weight: 500; }
+.hero .sub { margin-top: 12px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: rgba(255,255,255,0.88); letter-spacing: 0.14em; text-transform: uppercase; }
+.hero .facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
+.hero .chip { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); padding: 5px 11px;
+  border-radius: 20px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #fff; letter-spacing: 0.06em;
+  text-transform: uppercase; text-decoration: none; display: inline-flex; align-items: center; }
+.hero .chip.door:hover { background: rgba(255,255,255,0.3); border-color: rgba(255,255,255,0.6); }
+.hero .gen-date { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: rgba(255,255,255,0.8); letter-spacing: 0.12em; text-transform: uppercase; }
+.current-banner { background: var(--bg-card); border: 1px solid var(--accent); border-radius: 12px; box-shadow: 0 4px 20px rgba(199,32,39,0.10), 0 1px 3px rgba(0,0,0,0.04); margin-bottom: 32px; position: relative; padding: 38px 28px 24px; }
+.you-are-here-badge { position: absolute; top: 0; left: 0; background: var(--accent); color: white; padding: 5px 14px; border-radius: 0 0 8px 0; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 600; }
+.current-banner h2 { font-family: 'Fraunces', Georgia, serif; font-size: 32px; font-weight: 500; line-height: 1.15; }
+.current-banner h2 .country { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-3); letter-spacing: 0.12em; font-weight: 400; text-transform: uppercase; margin-left: 12px; vertical-align: middle; }
+.current-banner .dates { margin-top: 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-2); letter-spacing: 0.04em; }
+.current-banner .dates .days-left { color: var(--accent); font-weight: 500; margin-left: 8px; }
+.current-banner .accom-block { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border-light); }
+.current-banner .accom-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px; }
+.accom-item { padding: 10px 12px; margin-bottom: 6px; background: var(--bg-softer); border: 1px solid var(--border-light); border-radius: 6px; font-size: 13px; color: var(--text-2); }
+.accom-item .accom-name { font-weight: 500; color: var(--text); }
+.accom-item .accom-meta { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-3); letter-spacing: 0.04em; margin-top: 3px; }
+.accom-item a { color: var(--accent); text-decoration: none; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+.accom-item a:hover { text-decoration: underline; }
+.accom-item.current { background: var(--accent-soft); border-color: var(--accent); border-left: 4px solid var(--accent); }
+.accom-item.current .accom-name { color: var(--accent-strong); font-weight: 600; }
+.accom-item.current::after { content: 'TONIGHT'; display: inline-block; margin-left: 8px; font-family: 'JetBrains Mono', monospace; font-size: 9px; background: var(--accent); color: white; padding: 1px 6px; border-radius: 3px; letter-spacing: 0.1em; font-weight: 600; vertical-align: middle; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; margin: 40px 0 18px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.section-head h2 { font-family: 'Fraunces', Georgia, serif; font-size: 28px; font-weight: 500; font-style: italic; line-height: 1.2; }
+.section-head .meta { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.14em; text-transform: uppercase; }
+.leg { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 10px; padding: 18px 22px; margin-bottom: 10px; box-shadow: var(--shadow-sm); transition: box-shadow 0.2s, border-color 0.2s; }
+.leg:hover { box-shadow: var(--shadow-md); border-color: var(--border); }
+.leg.past { opacity: 0.78; }
+.leg-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.leg-title { font-family: 'Fraunces', Georgia, serif; font-size: 20px; font-weight: 500; line-height: 1.2; }
+.leg-title .country { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.1em; font-weight: 400; text-transform: uppercase; margin-left: 10px; vertical-align: middle; }
+.leg-dates { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-2); letter-spacing: 0.03em; }
+.leg-accom { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-light); }
+.pill { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; font-weight: 500; margin-left: 8px; vertical-align: middle; display: inline-block; }
+.pill.booked { background: var(--green-soft); color: var(--green-strong); }
+.pill.shortlisted { background: var(--blue-soft); color: var(--blue); }
+.pill.tentative { background: var(--amber-soft); color: var(--amber-strong); }
+/* The two-app seam, on the family page. A stop with a cityops guide gets the
+   accent-outlined "City guide" pill; a stop without one gets the dashed, muted
+   "Plan this city", which opens cityops rather than promising a guide that is
+   not there. Which one you see was decided at publish time from the traveller's
+   own guide list, so this page never calls out to an account. */
+.guide-link { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 9px; border-radius: 20px; border: 1.5px solid var(--accent); color: var(--accent-strong); background: #fff; text-decoration: none; font-weight: 500; display: inline-block; margin-left: 8px; vertical-align: middle; white-space: nowrap; }
+.guide-link:hover { background: var(--accent-soft); }
+.guide-link.plan-link { border-style: dashed; border-color: var(--border); color: var(--text-3); }
+.guide-link.plan-link:hover { border-color: var(--accent); color: var(--accent-strong); background: #fff; }
+.current-banner .dates .guide-link { margin-left: 10px; }
+.map-wrap { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow-sm); margin-bottom: 8px; }
+#map { height: 420px; z-index: 1; }
+.map-reset-btn { position: absolute; top: 10px; left: 52px; z-index: 1000; background: white; border: 2px solid rgba(0,0,0,0.2); border-radius: 4px; padding: 5px 10px; font-size: 11px; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: all 0.15s; }
+.map-reset-btn:hover { background: var(--accent-soft); color: var(--accent-strong); border-color: var(--accent); }
+.map-legend { display: flex; gap: 16px; flex-wrap: wrap; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.06em; text-transform: uppercase; margin-top: 8px; }
+.map-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; border: 1.5px solid white; box-shadow: 0 0 0 1px var(--border); }
+.empty { color: var(--text-3); font-style: italic; padding: 24px; text-align: center; background: var(--bg-softer); border: 1px dashed var(--border); border-radius: 8px; font-size: 13px; }
+/* Travel legs between cities */
+.transit { display: flex; align-items: center; gap: 12px; margin: 6px 0 6px 22px; padding: 10px 14px; background: var(--bg-softer); border: 1px solid var(--border-light); border-left: 3px solid var(--text-3); border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-2); letter-spacing: 0.02em; }
+.transit.indent { margin-left: 28px; }
+.transit.status-booked { border-left-color: var(--green); }
+.transit.status-shortlisted { border-left-color: var(--blue); }
+.transit.status-tentative { border-left-color: var(--amber); }
+.transit.past { opacity: 0.55; }
+.transit-ic { font-size: 16px; line-height: 1; }
+.transit-main { flex: 1; min-width: 0; }
+.transit-line1 { color: var(--text); font-weight: 500; font-size: 12px; }
+.transit-line2 { color: var(--text-3); margin-top: 2px; }
+.transit-time { color: var(--text-2); white-space: nowrap; }
+footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--border); text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.12em; text-transform: uppercase; }
+footer .stamp { display: inline-block; padding: 6px 14px; border: 1px solid var(--text-3); border-radius: 3px; margin-bottom: 10px; }
+/* ---- the loading and dead-link states ----
+   A share link outlives the share. Rotated, unpublished, mistyped, truncated
+   by a mail client: every one of those arrives here as "no row for that
+   token", and every one of them has to read as a plain fact rather than as a
+   broken page. Never a stack trace, never a spinner that never stops. */
+.state { max-width: 560px; margin: 80px auto; text-align: center; padding: 0 20px; }
+.state .mark { font-family: 'Fraunces', Georgia, serif; font-size: 46px; color: var(--accent); line-height: 1; }
+.state h1 { font-family: 'Fraunces', Georgia, serif; font-size: 27px; font-weight: 500; margin-top: 18px; line-height: 1.25; }
+.state p { margin-top: 12px; color: var(--text-2); font-size: 15px; line-height: 1.6; }
+.state .go { display: inline-block; margin-top: 22px; font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-strong); border: 1.5px solid var(--accent);
+  border-radius: 20px; padding: 10px 18px; text-decoration: none; min-height: 44px; box-sizing: border-box; }
+.state .go:hover { background: var(--accent-soft); }
+/* ---- included city guides ----
+   The Share-view idiom, in the read-only form the app itself uses: verdicts
+   only, stars only, no tips and no provenance. Collapsed by default, because a
+   guide is a detail under a stop rather than the point of this page. */
+.guide-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 10px; margin-bottom: 10px; box-shadow: var(--shadow-sm); }
+.guide-card > summary { cursor: pointer; padding: 16px 20px; list-style: none; display: flex; align-items: baseline;
+  justify-content: space-between; flex-wrap: wrap; gap: 10px; min-height: 44px; box-sizing: border-box; }
+.guide-card > summary::-webkit-details-marker { display: none; }
+.guide-card > summary:hover { background: var(--bg-softer); border-radius: 10px; }
+.guide-card .g-name { font-family: 'Fraunces', Georgia, serif; font-size: 19px; font-weight: 500; }
+.guide-card .g-name .country { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.1em; text-transform: uppercase; margin-left: 10px; vertical-align: middle; }
+.guide-card .g-meta { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-3); letter-spacing: 0.04em; }
+.guide-card .g-body { padding: 0 20px 16px; }
+.gsec { margin-top: 14px; }
+.gsec-head { font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-3); border-bottom: 1px solid var(--border-light); padding-bottom: 6px; }
+.gitem { padding: 9px 0; border-bottom: 1px solid var(--border-light); }
+.gitem:last-child { border-bottom: 0; }
+.gitem .gi-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.gitem .gi-name { font-weight: 500; font-size: 14px; }
+.gitem .gi-stars { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-3); }
+.gitem .gi-when { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.06em; text-transform: uppercase; }
+.gitem .gi-price { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-2); }
+.gitem .gi-note { font-size: 13px; color: var(--text-2); margin-top: 3px; line-height: 1.55; }
+.gitem .gi-verdict { font-size: 12px; color: var(--text-2); margin-top: 4px; padding-left: 10px; border-left: 2px solid var(--border); line-height: 1.5; }
+.gitem .gi-verdict b { color: var(--text); font-weight: 500; }
+.gitem .gi-links { margin-top: 5px; display: flex; gap: 10px; flex-wrap: wrap; }
+.gitem .gi-links a { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent-strong); text-decoration: none; min-height: 30px; display: inline-flex; align-items: center; }
+.gitem .gi-links a:hover { text-decoration: underline; }
+.snapnote { margin-top: 10px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.06em; line-height: 1.6; text-transform: none; }
+@media (max-width: 600px) {
+  body { padding: 0 0 40px; }
+  .doc { padding: 0 14px; }
+  .hero { margin: 0 -14px 24px; padding: 20px 14px 16px; }
+  .hero h1 { font-size: 29px; }
+  .hero .sub { margin-top: 10px; font-size: 10px; letter-spacing: 0.1em; }
+  .hero .facts { gap: 6px; margin-top: 11px; }
+  .hero .chip { padding: 4px 9px; font-size: 10px; }
+  /* A door needs a thumb; a fact does not. */
+  .hero .chip.door { min-height: 44px; padding: 8px 14px; }
+  .guide-link { min-height: 40px; display: inline-flex; align-items: center; margin-left: 0; margin-top: 6px; }
+  .current-banner { padding: 34px 16px 18px; margin-bottom: 24px; }
+  .current-banner h2 { font-size: 24px; }
+  .current-banner h2 .country { display: block; margin: 4px 0 0; }
+  .current-banner .accom-block { margin-top: 14px; padding-top: 12px; }
+  .section-head { margin: 28px 0 14px; }
+  .section-head h2 { font-size: 22px; }
+  .leg { padding: 14px 16px; }
+  .leg-title { font-size: 17px; }
+  .leg-title .country { display: block; margin: 4px 0 0; }
+  .leg-accom { margin-top: 10px; padding-top: 10px; }
+  .accom-item { padding: 9px 10px; }
+  #map { height: 260px; }
+  /* Narrow-screen transit card: airline + number, then date/times, then the route on one
+     compact line. Rebuilt as a grid so the three rows can be ordered independently of the
+     DOM order (which stays as-is for the desktop flex layout). */
+  .transit { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; row-gap: 2px; align-items: start; margin: 6px 0 6px 10px; padding: 9px 11px; }
+  .transit.indent { margin-left: 14px; }
+  .transit-main { display: contents; }
+  .transit-ic { grid-column: 1; grid-row: 1 / span 3; padding-top: 1px; }
+  .transit-line1 { grid-column: 2; grid-row: 1; min-width: 0; }
+  .transit-time { grid-column: 2; grid-row: 2; white-space: normal; }
+  .transit-line2 { grid-column: 2; grid-row: 3; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .state { margin: 56px auto; }
+  .state h1 { font-size: 23px; }
+  .guide-card > summary { padding: 14px 16px; }
+  .guide-card .g-body { padding: 0 16px 14px; }
+}
+</style>
+</head>
+<body>
+
+<script type="application/json" id="share-data">
+null
+</script>
+
+<div class="state" id="state-block" hidden>
+  <div class="mark" id="state-mark">·</div>
+  <h1 id="state-title"></h1>
+  <p id="state-body"></p>
+  <a class="go" id="state-go" href="https://cityops.robriggs.com" target="_blank" rel="noopener noreferrer">Open CityOps &#8599;</a>
+</div>
+
+<div class="doc" id="doc" hidden>
+  <header class="hero">
+    <h1 id="hero-title"></h1>
+    <div class="sub" id="cover-meta">Loading…</div>
+    <div class="facts">
+      <span class="chip gen-date" id="gen-date"></span>
+      <a class="chip door" href="https://cityops.robriggs.com" target="_blank" rel="noopener noreferrer">City guides &#8599;</a>
+    </div>
+  </header>
+
+  <div id="current-section"></div>
+
+  <div class="section-head"><h2>The map</h2><span class="meta">All stops</span></div>
+  <div class="map-wrap"><button class="map-reset-btn" onclick="resetMapView()" title="Fit all pins in view">⤢ Reset view</button><div id="map"></div></div>
+  <div class="map-legend" id="map-legend"></div>
+
+  <div id="future-section"></div>
+  <div id="past-section"></div>
+  <div id="guides-section"></div>
+
+  <footer>
+    <div class="stamp">Eyes only · For family</div>
+    <div id="footer-meta"></div>
+    <div class="snapnote">This page is a snapshot taken when the traveler pressed Publish. It is not live: plans made since then are not on it until they publish again.</div>
+  </footer>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// ---- THE SNAPSHOT BLOCK, and why this file has no HTML comments in it ----
+//
+// Two lives, one file. As share/index.html on the site the #share-data block
+// above is `null` and this page fetches its snapshot by token. As a downloaded
+// standalone file that block IS the snapshot, baked in by the trip surface,
+// and the page never touches the network for data at all. Which life it is in
+// is decided by whether the block parses to something with a cities array, and
+// by nothing else: no build flag, no query string, no second copy of the page.
+//
+// This whole file is also embedded inside the trip surface, in a text/plain
+// script block, so the trip surface can write the standalone copy with no
+// network. An HTML comment anywhere in it would put the tokenizer into
+// script-data-escaped state, and any script opener after that makes even the
+// real closing tag inert: the embedded copy would swallow the rest of the
+// page. Hence every note in here is a CSS or a JS comment, and no note may
+// spell a script tag out. tools/assemble.js checks both and fails the build.
+//
+// ---- the account this page reads from, and the ONE door it is allowed ----
+//
+// The publishable key is public by design and grants nothing on its own: anon
+// has no grant on public.shares at all, so the table cannot be listed, counted
+// or enumerated. The only thing anon may do is call get_share(token), which
+// returns one snapshot for an exact token match and null for everything else.
+// A wrong token is therefore indistinguishable from a rotated one, which is
+// what makes rotation an actual revocation.
+var SUPA = {
+  url: 'https://ggscdbbvqmqiyguiccrf.supabase.co',
+  anon: 'sb_publishable_j3oRAQ-3889fkN26FtaE7g_jMyx1Lda'
+};
+
+var DATA = null;
+const TODAY = new Date().toISOString().slice(0,10);
+var TRAVELER = 'They';
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso + 'T12:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function escapeHTML(s) {
+  return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---- the two-app seam ----
+// plan-ahead owns getting between cities; cityops owns what to do once you are in
+// one. Every stop therefore offers exactly one door, and which one is a FACT
+// baked in at publish time, not a guess made here: DATA.guideIds is the list of
+// guides the traveller actually has. A stop on that list links straight to its
+// guide; a stop that is not gets "Plan this city", which opens cityops. This page
+// never calls an account, so family see the same thing the traveller does.
+//
+// Slug MUST match cityops' own slug() exactly or a deep link lands on nothing:
+// lowercase, every non-alphanumeric run becomes one hyphen, trim hyphens.
+// ABSOLUTE, not root-relative and not "./".
+//
+// The Phase A lesson, and it bit twice: this page is served from /share/, one
+// level down from the app root, so a relative base resolves against /share/
+// and every guide door lands on /share/#city=... which is nothing. The same
+// file is also downloaded and opened over file://, where a root-absolute "/"
+// means the disk root. One absolute origin is the only spelling that is right
+// in both lives.
+const CITYOPS_BASE = 'https://cityops.robriggs.com';
+var GUIDE_IDS = [];
+
+function citySlug(name) {
+  return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+// Exact match first (same city, same arrival date), then the same city on a
+// nearby date: a check-in that moved by a day does not make the guide wrong.
+function guideIdFor(name, fromISO) {
+  const slug = citySlug(name);
+  if (!slug || !GUIDE_IDS.length) return '';
+  const exact = fromISO ? (slug + '-' + fromISO) : '';
+  if (exact && GUIDE_IDS.indexOf(exact) !== -1) return exact;
+  const prefix = slug + '-';
+  const siblings = GUIDE_IDS.filter(function (id) { return id.indexOf(prefix) === 0; });
+  if (!siblings.length) return '';
+  if (!fromISO || siblings.length === 1) return siblings[0];
+  const want = Date.parse(fromISO);
+  if (isNaN(want)) return siblings[0];
+  let best = siblings[0], bestGap = Infinity;
+  siblings.forEach(function (id) {
+    const at = Date.parse(id.slice(prefix.length));
+    const gap = isNaN(at) ? Infinity : Math.abs(at - want);
+    if (gap < bestGap) { bestGap = gap; best = id; }
+  });
+  return best;
+}
+
+// cityops has no url-driven prefill today (its hash reader only understands
+// #city=), so this opens the app and carries the stop details in a fragment it
+// safely ignores. That fragment is the scaffold hook if cityops ever wants to
+// prefill its Add-city form from a link.
+function cityPlanLink(city) {
+  const parts = ['plan=' + encodeURIComponent(citySlug(city.name))];
+  if (city.name) parts.push('name=' + encodeURIComponent(city.name));
+  if (city.checkIn) parts.push('from=' + encodeURIComponent(city.checkIn));
+  if (city.checkOut) parts.push('to=' + encodeURIComponent(city.checkOut));
+  if (city.country) parts.push('country=' + encodeURIComponent(city.country));
+  return CITYOPS_BASE + '/#' + parts.join('&');
+}
+
+// One door per stop. Past stops get nothing: the guide is no use once you have left.
+function cityGuideLink(city) {
+  if (!city || !city.name) return '';
+  const id = guideIdFor(city.name, city.checkIn);
+  if (id) {
+    return '<a class="guide-link" href="' + escapeHTML(CITYOPS_BASE + '/#city=' + encodeURIComponent(id)) +
+      '" target="_blank" rel="noopener noreferrer" title="What to eat, see and do here">City guide ↗</a>';
+  }
+  return '<a class="guide-link plan-link" href="' + escapeHTML(cityPlanLink(city)) +
+    '" target="_blank" rel="noopener noreferrer" title="No guide for this stop yet. Opens cityops.">Plan this city ↗</a>';
+}
+
+// Status -> marker color (mirrors itinerary pill colors). Past trumps status (gray). Current trumps everything (red).
+function colorFor(city, isCurrent) {
+  if (isCurrent) return '#c72027';
+  if (city.checkOut && city.checkOut <= TODAY) return '#8a8a8a';
+  const s = city.status || 'tentative';
+  if (s === 'booked') return '#2d7d34';
+  if (s === 'shortlisted') return '#2c5d8a';
+  return '#8a6d00';
+}
+
+function isCurrentAccommodation(a) {
+  if (!a.checkIn || !a.checkOut) return false;
+  return a.checkIn <= TODAY && a.checkOut > TODAY;
+}
+
+function renderAccoms(accoms, isCurrentCity) {
+  if (!accoms || !accoms.length) return '';
+  const booked = accoms.filter(a => a.status === 'booked');
+  const list = booked.length > 0 ? booked : accoms;
+  return list.map(a => buildStayRow(a, isCurrentCity)).join('');
+}
+
+// Single stay row (extracted so stays and travel legs can be interleaved chronologically).
+function buildStayRow(a, isCurrentCity) {
+  const isCurrentAccom = isCurrentCity && isCurrentAccommodation(a);
+  const cls = 'accom-item' + (isCurrentAccom ? ' current' : '');
+  const linkBit = a.link ? ' · <a href="' + escapeHTML(a.link) + '" target="_blank" rel="noopener">view booking</a>' : '';
+  const cityBit = (a.city && a.city.trim()) ? escapeHTML(a.city.trim()) + ' · ' : '';
+  const nbhdBit = a.neighborhood ? escapeHTML(a.neighborhood) + ' · ' : '';
+  const datesBit = a.checkIn && a.checkOut ? fmtDate(a.checkIn) + ' → ' + fmtDate(a.checkOut) : '';
+  return '<div class="' + cls + '"><div class="accom-name">' + escapeHTML(a.name) + '</div><div class="accom-meta">' + cityBit + nbhdBit + datesBit + linkBit + '</div></div>';
+}
+
+// Sort a mixed list of stays + legs into one chronological timeline — IDENTICAL logic to the
+// admin app's buildStayAndTravel comparator, so the family view matches what Rob sees.
+function stayTravelSort(entries, parentCityName) {
+  const parent = (parentCityName || '').trim().toLowerCase();
+  function entryDate(e) { return e.kind === 'stay' ? (e.ref.checkIn || '') : (e.ref.departureDate || ''); }
+  entries.sort(function(x, y) {
+    const dx = entryDate(x), dy = entryDate(y);
+    if (dx !== dy) { if (!dx) return -1; if (!dy) return 1; return dx < dy ? -1 : 1; }
+    if (x.kind !== y.kind) {
+      const stayE = x.kind === 'stay' ? x : y;
+      const legE  = x.kind === 'leg'  ? x : y;
+      const legDate = legE.ref.departureDate || '', ci = stayE.ref.checkIn || '', co = stayE.ref.checkOut || '';
+      let legFirst;
+      if (legDate && co && legDate === co) legFirst = false;
+      else if (legDate && ci && legDate === ci) legFirst = true;
+      else {
+        const cityExplicit = !!(stayE.ref.city && stayE.ref.city.trim());
+        const sc = ((stayE.ref.city && stayE.ref.city.trim()) || parentCityName || '').trim().toLowerCase();
+        const dest = (legE.ref.toCity || '').trim().toLowerCase();
+        const orig = (legE.ref.fromCity || parent || '').trim().toLowerCase();
+        if (cityExplicit && sc && dest && sc === dest) legFirst = true;
+        else if (cityExplicit && sc && orig && sc === orig) legFirst = false;
+        else legFirst = (legE.ref.departureTime || '12:00') < '15:00';
+      }
+      if (x.kind === 'leg') return legFirst ? -1 : 1;
+      return legFirst ? 1 : -1;
+    }
+    if (x.kind === 'leg') {
+      const tx = x.ref.departureTime || '99:99', ty = y.ref.departureTime || '99:99';
+      return tx < ty ? -1 : (tx > ty ? 1 : 0);
+    }
+    return (x.ref.name || '').localeCompare(y.ref.name || '');
+  });
+  return entries;
+}
+
+// Merged, chronologically-sorted stay + travel timeline for one city (legs indented).
+function buildStayTravelTimeline(city, isCurrentCity) {
+  const accoms = city.accommodations || [];
+  const booked = accoms.filter(a => a.status === 'booked');
+  const stays = booked.length > 0 ? booked : accoms;
+  const legs = transitsFromCity(city);
+  const entries = [];
+  stays.forEach(a => entries.push({ kind: 'stay', ref: a }));
+  legs.forEach(t => entries.push({ kind: 'leg', ref: t }));
+  if (!entries.length) return '';
+  stayTravelSort(entries, city.name);
+  return entries.map(e => e.kind === 'stay' ? buildStayRow(e.ref, isCurrentCity) : buildTransit(e.ref, true)).join('');
+}
+
+function pill(status) {
+  const valid = ['booked','shortlisted','tentative'];
+  if (!valid.includes(status)) return '';
+  return '<span class="pill ' + status + '">' + status + '</span>';
+}
+
+function render() {
+  let current = null;
+  const past = [], future = [];
+  DATA.cities.forEach(c => {
+    if (!c.checkIn || !c.checkOut) { future.push(c); return; }
+    if (c.checkIn <= TODAY && c.checkOut > TODAY) { current = c; return; }
+    if (c.checkOut <= TODAY) past.push(c);
+    else future.push(c);
+  });
+  past.sort((a,b) => (b.checkIn||'').localeCompare(a.checkIn||''));
+  future.sort((a,b) => (a.checkIn||'').localeCompare(b.checkIn||''));
+
+  const totalLabel = DATA.cities.length + ' stops · ' + past.length + ' past · ' + (current ? '1 current · ' : '') + future.length + ' upcoming';
+  document.getElementById('cover-meta').textContent = totalLabel;
+  (function(){
+    var gd = new Date(DATA.generatedAt);
+    var ageDays = Math.floor((Date.now() - gd.getTime()) / 86400000);
+    var ageText = ageDays <= 0 ? 'today' : (ageDays === 1 ? 'yesterday' : ageDays + ' days ago');
+    var human = gd.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+    var stale = ageDays >= 21 ? ' · may be out of date' : '';
+    document.getElementById('gen-date').textContent = 'Updated ' + human + ' · ' + ageText + stale;
+  })();
+  document.getElementById('footer-meta').textContent = 'Auto-updating · Last refresh on visit';
+
+  const cs = document.getElementById('current-section');
+  if (current) {
+    const daysLeft = Math.round((new Date(current.checkOut + 'T00:00:00') - new Date(TODAY + 'T00:00:00')) / 86400000);
+    const timeline = buildStayTravelTimeline(current, true);
+    const timelineHTML = timeline
+      ? '<div class="accom-block"><div class="accom-label">Stay &amp; travel</div>' + timeline + '</div>'
+      : '';
+    cs.innerHTML = '<div class="current-banner"><div class="you-are-here-badge">● ' + escapeHTML(TRAVELER) + ' is here</div><h2>' + escapeHTML(current.name) + '<span class="country">' + escapeHTML(current.country) + (current.state ? ' · ' + escapeHTML(current.state) : '') + '</span></h2><div class="dates">' + fmtDate(current.checkIn) + ' → ' + fmtDate(current.checkOut) + '<span class="days-left">' + daysLeft + ' day' + (daysLeft===1?'':'s') + ' left</span>' + cityGuideLink(current) + '</div>' + timelineHTML + '</div>';
+  } else {
+    cs.innerHTML = '<div class="current-banner" style="border-color:var(--border);box-shadow:var(--shadow-sm);padding-top:24px"><div style="text-align:center;color:var(--text-3);font-style:italic;font-family:Fraunces,serif;font-size:18px">Between stays — see upcoming below</div></div>';
+  }
+
+  document.getElementById('map-legend').innerHTML =
+    '<span><span class="dot" style="background:#c72027"></span>Currently here</span>' +
+    '<span><span class="dot" style="background:#2d7d34"></span>Booked</span>' +
+    '<span><span class="dot" style="background:#2c5d8a"></span>Shortlisted</span>' +
+    '<span><span class="dot" style="background:#8a6d00"></span>Tentative</span>' +
+    '<span><span class="dot" style="background:#8a8a8a"></span>Past</span>';
+
+  const fs = document.getElementById('future-section');
+  fs.innerHTML = '<div class="section-head"><h2>What&#39;s coming up</h2><span class="meta">' + future.length + ' stop' + (future.length===1?'':'s') + '</span></div>';
+  if (future.length === 0) {
+    fs.innerHTML += '<div class="empty">No upcoming trips planned yet.</div>';
+  } else {
+    future.forEach(c => {
+      fs.innerHTML += buildLeg(c, false);
+    });
+  }
+
+  if (past.length > 0) {
+    const ps = document.getElementById('past-section');
+    ps.innerHTML = '<div class="section-head"><h2>Where ' + escapeHTML(TRAVELER) + ' has been</h2><span class="meta">' + past.length + ' stop' + (past.length===1?'':'s') + '</span></div>';
+    past.forEach(c => {
+      ps.innerHTML += buildLeg(c, true);
+    });
+  }
+
+  initMap(DATA.cities, current);
+}
+
+function buildLeg(c, isPast) {
+  const cls = isPast ? 'leg past' : 'leg';
+  const timeline = buildStayTravelTimeline(c, false);
+  return '<div class="' + cls + '"><div class="leg-head"><div class="leg-title">' + escapeHTML(c.name) + '<span class="country">' + escapeHTML(c.country) + (c.state ? ' · ' + escapeHTML(c.state) : '') + '</span>' + pill(c.status) + (isPast ? '' : cityGuideLink(c)) + '</div><div class="leg-dates">' + fmtDate(c.checkIn) + ' → ' + fmtDate(c.checkOut) + '</div></div>' + (timeline ? '<div class="leg-accom">' + timeline + '</div>' : '') + '</div>';
+}
+
+// Icon mapper for transit modes (must match the admin app's TRANSITION_MODES)
+const TRANSIT_ICONS = { flight: '✈', train: '🚆', cruise: '🚢', bus: '🚌', ferry: '⛴', drive: '🚗', rideshare: '🚖', other: '➜' };
+const TRANSIT_LABELS = { flight: 'Flight', train: 'Train', cruise: 'Cruise', bus: 'Bus', ferry: 'Ferry', drive: 'Drive', rideshare: 'Rideshare', other: 'Travel' };
+
+function buildTransit(t, indent) {
+  if (!t) return '';
+  const isPast = t.arrivalDate && t.arrivalDate < TODAY;
+  const cls = 'transit status-' + (t.status || 'tentative') + (isPast ? ' past' : '') + (indent ? ' indent' : '');
+  const icon = TRANSIT_ICONS[t.mode] || '➜';
+  const label = TRANSIT_LABELS[t.mode] || 'Travel';
+  const carrierBit = (t.carrier || t.number) ? [t.carrier, t.number].filter(Boolean).join(' ') : label;
+  const route = (t.fromCity && t.toCity) ? escapeHTML(t.fromCity) + ' → ' + escapeHTML(t.toCity) : (t.toCity ? '→ ' + escapeHTML(t.toCity) : '');
+  let timeBit = '';
+  if (t.departureDate) {
+    timeBit = fmtDate(t.departureDate);
+    if (t.departureTime) timeBit += ' · ' + t.departureTime;
+    if (t.arrivalTime) timeBit += ' → ' + t.arrivalTime;
+  }
+  return '<div class="' + cls + '">' +
+    '<span class="transit-ic">' + icon + '</span>' +
+    '<div class="transit-main">' +
+      '<div class="transit-line1">' + escapeHTML(carrierBit) + '</div>' +
+      '<div class="transit-line2">' + route + '</div>' +
+    '</div>' +
+    '<div class="transit-time">' + timeBit + '</div>' +
+  '</div>';
+}
+
+// Find transitions departing from a given city.
+// Match strictly by ID when both sides have one (handles multiple cities with the same name,
+// e.g. past Atlanta vs. future Atlanta). Fall back to case-insensitive name only when ID is
+// missing on either side (older data or legacy imports).
+function transitsFromCity(city) {
+  if (!DATA.transitions || !city) return [];
+  const targetId = city.id || '';
+  const targetName = (city.name || '').trim().toLowerCase();
+  return DATA.transitions.filter(t => {
+    if (targetId && t.fromCityId) return t.fromCityId === targetId;
+    return (t.fromCity || '').trim().toLowerCase() === targetName;
+  });
+}
+
+function initMap(cities, current) {
+  const valid = cities.filter(c => typeof c.lat === 'number' && typeof c.lng === 'number');
+  if (valid.length === 0) {
+    document.getElementById('map').innerHTML = '<div class="empty" style="margin:20px">No locations to map yet.</div>';
+    document.querySelector('.map-reset-btn').style.display = 'none';
+    return;
+  }
+  const map = L.map('map').setView([valid[0].lat, valid[0].lng], 3);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 18 }).addTo(map);
+  const bounds = [];
+  valid.forEach(c => {
+    const isCurrent = current && c.name === current.name && c.checkIn === current.checkIn;
+    const color = colorFor(c, isCurrent);
+    const radius = isCurrent ? 12 : 7;
+    const marker = L.circleMarker([c.lat, c.lng], { radius: radius, color: 'white', weight: 2, fillColor: color, fillOpacity: 0.95 }).addTo(map);
+    const datesBit = c.checkIn ? '<br><small style="font-family:JetBrains Mono,monospace;color:#666">' + fmtDate(c.checkIn) + ' → ' + fmtDate(c.checkOut) + '</small>' : '';
+    const statusBit = !isCurrent && c.status ? '<br><small style="color:' + color + ';font-weight:600;text-transform:uppercase;letter-spacing:0.08em;font-family:JetBrains Mono,monospace;font-size:9px">' + c.status + '</small>' : '';
+    marker.bindPopup('<strong style="font-family:Fraunces,serif;font-size:15px">' + escapeHTML(c.name) + '</strong><br><span style="font-family:JetBrains Mono,monospace;font-size:10px;color:#666;letter-spacing:0.08em;text-transform:uppercase">' + escapeHTML(c.country) + '</span>' + datesBit + statusBit + (isCurrent ? '<br><strong style="color:#c72027;font-family:JetBrains Mono,monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase">★ ' + escapeHTML(TRAVELER) + ' is here</strong>' : ''));
+    bounds.push([c.lat, c.lng]);
+  });
+  // Store for reset button
+  window._famMap = map;
+  window._famBounds = bounds;
+  if (bounds.length > 1) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 8 });
+}
+
+function resetMapView() {
+  if (!window._famMap || !window._famBounds) return;
+  if (window._famBounds.length > 1) {
+    window._famMap.fitBounds(window._famBounds, { padding: [40, 40], maxZoom: 8 });
+  } else if (window._famBounds.length === 1) {
+    window._famMap.setView(window._famBounds[0], 8);
+  }
+}
+
+// ==================== INCLUDED CITY GUIDES ====================
+// Present only when the traveler ticked cities in the include picker. The
+// snapshot already dropped everything private (see shareKit.guide in the
+// engine); this only draws what survived, in the app's own Share-view idiom:
+// verdicts, no tips; stars, no count and no source.
+
+function guideItemHTML(it) {
+  var top = '<div class="gi-top"><span class="gi-name">' + escapeHTML(it.name) + '</span>';
+  if (typeof it.stars === 'number') top += '<span class="gi-stars">' + it.stars.toFixed(1) + '★</span>';
+  var when = it.when || (it.day ? fmtDate(it.day) : '');
+  if (when) top += '<span class="gi-when">' + escapeHTML(when) + '</span>';
+  if (it.price) top += '<span class="gi-price">' + escapeHTML(it.price) + '</span>';
+  top += '</div>';
+  var body = '';
+  if (it.note) body += '<div class="gi-note">' + escapeHTML(it.note) + '</div>';
+  (it.verdicts || []).forEach(function (v) {
+    if (!v || !v.text) return;
+    body += '<div class="gi-verdict">' + (v.label ? '<b>' + escapeHTML(v.label) + '</b> ' : '') + escapeHTML(v.text) + '</div>';
+  });
+  var links = (it.links || []).filter(function (l) { return l && l.href; });
+  if (links.length) {
+    body += '<div class="gi-links">' + links.map(function (l) {
+      return '<a href="' + escapeHTML(l.href) + '" target="_blank" rel="noopener noreferrer">' +
+        escapeHTML(l.label || (l.kind === 'map' ? 'Map' : 'Link')) + ' ↗</a>';
+    }).join('') + '</div>';
+  }
+  return '<div class="gitem">' + top + body + '</div>';
+}
+
+function guideCardHTML(g) {
+  var byId = {};
+  (g.sections || []).forEach(function (s) { byId[s.id] = s; });
+  var order = (g.sections || []).map(function (s) { return s.id; });
+  (g.items || []).forEach(function (it) {
+    if (order.indexOf(it.section) === -1) order.push(it.section);
+  });
+  var body = '';
+  order.forEach(function (sid) {
+    var items = (g.items || []).filter(function (it) { return it.section === sid; });
+    if (!items.length) return;
+    var sec = byId[sid];
+    var label = sec ? ((sec.icon ? sec.icon + ' ' : '') + (sec.label || sid)) : sid;
+    body += '<div class="gsec"><div class="gsec-head">' + escapeHTML(label) + '</div>' +
+      items.map(guideItemHTML).join('') + '</div>';
+  });
+  if (!body) body = '<div class="empty">Nothing in this guide yet.</div>';
+  var dates = (g.from || g.to) ? (fmtDate(g.from) + ' → ' + fmtDate(g.to)) : '';
+  var count = (g.items || []).length;
+  return '<details class="guide-card"><summary><span class="g-name">' + escapeHTML(g.name) +
+    '<span class="country">' + escapeHTML(g.country) + '</span></span>' +
+    '<span class="g-meta">' + (dates ? escapeHTML(dates) + ' · ' : '') + count + ' place' + (count === 1 ? '' : 's') + ' · tap to open</span>' +
+    '</summary><div class="g-body">' + body + '</div></details>';
+}
+
+function renderGuides() {
+  var host = document.getElementById('guides-section');
+  var guides = Array.isArray(DATA.guides) ? DATA.guides : [];
+  if (!guides.length) { host.innerHTML = ''; return; }
+  host.innerHTML = '<div class="section-head"><h2>The guides</h2><span class="meta">' +
+    guides.length + ' cit' + (guides.length === 1 ? 'y' : 'ies') + '</span></div>' +
+    guides.map(guideCardHTML).join('');
+}
+
+// ==================== BOOT ====================
+
+function showState(title, body, mark, showDoor) {
+  var block = document.getElementById('state-block');
+  document.getElementById('state-mark').textContent = mark || '·';
+  document.getElementById('state-title').textContent = title;
+  document.getElementById('state-body').textContent = body;
+  document.getElementById('state-go').hidden = !showDoor;
+  block.hidden = false;
+  document.getElementById('doc').hidden = true;
+}
+
+// The token, from the fragment first and the query second.
+//
+// The app always writes the FRAGMENT form. A fragment is never sent to the
+// server, so the token stays out of Pages access logs and out of the Referer
+// header on every outbound link the reader clicks from this page. ?t= is
+// accepted anyway because people retype links and some mail clients rewrite
+// them, and a link that works is worth more here than a rule about spelling.
+//
+// This mirrors CityOps.shareKit.tokenFromUrl exactly, and tests/run.js pins
+// the two against the same fixture table so they cannot drift.
+function tokenFromUrl(hash, search) {
+  var h = String(hash || '').replace(/^\s+|\s+$/g, '').replace(/^#/, '');
+  var m = h.match(/^([0-9a-f]{32,64})$/i);
+  if (m) return m[1].toLowerCase();
+  var q = String(search || '').replace(/^\s+|\s+$/g, '').replace(/^\?/, '');
+  var parts = q.split('&');
+  for (var i = 0; i < parts.length; i++) {
+    var kv = parts[i].split('=');
+    if (kv[0] !== 't' && kv[0] !== 'token') continue;
+    var v = '';
+    try { v = decodeURIComponent(kv.slice(1).join('=') || ''); } catch (e) { v = ''; }
+    v = v.replace(/^\s+|\s+$/g, '');
+    if (/^[0-9a-f]{32,64}$/i.test(v)) return v.toLowerCase();
+  }
+  return '';
+}
+
+function readEmbedded() {
+  var el = document.getElementById('share-data');
+  if (!el) return null;
+  try {
+    var v = JSON.parse(el.textContent || 'null');
+    return (v && typeof v === 'object' && Array.isArray(v.cities)) ? v : null;
+  } catch (e) { return null; }
+}
+
+// One call, one door. `share_token` is the argument name get_share declares;
+// PostgREST matches RPC arguments by name, so this string is part of the
+// contract and changing it on either side breaks the page.
+function fetchShare(token) {
+  return fetch(SUPA.url + '/rest/v1/rpc/get_share', {
+    method: 'POST',
+    headers: { 'apikey': SUPA.anon, 'Authorization': 'Bearer ' + SUPA.anon, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ share_token: token })
+  }).then(function (r) {
+    // 404 means the function does not exist yet: the shares SQL has not been
+    // applied to the project. That is a setup state, not a dead link, and the
+    // page says which one it is rather than telling a reader their link is
+    // broken when it is not.
+    if (r.status === 404) return { setup: true };
+    if (!r.ok) throw new Error('http ' + r.status);
+    return r.json().then(function (body) { return { snapshot: body }; });
+  });
+}
+
+function start() {
+  GUIDE_IDS = Array.isArray(DATA.guideIds) ? DATA.guideIds : [];
+  TRAVELER = (DATA.travelerName && DATA.travelerName.trim()) || 'They';
+  document.title = TRAVELER + ' · Travel plan';
+  var initial = (TRAVELER.charAt(0) || 'R').toUpperCase();
+  var fav = document.getElementById('favicon');
+  if (fav) {
+    fav.href = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%23c72027'/%3E%3Ctext x='50' y='74' font-family='Georgia,serif' font-size='72' font-weight='600' fill='white' text-anchor='middle'%3E" +
+      encodeURIComponent(initial) + "%3C/text%3E%3C/svg%3E";
+  }
+  document.getElementById('hero-title').innerHTML =
+    escapeHTML(TRAVELER) + ' · <span class="em">on the move</span>';
+  document.getElementById('state-block').hidden = true;
+  document.getElementById('doc').hidden = false;
+  render();
+  renderGuides();
+}
+
+function boot() {
+  var embedded = readEmbedded();
+  if (embedded) { DATA = embedded; start(); return; }
+
+  var token = tokenFromUrl(location.hash, location.search);
+  if (!token) {
+    showState('This link is missing its code',
+      'A share link ends in a long code after a # sign. Copy the whole link from the message it came in, including everything after the #.',
+      '?', true);
+    return;
+  }
+  showState('Loading the plan…', 'One moment.', '·', false);
+  fetchShare(token).then(function (res) {
+    if (res.setup) {
+      showState('Sharing is not switched on yet',
+        'This site can serve shares, but the account it reads from has not had its share table created. Nothing is wrong with your link.',
+        '·', true);
+      return;
+    }
+    var snap = res.snapshot;
+    if (!snap || typeof snap !== 'object' || !Array.isArray(snap.cities)) {
+      showState('This share link is no longer live',
+        'The traveler either replaced this link with a new one or turned sharing off. Ask them for the current link.',
+        '·', true);
+      return;
+    }
+    DATA = snap;
+    start();
+  }).catch(function (e) {
+    showState('Could not load this plan',
+      'The connection failed rather than the link. Check your signal and reload the page.',
+      '·', false);
+    if (window.console) console.warn('[share] load failed', e);
+  });
+}
+
+boot();
+</script>
+</body>
+</html>

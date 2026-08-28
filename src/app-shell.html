@@ -214,14 +214,14 @@
   var CLAUDE_KEY = 'cityops.claude.apikey.v1';
   var CLAUDE_KEY_AT = 'cityops.claude.apikey.updated.v1';  // ISO stamp for the reconcile
 
-  // The GitHub personal access token the TRIP surface (/trip/, same origin)
-  // publishes the family page with. This shell has no UI for it and never reads
-  // its value; it only carries it through the profile row, because a
-  // PostgREST upsert replaces the whole row and a shell that did not know about
-  // this sidecar would silently delete the account's token every time it pushed
-  // a profile. Same store, same stamp rule, same reconcile as the Claude key.
-  var GITHUB_KEY = 'cityops.github.pat.v1';
-  var GITHUB_KEY_AT = 'cityops.github.pat.updated.v1';
+  // The GitHub personal access token the trip surface used to publish the
+  // family page with, retired 2026-08-28 along with that publish path (it is a
+  // share link now, backed by public.shares). Nothing in either surface reads
+  // it any more, so this shell deletes its two keys on boot and the engine's
+  // buildProfileRow stops writing the sidecar, which takes the account's copy
+  // with the next push. Revoking the token itself is Rob's job, at
+  // github.com/settings/personal-access-tokens.
+  var LEGACY_GITHUB_KEYS = ['cityops.github.pat.v1', 'cityops.github.pat.updated.v1'];
 
   // The Add/Edit city form fields that are NOT part of schema v1
   // (accommodation address, transport, free-text trip notes) exist only to
@@ -397,19 +397,22 @@
     schedulePush('profile');
   }
 
-  // ---- GitHub token (carried, never read here) ----
-  // Exactly the three functions the Claude key has, minus a save path: the trip
-  // surface is the only thing that writes this token, and this shell only needs
-  // to be able to preserve it and to adopt a newer one.
-  function loadGithubToken() { return readLS(GITHUB_KEY) || ''; }
-  function githubTokenStamp() {
-    var at = readLS(GITHUB_KEY_AT);
-    if (at) return at;
-    return loadGithubToken() ? CityOps.syncKit.EPOCH : null;
-  }
-  function writeGithubToken(k, iso) {
-    writeLS(GITHUB_KEY, k ? k : null);
-    writeLS(GITHUB_KEY_AT, iso || null);
+  // ---- GitHub token: the demolition crew ----
+  // Not a store any more, just a delete. Runs once at boot. Returns true when
+  // it actually removed something, so the console can say so.
+  function purgeLegacyGithubToken() {
+    var hit = false;
+    LEGACY_GITHUB_KEYS.forEach(function (k) {
+      if (readLS(k) === null) return;
+      hit = true;
+      writeLS(k, null);
+    });
+    if (hit) {
+      console.log('[cityops] deleted the retired GitHub publish token from this device (' +
+        LEGACY_GITHUB_KEYS.join(', ') + '). Revoke it at ' +
+        'https://github.com/settings/personal-access-tokens if you have not already.');
+    }
+    return hit;
   }
 
   // ---- generation-form metadata (local working copy + its own stamp) ----
@@ -2913,11 +2916,9 @@
   // the field out entirely rather than writing an empty one.
   function localSidecars() {
     var keyAt = apiKeyStamp();
-    var ghAt = githubTokenStamp();
     var gmAt = genMetaStamp();
     return {
       apiKey: keyAt ? { value: loadApiKey(), updated: keyAt } : null,
-      github: ghAt ? { value: loadGithubToken(), updated: ghAt } : null,
       genmeta: gmAt ? { value: loadGenMeta(), updated: gmAt } : null,
       // Tombstones carry their own per-entry stamps, so the block's own stamp
       // is derived from them by the engine rather than kept beside them here.
@@ -2940,12 +2941,10 @@
       writeApiKey(remote.apiKey.value, remote.apiKey.updated);
       changed.push('Claude API key');
     }
-    // Carried, not used: this shell has no GitHub UI, so adopting a newer token
-    // is purely so the next push preserves it and so the trip surface finds it
-    // already here.
-    if (remote.github && CityOps.syncKit.decide(githubTokenStamp(), remote.github.updated) === 'pull') {
-      writeGithubToken(remote.github.value, remote.github.updated);
-    }
+    // remote.github is deliberately NOT adopted. The token has no reader left
+    // in either surface, so writing it back would be putting a dead credential
+    // onto a device the boot-time purge just cleaned. The row's own copy goes
+    // on the next push, because buildProfileRow no longer writes the field.
     if (remote.genmeta && CityOps.syncKit.decide(genMetaStamp(), remote.genmeta.updated) === 'pull') {
       writeGenMeta(remote.genmeta.value, remote.genmeta.updated);
       changed.push('city form details');
@@ -3707,6 +3706,9 @@
     // (and scrubbed) before anything reads it as a city deep link.
     readDevConfig();
     var authNotice = consumeAuthHash();
+    // The retired GitHub publish token, off this device before anything else
+    // runs. The account's copy goes with the next profile push.
+    purgeLegacyGithubToken();
     store = loadStore();
     // Seed the example ONLY on a genuine first run: no cities AND no stored
     // session AND never had real cities on this device. A signed-in device

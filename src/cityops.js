@@ -2938,13 +2938,12 @@ var CityOps = (function () {
     return out;
   }
 
-  // sidecars: {apiKey, github, genmeta}, each {value, updated} or absent.
+  // sidecars: {apiKey, genmeta, removed}, each {value, updated} or absent.
   //
-  // `github` is the GitHub personal access token the trip surface publishes the
-  // family page with (added 2026-08-26, when the trip editor moved onto the
-  // cityops origin). It is a credential exactly like apiKey, so it rides the
-  // same way: its own stamp, its own reconcile, never inside a data blob that
-  // an export, a snapshot or a published page could carry.
+  // There used to be a third, `github`: the personal access token the trip
+  // surface published the family page with. Phase B replaced that publish with
+  // public.shares, so the token is not written here any more and readSidecars
+  // still reads it only so a device can notice a legacy row and clean it.
   function buildProfileRow(profile, sidecars) {
     var p = normalizeProfile(profile);
     var data = {};
@@ -2952,8 +2951,10 @@ var CityOps = (function () {
     var s = (sidecars && typeof sidecars === 'object') ? sidecars : {};
     var key = normalizeKeyBlock(s.apiKey);
     if (key) data.apiKey = key;
-    var gh = normalizeKeyBlock(s.github);
-    if (gh) data.github = gh;
+    // No `github` block, deliberately, and this omission is the migration. The
+    // GitHub PAT publish is gone (2026-08-28, replaced by public.shares), so
+    // the token has no reader left anywhere in the product. Every row this
+    // function writes from now on is a row with the token removed.
     var gm = normalizeGenMetaBlock(s.genmeta);
     if (gm) data.genmeta = gm;
     // The removal tombstones. Written even when the map is empty is pointless,
@@ -3014,7 +3015,8 @@ var CityOps = (function () {
     var m = (mine && typeof mine === 'object') ? mine : {};
     var merged = {
       apiKey: newerBlock(normalizeKeyBlock(m.apiKey), theirs.apiKey),
-      github: newerBlock(normalizeKeyBlock(m.github), theirs.github),
+      // No github: whatever the account's row still carries is dropped on the
+      // way through, which is what makes any push a cleanup push.
       genmeta: newerBlock(normalizeGenMetaBlock(m.genmeta), theirs.genmeta),
       // Union, not newest-wins: see mergeTombValues. Two devices removing two
       // different cities must end up with BOTH removals, not the later one.
@@ -3036,9 +3038,12 @@ var CityOps = (function () {
   function sidecarsWorthPushing(row, mine) {
     var theirs = readSidecars(row && row.data);
     var m = (mine && typeof mine === 'object') ? mine : {};
+    // A row that still carries the retired `github` sidecar is a row that owes
+    // a rewrite, whether or not this device has anything newer to say. This is
+    // the whole migration trigger: one push, and the token is off the account.
+    if (legacyGithubSidecar(row && row.data)) return true;
     var pairs = [
       [normalizeKeyBlock(m.apiKey), theirs.apiKey],
-      [normalizeKeyBlock(m.github), theirs.github],
       [normalizeGenMetaBlock(m.genmeta), theirs.genmeta]
     ];
     for (var i = 0; i < pairs.length; i++) {
@@ -3052,6 +3057,259 @@ var CityOps = (function () {
     var mergedT = mergeTombBlocks(mineT, theirs.removed);
     if (tombValuesDiffer(theirs.removed && theirs.removed.value, mergedT && mergedT.value)) return true;
     return false;
+  }
+
+  // A profile row written before 2026-08-28 carries a `github` sidecar: the
+  // personal access token the trip surface used to publish the family page
+  // with. That publish path is gone, so the token has no reader left and must
+  // not keep riding the account. buildProfileRow no longer writes the field, so
+  // the next push drops it; this is how a device KNOWS a push is owed even when
+  // nothing else on it changed.
+  function legacyGithubSidecar(rowData) {
+    var src = (rowData && typeof rowData === 'object') ? rowData : {};
+    return !!src.github;
+  }
+
+  // ---- the public share ----
+  //
+  // Replaces the GitHub-PAT publish. A share is one row in public.shares keyed
+  // by an unguessable token; anonymous readers reach it through exactly one
+  // door, the get_share(token) function, and never the table.
+  //
+  // Everything here is PURE. The token comes from crypto in the shell (injected
+  // as a byte source so the test can pin the hex encoding), the network lives in
+  // the shell, and what a snapshot may contain lives here, where it can be
+  // tested without a browser.
+  //
+  // The snapshot is a SNAPSHOT: what was true when Publish was pressed. It does
+  // not follow the trip. That is a product decision (a link that silently starts
+  // showing tomorrow's plans is a link nobody can reason about) and the share
+  // page says so in as many words.
+  var SHARE_SCHEMA = 1;
+  var SHARE_TOKEN_BYTES = 16;    // 32 hex characters
+  var SHARE_GUIDE_CAP = 40;
+  var SHARE_ITEM_CAP = 500;
+  var SHARE_TEXT_CAP = 2000;
+
+  function shareText(v) {
+    return (typeof v === 'string') ? v.slice(0, SHARE_TEXT_CAP) : '';
+  }
+
+  // 32 lowercase hex characters out of 16 random bytes. `bytes` is whatever
+  // crypto.getRandomValues filled: an array-like of numbers. Anything that is
+  // not a byte source is refused rather than quietly producing a weak token,
+  // because a predictable token is the whole security model gone.
+  function shareToken(bytes) {
+    if (!bytes || typeof bytes === 'string' || typeof bytes.length !== 'number' ||
+        bytes.length < SHARE_TOKEN_BYTES) {
+      throw new Error('shareToken needs at least ' + SHARE_TOKEN_BYTES + ' random bytes');
+    }
+    var out = '';
+    for (var i = 0; i < SHARE_TOKEN_BYTES; i++) {
+      // Anything that is not a number is not entropy, and treating it as zero
+      // would silently shorten the token's real length. Refuse instead.
+      if (typeof bytes[i] !== 'number' || !isFinite(bytes[i])) {
+        throw new Error('shareToken was given something that is not a byte source');
+      }
+      var b = bytes[i] & 255;
+      out += (b < 16 ? '0' : '') + b.toString(16);
+    }
+    return out;
+  }
+
+  // The token a share URL carries. Two spellings are accepted because both get
+  // typed by hand and pasted by people: /share/#<token> and /share/?t=<token>.
+  // The hash is the one the app generates: a fragment is never sent to the
+  // server, never lands in a Pages access log, and never leaks through a
+  // Referer header to a link the reader clicks from the page.
+  function shareTokenFromUrl(hash, search) {
+    var h = trimStr(hash).replace(/^#/, '');
+    var m = h.match(/^([0-9a-f]{32,64})$/i);
+    if (m) return m[1].toLowerCase();
+    var q = trimStr(search).replace(/^\?/, '');
+    var parts = q.split('&');
+    for (var i = 0; i < parts.length; i++) {
+      var kv = parts[i].split('=');
+      if (kv[0] !== 't' && kv[0] !== 'token') continue;
+      var v = trimStr(decodeURIComponent(kv.slice(1).join('=') || ''));
+      if (/^[0-9a-f]{32,64}$/i.test(v)) return v.toLowerCase();
+    }
+    return '';
+  }
+
+  function shareUrl(origin, token) {
+    return trimStr(origin).replace(/\/+$/, '') + '/share/#' + trimStr(token);
+  }
+
+  // One stop on the trip, as family sees it.
+  //
+  // What is DROPPED here is the point of the function. Cost, the nightly rate,
+  // the estimated total, the booking confirmation number, admin notes, and the
+  // `paid` flag on a stay all stay behind. `paid` in particular: a public page
+  // that says which nights are still owed for is a page that tells a stranger
+  // when the traveler is carrying cash. That decision was made for the family
+  // page in batch 3 and it is unchanged here.
+  function shareStop(c) {
+    return {
+      id: shareText(c && c.id),
+      name: shareText(c && c.name),
+      country: shareText(c && c.country),
+      state: shareText(c && c.state),
+      status: shareText(c && c.status) || 'tentative',
+      checkIn: shareText(c && c.checkIn),
+      checkOut: shareText(c && c.checkOut),
+      lat: (c && typeof c.lat === 'number' && isFinite(c.lat)) ? c.lat : undefined,
+      lng: (c && typeof c.lng === 'number' && isFinite(c.lng)) ? c.lng : undefined,
+      accommodations: ((c && c.accommodations) || [])
+        .filter(function (a) { return a && (a.status === 'booked' || a.status === 'shortlisted'); })
+        .map(function (a) {
+          return {
+            name: shareText(a.name),
+            city: shareText(a.city),
+            neighborhood: shareText(a.neighborhood),
+            link: safeHref(a.link) || '',
+            status: shareText(a.status),
+            checkIn: shareText(a.checkIn),
+            checkOut: shareText(a.checkOut)
+          };
+        })
+    };
+  }
+
+  // One travel leg. Cost, confirmation number and the admin-only notes field
+  // are dropped; the carrier and flight number are kept, because "which flight
+  // are they on" is the question the page exists to answer.
+  function shareLeg(t, stops) {
+    var src = null;
+    for (var i = 0; i < stops.length; i++) {
+      if (stops[i] && stops[i].id === (t && t.cityId)) { src = stops[i]; break; }
+    }
+    return {
+      fromCityId: shareText(t && t.cityId),
+      mode: shareText(t && t.mode) || 'other',
+      status: shareText(t && t.status) || 'tentative',
+      fromCity: shareText(t && t.fromCity) || (src ? src.name : ''),
+      toCity: shareText(t && t.toCity),
+      departureDate: shareText(t && t.departureDate),
+      departureTime: shareText(t && t.departureTime),
+      arrivalDate: shareText(t && t.arrivalDate),
+      arrivalTime: shareText(t && t.arrivalTime),
+      carrier: shareText(t && t.carrier),
+      number: shareText(t && t.number)
+    };
+  }
+
+  // One city guide, in the Share-view idiom the app itself already uses: intel
+  // VERDICTS only (no tips, no source, no checked date) and a rating as stars
+  // only (no count, no provenance). See intelShareStrip and ratingBadge.
+  //
+  // Dropped outright, and each for its own reason:
+  //   city.accommodation   the lodging name and its coordinates. The trip half
+  //                        decides what lodging is public and at what grain;
+  //                        two sources could contradict each other.
+  //   city.notes           free-text personal notes about the stay.
+  //   city.currency        no reader on a read-only page.
+  //   item.place_id        provenance, meaningless outside the app.
+  //   item.verified        the same.
+  //   per-city STATE       done/pinned/dates overrides live in city_state,
+  //                        which the snapshot builder never reads at all.
+  //   genmeta              the Add/Edit form fields (accommodation address,
+  //                        arrival and departure transport, and the trip notes
+  //                        that say diet, mobility, budget and who is along).
+  //                        Never read here, on purpose: see the report.
+  function shareGuide(row) {
+    var data = (row && row.data && typeof row.data === 'object') ? row.data : {};
+    var city = (data.city && typeof data.city === 'object') ? data.city : {};
+    var dates = (city.dates && typeof city.dates === 'object') ? city.dates : {};
+    var sections = (Array.isArray(data.sections) ? data.sections : []).map(function (s) {
+      return { id: shareText(s && s.id), label: shareText(s && s.label), icon: shareText(s && s.icon) };
+    }).filter(function (s) { return s.id; });
+    var items = (Array.isArray(data.items) ? data.items : []).slice(0, SHARE_ITEM_CAP).map(function (it) {
+      var o = {
+        id: shareText(it && it.id),
+        section: shareText(it && it.section),
+        status: shareText(it && it.status) || 'plan',
+        day: shareText(it && it.day),
+        when: shareText(it && it.when),
+        name: shareText(it && it.name),
+        note: shareText(it && it.note),
+        price: shareText(it && it.price && it.price.text),
+        hours: shareText(it && it.hours && it.hours.text),
+        tags: (Array.isArray(it && it.tags) ? it.tags : []).map(shareText).filter(Boolean),
+        links: (Array.isArray(it && it.links) ? it.links : []).map(function (l) {
+          return { kind: shareText(l && l.kind) || 'web', label: shareText(l && l.label), href: safeHref(l && l.href) || '' };
+        }).filter(function (l) { return l.href; })
+      };
+      var stars = it && it.rating && it.rating.stars;
+      if (typeof stars === 'number' && isFinite(stars)) o.stars = stars;
+      var verdicts = it && it.intel && it.intel.verdicts;
+      if (Array.isArray(verdicts) && verdicts.length) {
+        o.verdicts = verdicts.map(function (v) {
+          return { label: shareText(v && v.label), text: shareText(v && v.text) };
+        });
+      }
+      return o;
+    }).filter(function (it) { return it.id && it.name; });
+    return {
+      id: shareText(row && row.city_id),
+      name: shareText(city.name),
+      country: shareText(city.country),
+      from: shareText(dates.from),
+      to: shareText(dates.to),
+      sections: sections,
+      items: items
+    };
+  }
+
+  // The whole snapshot, from the trip state and (optionally) the guide rows the
+  // traveler picked. `input.guides` is the raw rows as PostgREST returned them,
+  // {city_id, data}; `input.includeGuides` is the id list the picker produced.
+  // An empty list means "trip only", which is the default.
+  function buildShareSnapshot(input) {
+    var i = input || {};
+    var stops = (Array.isArray(i.cities) ? i.cities : []).map(shareStop)
+      .filter(function (c) { return c.name; });
+    var legs = (Array.isArray(i.transitions) ? i.transitions : [])
+      .filter(function (t) { return t && (t.toCity || t.departureDate); })
+      .map(function (t) { return shareLeg(t, stops); });
+    var want = Object.create(null);
+    (Array.isArray(i.includeGuides) ? i.includeGuides : []).forEach(function (id) {
+      if (typeof id === 'string' && id) want[id] = 1;
+    });
+    var guides = (Array.isArray(i.guides) ? i.guides : [])
+      .filter(function (r) { return r && Object.prototype.hasOwnProperty.call(want, r.city_id); })
+      .slice(0, SHARE_GUIDE_CAP)
+      .map(shareGuide)
+      .filter(function (g) { return g.id && g.name; });
+    return {
+      schema: SHARE_SCHEMA,
+      travelerName: shareText(i.travelerName) || 'Your traveler',
+      generatedAt: shareText(i.generatedAt) || EPOCH_ISO,
+      cities: stops,
+      transitions: legs,
+      guideIds: (Array.isArray(i.guideIds) ? i.guideIds : []).map(shareText).filter(Boolean),
+      guides: guides
+    };
+  }
+
+  // A last line of defence, not the mechanism. The mechanism is that the
+  // builders above copy a fixed field list and nothing else. This is what the
+  // test asserts on, and what a future field addition trips over.
+  var SHARE_FORBIDDEN = ['apiKey', 'apikey', 'github', 'githubToken', 'githubUser',
+    'githubRepo', 'githubFile', 'token', 'access_token', 'refresh_token',
+    'genmeta', 'paid', 'cost', 'confirmation', 'notes'];
+
+  function shareLeaks(snapshot) {
+    var found = [];
+    (function walk(v) {
+      if (!v || typeof v !== 'object') return;
+      if (Array.isArray(v)) { v.forEach(walk); return; }
+      Object.keys(v).forEach(function (k) {
+        if (SHARE_FORBIDDEN.indexOf(k) !== -1 && found.indexOf(k) === -1) found.push(k);
+        walk(v[k]);
+      });
+    })(snapshot);
+    return found;
   }
 
   // What a failed token refresh means. A refresh that fails because the token
@@ -5760,6 +6018,9 @@ var CityOps = (function () {
       // The trip surface's push path: it owns credentials but not the interest
       // profile, so it merges rather than replaces.
       mergeProfileRow: mergeProfileRow, sidecarsWorthPushing: sidecarsWorthPushing,
+      // The retired GitHub PAT sidecar: how a device notices a row still
+      // carrying one, so it can push the cleaned row.
+      legacyGithubSidecar: legacyGithubSidecar,
       refreshFailure: refreshFailure,
       // Removal tombstones: a removed city stays removed, on every device.
       // All pure, all unit tested; the shell owns the DELETE calls and the
@@ -5769,6 +6030,14 @@ var CityOps = (function () {
         at: tombstoneAt, merge: mergeTombValues, mergeBlocks: mergeTombBlocks,
         differ: tombValuesDiffer, plan: planTombstones, CAP: TOMB_CAP
       }
+    },
+    // The public share: the token, the URL it lives at, and what a snapshot is
+    // allowed to contain. All pure; the shell owns crypto, the RPC and the UI.
+    shareKit: {
+      SCHEMA: SHARE_SCHEMA, TOKEN_BYTES: SHARE_TOKEN_BYTES, GUIDE_CAP: SHARE_GUIDE_CAP,
+      token: shareToken, tokenFromUrl: shareTokenFromUrl, url: shareUrl,
+      build: buildShareSnapshot, stop: shareStop, leg: shareLeg, guide: shareGuide,
+      FORBIDDEN: SHARE_FORBIDDEN, leaks: shareLeaks
     },
     safeHref: safeHref,
     onStateChange: null, liveState: liveState,

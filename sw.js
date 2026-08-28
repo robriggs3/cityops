@@ -1,5 +1,5 @@
 // CityOps app-shell service worker. Bump CACHE on each release.
-var CACHE = 'cityops-app-v8';
+var CACHE = 'cityops-app-v9';
 // Both surfaces of the app, because both are things a traveler opens with no
 // signal. The fetch handler is cache-first with a background refresh, so
 // without the bump above a phone would serve the previous build once after
@@ -10,7 +10,12 @@ var CACHE = 'cityops-app-v8';
 // which covers /trip/ as well. The retired .html path is a redirect stub and is
 // deliberately NOT precached: caching a redirect would keep serving the hop
 // after the stub is eventually deleted.
-var SHELL = ['/', '/index.html', '/trip/'];
+// /share/ is here as a SHELL, and only as a shell. The page it precaches is the
+// empty one: the snapshot arrives from an rpc POST, and this worker only ever
+// handles GET, so no token and no snapshot can land in the cache. That is
+// deliberate. A share link is meant to die when it is rotated, and a cached
+// payload would keep answering after the row it came from was replaced.
+var SHELL = ['/', '/index.html', '/trip/', '/share/'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); }));
 });

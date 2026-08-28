@@ -2850,18 +2850,43 @@ test('an exported guide carries no sidecar, because the export never sees one', 
 
 // ---- the GitHub token sidecar (the trip surface's publish credential) ----
 
-test('the GitHub token rides as its own stamped sidecar, on its own stamp', () => {
+// ---- the retired GitHub PAT sidecar (Phase B migration) ----
+// The token used to ride the profile row beside the Claude key. The publish
+// path it existed for is gone, so buildProfileRow stopped writing it and every
+// push from here on is the migration: one rewrite, and the token is off the
+// account. These three tests are the whole contract.
+test('buildProfileRow never writes the retired GitHub sidecar again', () => {
   const row = C.syncKit.buildProfileRow({ updated: P_LOCAL }, {
     apiKey: { value: 'sk-ant-x', updated: P_LOCAL },
     github: { value: 'github_pat_secret', updated: P_REMOTE }
   });
-  assert.deepEqual(row.data.github, { value: 'github_pat_secret', updated: P_REMOTE });
-  // The row's own stamp stays the PROFILE's: a token change must not make a
-  // stale interest profile win the next reconcile.
+  assert.equal(row.data.github, undefined, 'the token is back in the profile row');
+  assert.equal(JSON.stringify(row).indexOf('github_pat_secret'), -1);
+  // The Claude key is untouched, and the row's own stamp is still the
+  // PROFILE's: this migration must not make a stale profile win a reconcile.
+  assert.deepEqual(row.data.apiKey, { value: 'sk-ant-x', updated: P_LOCAL });
   assert.equal(row.updated_at, P_LOCAL);
-  // And it comes back out the same way, so a pull can reconcile it alone.
-  assert.deepEqual(C.syncKit.readSidecars(row.data).github,
-    { value: 'github_pat_secret', updated: P_REMOTE });
+});
+
+test('a row that still carries the GitHub sidecar is a row owing a push', () => {
+  // This is what makes the migration happen by itself: the next pull sees the
+  // legacy field, says a push is worth making, and mergeProfileRow writes the
+  // row back without it.
+  const legacy = {
+    data: { updated: P_REMOTE, apiKey: { value: 'sk', updated: P_REMOTE },
+            github: { value: 'github_pat_secret', updated: P_REMOTE } },
+    updated_at: P_REMOTE
+  };
+  assert.equal(C.syncKit.legacyGithubSidecar(legacy.data), true);
+  assert.equal(C.syncKit.legacyGithubSidecar({ apiKey: { value: 'sk', updated: P_REMOTE } }), false);
+  // Nothing on this device is newer, and it still owes a push.
+  assert.equal(C.syncKit.sidecarsWorthPushing(legacy, { apiKey: { value: 'sk', updated: P_REMOTE } }), true);
+  const cleaned = C.syncKit.mergeProfileRow(legacy, { apiKey: { value: 'sk', updated: P_REMOTE } });
+  assert.equal(cleaned.data.github, undefined, 'the cleanup push carried the token back up');
+  assert.equal(JSON.stringify(cleaned).indexOf('github_pat_secret'), -1);
+  // And once it is gone, the row stops asking to be rewritten.
+  assert.equal(C.syncKit.sidecarsWorthPushing({ data: cleaned.data, updated_at: P_REMOTE },
+    { apiKey: { value: 'sk', updated: P_REMOTE } }), false);
 });
 
 test('a GitHub token cannot reach the interest profile, a prompt or an export', () => {
@@ -2891,13 +2916,13 @@ test('mergeProfileRow keeps the account profile and its stamp untouched', () => 
             notes: 'quiet mornings', showExample: false, updated: P_REMOTE },
     updated_at: P_REMOTE
   };
-  const out = C.syncKit.mergeProfileRow(row, { github: { value: 'github_pat_new', updated: P_LOCAL } });
+  const out = C.syncKit.mergeProfileRow(row, { apiKey: { value: 'sk-new', updated: P_LOCAL } });
   assert.deepEqual(out.data.interests, ['ramen', 'ruins']);
   assert.deepEqual(out.data.avoid, ['clubs']);
   assert.equal(out.data.notes, 'quiet mornings');
   assert.equal(out.data.updated, P_REMOTE);
   assert.equal(out.updated_at, P_REMOTE);
-  assert.deepEqual(out.data.github, { value: 'github_pat_new', updated: P_LOCAL });
+  assert.deepEqual(out.data.apiKey, { value: 'sk-new', updated: P_LOCAL });
 });
 
 test('mergeProfileRow carries forward every sidecar it was not given', () => {
@@ -2911,10 +2936,9 @@ test('mergeProfileRow carries forward every sidecar it was not given', () => {
     },
     updated_at: P_REMOTE
   };
-  const out = C.syncKit.mergeProfileRow(row, { github: { value: 'github_pat_new', updated: P_LOCAL } });
+  const out = C.syncKit.mergeProfileRow(row, {});
   assert.deepEqual(out.data.apiKey, { value: 'sk-ant-account', updated: P_REMOTE });
   assert.deepEqual(out.data.genmeta.value, { 'batumi-2026-08-08': { notes: 'top floor' } });
-  assert.deepEqual(out.data.github, { value: 'github_pat_new', updated: P_LOCAL });
 });
 
 test('mergeProfileRow is newest-wins per credential, both directions', () => {
@@ -2931,31 +2955,30 @@ test('mergeProfileRow is newest-wins per credential, both directions', () => {
 });
 
 test('mergeProfileRow against no row at all still writes the credential', () => {
-  const out = C.syncKit.mergeProfileRow(null, { github: { value: 'github_pat_first', updated: P_LOCAL } });
-  assert.deepEqual(out.data.github, { value: 'github_pat_first', updated: P_LOCAL });
+  const out = C.syncKit.mergeProfileRow(null, { apiKey: { value: 'sk-first', updated: P_LOCAL } });
+  assert.deepEqual(out.data.apiKey, { value: 'sk-first', updated: P_LOCAL });
   assert.deepEqual(out.data.interests, []);
   assert.equal(out.updated_at, C.syncKit.EPOCH);   // no profile edit is being claimed
 });
 
 test('sidecarsWorthPushing says no when the account already has it all', () => {
   const row = {
-    data: { updated: P_REMOTE, apiKey: { value: 'sk', updated: P_REMOTE },
-            github: { value: 'gh', updated: P_REMOTE } },
+    data: { updated: P_REMOTE, apiKey: { value: 'sk', updated: P_REMOTE } },
     updated_at: P_REMOTE
   };
   assert.equal(C.syncKit.sidecarsWorthPushing(row, {
-    apiKey: { value: 'sk', updated: P_REMOTE }, github: { value: 'gh', updated: P_REMOTE }
+    apiKey: { value: 'sk', updated: P_REMOTE }
   }), false);
   // A device with nothing never pushes emptiness over a real credential.
-  assert.equal(C.syncKit.sidecarsWorthPushing(row, { apiKey: null, github: null }), false);
+  assert.equal(C.syncKit.sidecarsWorthPushing(row, { apiKey: null }), false);
   // A newer one does.
   assert.equal(C.syncKit.sidecarsWorthPushing(row, {
-    github: { value: 'gh2', updated: '2030-01-01T00:00:00.000Z' }
+    apiKey: { value: 'sk2', updated: '2030-01-01T00:00:00.000Z' }
   }), true);
   // And so does a credential the account has never seen: this is the case that
-  // carries a token out of the old trip blob and up to the account.
+  // carries a key out of the old trip blob and up to the account.
   assert.equal(C.syncKit.sidecarsWorthPushing(null, {
-    github: { value: 'gh', updated: C.syncKit.EPOCH }
+    apiKey: { value: 'sk', updated: C.syncKit.EPOCH }
   }), true);
 });
 
@@ -2993,20 +3016,25 @@ test('the built trip page reads the shared session key, not its own', () => {
   assert.equal(trip.indexOf('/auth/v1/otp'), -1, 'the trip surface must not send magic links');
 });
 
-test('the published family page is built from a fixed field list', () => {
-  // The family page is public. It is built by naming the fields that go into
-  // it, not by filtering a copy of the state, which is why no credential can
-  // reach it even if one somehow got back into the blob.
+test('the published share is built from a fixed field list, in the engine', () => {
+  // The share page is public. Its payload is built by naming the fields that
+  // go into it (CityOps.shareKit.build, pure and tested below), never by
+  // filtering a copy of the state, which is why no credential can reach it
+  // even if one somehow got back into the blob.
   const fs = require('fs');
   const path = require('path');
   const trip = fs.readFileSync(path.join(__dirname, '..', 'trip', 'index.html'), 'utf8');
-  const fn = trip.match(/function buildFamilyShareForCurrentState\(\) \{[\s\S]*?\n\}/);
-  assert.ok(fn, 'buildFamilyShareForCurrentState missing from the built trip page');
+  const fn = trip.match(/function buildShareSnapshot\(\) \{[\s\S]*?\n\}/);
+  assert.ok(fn, 'buildShareSnapshot missing from the built trip page');
   assert.equal(fn[0].indexOf('apiKey'), -1);
-  assert.equal(fn[0].indexOf('githubToken'), -1);
   assert.equal(fn[0].indexOf('credGet'), -1);
-  // The payload names exactly what family sees.
-  assert.ok(/travelerName:/.test(fn[0]) && /cities: cities/.test(fn[0]) && /transitions: transitions/.test(fn[0]));
+  assert.ok(/CityOps\.shareKit\.build\(/.test(fn[0]), 'the snapshot must come from the engine');
+  assert.ok(/travelerName:/.test(fn[0]) && /cities: state\.cities/.test(fn[0]) &&
+    /transitions: state\.transitions/.test(fn[0]));
+  // Both the download and the publish go through that one builder. Two
+  // builders would be two field lists, and the second would drift.
+  assert.ok(/return buildFamilyShareHTML\(buildShareSnapshot\(\)\)/.test(trip));
+  assert.ok(/writeShareRow\(token, snapshot\)/.test(trip));
 });
 
 test('the built trip page is the engine plus the shell, and nothing else', () => {
@@ -3023,6 +3051,383 @@ test('the built trip page is the engine plus the shell, and nothing else', () =>
   assert.ok(/const CITYOPS_BASE = '';/.test(trip));
   assert.equal(trip.indexOf('https://cityops.robriggs.com/#city='), -1);
 });
+
+// ---------------------------------------------------------------------------
+// Phase B: the public share
+// ---------------------------------------------------------------------------
+// The token, the snapshot and what a snapshot may never contain. All pure, so
+// all of it is testable here; the RPC, the crypto and the UI live in the
+// shells and are verified in the browser.
+
+test('a share token is 32 hex characters, and refuses a weak source', () => {
+  const bytes = [0, 1, 15, 16, 127, 128, 200, 255, 3, 4, 5, 6, 7, 8, 9, 10];
+  const tok = C.shareKit.token(bytes);
+  assert.equal(tok, '00010f107f80c8ff030405060708090a');
+  assert.equal(tok.length, 32);
+  assert.ok(/^[0-9a-f]{32}$/.test(tok));
+  // Too few bytes is not "a shorter token", it is a guessable one. Refused.
+  assert.throws(() => C.shareKit.token([1, 2, 3]));
+  assert.throws(() => C.shareKit.token(null));
+  assert.throws(() => C.shareKit.token('not bytes at all'));
+});
+
+test('the share URL is the fragment form, so the token never leaves the browser', () => {
+  const url = C.shareKit.url('https://cityops.robriggs.com', 'a'.repeat(32));
+  assert.equal(url, 'https://cityops.robriggs.com/share/#' + 'a'.repeat(32));
+  // A trailing slash on the origin must not double up.
+  assert.equal(C.shareKit.url('https://cityops.robriggs.com/', 'b'.repeat(32)),
+    'https://cityops.robriggs.com/share/#' + 'b'.repeat(32));
+});
+
+// The fixture table both parsers have to agree on. The engine owns the rule and
+// the share page carries its own copy (it ships without the engine), so the
+// test below runs the page's copy against exactly these cases.
+const SHARE_URL_CASES = [
+  ['#' + 'a'.repeat(32), '', 'a'.repeat(32)],
+  ['#' + 'A'.repeat(32), '', 'a'.repeat(32)],               // case folded
+  ['', '?t=' + 'c'.repeat(32), 'c'.repeat(32)],
+  ['', '?token=' + 'd'.repeat(32), 'd'.repeat(32)],
+  ['', '?x=1&t=' + 'e'.repeat(32) + '&y=2', 'e'.repeat(32)],
+  ['#' + 'f'.repeat(32), '?t=' + '9'.repeat(32), 'f'.repeat(32)],  // the hash wins
+  ['', '', ''],
+  ['#city=batumi-2026-08-08', '', ''],                      // the OTHER fragment
+  ['#' + 'a'.repeat(20), '', ''],                           // too short to be one
+  ['#' + 'z'.repeat(32), '', ''],                           // not hex
+  ['', '?t=' + 'z'.repeat(32), '']
+];
+
+test('the share token is read from the fragment first and the query second', () => {
+  SHARE_URL_CASES.forEach(([hash, search, want]) => {
+    assert.equal(C.shareKit.tokenFromUrl(hash, search), want,
+      'hash=' + JSON.stringify(hash) + ' search=' + JSON.stringify(search));
+  });
+});
+
+// The share page ships WITHOUT the engine (it is a read-only page for people
+// with no account; 280KB of editor would have nothing to do there), so it
+// carries its own copy of the token parser. This is the drift guard: the page's
+// copy is pulled out of the built share/index.html and run against the same
+// fixtures.
+function loadShareTokenParser() {
+  const fs = require('fs');
+  const path = require('path');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'share', 'index.html'), 'utf8');
+  const start = html.indexOf('function tokenFromUrl(');
+  assert.ok(start !== -1, 'tokenFromUrl is missing from the built share page');
+  const end = html.indexOf('\n}\n', start);
+  assert.ok(end !== -1, 'could not find the end of tokenFromUrl');
+  return new Function(html.slice(start, end + 2) + '\nreturn tokenFromUrl;')();
+}
+
+test('the share page reads a token exactly the way the engine says to', () => {
+  const pageParser = loadShareTokenParser();
+  SHARE_URL_CASES.forEach(([hash, search, want]) => {
+    assert.equal(pageParser(hash, search), want,
+      'the share page disagrees with the engine on hash=' + JSON.stringify(hash) +
+      ' search=' + JSON.stringify(search));
+  });
+});
+
+// ---- the snapshot builder and its exclusions ----
+// The trip state this builds from, deliberately loaded with everything that
+// must NOT come out the other side.
+const SHARE_STATE = {
+  travelerName: 'Rob',
+  cities: [
+    { id: 'c1', name: 'Batumi', country: 'GE', state: '', status: 'booked',
+      checkIn: '2026-08-08', checkOut: '2026-08-15', lat: 41.64, lng: 41.61,
+      estCost: 1800, currency: 'GEL', notes: 'landlord takes cash only',
+      accommodations: [
+        { id: 'a1', name: 'Sea View Flat', city: 'Batumi', neighborhood: 'Old Town',
+          link: 'https://booking.example/x', status: 'booked',
+          checkIn: '2026-08-08', checkOut: '2026-08-15',
+          paid: false, cost: 640, currency: 'GEL', confirmation: 'BK-99182',
+          notes: 'code 4417 on the door' },
+        { id: 'a2', name: 'Rejected Hostel', status: 'considering', checkIn: '', checkOut: '' }
+      ] },
+    { id: 'c2', name: '', country: 'XX' }   // no name: never publishable
+  ],
+  transitions: [
+    { id: 't1', cityId: 'c1', mode: 'flight', status: 'booked', toCity: 'Tirana',
+      departureDate: '2026-08-15', departureTime: '09:40', arrivalDate: '2026-08-15',
+      arrivalTime: '11:05', carrier: 'Wizz', number: 'W6 4402',
+      cost: 210, confirmation: 'ABC123', notes: 'admin only: seat paid separately', paid: true },
+    { id: 't2', cityId: 'c1' }   // neither a destination nor a date: skipped
+  ]
+};
+
+const SHARE_GUIDE_ROW = {
+  city_id: 'batumi-2026-08-08',
+  data: {
+    schema: 1,
+    city: {
+      name: 'Batumi', country: 'GE',
+      dates: { from: '2026-08-08', to: '2026-08-15' },
+      accommodation: { name: 'Sea View Flat, 12 Ninoshvili St', lat: 41.64, lng: 41.61 },
+      currency: { code: 'GEL', usd: 0.37 },
+      notes: ['landlord takes cash only', 'knee is bad, no hills']
+    },
+    sections: [{ id: 'dinner', label: 'Dinner', icon: '🍽️' }],
+    items: [{
+      id: 'brasserie', section: 'dinner', status: 'plan', day: '2026-08-13',
+      when: 'Old Town office day', name: 'Brasserie 1900',
+      price: { text: '~80 GEL' }, note: 'Reserve ahead.',
+      hours: { text: '12:00-23:00 daily', class: 'late' }, tags: ['Book ahead'],
+      links: [{ kind: 'map', label: 'Open in Maps', href: 'https://maps.google.com/?cid=1' },
+              { kind: 'web', label: 'Bad', href: 'javascript:alert(1)' }],
+      place_id: 'ChIJsecret', verified: '2026-08-01',
+      rating: { stars: 4.8, count: 442, source: 'Google', checked: '2026-08-01' },
+      intel: { verdicts: [{ label: 'Best for', text: 'a long dinner' }],
+               tips: ['Ask for the corner table, Rob'],
+               source: 'Claude, 2026-08-01', details: 'internal reasoning' }
+    }]
+  }
+};
+
+test('the snapshot carries the trip and drops every private field on it', () => {
+  const snap = C.shareKit.build(Object.assign({ generatedAt: '2026-08-28T00:00:00.000Z' }, SHARE_STATE));
+  assert.equal(snap.schema, 1);
+  assert.equal(snap.travelerName, 'Rob');
+  // The unnamed city never ships; the named one does.
+  assert.equal(snap.cities.length, 1);
+  const stop = snap.cities[0];
+  assert.equal(stop.name, 'Batumi');
+  assert.equal(stop.estCost, undefined);
+  assert.equal(stop.currency, undefined);
+  assert.equal(stop.notes, undefined);
+  // Only booked and shortlisted stays. And on the one that ships: no paid flag,
+  // no cost, no confirmation number, no door code.
+  assert.equal(stop.accommodations.length, 1);
+  const stay = stop.accommodations[0];
+  assert.equal(stay.name, 'Sea View Flat');
+  assert.equal(stay.paid, undefined, 'the paid flag must stay private');
+  assert.equal(stay.cost, undefined);
+  assert.equal(stay.confirmation, undefined);
+  assert.equal(stay.notes, undefined);
+  assert.equal(stay.link, 'https://booking.example/x');
+  // A leg with neither a destination nor a date is not a leg.
+  assert.equal(snap.transitions.length, 1);
+  const leg = snap.transitions[0];
+  assert.equal(leg.carrier, 'Wizz');
+  assert.equal(leg.number, 'W6 4402');
+  assert.equal(leg.cost, undefined);
+  assert.equal(leg.confirmation, undefined);
+  assert.equal(leg.notes, undefined);
+  assert.equal(leg.paid, undefined);
+  // Trip only by default: guides are opt-in, one city at a time.
+  assert.deepEqual(snap.guides, []);
+});
+
+test('a guide only ships when it was ticked, and ships in Share-view form', () => {
+  const base = Object.assign({ generatedAt: '2026-08-28T00:00:00.000Z' }, SHARE_STATE);
+  // Handed the row but not asked for it: nothing ships.
+  const off = C.shareKit.build(Object.assign({}, base, { guides: [SHARE_GUIDE_ROW], includeGuides: [] }));
+  assert.deepEqual(off.guides, []);
+  // Asked for a city that is not in the rows: still nothing, no crash.
+  assert.deepEqual(C.shareKit.build(Object.assign({}, base,
+    { guides: [SHARE_GUIDE_ROW], includeGuides: ['nowhere'] })).guides, []);
+
+  const on = C.shareKit.build(Object.assign({}, base,
+    { guides: [SHARE_GUIDE_ROW], includeGuides: ['batumi-2026-08-08'] }));
+  assert.equal(on.guides.length, 1);
+  const g = on.guides[0];
+  assert.equal(g.name, 'Batumi');
+  assert.equal(g.from, '2026-08-08');
+  // The lodging address and its coordinates, the currency, and the free-text
+  // city notes (which carry a medical fact here) all stay behind.
+  assert.equal(g.accommodation, undefined);
+  assert.equal(g.currency, undefined);
+  assert.equal(g.notes, undefined);
+  assert.equal(JSON.stringify(g).indexOf('Ninoshvili'), -1);
+  assert.equal(JSON.stringify(g).indexOf('knee is bad'), -1);
+
+  const it = g.items[0];
+  assert.equal(it.name, 'Brasserie 1900');
+  assert.equal(it.price, '~80 GEL');
+  assert.equal(it.hours, '12:00-23:00 daily');
+  // Provenance is meaningless outside the app and goes.
+  assert.equal(it.place_id, undefined);
+  assert.equal(it.verified, undefined);
+  // Share view: stars only, no count and no source.
+  assert.equal(it.stars, 4.8);
+  assert.equal(it.rating, undefined);
+  assert.equal(JSON.stringify(it).indexOf('442'), -1);
+  assert.equal(JSON.stringify(it).indexOf('Google'), -1);
+  // Share view: verdicts only, no tips and no reasoning.
+  assert.deepEqual(it.verdicts, [{ label: 'Best for', text: 'a long dinner' }]);
+  assert.equal(it.tips, undefined);
+  assert.equal(JSON.stringify(it).indexOf('corner table'), -1);
+  assert.equal(JSON.stringify(it).indexOf('internal reasoning'), -1);
+  // A javascript: link is refused, exactly as it is in the app.
+  assert.equal(it.links.length, 1);
+  assert.equal(it.links[0].href, 'https://maps.google.com/?cid=1');
+});
+
+test('nothing a credential could hide in survives into a snapshot', () => {
+  // The mechanism is the fixed field lists above. This is the belt: feed the
+  // builder a state with a credential in every plausible place and assert the
+  // whole serialised snapshot mentions none of it.
+  const dirty = JSON.parse(JSON.stringify(SHARE_STATE));
+  dirty.apiKey = 'sk-ant-LEAK';
+  dirty.githubToken = 'github_pat_LEAK';
+  dirty.cities[0].apiKey = 'sk-ant-LEAK';
+  dirty.cities[0].accommodations[0].githubToken = 'github_pat_LEAK';
+  dirty.transitions[0].apiKey = 'sk-ant-LEAK';
+  const guide = JSON.parse(JSON.stringify(SHARE_GUIDE_ROW));
+  guide.data.apiKey = 'sk-ant-LEAK';
+  guide.data.genmeta = { 'batumi-2026-08-08': { accommodation: '12 Ninoshvili St', notes: 'diet: coeliac' } };
+  guide.data.items[0].apiKey = 'sk-ant-LEAK';
+  const snap = C.shareKit.build(Object.assign({ generatedAt: '2026-08-28T00:00:00.000Z' }, dirty,
+    { guides: [guide], includeGuides: ['batumi-2026-08-08'] }));
+  const text = JSON.stringify(snap);
+  assert.equal(text.indexOf('sk-ant-LEAK'), -1);
+  assert.equal(text.indexOf('github_pat_LEAK'), -1);
+  assert.equal(text.indexOf('coeliac'), -1, 'genmeta trip notes reached a public page');
+  assert.equal(text.indexOf('Ninoshvili'), -1, 'a genmeta address reached a public page');
+  // And the key-name sweep agrees: no forbidden key anywhere in the tree.
+  assert.deepEqual(C.shareKit.leaks(snap), []);
+  // The sweep is only worth having if it actually catches one.
+  assert.deepEqual(C.shareKit.leaks({ cities: [{ paid: true }] }), ['paid']);
+});
+
+// ---- the shipped bytes ----
+
+test('the share page is public-safe: one door, no engine, no worker', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const root = path.join(__dirname, '..');
+  const page = fs.readFileSync(path.join(root, 'share', 'index.html'), 'utf8');
+  const engine = fs.readFileSync(path.join(root, 'src', 'cityops.js'), 'utf8');
+  // No engine, and no editor: this is a page for people with no account.
+  assert.equal(page.indexOf(engine), -1, 'the editor engine must not ship on the public share page');
+  assert.ok(page.length < 120000, 'the share page has grown an engine-sized limb');
+  // Exactly one Supabase endpoint, and it is the security-definer function.
+  const calls = page.match(/\/rest\/v1\/[a-z_/]+/g) || [];
+  assert.deepEqual(calls, ['/rest/v1/rpc/get_share'],
+    'the share page must reach exactly one endpoint: ' + calls.join(', '));
+  assert.equal(page.indexOf('/rest/v1/shares'), -1, 'the share page must never touch the table');
+  // The publishable key, and no other credential material of any kind.
+  assert.ok(/anon: 'sb_publishable_/.test(page));
+  assert.equal(page.indexOf('service_role'), -1);
+  assert.equal(page.indexOf('sk-ant-'), -1);
+  assert.equal(page.indexOf('github_pat_'), -1);
+  assert.equal(page.indexOf('/auth/v1/'), -1, 'the share page must not carry a sign-in flow');
+  // No service worker of its own, and no storage: a stranger's browser is not
+  // a place to leave anything, and a cached payload would outlive a rotation.
+  assert.equal(page.indexOf('serviceWorker'), -1);
+  assert.equal(page.indexOf('ocalStorage'), -1);
+  // Not indexable. A share link is unguessable; a crawler that found one and
+  // published it would make that moot.
+  assert.ok(/<meta name="robots" content="noindex, nofollow">/.test(page));
+  // Absolute doors, per the Phase A lesson: this page sits at /share/, and a
+  // relative base would resolve every guide link one level down into nothing.
+  assert.ok(/const CITYOPS_BASE = 'https:\/\/cityops\.robriggs\.com';/.test(page));
+});
+
+test('the share page fails soft on a dead token and on a missing function', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const page = fs.readFileSync(path.join(__dirname, '..', 'share', 'index.html'), 'utf8');
+  // A 404 from PostgREST means get_share does not exist yet (the DDL has not
+  // been run). That is a setup state, not a dead link, and the page has to say
+  // which one it is: telling a reader their link is broken when it is not is
+  // the failure mode this branch exists to prevent.
+  assert.ok(/if \(r\.status === 404\) return \{ setup: true \};/.test(page));
+  assert.ok(page.indexOf('Sharing is not switched on yet') !== -1);
+  // A null answer is a rotated, unpublished or mistyped token. Same words for
+  // all three, because the page genuinely cannot tell them apart and guessing
+  // would be worse.
+  assert.ok(page.indexOf('This share link is no longer live') !== -1);
+  assert.ok(page.indexOf('This link is missing its code') !== -1);
+  assert.ok(page.indexOf('Could not load this plan') !== -1);
+  // The RPC argument name is part of the contract with the SQL.
+  assert.ok(/JSON\.stringify\(\{ share_token: token \}\)/.test(page));
+});
+
+test('the trip page carries no GitHub publish path at all', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const trip = fs.readFileSync(path.join(__dirname, '..', 'trip', 'index.html'), 'utf8');
+  assert.equal(trip.indexOf('api.github.com'), -1, 'the contents-API publish is back');
+  assert.equal(trip.indexOf('github_pat_'), -1, 'the PAT placeholder is back');
+  assert.equal(trip.indexOf('publishFamilyShare'), -1, 'the old publish function is back');
+  assert.equal(trip.indexOf('github-token-input'), -1, 'the PAT field is back');
+  assert.equal(trip.indexOf('personal-access-tokens/new'), -1, 'the PAT setup copy is back');
+  // The credential store has one entry left, and it is not the token.
+  const creds = trip.match(/const CRED_KEYS = \{[\s\S]*?\n\};/);
+  assert.ok(creds, 'CRED_KEYS missing from the built trip page');
+  assert.equal(creds[0].indexOf('github'), -1, 'the token is back in the credential store');
+  // defaultState carries the share, and none of the retired GitHub settings.
+  const def = trip.match(/function defaultState\(\) \{[\s\S]*?\n\}/);
+  assert.ok(/shareToken: ''/.test(def[0]));
+  ['githubUser', 'githubRepo', 'githubFile'].forEach(f => {
+    assert.equal(def[0].indexOf(f + ':'), -1, f + ' is back in the trip state');
+  });
+});
+
+test('the migration deletes the token, on this device and on the account', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const root = path.join(__dirname, '..');
+  const trip = fs.readFileSync(path.join(root, 'trip', 'index.html'), 'utf8');
+  const app = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  // Both surfaces delete the two local keys at boot. Both, because either one
+  // can be the first page opened after the update.
+  [trip, app].forEach(page => {
+    assert.ok(/LEGACY_GITHUB_KEYS = \['cityops\.github\.pat\.v1', 'cityops\.github\.pat\.updated\.v1'\]/.test(page));
+    assert.ok(/purgeLegacyGithubToken\(\);/.test(page), 'the purge is defined but never called');
+    // And say so, including the one thing the app cannot do for him.
+    assert.ok(page.indexOf('github.com/settings/personal-access-tokens') !== -1,
+      'the console line must tell Rob where to revoke the token');
+  });
+  // The trip blob's github settings go through the same door the credentials do.
+  assert.ok(/RETIRED_GITHUB_FIELDS = \['githubToken', 'githubUser', 'githubRepo', 'githubFile'\]/.test(trip));
+  // Neither surface adopts a github sidecar off the account any more.
+  assert.equal(trip.indexOf('remote.github'), -1);
+  assert.equal(app.indexOf('writeGithubToken('), -1);
+});
+
+test('the share page rides in the trip build, escaped and reversible', () => {
+  // Identical mechanism to the guide template in index.html: one source file,
+  // embedded so the download and the hosted page cannot become two pages.
+  const fs = require('fs');
+  const path = require('path');
+  const root = path.join(__dirname, '..');
+  const trip = fs.readFileSync(path.join(root, 'trip', 'index.html'), 'utf8');
+  const m = trip.match(/<script type="text\/plain" id="share-template">\n([\s\S]*?)\n<\/script>/);
+  assert.ok(m, 'share-template block missing or closed early');
+  assert.equal(m[1].indexOf('</script'), -1);
+  assert.equal(m[1].indexOf('<!--'), -1, 'an HTML comment here would trap the block');
+  const un = m[1].replace(/<\\\/script/g, '</script');
+  const page = fs.readFileSync(path.join(root, 'share', 'index.html'), 'utf8');
+  const marked = page.replace(
+    /(<script type="application\/json" id="share-data">)[\s\S]*?(<\/script>)/,
+    (x, open, close) => open + '\n__SHARE_DATA__\n' + close
+  );
+  assert.equal(un, marked, 'the embedded share page has drifted from share/index.html');
+  // Filling the marker produces a standalone file that carries its snapshot and
+  // therefore never calls the network for data.
+  const snap = C.shareKit.build({ travelerName: 'Rob', generatedAt: '2026-08-28T00:00:00.000Z',
+    cities: SHARE_STATE.cities, transitions: SHARE_STATE.transitions });
+  const filled = un.replace('__SHARE_DATA__', () => JSON.stringify(snap).replace(/<\//g, '<\\/'));
+  assert.ok(filled.indexOf('"Batumi"') !== -1);
+  assert.equal(filled.indexOf('__SHARE_DATA__'), -1);
+  const back = filled.match(/<script type="application\/json" id="share-data">\n([\s\S]*?)\n<\/script>/);
+  assert.deepEqual(JSON.parse(back[1].replace(/<\\\//g, '</')), snap);
+});
+
+test('the service worker precaches the share shell and nothing token-shaped', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const sw = fs.readFileSync(path.join(__dirname, '..', 'sw.js'), 'utf8');
+  assert.ok(/var SHELL = \['\/', '\/index\.html', '\/trip\/', '\/share\/'\];/.test(sw));
+  // Bumped, or a phone serves the previous build once after every release.
+  assert.ok(/var CACHE = 'cityops-app-v9';/.test(sw));
+  // GET only, so the rpc POST that carries the token is never cached, and a
+  // rotated share cannot keep answering out of a stale cache.
+  assert.ok(/if \(e\.request\.method !== 'GET'\) return;/.test(sw));
+});
+
 
 // ---- clean URLs: /trip/ is the address, /trip.html is a stub ----
 // The trip surface moved from /trip.html to the directory /trip/. Two things

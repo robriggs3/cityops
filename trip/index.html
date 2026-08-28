@@ -1841,61 +1841,43 @@
 
       <div class="setting-card">
         <h3>Share with family</h3>
-        <div class="muted" style="margin-bottom:10px">Generate a standalone HTML file showing your travel plan (no budgets) for family to track your whereabouts. Self-updating: each visit recalculates past / current / future based on visit date.</div>
+        <div class="muted" style="margin-bottom:10px">One link, no account at the other end. Publishing takes a <strong>snapshot</strong> of your plan right now and puts it at a private web address only someone with the link can open. It does not follow your plan: publish again when things change.</div>
 
         <div style="margin-bottom:14px">
           <label style="font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-3);display:block;margin-bottom:4px">Your name (shown on share page)</label>
           <input class="text-input" id="traveler-name-input" placeholder="e.g. Rob" style="max-width:280px" oninput="updateTravelerName(this.value)">
         </div>
 
+        <div style="margin-bottom:14px;padding:12px 14px;background:var(--bg-softer);border:1px solid var(--border-light);border-radius:8px">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-3);margin-bottom:8px">What goes in the snapshot</div>
+          <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.5;margin-bottom:6px;cursor:pointer">
+            <input type="radio" name="share-scope" value="trip" onchange="setShareScope('trip')" style="margin-top:3px">
+            <span><strong>Your trip only.</strong> Stops, dates, stays and travel legs.</span>
+          </label>
+          <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.5;cursor:pointer">
+            <input type="radio" name="share-scope" value="guides" onchange="setShareScope('guides')" style="margin-top:3px">
+            <span><strong>Your trip plus city guides.</strong> Adds the guides you tick below, read-only.</span>
+          </label>
+          <div id="share-guide-picker" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border-light)">
+            <div id="share-guide-list" style="display:flex;flex-direction:column;gap:5px;max-height:210px;overflow:auto"></div>
+            <div class="muted" style="font-size:11px;margin-top:8px;line-height:1.5">Guides go in the same read-only form the app uses for Share view: places, verdicts and star ratings. Never your own notes, costs or accommodation addresses.</div>
+          </div>
+        </div>
+
         <div class="setting-actions">
+          <button class="btn" id="share-publish-btn" onclick="publishShare()">🔗 Publish share</button>
+          <button class="btn-secondary" id="share-copy-btn" onclick="copyShareLink()" style="display:none">📋 Copy link</button>
+          <button class="btn-secondary" id="share-rotate-btn" onclick="rotateShareLink()" style="display:none">🔁 New link</button>
+          <button class="btn-secondary danger" id="share-unpublish-btn" onclick="unpublishShare()" style="display:none">Stop sharing</button>
           <button class="btn-secondary green" onclick="generateFamilyShare()">📍 Download HTML</button>
-          <button class="btn-secondary" onclick="publishFamilyShare()">🚀 Publish to GitHub</button>
-          <button class="btn-secondary" onclick="toggleGithubSetup()">⚙ GitHub setup</button>
+        </div>
+
+        <div id="share-link-row" style="display:none;margin-top:12px;padding:10px 12px;background:var(--bg-card);border:1px solid var(--border-light);border-radius:6px">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-3);margin-bottom:5px">Your share link</div>
+          <a id="share-link" href="#" target="_blank" rel="noopener noreferrer" style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent);word-break:break-all"></a>
         </div>
 
         <div id="publish-freshness" style="margin-top:10px;font-size:12px;font-family:'JetBrains Mono',monospace;letter-spacing:0.02em;line-height:1.5"></div>
-
-        <div id="github-setup-block" style="display:none;margin-top:14px;padding:14px;background:var(--bg-softer);border:1px dashed var(--border);border-radius:8px">
-          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-3);margin-bottom:10px">GitHub publishing setup</div>
-          <div style="font-size:12px;color:var(--text-2);line-height:1.6;margin-bottom:12px">
-            1. Go to <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener" style="color:var(--accent)">github.com/settings/personal-access-tokens/new</a> (fine-grained, never classic)<br>
-            2. <strong>Repository access → Only select repositories</strong> → the one repo you publish into<br>
-            3. <strong>Repository permissions → Contents → Read and write</strong>. Nothing else: leave every other permission on No access<br>
-            4. Set an expiry, copy the token, paste it below<br>
-            5. Publish makes exactly two calls with it, both on the one file: GET the current version, PUT the new one.
-          </div>
-          <div style="font-size:12px;color:var(--text-2);line-height:1.6;margin-bottom:12px;padding:9px 11px;background:var(--bg-card);border:1px solid var(--border-light);border-radius:6px">
-            <strong>Where the token goes.</strong> It is saved on this device, and while you are signed in it also
-            syncs to your own account so your other devices can publish too. It rides in its own protected row,
-            never inside your trip data: it cannot reach a snapshot, an export, or the page your family reads.
-            It is sent to api.github.com and nowhere else. Revoke it any time at
-            <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener" style="color:var(--accent)">github.com/settings/personal-access-tokens</a>.
-          </div>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-            <div>
-              <label style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;font-family:'JetBrains Mono',monospace">GitHub username</label>
-              <input class="text-input" id="github-user-input" placeholder="e.g. robriggs3" oninput="updateGithubField('githubUser', this.value)">
-            </div>
-            <div>
-              <label style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;font-family:'JetBrains Mono',monospace">Repo name</label>
-              <input class="text-input" id="github-repo-input" placeholder="e.g. plan-ahead" oninput="updateGithubField('githubRepo', this.value)">
-            </div>
-            <div>
-              <label style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;font-family:'JetBrains Mono',monospace">File path (in repo)</label>
-              <input class="text-input" id="github-file-input" placeholder="family.html" oninput="updateGithubField('githubFile', this.value)">
-            </div>
-            <div>
-              <label style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.05em;font-family:'JetBrains Mono',monospace">Personal access token</label>
-              <input class="text-input" id="github-token-input" type="password" placeholder="github_pat_..." oninput="updateGithubField('githubToken', this.value)">
-            </div>
-          </div>
-
-          <div style="font-size:11px;color:var(--text-3);font-family:'JetBrains Mono',monospace;margin-top:6px">
-            <strong style="color:var(--accent)">Security:</strong> a classic token can write every repo you own. A fine-grained one scoped to Contents on a single repo can write one file. Use the second.
-          </div>
-        </div>
 
         <div id="family-share-status" class="muted" style="margin-top:10px;min-height:18px"></div>
       </div>
@@ -4999,13 +4981,12 @@ var CityOps = (function () {
     return out;
   }
 
-  // sidecars: {apiKey, github, genmeta}, each {value, updated} or absent.
+  // sidecars: {apiKey, genmeta, removed}, each {value, updated} or absent.
   //
-  // `github` is the GitHub personal access token the trip surface publishes the
-  // family page with (added 2026-08-26, when the trip editor moved onto the
-  // cityops origin). It is a credential exactly like apiKey, so it rides the
-  // same way: its own stamp, its own reconcile, never inside a data blob that
-  // an export, a snapshot or a published page could carry.
+  // There used to be a third, `github`: the personal access token the trip
+  // surface published the family page with. Phase B replaced that publish with
+  // public.shares, so the token is not written here any more and readSidecars
+  // still reads it only so a device can notice a legacy row and clean it.
   function buildProfileRow(profile, sidecars) {
     var p = normalizeProfile(profile);
     var data = {};
@@ -5013,8 +4994,10 @@ var CityOps = (function () {
     var s = (sidecars && typeof sidecars === 'object') ? sidecars : {};
     var key = normalizeKeyBlock(s.apiKey);
     if (key) data.apiKey = key;
-    var gh = normalizeKeyBlock(s.github);
-    if (gh) data.github = gh;
+    // No `github` block, deliberately, and this omission is the migration. The
+    // GitHub PAT publish is gone (2026-08-28, replaced by public.shares), so
+    // the token has no reader left anywhere in the product. Every row this
+    // function writes from now on is a row with the token removed.
     var gm = normalizeGenMetaBlock(s.genmeta);
     if (gm) data.genmeta = gm;
     // The removal tombstones. Written even when the map is empty is pointless,
@@ -5075,7 +5058,8 @@ var CityOps = (function () {
     var m = (mine && typeof mine === 'object') ? mine : {};
     var merged = {
       apiKey: newerBlock(normalizeKeyBlock(m.apiKey), theirs.apiKey),
-      github: newerBlock(normalizeKeyBlock(m.github), theirs.github),
+      // No github: whatever the account's row still carries is dropped on the
+      // way through, which is what makes any push a cleanup push.
       genmeta: newerBlock(normalizeGenMetaBlock(m.genmeta), theirs.genmeta),
       // Union, not newest-wins: see mergeTombValues. Two devices removing two
       // different cities must end up with BOTH removals, not the later one.
@@ -5097,9 +5081,12 @@ var CityOps = (function () {
   function sidecarsWorthPushing(row, mine) {
     var theirs = readSidecars(row && row.data);
     var m = (mine && typeof mine === 'object') ? mine : {};
+    // A row that still carries the retired `github` sidecar is a row that owes
+    // a rewrite, whether or not this device has anything newer to say. This is
+    // the whole migration trigger: one push, and the token is off the account.
+    if (legacyGithubSidecar(row && row.data)) return true;
     var pairs = [
       [normalizeKeyBlock(m.apiKey), theirs.apiKey],
-      [normalizeKeyBlock(m.github), theirs.github],
       [normalizeGenMetaBlock(m.genmeta), theirs.genmeta]
     ];
     for (var i = 0; i < pairs.length; i++) {
@@ -5113,6 +5100,259 @@ var CityOps = (function () {
     var mergedT = mergeTombBlocks(mineT, theirs.removed);
     if (tombValuesDiffer(theirs.removed && theirs.removed.value, mergedT && mergedT.value)) return true;
     return false;
+  }
+
+  // A profile row written before 2026-08-28 carries a `github` sidecar: the
+  // personal access token the trip surface used to publish the family page
+  // with. That publish path is gone, so the token has no reader left and must
+  // not keep riding the account. buildProfileRow no longer writes the field, so
+  // the next push drops it; this is how a device KNOWS a push is owed even when
+  // nothing else on it changed.
+  function legacyGithubSidecar(rowData) {
+    var src = (rowData && typeof rowData === 'object') ? rowData : {};
+    return !!src.github;
+  }
+
+  // ---- the public share ----
+  //
+  // Replaces the GitHub-PAT publish. A share is one row in public.shares keyed
+  // by an unguessable token; anonymous readers reach it through exactly one
+  // door, the get_share(token) function, and never the table.
+  //
+  // Everything here is PURE. The token comes from crypto in the shell (injected
+  // as a byte source so the test can pin the hex encoding), the network lives in
+  // the shell, and what a snapshot may contain lives here, where it can be
+  // tested without a browser.
+  //
+  // The snapshot is a SNAPSHOT: what was true when Publish was pressed. It does
+  // not follow the trip. That is a product decision (a link that silently starts
+  // showing tomorrow's plans is a link nobody can reason about) and the share
+  // page says so in as many words.
+  var SHARE_SCHEMA = 1;
+  var SHARE_TOKEN_BYTES = 16;    // 32 hex characters
+  var SHARE_GUIDE_CAP = 40;
+  var SHARE_ITEM_CAP = 500;
+  var SHARE_TEXT_CAP = 2000;
+
+  function shareText(v) {
+    return (typeof v === 'string') ? v.slice(0, SHARE_TEXT_CAP) : '';
+  }
+
+  // 32 lowercase hex characters out of 16 random bytes. `bytes` is whatever
+  // crypto.getRandomValues filled: an array-like of numbers. Anything that is
+  // not a byte source is refused rather than quietly producing a weak token,
+  // because a predictable token is the whole security model gone.
+  function shareToken(bytes) {
+    if (!bytes || typeof bytes === 'string' || typeof bytes.length !== 'number' ||
+        bytes.length < SHARE_TOKEN_BYTES) {
+      throw new Error('shareToken needs at least ' + SHARE_TOKEN_BYTES + ' random bytes');
+    }
+    var out = '';
+    for (var i = 0; i < SHARE_TOKEN_BYTES; i++) {
+      // Anything that is not a number is not entropy, and treating it as zero
+      // would silently shorten the token's real length. Refuse instead.
+      if (typeof bytes[i] !== 'number' || !isFinite(bytes[i])) {
+        throw new Error('shareToken was given something that is not a byte source');
+      }
+      var b = bytes[i] & 255;
+      out += (b < 16 ? '0' : '') + b.toString(16);
+    }
+    return out;
+  }
+
+  // The token a share URL carries. Two spellings are accepted because both get
+  // typed by hand and pasted by people: /share/#<token> and /share/?t=<token>.
+  // The hash is the one the app generates: a fragment is never sent to the
+  // server, never lands in a Pages access log, and never leaks through a
+  // Referer header to a link the reader clicks from the page.
+  function shareTokenFromUrl(hash, search) {
+    var h = trimStr(hash).replace(/^#/, '');
+    var m = h.match(/^([0-9a-f]{32,64})$/i);
+    if (m) return m[1].toLowerCase();
+    var q = trimStr(search).replace(/^\?/, '');
+    var parts = q.split('&');
+    for (var i = 0; i < parts.length; i++) {
+      var kv = parts[i].split('=');
+      if (kv[0] !== 't' && kv[0] !== 'token') continue;
+      var v = trimStr(decodeURIComponent(kv.slice(1).join('=') || ''));
+      if (/^[0-9a-f]{32,64}$/i.test(v)) return v.toLowerCase();
+    }
+    return '';
+  }
+
+  function shareUrl(origin, token) {
+    return trimStr(origin).replace(/\/+$/, '') + '/share/#' + trimStr(token);
+  }
+
+  // One stop on the trip, as family sees it.
+  //
+  // What is DROPPED here is the point of the function. Cost, the nightly rate,
+  // the estimated total, the booking confirmation number, admin notes, and the
+  // `paid` flag on a stay all stay behind. `paid` in particular: a public page
+  // that says which nights are still owed for is a page that tells a stranger
+  // when the traveler is carrying cash. That decision was made for the family
+  // page in batch 3 and it is unchanged here.
+  function shareStop(c) {
+    return {
+      id: shareText(c && c.id),
+      name: shareText(c && c.name),
+      country: shareText(c && c.country),
+      state: shareText(c && c.state),
+      status: shareText(c && c.status) || 'tentative',
+      checkIn: shareText(c && c.checkIn),
+      checkOut: shareText(c && c.checkOut),
+      lat: (c && typeof c.lat === 'number' && isFinite(c.lat)) ? c.lat : undefined,
+      lng: (c && typeof c.lng === 'number' && isFinite(c.lng)) ? c.lng : undefined,
+      accommodations: ((c && c.accommodations) || [])
+        .filter(function (a) { return a && (a.status === 'booked' || a.status === 'shortlisted'); })
+        .map(function (a) {
+          return {
+            name: shareText(a.name),
+            city: shareText(a.city),
+            neighborhood: shareText(a.neighborhood),
+            link: safeHref(a.link) || '',
+            status: shareText(a.status),
+            checkIn: shareText(a.checkIn),
+            checkOut: shareText(a.checkOut)
+          };
+        })
+    };
+  }
+
+  // One travel leg. Cost, confirmation number and the admin-only notes field
+  // are dropped; the carrier and flight number are kept, because "which flight
+  // are they on" is the question the page exists to answer.
+  function shareLeg(t, stops) {
+    var src = null;
+    for (var i = 0; i < stops.length; i++) {
+      if (stops[i] && stops[i].id === (t && t.cityId)) { src = stops[i]; break; }
+    }
+    return {
+      fromCityId: shareText(t && t.cityId),
+      mode: shareText(t && t.mode) || 'other',
+      status: shareText(t && t.status) || 'tentative',
+      fromCity: shareText(t && t.fromCity) || (src ? src.name : ''),
+      toCity: shareText(t && t.toCity),
+      departureDate: shareText(t && t.departureDate),
+      departureTime: shareText(t && t.departureTime),
+      arrivalDate: shareText(t && t.arrivalDate),
+      arrivalTime: shareText(t && t.arrivalTime),
+      carrier: shareText(t && t.carrier),
+      number: shareText(t && t.number)
+    };
+  }
+
+  // One city guide, in the Share-view idiom the app itself already uses: intel
+  // VERDICTS only (no tips, no source, no checked date) and a rating as stars
+  // only (no count, no provenance). See intelShareStrip and ratingBadge.
+  //
+  // Dropped outright, and each for its own reason:
+  //   city.accommodation   the lodging name and its coordinates. The trip half
+  //                        decides what lodging is public and at what grain;
+  //                        two sources could contradict each other.
+  //   city.notes           free-text personal notes about the stay.
+  //   city.currency        no reader on a read-only page.
+  //   item.place_id        provenance, meaningless outside the app.
+  //   item.verified        the same.
+  //   per-city STATE       done/pinned/dates overrides live in city_state,
+  //                        which the snapshot builder never reads at all.
+  //   genmeta              the Add/Edit form fields (accommodation address,
+  //                        arrival and departure transport, and the trip notes
+  //                        that say diet, mobility, budget and who is along).
+  //                        Never read here, on purpose: see the report.
+  function shareGuide(row) {
+    var data = (row && row.data && typeof row.data === 'object') ? row.data : {};
+    var city = (data.city && typeof data.city === 'object') ? data.city : {};
+    var dates = (city.dates && typeof city.dates === 'object') ? city.dates : {};
+    var sections = (Array.isArray(data.sections) ? data.sections : []).map(function (s) {
+      return { id: shareText(s && s.id), label: shareText(s && s.label), icon: shareText(s && s.icon) };
+    }).filter(function (s) { return s.id; });
+    var items = (Array.isArray(data.items) ? data.items : []).slice(0, SHARE_ITEM_CAP).map(function (it) {
+      var o = {
+        id: shareText(it && it.id),
+        section: shareText(it && it.section),
+        status: shareText(it && it.status) || 'plan',
+        day: shareText(it && it.day),
+        when: shareText(it && it.when),
+        name: shareText(it && it.name),
+        note: shareText(it && it.note),
+        price: shareText(it && it.price && it.price.text),
+        hours: shareText(it && it.hours && it.hours.text),
+        tags: (Array.isArray(it && it.tags) ? it.tags : []).map(shareText).filter(Boolean),
+        links: (Array.isArray(it && it.links) ? it.links : []).map(function (l) {
+          return { kind: shareText(l && l.kind) || 'web', label: shareText(l && l.label), href: safeHref(l && l.href) || '' };
+        }).filter(function (l) { return l.href; })
+      };
+      var stars = it && it.rating && it.rating.stars;
+      if (typeof stars === 'number' && isFinite(stars)) o.stars = stars;
+      var verdicts = it && it.intel && it.intel.verdicts;
+      if (Array.isArray(verdicts) && verdicts.length) {
+        o.verdicts = verdicts.map(function (v) {
+          return { label: shareText(v && v.label), text: shareText(v && v.text) };
+        });
+      }
+      return o;
+    }).filter(function (it) { return it.id && it.name; });
+    return {
+      id: shareText(row && row.city_id),
+      name: shareText(city.name),
+      country: shareText(city.country),
+      from: shareText(dates.from),
+      to: shareText(dates.to),
+      sections: sections,
+      items: items
+    };
+  }
+
+  // The whole snapshot, from the trip state and (optionally) the guide rows the
+  // traveler picked. `input.guides` is the raw rows as PostgREST returned them,
+  // {city_id, data}; `input.includeGuides` is the id list the picker produced.
+  // An empty list means "trip only", which is the default.
+  function buildShareSnapshot(input) {
+    var i = input || {};
+    var stops = (Array.isArray(i.cities) ? i.cities : []).map(shareStop)
+      .filter(function (c) { return c.name; });
+    var legs = (Array.isArray(i.transitions) ? i.transitions : [])
+      .filter(function (t) { return t && (t.toCity || t.departureDate); })
+      .map(function (t) { return shareLeg(t, stops); });
+    var want = Object.create(null);
+    (Array.isArray(i.includeGuides) ? i.includeGuides : []).forEach(function (id) {
+      if (typeof id === 'string' && id) want[id] = 1;
+    });
+    var guides = (Array.isArray(i.guides) ? i.guides : [])
+      .filter(function (r) { return r && Object.prototype.hasOwnProperty.call(want, r.city_id); })
+      .slice(0, SHARE_GUIDE_CAP)
+      .map(shareGuide)
+      .filter(function (g) { return g.id && g.name; });
+    return {
+      schema: SHARE_SCHEMA,
+      travelerName: shareText(i.travelerName) || 'Your traveler',
+      generatedAt: shareText(i.generatedAt) || EPOCH_ISO,
+      cities: stops,
+      transitions: legs,
+      guideIds: (Array.isArray(i.guideIds) ? i.guideIds : []).map(shareText).filter(Boolean),
+      guides: guides
+    };
+  }
+
+  // A last line of defence, not the mechanism. The mechanism is that the
+  // builders above copy a fixed field list and nothing else. This is what the
+  // test asserts on, and what a future field addition trips over.
+  var SHARE_FORBIDDEN = ['apiKey', 'apikey', 'github', 'githubToken', 'githubUser',
+    'githubRepo', 'githubFile', 'token', 'access_token', 'refresh_token',
+    'genmeta', 'paid', 'cost', 'confirmation', 'notes'];
+
+  function shareLeaks(snapshot) {
+    var found = [];
+    (function walk(v) {
+      if (!v || typeof v !== 'object') return;
+      if (Array.isArray(v)) { v.forEach(walk); return; }
+      Object.keys(v).forEach(function (k) {
+        if (SHARE_FORBIDDEN.indexOf(k) !== -1 && found.indexOf(k) === -1) found.push(k);
+        walk(v[k]);
+      });
+    })(snapshot);
+    return found;
   }
 
   // What a failed token refresh means. A refresh that fails because the token
@@ -7821,6 +8061,9 @@ var CityOps = (function () {
       // The trip surface's push path: it owns credentials but not the interest
       // profile, so it merges rather than replaces.
       mergeProfileRow: mergeProfileRow, sidecarsWorthPushing: sidecarsWorthPushing,
+      // The retired GitHub PAT sidecar: how a device notices a row still
+      // carrying one, so it can push the cleaned row.
+      legacyGithubSidecar: legacyGithubSidecar,
       refreshFailure: refreshFailure,
       // Removal tombstones: a removed city stays removed, on every device.
       // All pure, all unit tested; the shell owns the DELETE calls and the
@@ -7830,6 +8073,14 @@ var CityOps = (function () {
         at: tombstoneAt, merge: mergeTombValues, mergeBlocks: mergeTombBlocks,
         differ: tombValuesDiffer, plan: planTombstones, CAP: TOMB_CAP
       }
+    },
+    // The public share: the token, the URL it lives at, and what a snapshot is
+    // allowed to contain. All pure; the shell owns crypto, the RPC and the UI.
+    shareKit: {
+      SCHEMA: SHARE_SCHEMA, TOKEN_BYTES: SHARE_TOKEN_BYTES, GUIDE_CAP: SHARE_GUIDE_CAP,
+      token: shareToken, tokenFromUrl: shareTokenFromUrl, url: shareUrl,
+      build: buildShareSnapshot, stop: shareStop, leg: shareLeg, guide: shareGuide,
+      FORBIDDEN: SHARE_FORBIDDEN, leaks: shareLeaks
     },
     safeHref: safeHref,
     onStateChange: null, liveState: liveState,
@@ -7900,13 +8151,801 @@ var CityOps = (function () {
 CityOps.init();
 </script>
 
+<!-- The share page (src/share-shell.html, the same bytes served at /share/),
+     inlined by tools/assemble.js as a text/plain block with a __SHARE_DATA__
+     marker where the snapshot goes. Download HTML fills that marker and hands
+     you the file; there is no second copy of the page and no fetch involved,
+     so the file you download and the page your family opens are the same page.
+     Exactly the mechanism the city app uses to carry the standalone guide. -->
+<script type="text/plain" id="share-template">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Travel plan</title>
+<link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%23c72027'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,ital,wght@9..144,0,400;9..144,0,500;9..144,0,600;9..144,1,400;9..144,1,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root {
+  --bg: #cccccc; --bg-card: #ffffff; --bg-soft: #bdbdbd; --bg-softer: #e8e8e8;
+  --border: #a8a8a8; --border-light: #d0d0d0;
+  --text: #242424; --text-2: #4a4a4a;
+  /* Was #666666 (3.58:1 on this page's own --bg, fails WCAG AA 4.5:1 for
+     normal text; same gap PR #1 fixed in the main app's --text-3). Same fix,
+     same value: #525252 reads as the same "quiet label" tier and passes on
+     --bg, --bg-softer, and --bg-card. */
+  --text-3: #525252;
+  --accent: #c72027; --accent-hover: #9c181d; --accent-soft: #f3d1d3;
+  --green: #2d7d34; --green-soft: #d4e8d5;
+  --blue: #2c5d8a; --blue-soft: #d3e0ee;
+  --amber: #8a6d00; --amber-soft: #ede1be;
+  /* "-strong" text variants, same pattern and values as PR #1's main-app fix:
+     the base color reads fine as a border/icon/large glyph, but at pill/badge
+     size on its own "-soft" tinted background (or this doc's gray page bg) it
+     falls under 4.5:1. Used for text only; base colors are unchanged for
+     borders, the map's dot markers, and large text (e.g. the hero italic). */
+  --green-strong: #235f29;
+  --amber-strong: #6b5500;
+  --accent-strong: #8a161c;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.08);
+  --shadow-md: 0 2px 8px rgba(0,0,0,.10);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 0 0 60px; -webkit-font-smoothing: antialiased; }
+.doc { max-width: 880px; margin: 0 auto; padding: 0 20px; }
+/* The cityops header block: square, deep red, edge to edge, with the facts as
+   chips. Same treatment as the editor, so the page family reads and the page Rob
+   edits are visibly one product. The negative margins cancel .doc's padding. */
+.hero { background: linear-gradient(160deg, var(--accent) 0%, var(--accent-hover) 100%); color: #fff;
+  margin: 0 -20px 32px; padding: 26px 20px 22px; position: relative; }
+.hero h1 { font-family: 'Fraunces', Georgia, serif; font-size: 40px; font-weight: 400; line-height: 1.05; letter-spacing: -0.02em; color: #fff; }
+.hero h1 .em { color: #fff; opacity: 0.75; font-style: italic; font-weight: 500; }
+.hero .sub { margin-top: 12px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: rgba(255,255,255,0.88); letter-spacing: 0.14em; text-transform: uppercase; }
+.hero .facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
+.hero .chip { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); padding: 5px 11px;
+  border-radius: 20px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #fff; letter-spacing: 0.06em;
+  text-transform: uppercase; text-decoration: none; display: inline-flex; align-items: center; }
+.hero .chip.door:hover { background: rgba(255,255,255,0.3); border-color: rgba(255,255,255,0.6); }
+.hero .gen-date { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: rgba(255,255,255,0.8); letter-spacing: 0.12em; text-transform: uppercase; }
+.current-banner { background: var(--bg-card); border: 1px solid var(--accent); border-radius: 12px; box-shadow: 0 4px 20px rgba(199,32,39,0.10), 0 1px 3px rgba(0,0,0,0.04); margin-bottom: 32px; position: relative; padding: 38px 28px 24px; }
+.you-are-here-badge { position: absolute; top: 0; left: 0; background: var(--accent); color: white; padding: 5px 14px; border-radius: 0 0 8px 0; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 600; }
+.current-banner h2 { font-family: 'Fraunces', Georgia, serif; font-size: 32px; font-weight: 500; line-height: 1.15; }
+.current-banner h2 .country { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-3); letter-spacing: 0.12em; font-weight: 400; text-transform: uppercase; margin-left: 12px; vertical-align: middle; }
+.current-banner .dates { margin-top: 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-2); letter-spacing: 0.04em; }
+.current-banner .dates .days-left { color: var(--accent); font-weight: 500; margin-left: 8px; }
+.current-banner .accom-block { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border-light); }
+.current-banner .accom-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px; }
+.accom-item { padding: 10px 12px; margin-bottom: 6px; background: var(--bg-softer); border: 1px solid var(--border-light); border-radius: 6px; font-size: 13px; color: var(--text-2); }
+.accom-item .accom-name { font-weight: 500; color: var(--text); }
+.accom-item .accom-meta { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-3); letter-spacing: 0.04em; margin-top: 3px; }
+.accom-item a { color: var(--accent); text-decoration: none; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+.accom-item a:hover { text-decoration: underline; }
+.accom-item.current { background: var(--accent-soft); border-color: var(--accent); border-left: 4px solid var(--accent); }
+.accom-item.current .accom-name { color: var(--accent-strong); font-weight: 600; }
+.accom-item.current::after { content: 'TONIGHT'; display: inline-block; margin-left: 8px; font-family: 'JetBrains Mono', monospace; font-size: 9px; background: var(--accent); color: white; padding: 1px 6px; border-radius: 3px; letter-spacing: 0.1em; font-weight: 600; vertical-align: middle; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; margin: 40px 0 18px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.section-head h2 { font-family: 'Fraunces', Georgia, serif; font-size: 28px; font-weight: 500; font-style: italic; line-height: 1.2; }
+.section-head .meta { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.14em; text-transform: uppercase; }
+.leg { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 10px; padding: 18px 22px; margin-bottom: 10px; box-shadow: var(--shadow-sm); transition: box-shadow 0.2s, border-color 0.2s; }
+.leg:hover { box-shadow: var(--shadow-md); border-color: var(--border); }
+.leg.past { opacity: 0.78; }
+.leg-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.leg-title { font-family: 'Fraunces', Georgia, serif; font-size: 20px; font-weight: 500; line-height: 1.2; }
+.leg-title .country { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.1em; font-weight: 400; text-transform: uppercase; margin-left: 10px; vertical-align: middle; }
+.leg-dates { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-2); letter-spacing: 0.03em; }
+.leg-accom { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-light); }
+.pill { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; font-weight: 500; margin-left: 8px; vertical-align: middle; display: inline-block; }
+.pill.booked { background: var(--green-soft); color: var(--green-strong); }
+.pill.shortlisted { background: var(--blue-soft); color: var(--blue); }
+.pill.tentative { background: var(--amber-soft); color: var(--amber-strong); }
+/* The two-app seam, on the family page. A stop with a cityops guide gets the
+   accent-outlined "City guide" pill; a stop without one gets the dashed, muted
+   "Plan this city", which opens cityops rather than promising a guide that is
+   not there. Which one you see was decided at publish time from the traveller's
+   own guide list, so this page never calls out to an account. */
+.guide-link { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 9px; border-radius: 20px; border: 1.5px solid var(--accent); color: var(--accent-strong); background: #fff; text-decoration: none; font-weight: 500; display: inline-block; margin-left: 8px; vertical-align: middle; white-space: nowrap; }
+.guide-link:hover { background: var(--accent-soft); }
+.guide-link.plan-link { border-style: dashed; border-color: var(--border); color: var(--text-3); }
+.guide-link.plan-link:hover { border-color: var(--accent); color: var(--accent-strong); background: #fff; }
+.current-banner .dates .guide-link { margin-left: 10px; }
+.map-wrap { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow-sm); margin-bottom: 8px; }
+#map { height: 420px; z-index: 1; }
+.map-reset-btn { position: absolute; top: 10px; left: 52px; z-index: 1000; background: white; border: 2px solid rgba(0,0,0,0.2); border-radius: 4px; padding: 5px 10px; font-size: 11px; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: all 0.15s; }
+.map-reset-btn:hover { background: var(--accent-soft); color: var(--accent-strong); border-color: var(--accent); }
+.map-legend { display: flex; gap: 16px; flex-wrap: wrap; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.06em; text-transform: uppercase; margin-top: 8px; }
+.map-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; border: 1.5px solid white; box-shadow: 0 0 0 1px var(--border); }
+.empty { color: var(--text-3); font-style: italic; padding: 24px; text-align: center; background: var(--bg-softer); border: 1px dashed var(--border); border-radius: 8px; font-size: 13px; }
+/* Travel legs between cities */
+.transit { display: flex; align-items: center; gap: 12px; margin: 6px 0 6px 22px; padding: 10px 14px; background: var(--bg-softer); border: 1px solid var(--border-light); border-left: 3px solid var(--text-3); border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-2); letter-spacing: 0.02em; }
+.transit.indent { margin-left: 28px; }
+.transit.status-booked { border-left-color: var(--green); }
+.transit.status-shortlisted { border-left-color: var(--blue); }
+.transit.status-tentative { border-left-color: var(--amber); }
+.transit.past { opacity: 0.55; }
+.transit-ic { font-size: 16px; line-height: 1; }
+.transit-main { flex: 1; min-width: 0; }
+.transit-line1 { color: var(--text); font-weight: 500; font-size: 12px; }
+.transit-line2 { color: var(--text-3); margin-top: 2px; }
+.transit-time { color: var(--text-2); white-space: nowrap; }
+footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--border); text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.12em; text-transform: uppercase; }
+footer .stamp { display: inline-block; padding: 6px 14px; border: 1px solid var(--text-3); border-radius: 3px; margin-bottom: 10px; }
+/* ---- the loading and dead-link states ----
+   A share link outlives the share. Rotated, unpublished, mistyped, truncated
+   by a mail client: every one of those arrives here as "no row for that
+   token", and every one of them has to read as a plain fact rather than as a
+   broken page. Never a stack trace, never a spinner that never stops. */
+.state { max-width: 560px; margin: 80px auto; text-align: center; padding: 0 20px; }
+.state .mark { font-family: 'Fraunces', Georgia, serif; font-size: 46px; color: var(--accent); line-height: 1; }
+.state h1 { font-family: 'Fraunces', Georgia, serif; font-size: 27px; font-weight: 500; margin-top: 18px; line-height: 1.25; }
+.state p { margin-top: 12px; color: var(--text-2); font-size: 15px; line-height: 1.6; }
+.state .go { display: inline-block; margin-top: 22px; font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-strong); border: 1.5px solid var(--accent);
+  border-radius: 20px; padding: 10px 18px; text-decoration: none; min-height: 44px; box-sizing: border-box; }
+.state .go:hover { background: var(--accent-soft); }
+/* ---- included city guides ----
+   The Share-view idiom, in the read-only form the app itself uses: verdicts
+   only, stars only, no tips and no provenance. Collapsed by default, because a
+   guide is a detail under a stop rather than the point of this page. */
+.guide-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 10px; margin-bottom: 10px; box-shadow: var(--shadow-sm); }
+.guide-card > summary { cursor: pointer; padding: 16px 20px; list-style: none; display: flex; align-items: baseline;
+  justify-content: space-between; flex-wrap: wrap; gap: 10px; min-height: 44px; box-sizing: border-box; }
+.guide-card > summary::-webkit-details-marker { display: none; }
+.guide-card > summary:hover { background: var(--bg-softer); border-radius: 10px; }
+.guide-card .g-name { font-family: 'Fraunces', Georgia, serif; font-size: 19px; font-weight: 500; }
+.guide-card .g-name .country { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.1em; text-transform: uppercase; margin-left: 10px; vertical-align: middle; }
+.guide-card .g-meta { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-3); letter-spacing: 0.04em; }
+.guide-card .g-body { padding: 0 20px 16px; }
+.gsec { margin-top: 14px; }
+.gsec-head { font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-3); border-bottom: 1px solid var(--border-light); padding-bottom: 6px; }
+.gitem { padding: 9px 0; border-bottom: 1px solid var(--border-light); }
+.gitem:last-child { border-bottom: 0; }
+.gitem .gi-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.gitem .gi-name { font-weight: 500; font-size: 14px; }
+.gitem .gi-stars { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-3); }
+.gitem .gi-when { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.06em; text-transform: uppercase; }
+.gitem .gi-price { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-2); }
+.gitem .gi-note { font-size: 13px; color: var(--text-2); margin-top: 3px; line-height: 1.55; }
+.gitem .gi-verdict { font-size: 12px; color: var(--text-2); margin-top: 4px; padding-left: 10px; border-left: 2px solid var(--border); line-height: 1.5; }
+.gitem .gi-verdict b { color: var(--text); font-weight: 500; }
+.gitem .gi-links { margin-top: 5px; display: flex; gap: 10px; flex-wrap: wrap; }
+.gitem .gi-links a { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent-strong); text-decoration: none; min-height: 30px; display: inline-flex; align-items: center; }
+.gitem .gi-links a:hover { text-decoration: underline; }
+.snapnote { margin-top: 10px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.06em; line-height: 1.6; text-transform: none; }
+@media (max-width: 600px) {
+  body { padding: 0 0 40px; }
+  .doc { padding: 0 14px; }
+  .hero { margin: 0 -14px 24px; padding: 20px 14px 16px; }
+  .hero h1 { font-size: 29px; }
+  .hero .sub { margin-top: 10px; font-size: 10px; letter-spacing: 0.1em; }
+  .hero .facts { gap: 6px; margin-top: 11px; }
+  .hero .chip { padding: 4px 9px; font-size: 10px; }
+  /* A door needs a thumb; a fact does not. */
+  .hero .chip.door { min-height: 44px; padding: 8px 14px; }
+  .guide-link { min-height: 40px; display: inline-flex; align-items: center; margin-left: 0; margin-top: 6px; }
+  .current-banner { padding: 34px 16px 18px; margin-bottom: 24px; }
+  .current-banner h2 { font-size: 24px; }
+  .current-banner h2 .country { display: block; margin: 4px 0 0; }
+  .current-banner .accom-block { margin-top: 14px; padding-top: 12px; }
+  .section-head { margin: 28px 0 14px; }
+  .section-head h2 { font-size: 22px; }
+  .leg { padding: 14px 16px; }
+  .leg-title { font-size: 17px; }
+  .leg-title .country { display: block; margin: 4px 0 0; }
+  .leg-accom { margin-top: 10px; padding-top: 10px; }
+  .accom-item { padding: 9px 10px; }
+  #map { height: 260px; }
+  /* Narrow-screen transit card: airline + number, then date/times, then the route on one
+     compact line. Rebuilt as a grid so the three rows can be ordered independently of the
+     DOM order (which stays as-is for the desktop flex layout). */
+  .transit { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; row-gap: 2px; align-items: start; margin: 6px 0 6px 10px; padding: 9px 11px; }
+  .transit.indent { margin-left: 14px; }
+  .transit-main { display: contents; }
+  .transit-ic { grid-column: 1; grid-row: 1 / span 3; padding-top: 1px; }
+  .transit-line1 { grid-column: 2; grid-row: 1; min-width: 0; }
+  .transit-time { grid-column: 2; grid-row: 2; white-space: normal; }
+  .transit-line2 { grid-column: 2; grid-row: 3; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .state { margin: 56px auto; }
+  .state h1 { font-size: 23px; }
+  .guide-card > summary { padding: 14px 16px; }
+  .guide-card .g-body { padding: 0 16px 14px; }
+}
+</style>
+</head>
+<body>
+
+<script type="application/json" id="share-data">
+__SHARE_DATA__
+<\/script>
+
+<div class="state" id="state-block" hidden>
+  <div class="mark" id="state-mark">·</div>
+  <h1 id="state-title"></h1>
+  <p id="state-body"></p>
+  <a class="go" id="state-go" href="https://cityops.robriggs.com" target="_blank" rel="noopener noreferrer">Open CityOps &#8599;</a>
+</div>
+
+<div class="doc" id="doc" hidden>
+  <header class="hero">
+    <h1 id="hero-title"></h1>
+    <div class="sub" id="cover-meta">Loading…</div>
+    <div class="facts">
+      <span class="chip gen-date" id="gen-date"></span>
+      <a class="chip door" href="https://cityops.robriggs.com" target="_blank" rel="noopener noreferrer">City guides &#8599;</a>
+    </div>
+  </header>
+
+  <div id="current-section"></div>
+
+  <div class="section-head"><h2>The map</h2><span class="meta">All stops</span></div>
+  <div class="map-wrap"><button class="map-reset-btn" onclick="resetMapView()" title="Fit all pins in view">⤢ Reset view</button><div id="map"></div></div>
+  <div class="map-legend" id="map-legend"></div>
+
+  <div id="future-section"></div>
+  <div id="past-section"></div>
+  <div id="guides-section"></div>
+
+  <footer>
+    <div class="stamp">Eyes only · For family</div>
+    <div id="footer-meta"></div>
+    <div class="snapnote">This page is a snapshot taken when the traveler pressed Publish. It is not live: plans made since then are not on it until they publish again.</div>
+  </footer>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\/script>
+<script>
+// ---- THE SNAPSHOT BLOCK, and why this file has no HTML comments in it ----
+//
+// Two lives, one file. As share/index.html on the site the #share-data block
+// above is `null` and this page fetches its snapshot by token. As a downloaded
+// standalone file that block IS the snapshot, baked in by the trip surface,
+// and the page never touches the network for data at all. Which life it is in
+// is decided by whether the block parses to something with a cities array, and
+// by nothing else: no build flag, no query string, no second copy of the page.
+//
+// This whole file is also embedded inside the trip surface, in a text/plain
+// script block, so the trip surface can write the standalone copy with no
+// network. An HTML comment anywhere in it would put the tokenizer into
+// script-data-escaped state, and any script opener after that makes even the
+// real closing tag inert: the embedded copy would swallow the rest of the
+// page. Hence every note in here is a CSS or a JS comment, and no note may
+// spell a script tag out. tools/assemble.js checks both and fails the build.
+//
+// ---- the account this page reads from, and the ONE door it is allowed ----
+//
+// The publishable key is public by design and grants nothing on its own: anon
+// has no grant on public.shares at all, so the table cannot be listed, counted
+// or enumerated. The only thing anon may do is call get_share(token), which
+// returns one snapshot for an exact token match and null for everything else.
+// A wrong token is therefore indistinguishable from a rotated one, which is
+// what makes rotation an actual revocation.
+var SUPA = {
+  url: 'https://ggscdbbvqmqiyguiccrf.supabase.co',
+  anon: 'sb_publishable_j3oRAQ-3889fkN26FtaE7g_jMyx1Lda'
+};
+
+var DATA = null;
+const TODAY = new Date().toISOString().slice(0,10);
+var TRAVELER = 'They';
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso + 'T12:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function escapeHTML(s) {
+  return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---- the two-app seam ----
+// plan-ahead owns getting between cities; cityops owns what to do once you are in
+// one. Every stop therefore offers exactly one door, and which one is a FACT
+// baked in at publish time, not a guess made here: DATA.guideIds is the list of
+// guides the traveller actually has. A stop on that list links straight to its
+// guide; a stop that is not gets "Plan this city", which opens cityops. This page
+// never calls an account, so family see the same thing the traveller does.
+//
+// Slug MUST match cityops' own slug() exactly or a deep link lands on nothing:
+// lowercase, every non-alphanumeric run becomes one hyphen, trim hyphens.
+// ABSOLUTE, not root-relative and not "./".
+//
+// The Phase A lesson, and it bit twice: this page is served from /share/, one
+// level down from the app root, so a relative base resolves against /share/
+// and every guide door lands on /share/#city=... which is nothing. The same
+// file is also downloaded and opened over file://, where a root-absolute "/"
+// means the disk root. One absolute origin is the only spelling that is right
+// in both lives.
+const CITYOPS_BASE = 'https://cityops.robriggs.com';
+var GUIDE_IDS = [];
+
+function citySlug(name) {
+  return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+// Exact match first (same city, same arrival date), then the same city on a
+// nearby date: a check-in that moved by a day does not make the guide wrong.
+function guideIdFor(name, fromISO) {
+  const slug = citySlug(name);
+  if (!slug || !GUIDE_IDS.length) return '';
+  const exact = fromISO ? (slug + '-' + fromISO) : '';
+  if (exact && GUIDE_IDS.indexOf(exact) !== -1) return exact;
+  const prefix = slug + '-';
+  const siblings = GUIDE_IDS.filter(function (id) { return id.indexOf(prefix) === 0; });
+  if (!siblings.length) return '';
+  if (!fromISO || siblings.length === 1) return siblings[0];
+  const want = Date.parse(fromISO);
+  if (isNaN(want)) return siblings[0];
+  let best = siblings[0], bestGap = Infinity;
+  siblings.forEach(function (id) {
+    const at = Date.parse(id.slice(prefix.length));
+    const gap = isNaN(at) ? Infinity : Math.abs(at - want);
+    if (gap < bestGap) { bestGap = gap; best = id; }
+  });
+  return best;
+}
+
+// cityops has no url-driven prefill today (its hash reader only understands
+// #city=), so this opens the app and carries the stop details in a fragment it
+// safely ignores. That fragment is the scaffold hook if cityops ever wants to
+// prefill its Add-city form from a link.
+function cityPlanLink(city) {
+  const parts = ['plan=' + encodeURIComponent(citySlug(city.name))];
+  if (city.name) parts.push('name=' + encodeURIComponent(city.name));
+  if (city.checkIn) parts.push('from=' + encodeURIComponent(city.checkIn));
+  if (city.checkOut) parts.push('to=' + encodeURIComponent(city.checkOut));
+  if (city.country) parts.push('country=' + encodeURIComponent(city.country));
+  return CITYOPS_BASE + '/#' + parts.join('&');
+}
+
+// One door per stop. Past stops get nothing: the guide is no use once you have left.
+function cityGuideLink(city) {
+  if (!city || !city.name) return '';
+  const id = guideIdFor(city.name, city.checkIn);
+  if (id) {
+    return '<a class="guide-link" href="' + escapeHTML(CITYOPS_BASE + '/#city=' + encodeURIComponent(id)) +
+      '" target="_blank" rel="noopener noreferrer" title="What to eat, see and do here">City guide ↗</a>';
+  }
+  return '<a class="guide-link plan-link" href="' + escapeHTML(cityPlanLink(city)) +
+    '" target="_blank" rel="noopener noreferrer" title="No guide for this stop yet. Opens cityops.">Plan this city ↗</a>';
+}
+
+// Status -> marker color (mirrors itinerary pill colors). Past trumps status (gray). Current trumps everything (red).
+function colorFor(city, isCurrent) {
+  if (isCurrent) return '#c72027';
+  if (city.checkOut && city.checkOut <= TODAY) return '#8a8a8a';
+  const s = city.status || 'tentative';
+  if (s === 'booked') return '#2d7d34';
+  if (s === 'shortlisted') return '#2c5d8a';
+  return '#8a6d00';
+}
+
+function isCurrentAccommodation(a) {
+  if (!a.checkIn || !a.checkOut) return false;
+  return a.checkIn <= TODAY && a.checkOut > TODAY;
+}
+
+function renderAccoms(accoms, isCurrentCity) {
+  if (!accoms || !accoms.length) return '';
+  const booked = accoms.filter(a => a.status === 'booked');
+  const list = booked.length > 0 ? booked : accoms;
+  return list.map(a => buildStayRow(a, isCurrentCity)).join('');
+}
+
+// Single stay row (extracted so stays and travel legs can be interleaved chronologically).
+function buildStayRow(a, isCurrentCity) {
+  const isCurrentAccom = isCurrentCity && isCurrentAccommodation(a);
+  const cls = 'accom-item' + (isCurrentAccom ? ' current' : '');
+  const linkBit = a.link ? ' · <a href="' + escapeHTML(a.link) + '" target="_blank" rel="noopener">view booking</a>' : '';
+  const cityBit = (a.city && a.city.trim()) ? escapeHTML(a.city.trim()) + ' · ' : '';
+  const nbhdBit = a.neighborhood ? escapeHTML(a.neighborhood) + ' · ' : '';
+  const datesBit = a.checkIn && a.checkOut ? fmtDate(a.checkIn) + ' → ' + fmtDate(a.checkOut) : '';
+  return '<div class="' + cls + '"><div class="accom-name">' + escapeHTML(a.name) + '</div><div class="accom-meta">' + cityBit + nbhdBit + datesBit + linkBit + '</div></div>';
+}
+
+// Sort a mixed list of stays + legs into one chronological timeline — IDENTICAL logic to the
+// admin app's buildStayAndTravel comparator, so the family view matches what Rob sees.
+function stayTravelSort(entries, parentCityName) {
+  const parent = (parentCityName || '').trim().toLowerCase();
+  function entryDate(e) { return e.kind === 'stay' ? (e.ref.checkIn || '') : (e.ref.departureDate || ''); }
+  entries.sort(function(x, y) {
+    const dx = entryDate(x), dy = entryDate(y);
+    if (dx !== dy) { if (!dx) return -1; if (!dy) return 1; return dx < dy ? -1 : 1; }
+    if (x.kind !== y.kind) {
+      const stayE = x.kind === 'stay' ? x : y;
+      const legE  = x.kind === 'leg'  ? x : y;
+      const legDate = legE.ref.departureDate || '', ci = stayE.ref.checkIn || '', co = stayE.ref.checkOut || '';
+      let legFirst;
+      if (legDate && co && legDate === co) legFirst = false;
+      else if (legDate && ci && legDate === ci) legFirst = true;
+      else {
+        const cityExplicit = !!(stayE.ref.city && stayE.ref.city.trim());
+        const sc = ((stayE.ref.city && stayE.ref.city.trim()) || parentCityName || '').trim().toLowerCase();
+        const dest = (legE.ref.toCity || '').trim().toLowerCase();
+        const orig = (legE.ref.fromCity || parent || '').trim().toLowerCase();
+        if (cityExplicit && sc && dest && sc === dest) legFirst = true;
+        else if (cityExplicit && sc && orig && sc === orig) legFirst = false;
+        else legFirst = (legE.ref.departureTime || '12:00') < '15:00';
+      }
+      if (x.kind === 'leg') return legFirst ? -1 : 1;
+      return legFirst ? 1 : -1;
+    }
+    if (x.kind === 'leg') {
+      const tx = x.ref.departureTime || '99:99', ty = y.ref.departureTime || '99:99';
+      return tx < ty ? -1 : (tx > ty ? 1 : 0);
+    }
+    return (x.ref.name || '').localeCompare(y.ref.name || '');
+  });
+  return entries;
+}
+
+// Merged, chronologically-sorted stay + travel timeline for one city (legs indented).
+function buildStayTravelTimeline(city, isCurrentCity) {
+  const accoms = city.accommodations || [];
+  const booked = accoms.filter(a => a.status === 'booked');
+  const stays = booked.length > 0 ? booked : accoms;
+  const legs = transitsFromCity(city);
+  const entries = [];
+  stays.forEach(a => entries.push({ kind: 'stay', ref: a }));
+  legs.forEach(t => entries.push({ kind: 'leg', ref: t }));
+  if (!entries.length) return '';
+  stayTravelSort(entries, city.name);
+  return entries.map(e => e.kind === 'stay' ? buildStayRow(e.ref, isCurrentCity) : buildTransit(e.ref, true)).join('');
+}
+
+function pill(status) {
+  const valid = ['booked','shortlisted','tentative'];
+  if (!valid.includes(status)) return '';
+  return '<span class="pill ' + status + '">' + status + '</span>';
+}
+
+function render() {
+  let current = null;
+  const past = [], future = [];
+  DATA.cities.forEach(c => {
+    if (!c.checkIn || !c.checkOut) { future.push(c); return; }
+    if (c.checkIn <= TODAY && c.checkOut > TODAY) { current = c; return; }
+    if (c.checkOut <= TODAY) past.push(c);
+    else future.push(c);
+  });
+  past.sort((a,b) => (b.checkIn||'').localeCompare(a.checkIn||''));
+  future.sort((a,b) => (a.checkIn||'').localeCompare(b.checkIn||''));
+
+  const totalLabel = DATA.cities.length + ' stops · ' + past.length + ' past · ' + (current ? '1 current · ' : '') + future.length + ' upcoming';
+  document.getElementById('cover-meta').textContent = totalLabel;
+  (function(){
+    var gd = new Date(DATA.generatedAt);
+    var ageDays = Math.floor((Date.now() - gd.getTime()) / 86400000);
+    var ageText = ageDays <= 0 ? 'today' : (ageDays === 1 ? 'yesterday' : ageDays + ' days ago');
+    var human = gd.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+    var stale = ageDays >= 21 ? ' · may be out of date' : '';
+    document.getElementById('gen-date').textContent = 'Updated ' + human + ' · ' + ageText + stale;
+  })();
+  document.getElementById('footer-meta').textContent = 'Auto-updating · Last refresh on visit';
+
+  const cs = document.getElementById('current-section');
+  if (current) {
+    const daysLeft = Math.round((new Date(current.checkOut + 'T00:00:00') - new Date(TODAY + 'T00:00:00')) / 86400000);
+    const timeline = buildStayTravelTimeline(current, true);
+    const timelineHTML = timeline
+      ? '<div class="accom-block"><div class="accom-label">Stay &amp; travel</div>' + timeline + '</div>'
+      : '';
+    cs.innerHTML = '<div class="current-banner"><div class="you-are-here-badge">● ' + escapeHTML(TRAVELER) + ' is here</div><h2>' + escapeHTML(current.name) + '<span class="country">' + escapeHTML(current.country) + (current.state ? ' · ' + escapeHTML(current.state) : '') + '</span></h2><div class="dates">' + fmtDate(current.checkIn) + ' → ' + fmtDate(current.checkOut) + '<span class="days-left">' + daysLeft + ' day' + (daysLeft===1?'':'s') + ' left</span>' + cityGuideLink(current) + '</div>' + timelineHTML + '</div>';
+  } else {
+    cs.innerHTML = '<div class="current-banner" style="border-color:var(--border);box-shadow:var(--shadow-sm);padding-top:24px"><div style="text-align:center;color:var(--text-3);font-style:italic;font-family:Fraunces,serif;font-size:18px">Between stays — see upcoming below</div></div>';
+  }
+
+  document.getElementById('map-legend').innerHTML =
+    '<span><span class="dot" style="background:#c72027"></span>Currently here</span>' +
+    '<span><span class="dot" style="background:#2d7d34"></span>Booked</span>' +
+    '<span><span class="dot" style="background:#2c5d8a"></span>Shortlisted</span>' +
+    '<span><span class="dot" style="background:#8a6d00"></span>Tentative</span>' +
+    '<span><span class="dot" style="background:#8a8a8a"></span>Past</span>';
+
+  const fs = document.getElementById('future-section');
+  fs.innerHTML = '<div class="section-head"><h2>What&#39;s coming up</h2><span class="meta">' + future.length + ' stop' + (future.length===1?'':'s') + '</span></div>';
+  if (future.length === 0) {
+    fs.innerHTML += '<div class="empty">No upcoming trips planned yet.</div>';
+  } else {
+    future.forEach(c => {
+      fs.innerHTML += buildLeg(c, false);
+    });
+  }
+
+  if (past.length > 0) {
+    const ps = document.getElementById('past-section');
+    ps.innerHTML = '<div class="section-head"><h2>Where ' + escapeHTML(TRAVELER) + ' has been</h2><span class="meta">' + past.length + ' stop' + (past.length===1?'':'s') + '</span></div>';
+    past.forEach(c => {
+      ps.innerHTML += buildLeg(c, true);
+    });
+  }
+
+  initMap(DATA.cities, current);
+}
+
+function buildLeg(c, isPast) {
+  const cls = isPast ? 'leg past' : 'leg';
+  const timeline = buildStayTravelTimeline(c, false);
+  return '<div class="' + cls + '"><div class="leg-head"><div class="leg-title">' + escapeHTML(c.name) + '<span class="country">' + escapeHTML(c.country) + (c.state ? ' · ' + escapeHTML(c.state) : '') + '</span>' + pill(c.status) + (isPast ? '' : cityGuideLink(c)) + '</div><div class="leg-dates">' + fmtDate(c.checkIn) + ' → ' + fmtDate(c.checkOut) + '</div></div>' + (timeline ? '<div class="leg-accom">' + timeline + '</div>' : '') + '</div>';
+}
+
+// Icon mapper for transit modes (must match the admin app's TRANSITION_MODES)
+const TRANSIT_ICONS = { flight: '✈', train: '🚆', cruise: '🚢', bus: '🚌', ferry: '⛴', drive: '🚗', rideshare: '🚖', other: '➜' };
+const TRANSIT_LABELS = { flight: 'Flight', train: 'Train', cruise: 'Cruise', bus: 'Bus', ferry: 'Ferry', drive: 'Drive', rideshare: 'Rideshare', other: 'Travel' };
+
+function buildTransit(t, indent) {
+  if (!t) return '';
+  const isPast = t.arrivalDate && t.arrivalDate < TODAY;
+  const cls = 'transit status-' + (t.status || 'tentative') + (isPast ? ' past' : '') + (indent ? ' indent' : '');
+  const icon = TRANSIT_ICONS[t.mode] || '➜';
+  const label = TRANSIT_LABELS[t.mode] || 'Travel';
+  const carrierBit = (t.carrier || t.number) ? [t.carrier, t.number].filter(Boolean).join(' ') : label;
+  const route = (t.fromCity && t.toCity) ? escapeHTML(t.fromCity) + ' → ' + escapeHTML(t.toCity) : (t.toCity ? '→ ' + escapeHTML(t.toCity) : '');
+  let timeBit = '';
+  if (t.departureDate) {
+    timeBit = fmtDate(t.departureDate);
+    if (t.departureTime) timeBit += ' · ' + t.departureTime;
+    if (t.arrivalTime) timeBit += ' → ' + t.arrivalTime;
+  }
+  return '<div class="' + cls + '">' +
+    '<span class="transit-ic">' + icon + '</span>' +
+    '<div class="transit-main">' +
+      '<div class="transit-line1">' + escapeHTML(carrierBit) + '</div>' +
+      '<div class="transit-line2">' + route + '</div>' +
+    '</div>' +
+    '<div class="transit-time">' + timeBit + '</div>' +
+  '</div>';
+}
+
+// Find transitions departing from a given city.
+// Match strictly by ID when both sides have one (handles multiple cities with the same name,
+// e.g. past Atlanta vs. future Atlanta). Fall back to case-insensitive name only when ID is
+// missing on either side (older data or legacy imports).
+function transitsFromCity(city) {
+  if (!DATA.transitions || !city) return [];
+  const targetId = city.id || '';
+  const targetName = (city.name || '').trim().toLowerCase();
+  return DATA.transitions.filter(t => {
+    if (targetId && t.fromCityId) return t.fromCityId === targetId;
+    return (t.fromCity || '').trim().toLowerCase() === targetName;
+  });
+}
+
+function initMap(cities, current) {
+  const valid = cities.filter(c => typeof c.lat === 'number' && typeof c.lng === 'number');
+  if (valid.length === 0) {
+    document.getElementById('map').innerHTML = '<div class="empty" style="margin:20px">No locations to map yet.</div>';
+    document.querySelector('.map-reset-btn').style.display = 'none';
+    return;
+  }
+  const map = L.map('map').setView([valid[0].lat, valid[0].lng], 3);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 18 }).addTo(map);
+  const bounds = [];
+  valid.forEach(c => {
+    const isCurrent = current && c.name === current.name && c.checkIn === current.checkIn;
+    const color = colorFor(c, isCurrent);
+    const radius = isCurrent ? 12 : 7;
+    const marker = L.circleMarker([c.lat, c.lng], { radius: radius, color: 'white', weight: 2, fillColor: color, fillOpacity: 0.95 }).addTo(map);
+    const datesBit = c.checkIn ? '<br><small style="font-family:JetBrains Mono,monospace;color:#666">' + fmtDate(c.checkIn) + ' → ' + fmtDate(c.checkOut) + '</small>' : '';
+    const statusBit = !isCurrent && c.status ? '<br><small style="color:' + color + ';font-weight:600;text-transform:uppercase;letter-spacing:0.08em;font-family:JetBrains Mono,monospace;font-size:9px">' + c.status + '</small>' : '';
+    marker.bindPopup('<strong style="font-family:Fraunces,serif;font-size:15px">' + escapeHTML(c.name) + '</strong><br><span style="font-family:JetBrains Mono,monospace;font-size:10px;color:#666;letter-spacing:0.08em;text-transform:uppercase">' + escapeHTML(c.country) + '</span>' + datesBit + statusBit + (isCurrent ? '<br><strong style="color:#c72027;font-family:JetBrains Mono,monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase">★ ' + escapeHTML(TRAVELER) + ' is here</strong>' : ''));
+    bounds.push([c.lat, c.lng]);
+  });
+  // Store for reset button
+  window._famMap = map;
+  window._famBounds = bounds;
+  if (bounds.length > 1) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 8 });
+}
+
+function resetMapView() {
+  if (!window._famMap || !window._famBounds) return;
+  if (window._famBounds.length > 1) {
+    window._famMap.fitBounds(window._famBounds, { padding: [40, 40], maxZoom: 8 });
+  } else if (window._famBounds.length === 1) {
+    window._famMap.setView(window._famBounds[0], 8);
+  }
+}
+
+// ==================== INCLUDED CITY GUIDES ====================
+// Present only when the traveler ticked cities in the include picker. The
+// snapshot already dropped everything private (see shareKit.guide in the
+// engine); this only draws what survived, in the app's own Share-view idiom:
+// verdicts, no tips; stars, no count and no source.
+
+function guideItemHTML(it) {
+  var top = '<div class="gi-top"><span class="gi-name">' + escapeHTML(it.name) + '</span>';
+  if (typeof it.stars === 'number') top += '<span class="gi-stars">' + it.stars.toFixed(1) + '★</span>';
+  var when = it.when || (it.day ? fmtDate(it.day) : '');
+  if (when) top += '<span class="gi-when">' + escapeHTML(when) + '</span>';
+  if (it.price) top += '<span class="gi-price">' + escapeHTML(it.price) + '</span>';
+  top += '</div>';
+  var body = '';
+  if (it.note) body += '<div class="gi-note">' + escapeHTML(it.note) + '</div>';
+  (it.verdicts || []).forEach(function (v) {
+    if (!v || !v.text) return;
+    body += '<div class="gi-verdict">' + (v.label ? '<b>' + escapeHTML(v.label) + '</b> ' : '') + escapeHTML(v.text) + '</div>';
+  });
+  var links = (it.links || []).filter(function (l) { return l && l.href; });
+  if (links.length) {
+    body += '<div class="gi-links">' + links.map(function (l) {
+      return '<a href="' + escapeHTML(l.href) + '" target="_blank" rel="noopener noreferrer">' +
+        escapeHTML(l.label || (l.kind === 'map' ? 'Map' : 'Link')) + ' ↗</a>';
+    }).join('') + '</div>';
+  }
+  return '<div class="gitem">' + top + body + '</div>';
+}
+
+function guideCardHTML(g) {
+  var byId = {};
+  (g.sections || []).forEach(function (s) { byId[s.id] = s; });
+  var order = (g.sections || []).map(function (s) { return s.id; });
+  (g.items || []).forEach(function (it) {
+    if (order.indexOf(it.section) === -1) order.push(it.section);
+  });
+  var body = '';
+  order.forEach(function (sid) {
+    var items = (g.items || []).filter(function (it) { return it.section === sid; });
+    if (!items.length) return;
+    var sec = byId[sid];
+    var label = sec ? ((sec.icon ? sec.icon + ' ' : '') + (sec.label || sid)) : sid;
+    body += '<div class="gsec"><div class="gsec-head">' + escapeHTML(label) + '</div>' +
+      items.map(guideItemHTML).join('') + '</div>';
+  });
+  if (!body) body = '<div class="empty">Nothing in this guide yet.</div>';
+  var dates = (g.from || g.to) ? (fmtDate(g.from) + ' → ' + fmtDate(g.to)) : '';
+  var count = (g.items || []).length;
+  return '<details class="guide-card"><summary><span class="g-name">' + escapeHTML(g.name) +
+    '<span class="country">' + escapeHTML(g.country) + '</span></span>' +
+    '<span class="g-meta">' + (dates ? escapeHTML(dates) + ' · ' : '') + count + ' place' + (count === 1 ? '' : 's') + ' · tap to open</span>' +
+    '</summary><div class="g-body">' + body + '</div></details>';
+}
+
+function renderGuides() {
+  var host = document.getElementById('guides-section');
+  var guides = Array.isArray(DATA.guides) ? DATA.guides : [];
+  if (!guides.length) { host.innerHTML = ''; return; }
+  host.innerHTML = '<div class="section-head"><h2>The guides</h2><span class="meta">' +
+    guides.length + ' cit' + (guides.length === 1 ? 'y' : 'ies') + '</span></div>' +
+    guides.map(guideCardHTML).join('');
+}
+
+// ==================== BOOT ====================
+
+function showState(title, body, mark, showDoor) {
+  var block = document.getElementById('state-block');
+  document.getElementById('state-mark').textContent = mark || '·';
+  document.getElementById('state-title').textContent = title;
+  document.getElementById('state-body').textContent = body;
+  document.getElementById('state-go').hidden = !showDoor;
+  block.hidden = false;
+  document.getElementById('doc').hidden = true;
+}
+
+// The token, from the fragment first and the query second.
+//
+// The app always writes the FRAGMENT form. A fragment is never sent to the
+// server, so the token stays out of Pages access logs and out of the Referer
+// header on every outbound link the reader clicks from this page. ?t= is
+// accepted anyway because people retype links and some mail clients rewrite
+// them, and a link that works is worth more here than a rule about spelling.
+//
+// This mirrors CityOps.shareKit.tokenFromUrl exactly, and tests/run.js pins
+// the two against the same fixture table so they cannot drift.
+function tokenFromUrl(hash, search) {
+  var h = String(hash || '').replace(/^\s+|\s+$/g, '').replace(/^#/, '');
+  var m = h.match(/^([0-9a-f]{32,64})$/i);
+  if (m) return m[1].toLowerCase();
+  var q = String(search || '').replace(/^\s+|\s+$/g, '').replace(/^\?/, '');
+  var parts = q.split('&');
+  for (var i = 0; i < parts.length; i++) {
+    var kv = parts[i].split('=');
+    if (kv[0] !== 't' && kv[0] !== 'token') continue;
+    var v = '';
+    try { v = decodeURIComponent(kv.slice(1).join('=') || ''); } catch (e) { v = ''; }
+    v = v.replace(/^\s+|\s+$/g, '');
+    if (/^[0-9a-f]{32,64}$/i.test(v)) return v.toLowerCase();
+  }
+  return '';
+}
+
+function readEmbedded() {
+  var el = document.getElementById('share-data');
+  if (!el) return null;
+  try {
+    var v = JSON.parse(el.textContent || 'null');
+    return (v && typeof v === 'object' && Array.isArray(v.cities)) ? v : null;
+  } catch (e) { return null; }
+}
+
+// One call, one door. `share_token` is the argument name get_share declares;
+// PostgREST matches RPC arguments by name, so this string is part of the
+// contract and changing it on either side breaks the page.
+function fetchShare(token) {
+  return fetch(SUPA.url + '/rest/v1/rpc/get_share', {
+    method: 'POST',
+    headers: { 'apikey': SUPA.anon, 'Authorization': 'Bearer ' + SUPA.anon, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ share_token: token })
+  }).then(function (r) {
+    // 404 means the function does not exist yet: the shares SQL has not been
+    // applied to the project. That is a setup state, not a dead link, and the
+    // page says which one it is rather than telling a reader their link is
+    // broken when it is not.
+    if (r.status === 404) return { setup: true };
+    if (!r.ok) throw new Error('http ' + r.status);
+    return r.json().then(function (body) { return { snapshot: body }; });
+  });
+}
+
+function start() {
+  GUIDE_IDS = Array.isArray(DATA.guideIds) ? DATA.guideIds : [];
+  TRAVELER = (DATA.travelerName && DATA.travelerName.trim()) || 'They';
+  document.title = TRAVELER + ' · Travel plan';
+  var initial = (TRAVELER.charAt(0) || 'R').toUpperCase();
+  var fav = document.getElementById('favicon');
+  if (fav) {
+    fav.href = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%23c72027'/%3E%3Ctext x='50' y='74' font-family='Georgia,serif' font-size='72' font-weight='600' fill='white' text-anchor='middle'%3E" +
+      encodeURIComponent(initial) + "%3C/text%3E%3C/svg%3E";
+  }
+  document.getElementById('hero-title').innerHTML =
+    escapeHTML(TRAVELER) + ' · <span class="em">on the move</span>';
+  document.getElementById('state-block').hidden = true;
+  document.getElementById('doc').hidden = false;
+  render();
+  renderGuides();
+}
+
+function boot() {
+  var embedded = readEmbedded();
+  if (embedded) { DATA = embedded; start(); return; }
+
+  var token = tokenFromUrl(location.hash, location.search);
+  if (!token) {
+    showState('This link is missing its code',
+      'A share link ends in a long code after a # sign. Copy the whole link from the message it came in, including everything after the #.',
+      '?', true);
+    return;
+  }
+  showState('Loading the plan…', 'One moment.', '·', false);
+  fetchShare(token).then(function (res) {
+    if (res.setup) {
+      showState('Sharing is not switched on yet',
+        'This site can serve shares, but the account it reads from has not had its share table created. Nothing is wrong with your link.',
+        '·', true);
+      return;
+    }
+    var snap = res.snapshot;
+    if (!snap || typeof snap !== 'object' || !Array.isArray(snap.cities)) {
+      showState('This share link is no longer live',
+        'The traveler either replaced this link with a new one or turned sharing off. Ask them for the current link.',
+        '·', true);
+      return;
+    }
+    DATA = snap;
+    start();
+  }).catch(function (e) {
+    showState('Could not load this plan',
+      'The connection failed rather than the link. Check your signal and reload the page.',
+      '·', false);
+    if (window.console) console.warn('[share] load failed', e);
+  });
+}
+
+boot();
+<\/script>
+</body>
+</html>
+</script>
+
 <script>
 'use strict';
 
 const STORAGE_KEY = 'planahead:v1';
 // Build stamp — bump when shipping. Shown in the footer + logged to console so you can
 // confirm at a glance which code your browser is actually running (rules out stale cache).
-const BUILD = '2026.08.28-trip3';
+const BUILD = '2026.08.28-trip4';
 const SNAPSHOTS_KEY = 'planahead:v1:snapshots';
 const MAX_AUTO_SNAPSHOTS = 7;    // daily auto rolling — about a week
 const MAX_MANUAL_SNAPSHOTS = 10; // generous cap for user snapshots
@@ -8095,9 +9134,36 @@ function newId() { return 'i_' + Date.now() + '_' + Math.random().toString(36).s
 //     is pushable, but loses to any explicit change made anywhere since
 //   - signing out keeps every credential on the device; it only stops pushing
 const CRED_KEYS = {
-  anthropic: { value: 'cityops.claude.apikey.v1', at: 'cityops.claude.apikey.updated.v1' },
-  github: { value: 'cityops.github.pat.v1', at: 'cityops.github.pat.updated.v1' }
+  anthropic: { value: 'cityops.claude.apikey.v1', at: 'cityops.claude.apikey.updated.v1' }
 };
+
+// The GitHub personal access token, retired 2026-08-28 with the publish path it
+// existed for. There is no `github` entry above any more, so nothing in this app
+// can read, write, sync or leak one. What is left is a demolition crew: the two
+// localStorage keys it lived in on this device are deleted on boot, and the
+// account's copy goes with the next profile push (buildProfileRow stopped
+// writing the sidecar, and sidecarsWorthPushing treats a row that still carries
+// one as a row owing a rewrite).
+//
+// What this CANNOT do is revoke the token at GitHub. Only Rob can, at
+// github.com/settings/personal-access-tokens, and until he does it is a live
+// credential that happens to be unused. The console line says so.
+const LEGACY_GITHUB_KEYS = ['cityops.github.pat.v1', 'cityops.github.pat.updated.v1'];
+
+function purgeLegacyGithubToken() {
+  let hit = false;
+  LEGACY_GITHUB_KEYS.forEach(k => {
+    if (credRead(k) === null) return;
+    hit = true;
+    credWrite(k, null);
+  });
+  if (hit) {
+    console.log('[trip] deleted the retired GitHub publish token from this device (' +
+      LEGACY_GITHUB_KEYS.join(', ') + '). Revoke it at ' +
+      'https://github.com/settings/personal-access-tokens if you have not already.');
+  }
+  return hit;
+}
 
 function credRead(k) {
   try { return localStorage.getItem(k); } catch (e) { return null; }
@@ -8143,10 +9209,8 @@ function credSet(which, value) {
 // rather than writing an empty one over the account's real value.
 function localCredSidecars() {
   const a = credStamp('anthropic');
-  const g = credStamp('github');
   return {
-    apiKey: a ? { value: credGet('anthropic'), updated: a } : null,
-    github: g ? { value: credGet('github'), updated: g } : null
+    apiKey: a ? { value: credGet('anthropic'), updated: a } : null
   };
 }
 
@@ -8154,25 +9218,40 @@ function localCredSidecars() {
 // again on any state PULLED from the account, so a blob written by an older
 // build on another device cannot put a credential back into the row.
 //
-// Nothing is destroyed: a credential found in the blob is reseated into the
-// credential store first, and only then removed from the blob. It is seated at
-// the EPOCH rather than now, which makes it pushable when the account has
-// nothing, and makes it lose to any key explicitly entered anywhere since (the
-// city app's Profile is the more likely place Rob typed the current one).
+// The Claude key is RESEATED: found in the blob, moved into the credential
+// store (at the EPOCH, so it is pushable when the account has nothing and loses
+// to any key explicitly entered anywhere since), and only then removed.
+//
+// The GitHub fields are DELETED outright, no reseating. The token has no reader
+// left anywhere in the product, and the username/repo/file settings addressed a
+// publish path that no longer exists. Keeping them would be keeping a credential
+// alive for nothing.
 // Returns true when the blob actually changed, so the caller can persist it.
+const RETIRED_GITHUB_FIELDS = ['githubToken', 'githubUser', 'githubRepo', 'githubFile'];
+
 function stripCredentialsFromBlob(blob) {
   if (!blob || typeof blob !== 'object') return false;
   let changed = false;
-  [['apiKey', 'anthropic'], ['githubToken', 'github']].forEach(([field, which]) => {
-    if (!(field in blob)) return;
-    const found = (typeof blob[field] === 'string') ? blob[field].trim() : '';
-    if (found && !credGet(which) && !credStamp(which)) {
-      credWriteBoth(which, found, CityOps.syncKit.EPOCH);
-      console.log('[trip] moved ' + field + ' out of the trip data and into the credential store');
+  if ('apiKey' in blob) {
+    const found = (typeof blob.apiKey === 'string') ? blob.apiKey.trim() : '';
+    if (found && !credGet('anthropic') && !credStamp('anthropic')) {
+      credWriteBoth('anthropic', found, CityOps.syncKit.EPOCH);
+      console.log('[trip] moved apiKey out of the trip data and into the credential store');
     }
+    delete blob.apiKey;
+    changed = true;
+  }
+  const dropped = [];
+  RETIRED_GITHUB_FIELDS.forEach(field => {
+    if (!(field in blob)) return;
     delete blob[field];
+    dropped.push(field);
     changed = true;
   });
+  if (dropped.length) {
+    console.log('[trip] deleted the retired GitHub publish settings from your trip data (' +
+      dropped.join(', ') + '). Sharing is a link now: Settings, Share with family.');
+  }
   return changed;
 }
 
@@ -8196,13 +9275,18 @@ function defaultState() {
     budgetMonthlyTarget: 0,
     lastSession: '',
     travelerName: '',
-    // No apiKey field and no githubToken field here. Credentials live in the
+    // No apiKey field here, and no github fields either. Credentials live in the
     // credential store above, never in this blob, and leaving the fields in
     // this shape at all would let Object.assign(defaultState(), pulledBlob)
-    // quietly put a stale one back.
-    githubUser: '',
-    githubRepo: '',
-    githubFile: 'family.html',
+    // quietly put a stale one back. The github username/repo/file settings went
+    // the same way on 2026-08-28 with the publish path they addressed.
+    // The public share: the token is the LINK, so it is a fact about the
+    // account rather than a secret, and it rides the trip blob so every device
+    // shows the same link and the same Copy/New link/Stop sharing controls.
+    // The snapshot itself never lives here; it lives in the shares row.
+    shareToken: '',
+    shareScope: 'trip',     // 'trip' or 'guides'
+    shareGuideIds: [],      // which guides the picker has ticked
     lastPublishedAt: '',
     lastExportedAt: ''  // ISO string of most recent successful JSON export. Drives "stale backup" nudge.
   };
@@ -11066,16 +12150,7 @@ function renderSettings() {
   if (budgetInput) budgetInput.value = state.budgetMonthlyTarget || '';
   const nameInput = document.getElementById('traveler-name-input');
   if (nameInput) nameInput.value = state.travelerName || '';
-  // Show "last published" indicator if we've published before
-  const statusEl = document.getElementById('family-share-status');
-  if (statusEl && state.lastPublishedAt && !statusEl.textContent.trim()) {
-    const when = new Date(state.lastPublishedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-    const url = state.githubUser && state.githubRepo
-      ? `https://${state.githubUser}.github.io/${state.githubRepo}/${state.githubFile || 'family.html'}`
-      : '';
-    statusEl.innerHTML = `Last published: ${when}` + (url ? ` · <a href="${url}" target="_blank" rel="noopener" style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:12px">${url}</a>` : '');
-    statusEl.style.color = 'var(--text-3)';
-  }
+  renderShareBlock();
   renderAIUsage();
 }
 
@@ -11089,117 +12164,350 @@ function updateTravelerName(v) {
   saveState();
 }
 
-function updateGithubField(field, v) {
-  // The token is a credential and never enters `state`; the username, repo and
-  // file path are plain settings and stay where they were.
-  if (field === 'githubToken') {
-    clearTimeout(window._patTimer);
-    window._patTimer = setTimeout(() => credSet('github', v), 500);
-    return;
+// ==================== THE PUBLIC SHARE ====================
+// Replaces Publish to GitHub (retired 2026-08-28 with the PAT that drove it).
+//
+// One Publish concept and one door. Publishing writes a SNAPSHOT of the chosen
+// data into public.shares under an unguessable token, and the link is
+// cityops.robriggs.com/share/#<token>. Family need no account, no app and no
+// sign-in. Rotating writes a new token onto the same row, which kills the old
+// link the instant it lands. Unpublishing deletes the row.
+//
+// Everything about WHAT a snapshot may contain lives in the engine as
+// CityOps.shareKit, where it is pure and unit tested. This file is transport,
+// storage and UI, exactly as with sync.
+
+// The link family will hold. Deliberately a constant rather than
+// location.origin: Rob may publish from a preview host or a local copy one day,
+// and a link that only resolves on his machine is worse than no link at all.
+const SHARE_ORIGIN = 'https://cityops.robriggs.com';
+
+let _shareBusy = false;
+let _guideRows = null;      // [{city_id, data}] once read, for the picker and the publish
+let _sharesTableMissing = false;
+
+function shareStatus(msg, kind) {
+  const el = document.getElementById('family-share-status');
+  if (!el) return;
+  el.innerHTML = msg;
+  el.style.color = kind === 'error' ? 'var(--accent)' : kind === 'ok' ? 'var(--green)' : 'var(--text-3)';
+}
+
+function shareLinkFor(token) {
+  return token ? CityOps.shareKit.url(SHARE_ORIGIN, token) : '';
+}
+
+// A token that cannot be guessed, or nothing at all. crypto.getRandomValues is
+// on every browser this app supports; if it somehow is not, publishing refuses
+// rather than falling back to Math.random, because a guessable token is the
+// entire security model gone.
+function newShareToken() {
+  const c = window.crypto || window.msCrypto;
+  if (!c || typeof c.getRandomValues !== 'function') {
+    throw new Error('This browser has no secure random source, so it cannot make a share link.');
   }
-  state[field] = v.trim();
+  return CityOps.shareKit.token(c.getRandomValues(new Uint8Array(CityOps.shareKit.TOKEN_BYTES)));
+}
+
+function setShareScope(scope) {
+  state.shareScope = (scope === 'guides') ? 'guides' : 'trip';
+  saveState();
+  renderShareBlock();
+  if (state.shareScope === 'guides') refreshGuideRows().then(() => renderShareBlock());
+}
+
+function toggleShareGuide(cityId, on) {
+  const list = Array.isArray(state.shareGuideIds) ? state.shareGuideIds.slice() : [];
+  const at = list.indexOf(cityId);
+  if (on && at === -1) list.push(cityId);
+  if (!on && at !== -1) list.splice(at, 1);
+  state.shareGuideIds = list;
   saveState();
 }
 
-function toggleGithubSetup() {
-  const block = document.getElementById('github-setup-block');
-  block.style.display = block.style.display === 'none' ? 'block' : 'none';
-  if (block.style.display !== 'none') {
-    // populate fields from state
-    const inputs = {
-      'traveler-name-input': 'travelerName',
-      'github-user-input': 'githubUser',
-      'github-repo-input': 'githubRepo',
-      'github-file-input': 'githubFile'
-    };
-    Object.entries(inputs).forEach(([id, key]) => {
-      const el = document.getElementById(id);
-      if (el) el.value = state[key] || (key === 'githubFile' ? 'family.html' : '');
-    });
-    // The token comes from the credential store, not from state.
-    const tok = document.getElementById('github-token-input');
-    if (tok) tok.value = credGet('github');
-  }
+// The guide rows, read once per session. The picker needs their names and the
+// publish needs their data, and they are the same read, so it happens once.
+// Fails soft: no session, no table or offline all leave the picker saying so
+// rather than showing an empty list that looks like "you have no guides".
+function refreshGuideRows() {
+  if (!syncOn() || !syncSignedIn()) return Promise.resolve(null);
+  if (_guideRows) return Promise.resolve(_guideRows);
+  return syncApi('/rest/v1/cities?select=city_id,data')
+    .then(rows => {
+      if (!Array.isArray(rows)) return null;
+      _guideRows = rows;
+      return rows;
+    })
+    .catch(e => { syncWarn('city guide read failed (the share picker will be empty)', e); return null; });
 }
 
-// Build the family share HTML for current state (extracted from generateFamilyShare so
-// both download and publish paths use the same logic).
-function buildFamilyShareForCurrentState() {
-  const cities = (state.cities || []).map(c => ({
-    id: c.id || '',
-    name: c.name || '',
-    country: c.country || '',
-    state: c.state || '',
-    status: c.status || 'tentative',
-    checkIn: c.checkIn || '',
-    checkOut: c.checkOut || '',
-    lat: c.lat,
-    lng: c.lng,
-    // Include accommodation dates so family view can highlight "currently staying at"
-    accommodations: (c.accommodations || [])
-      .filter(a => a.status === 'booked' || a.status === 'shortlisted')
-      .map(a => ({
-        name: a.name || '',
-        city: a.city || '',
-        neighborhood: a.neighborhood || '',
-        link: a.link || '',
-        status: a.status || '',
-        checkIn: a.checkIn || '',
-        checkOut: a.checkOut || ''
-      }))
-  })).filter(c => c.name);
+// The whole Share block, redrawn from state. Every control's presence and
+// label follows the state it is in: there is never a live button that cannot
+// work, and never a dead end with no way forward.
+function renderShareBlock() {
+  const scope = (state.shareScope === 'guides') ? 'guides' : 'trip';
+  const radio = document.querySelector('input[name="share-scope"][value="' + scope + '"]');
+  if (radio) radio.checked = true;
 
-  // Diagnostic: warn loudly if filter drops cities — helps catch data issues
-  const totalInState = (state.cities || []).length;
-  if (cities.length < totalInState) {
-    const missing = (state.cities || []).filter(c => !c.name);
-    console.warn('[Plan Ahead] ' + (totalInState - cities.length) + ' cities filtered out of publish (no name field). Affected:', missing);
+  const picker = document.getElementById('share-guide-picker');
+  if (picker) picker.style.display = scope === 'guides' ? 'block' : 'none';
+  if (picker && scope === 'guides') renderShareGuideList();
+
+  const token = state.shareToken || '';
+  const live = !!token;
+  const signedIn = syncOn() && syncSignedIn();
+
+  const pub = document.getElementById('share-publish-btn');
+  if (pub) {
+    pub.textContent = live ? '🔗 Update share' : '🔗 Publish share';
+    pub.disabled = !signedIn || _shareBusy;
+    pub.title = signedIn
+      ? (live ? 'Replace the snapshot behind your existing link' : 'Create the link and put a snapshot behind it')
+      : 'Sign in to sync first: a share lives in your account, so the link keeps working when this browser does not.';
   }
-  console.log('[Plan Ahead] Build for share:', {
-    citiesInState: totalInState,
-    citiesPublished: cities.length,
-    transitionsInState: (state.transitions || []).length
+  ['share-copy-btn', 'share-rotate-btn', 'share-unpublish-btn'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.style.display = live ? '' : 'none'; el.disabled = _shareBusy; }
   });
+  const row = document.getElementById('share-link-row');
+  const link = document.getElementById('share-link');
+  if (row) row.style.display = live ? 'block' : 'none';
+  if (link && live) { link.href = shareLinkFor(token); link.textContent = shareLinkFor(token); }
 
-  // Transitions: strip cost, confirmation, notes — show only mode/carrier/number/dates/cities
-  const transitions = (state.transitions || [])
-    .filter(t => t.toCity || t.departureDate)  // skip blank
-    .map(t => {
-      // Resolve source city name from cityId — preserve both id (for stable matching) and name (for display)
-      const srcCity = (state.cities || []).find(c => c.id === t.cityId);
-      return {
-        fromCityId: t.cityId || '',
-        mode: t.mode || 'other',
-        status: t.status || 'tentative',
-        fromCity: t.fromCity || (srcCity ? srcCity.name : ''),
-        toCity: t.toCity || '',
-        departureDate: t.departureDate || '',
-        departureTime: t.departureTime || '',
-        arrivalDate: t.arrivalDate || '',
-        arrivalTime: t.arrivalTime || '',
-        carrier: t.carrier || '',
-        number: t.number || ''
-      };
-    });
+  if (!signedIn) {
+    shareStatus('Sign in to sync (the chip at the top) to publish a share. A share lives in your account so the link keeps working from any device.', '');
+  }
+  renderPublishFreshness();
+}
 
-  // The share page has no account and must never call Supabase, so which stops
-  // actually have a cityops guide is resolved HERE, at publish time, and baked
-  // in. A stale list only ever costs a "Plan this city" where a guide link could
-  // have been, which is a door that still opens; it can never produce a link
-  // that dead-ends on someone else's city.
-  const guideIds = loadGuideIds() || [];
+function renderShareGuideList() {
+  const host = document.getElementById('share-guide-list');
+  if (!host) return;
+  if (!syncOn() || !syncSignedIn()) {
+    host.innerHTML = '<div class="muted" style="font-size:12px">Sign in to sync to see your city guides.</div>';
+    return;
+  }
+  if (!_guideRows) {
+    host.innerHTML = '<div class="muted" style="font-size:12px">Reading your city guides…</div>';
+    refreshGuideRows().then(() => renderShareGuideList());
+    return;
+  }
+  if (!_guideRows.length) {
+    host.innerHTML = '<div class="muted" style="font-size:12px">No city guides in your account yet. Make one from a stop card, then come back.</div>';
+    return;
+  }
+  const picked = Array.isArray(state.shareGuideIds) ? state.shareGuideIds : [];
+  host.innerHTML = '';
+  _guideRows.slice().sort((a, b) => String(a.city_id).localeCompare(String(b.city_id))).forEach(r => {
+    const city = (r.data && r.data.city) || {};
+    const dates = (city.dates && city.dates.from) ? city.dates.from : '';
+    const label = document.createElement('label');
+    label.style.cssText = 'display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;min-height:32px';
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = picked.indexOf(r.city_id) !== -1;
+    box.onchange = () => toggleShareGuide(r.city_id, box.checked);
+    const text = document.createElement('span');
+    text.textContent = (city.name || r.city_id) + (city.country ? ' · ' + city.country : '') + (dates ? ' · ' + dates : '');
+    label.appendChild(box);
+    label.appendChild(text);
+    host.appendChild(label);
+  });
+}
 
-  return buildFamilyShareHTML({
-    travelerName: (state.travelerName || '').trim() || 'Your traveler',
+// The snapshot, built by the engine from what this device holds. `guides` is
+// passed as the raw rows; shareKit picks out the ticked ones and strips them.
+function buildShareSnapshot() {
+  return CityOps.shareKit.build({
+    travelerName: state.travelerName || '',
     generatedAt: new Date().toISOString(),
-    cities: cities,
-    transitions: transitions,
-    guideIds: guideIds
+    cities: state.cities || [],
+    transitions: state.transitions || [],
+    guideIds: loadGuideIds() || [],
+    guides: (state.shareScope === 'guides') ? (_guideRows || []) : [],
+    includeGuides: (state.shareScope === 'guides') ? (state.shareGuideIds || []) : []
   });
+}
+
+// One row per user (the table has unique(user_id)), so publish and rotate are
+// the same upsert with a different token. user_id is never sent: it defaults to
+// auth.uid() and RLS refuses anything else.
+function writeShareRow(token, snapshot) {
+  return syncApi('/rest/v1/shares?on_conflict=user_id', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Prefer': 'resolution=merge-duplicates,return=minimal'
+    },
+    body: JSON.stringify([{ token: token, data: snapshot, updated_at: new Date().toISOString() }])
+  });
+}
+
+// The shares table is created by a one-time SQL block Rob runs in the Supabase
+// SQL editor, exactly like the sync tables before it. Until then PostgREST
+// answers 404 and this says which thing is missing rather than "publish
+// failed": the difference between a setup step and a fault is the whole
+// difference between a user who acts and a user who files a bug.
+function noteSharesTable(e) {
+  const msg = (e && e.message) || '';
+  if (msg.indexOf('404') === -1) return false;
+  _sharesTableMissing = true;
+  shareStatus('Sharing is not switched on for this account yet: the <strong>shares</strong> table has not been created. ' +
+    'Run the shares SQL block in the Supabase SQL editor, then publish again. Everything else in the app is unaffected.', 'error');
+  return true;
+}
+
+function withShareBusy(p) {
+  _shareBusy = true;
+  renderShareBlock();
+  return p.then(
+    v => { _shareBusy = false; renderShareBlock(); return v; },
+    e => { _shareBusy = false; renderShareBlock(); throw e; }
+  );
+}
+
+function publishShare() {
+  if (!syncOn() || !syncSignedIn()) {
+    shareStatus('Sign in to sync first. A share lives in your account, not in this browser.', 'error');
+    return Promise.resolve(false);
+  }
+  let snapshot, token;
+  try {
+    snapshot = buildShareSnapshot();
+    token = state.shareToken || newShareToken();
+  } catch (e) {
+    shareStatus(escapeHTML(e.message), 'error');
+    return Promise.resolve(false);
+  }
+  const stops = snapshot.cities.length;
+  const legs = snapshot.transitions.length;
+  const guides = snapshot.guides.length;
+  const first = !state.shareToken;
+  const confirmMsg = 'Publishing a snapshot:\n\n  • ' + stops + ' stop' + (stops === 1 ? '' : 's') +
+    '\n  • ' + legs + ' travel leg' + (legs === 1 ? '' : 's') +
+    (guides ? '\n  • ' + guides + ' city guide' + (guides === 1 ? '' : 's') : '') +
+    '\n\nAnyone with the link can read this, with no account.' +
+    (first ? '\n\nThis creates the link.' : '\n\nThis replaces what your existing link shows.') +
+    '\n\nContinue?';
+  if (!confirm(confirmMsg)) { shareStatus('Publish cancelled.', ''); return Promise.resolve(false); }
+
+  shareStatus('Publishing a snapshot of ' + stops + ' stops…', '');
+  return withShareBusy(writeShareRow(token, snapshot).then(() => {
+    state.shareToken = token;
+    state.lastPublishedAt = new Date().toISOString();
+    saveState();
+    const url = shareLinkFor(token);
+    shareStatus('✓ Published. Send this link to family: <a href="' + escapeHTML(url) + '" target="_blank" rel="noopener" ' +
+      'style="color:var(--accent);font-family:\'JetBrains Mono\',monospace;font-size:12px">' + escapeHTML(url) + '</a>', 'ok');
+    toast('✓ Share published. Link ready to send.', 'ok');
+    return true;
+  }).catch(e => {
+    if (!noteSharesTable(e)) {
+      console.error('Publish failed:', e);
+      shareStatus('Publish failed: ' + escapeHTML(e.message) + '. Your plan is untouched; try again.', 'error');
+    }
+    return false;
+  }));
+}
+
+// Rotate: a NEW token on the same row. The old link stops resolving the moment
+// this write lands, because get_share matches the token exactly and there is
+// only ever one row per user. This is the revocation, and it is instant.
+function rotateShareLink() {
+  if (!state.shareToken) return Promise.resolve(false);
+  if (armConfirm('rotateShare', 'Click "New link" again to confirm — the link family already have will stop working immediately.')) return Promise.resolve(false);
+  let token, snapshot;
+  try {
+    token = newShareToken();
+    snapshot = buildShareSnapshot();
+  } catch (e) {
+    shareStatus(escapeHTML(e.message), 'error');
+    return Promise.resolve(false);
+  }
+  shareStatus('Making a new link…', '');
+  return withShareBusy(writeShareRow(token, snapshot).then(() => {
+    state.shareToken = token;
+    state.lastPublishedAt = new Date().toISOString();
+    saveState();
+    const url = shareLinkFor(token);
+    shareStatus('✓ New link made and the old one is dead. Send this one: <a href="' + escapeHTML(url) + '" target="_blank" rel="noopener" ' +
+      'style="color:var(--accent);font-family:\'JetBrains Mono\',monospace;font-size:12px">' + escapeHTML(url) + '</a>', 'ok');
+    toast('✓ New share link. The old one no longer works.', 'ok');
+    return true;
+  }).catch(e => {
+    if (!noteSharesTable(e)) shareStatus('Could not make a new link: ' + escapeHTML(e.message) + '. The old link is still live.', 'error');
+    return false;
+  }));
+}
+
+function unpublishShare() {
+  if (!state.shareToken) return Promise.resolve(false);
+  if (armConfirm('unpublishShare', 'Click "Stop sharing" again to confirm — the link family have will stop working and the snapshot is deleted.')) return Promise.resolve(false);
+  const token = state.shareToken;
+  shareStatus('Taking the share down…', '');
+  return withShareBusy(syncApi('/rest/v1/shares?token=eq.' + encodeURIComponent(token), {
+    method: 'DELETE',
+    headers: { 'Prefer': 'return=minimal' }
+  }).then(() => {
+    state.shareToken = '';
+    state.lastPublishedAt = '';
+    saveState();
+    shareStatus('✓ Sharing is off. The link no longer opens anything.', 'ok');
+    toast('✓ Sharing stopped.', 'ok');
+    return true;
+  }).catch(e => {
+    if (!noteSharesTable(e)) shareStatus('Could not stop sharing: ' + escapeHTML(e.message) + '. The link is still live; try again.', 'error');
+    return false;
+  }));
+}
+
+function copyShareLink() {
+  const url = shareLinkFor(state.shareToken);
+  if (!url) return;
+  const done = () => { shareStatus('✓ Link copied. Paste it wherever family will look for it.', 'ok'); toast('Link copied.', 'ok'); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(done, () => shareStatus('Could not copy. Select the link above and copy it by hand.', 'error'));
+    return;
+  }
+  shareStatus('Copy is not available in this browser. Select the link above and copy it by hand.', 'error');
+}
+
+// ==================== THE STANDALONE DOWNLOAD ====================
+// The same page, handed over as a file rather than served. src/share-shell.html
+// rides in this build as a text/plain block with a __SHARE_DATA__ marker where
+// the snapshot goes; filling it produces a file byte-identical to what /share/
+// serves, minus the fetch. No network, no account, and it keeps working when
+// the share is unpublished, which is why it is still here.
+// (Never write that closing sequence literally in this file: it would end THIS
+// script element. The assembler counts script tags to keep that honest.)
+function shareTemplateHTML() {
+  const node = document.getElementById('share-template');
+  if (!node) throw new Error('this build carries no share page template');
+  const closeTag = '<' + '/script'; // assembled, never written literally: see above
+  let raw = node.textContent;
+  if (raw.charAt(0) === '\n') raw = raw.slice(1);
+  if (raw.charAt(raw.length - 1) === '\n') raw = raw.slice(0, -1);
+  return raw.replace(/<\\\/script/g, closeTag);
+}
+
+function buildFamilyShareHTML(snapshot) {
+  const tpl = shareTemplateHTML();
+  if (tpl.indexOf('__SHARE_DATA__') === -1) throw new Error('the share page template has no data marker');
+  // Escape every "</" so a closing-script-like sequence inside the snapshot
+  // cannot break out of the embedded data block. "\/" is a valid JSON escape
+  // for "/", so this is lossless.
+  const json = JSON.stringify(snapshot).replace(/<\//g, '<\\/');
+  return tpl.replace('__SHARE_DATA__', () => json);
+}
+
+function buildFamilyShareForCurrentState() {
+  return buildFamilyShareHTML(buildShareSnapshot());
 }
 
 function generateFamilyShare() {
-  const html = buildFamilyShareForCurrentState();
+  let html;
+  try { html = buildFamilyShareForCurrentState(); }
+  catch (e) { shareStatus('Could not build the file: ' + escapeHTML(e.message), 'error'); return; }
   const blob = new Blob([html], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -11209,629 +12517,8 @@ function generateFamilyShare() {
   setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
 
   const cityCount = (state.cities || []).filter(c => c.name).length;
-  const el = document.getElementById('family-share-status');
-  if (el) {
-    el.innerHTML = `✓ Downloaded <strong>family-share-${todayISO()}.html</strong> with ${cityCount} cities. To share: set up GitHub publishing above for one-click updates.`;
-    el.style.color = 'var(--green)';
-  }
-}
-
-// Publish the family share HTML directly to a GitHub repo via the GitHub API.
-// Same URL each time → family's bookmark stays valid forever.
-async function publishFamilyShare() {
-  const statusEl = document.getElementById('family-share-status');
-  function setStatus(msg, kind) {
-    if (!statusEl) return;
-    statusEl.innerHTML = msg;
-    statusEl.style.color = kind === 'error' ? 'var(--accent)' : kind === 'ok' ? 'var(--green)' : 'var(--text-3)';
-  }
-
-  // Validate setup
-  const missing = [];
-  if (!credGet('github')) missing.push('token');
-  if (!state.githubUser) missing.push('username');
-  if (!state.githubRepo) missing.push('repo');
-  if (missing.length > 0) {
-    setStatus(`Set up GitHub publishing first (missing: ${missing.join(', ')}). Click ⚙ GitHub setup.`, 'error');
-    document.getElementById('github-setup-block').style.display = 'block';
-    return;
-  }
-  const file = state.githubFile || 'family.html';
-
-  // Pre-flight count — shown in confirmation dialog so the user catches any "wait, that's the
-  // wrong number" surprises BEFORE shipping. This is exactly the diagnostic that would have
-  // caught the "publish shipped only 2 cities" incident earlier.
-  const cityCount = (state.cities || []).length;
-  const cityWithNameCount = (state.cities || []).filter(c => c.name).length;
-  const transCount = (state.transitions || []).length;
-
-  const confirmMsg = `About to publish:\n\n  • ${cityWithNameCount} cit${cityWithNameCount===1?'y':'ies'}\n  • ${transCount} travel leg${transCount===1?'':'s'}\n\nTo: ${state.githubUser}/${state.githubRepo}/${file}\n\nThis will overwrite the current family share. Continue?`;
-  if (!confirm(confirmMsg)) {
-    setStatus('Publish cancelled.', '');
-    return;
-  }
-
-  setStatus(`🚀 Publishing ${cityWithNameCount} cities + ${transCount} legs to GitHub…`, '');
-
-  // DIAGNOSTIC: log exactly what's about to go out
-  console.log('[Plan Ahead] Publishing:', {
-    citiesInState: cityCount,
-    citiesWithNames: cityWithNameCount,
-    transitions: transCount,
-    cityNames: (state.cities || []).map(c => c.name)
-  });
-
-  try {
-    const html = buildFamilyShareForCurrentState();
-    // GitHub API needs base64-encoded content; handle UTF-8 properly
-    const contentB64 = btoa(unescape(encodeURIComponent(html)));
-
-    // Step 1: Get the existing file's SHA (required for updates). 404 means new file.
-    const apiBase = `https://api.github.com/repos/${state.githubUser}/${state.githubRepo}/contents/${file}`;
-    let sha = null;
-    try {
-      const getRes = await fetch(apiBase, {
-        headers: {
-          'Authorization': `Bearer ${credGet('github')}`,
-          'Accept': 'application/vnd.github+json'
-        }
-      });
-      if (getRes.ok) {
-        const existing = await getRes.json();
-        sha = existing.sha;
-      } else if (getRes.status === 404) {
-        // file doesn't exist yet — that's fine, sha stays null
-      } else if (getRes.status === 401) {
-        throw new Error('Token rejected (401). Check that the PAT is valid and has Contents read+write permission.');
-      } else if (getRes.status === 403) {
-        throw new Error('Forbidden (403). The PAT may not have access to this repo, or rate limit hit.');
-      } else if (getRes.status === 404) {
-        throw new Error(`Repo not found (404). Check username "${state.githubUser}" and repo "${state.githubRepo}".`);
-      }
-    } catch(e) {
-      if (e.message && e.message.startsWith('Token') || e.message.startsWith('Forbidden') || e.message.startsWith('Repo')) throw e;
-      // network/other error — continue, the PUT will fail cleanly if needed
-    }
-
-    // Step 2: PUT to create or update
-    const putRes = await fetch(apiBase, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${credGet('github')}`,
-        'Accept': 'application/vnd.github+json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        message: sha ? `Update family share (${todayISO()})` : `Create family share`,
-        content: contentB64,
-        sha: sha || undefined
-      })
-    });
-
-    if (!putRes.ok) {
-      const errBody = await putRes.json().catch(() => ({}));
-      throw new Error(errBody.message || `HTTP ${putRes.status}`);
-    }
-
-    // Success — build the public URL and remember
-    const publishedURL = `https://${state.githubUser}.github.io/${state.githubRepo}/${file}`;
-    state.lastPublishedAt = new Date().toISOString();
-    saveState();
-    renderPublishFreshness();
-
-    setStatus(
-      `✓ Published! Share this URL with family: <a href="${publishedURL}" target="_blank" rel="noopener" style="color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:12px">${publishedURL}</a> · <span style="color:var(--text-3);font-size:11px">GitHub Pages takes ~1 minute to update.</span>`,
-      'ok'
-    );
-    toast(`✓ Published to GitHub. URL ready to share.`, 'ok');
-  } catch(e) {
-    console.error('Publish failed:', e);
-    setStatus(`Publish failed: ${e.message}. Check the setup form above.`, 'error');
-  }
-}
-
-// Build the complete standalone HTML as a string. Embedded data + JS + map.
-// Polished design mirrors plan-ahead.html: Fraunces serif, JetBrains Mono tactical,
-// warm off-white background, refined card shadows, status-aware color coding.
-function buildFamilyShareHTML(payload) {
-  const data = JSON.stringify(payload).replace(/<\//g, '<\\/'); // safe for script embed
-  const initial = ((payload.travelerName || 'R').trim().charAt(0) || 'R').toUpperCase();
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${escapeHTML(payload.travelerName)} · Travel Plan</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%23c72027'/%3E%3Ctext x='50' y='74' font-family='Georgia,serif' font-size='72' font-weight='600' fill='white' text-anchor='middle'%3E${initial}%3C/text%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,ital,wght@9..144,0,400;9..144,0,500;9..144,0,600;9..144,1,400;9..144,1,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<style>
-:root {
-  --bg: #cccccc; --bg-card: #ffffff; --bg-soft: #bdbdbd; --bg-softer: #e8e8e8;
-  --border: #a8a8a8; --border-light: #d0d0d0;
-  --text: #242424; --text-2: #4a4a4a;
-  /* Was #666666 (3.58:1 on this page's own --bg, fails WCAG AA 4.5:1 for
-     normal text; same gap PR #1 fixed in the main app's --text-3). Same fix,
-     same value: #525252 reads as the same "quiet label" tier and passes on
-     --bg, --bg-softer, and --bg-card. */
-  --text-3: #525252;
-  --accent: #c72027; --accent-hover: #9c181d; --accent-soft: #f3d1d3;
-  --green: #2d7d34; --green-soft: #d4e8d5;
-  --blue: #2c5d8a; --blue-soft: #d3e0ee;
-  --amber: #8a6d00; --amber-soft: #ede1be;
-  /* "-strong" text variants, same pattern and values as PR #1's main-app fix:
-     the base color reads fine as a border/icon/large glyph, but at pill/badge
-     size on its own "-soft" tinted background (or this doc's gray page bg) it
-     falls under 4.5:1. Used for text only; base colors are unchanged for
-     borders, the map's dot markers, and large text (e.g. the hero italic). */
-  --green-strong: #235f29;
-  --amber-strong: #6b5500;
-  --accent-strong: #8a161c;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,.08);
-  --shadow-md: 0 2px 8px rgba(0,0,0,.10);
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 0 0 60px; -webkit-font-smoothing: antialiased; }
-.doc { max-width: 880px; margin: 0 auto; padding: 0 20px; }
-/* The cityops header block: square, deep red, edge to edge, with the facts as
-   chips. Same treatment as the editor, so the page family reads and the page Rob
-   edits are visibly one product. The negative margins cancel .doc's padding. */
-.hero { background: linear-gradient(160deg, var(--accent) 0%, var(--accent-hover) 100%); color: #fff;
-  margin: 0 -20px 32px; padding: 26px 20px 22px; position: relative; }
-.hero h1 { font-family: 'Fraunces', Georgia, serif; font-size: 40px; font-weight: 400; line-height: 1.05; letter-spacing: -0.02em; color: #fff; }
-.hero h1 .em { color: #fff; opacity: 0.75; font-style: italic; font-weight: 500; }
-.hero .sub { margin-top: 12px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: rgba(255,255,255,0.88); letter-spacing: 0.14em; text-transform: uppercase; }
-.hero .facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
-.hero .chip { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); padding: 5px 11px;
-  border-radius: 20px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #fff; letter-spacing: 0.06em;
-  text-transform: uppercase; text-decoration: none; display: inline-flex; align-items: center; }
-.hero .chip.door:hover { background: rgba(255,255,255,0.3); border-color: rgba(255,255,255,0.6); }
-.hero .gen-date { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: rgba(255,255,255,0.8); letter-spacing: 0.12em; text-transform: uppercase; }
-.current-banner { background: var(--bg-card); border: 1px solid var(--accent); border-radius: 12px; box-shadow: 0 4px 20px rgba(199,32,39,0.10), 0 1px 3px rgba(0,0,0,0.04); margin-bottom: 32px; position: relative; padding: 38px 28px 24px; }
-.you-are-here-badge { position: absolute; top: 0; left: 0; background: var(--accent); color: white; padding: 5px 14px; border-radius: 0 0 8px 0; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 600; }
-.current-banner h2 { font-family: 'Fraunces', Georgia, serif; font-size: 32px; font-weight: 500; line-height: 1.15; }
-.current-banner h2 .country { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-3); letter-spacing: 0.12em; font-weight: 400; text-transform: uppercase; margin-left: 12px; vertical-align: middle; }
-.current-banner .dates { margin-top: 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-2); letter-spacing: 0.04em; }
-.current-banner .dates .days-left { color: var(--accent); font-weight: 500; margin-left: 8px; }
-.current-banner .accom-block { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border-light); }
-.current-banner .accom-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px; }
-.accom-item { padding: 10px 12px; margin-bottom: 6px; background: var(--bg-softer); border: 1px solid var(--border-light); border-radius: 6px; font-size: 13px; color: var(--text-2); }
-.accom-item .accom-name { font-weight: 500; color: var(--text); }
-.accom-item .accom-meta { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-3); letter-spacing: 0.04em; margin-top: 3px; }
-.accom-item a { color: var(--accent); text-decoration: none; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
-.accom-item a:hover { text-decoration: underline; }
-.accom-item.current { background: var(--accent-soft); border-color: var(--accent); border-left: 4px solid var(--accent); }
-.accom-item.current .accom-name { color: var(--accent-strong); font-weight: 600; }
-.accom-item.current::after { content: 'TONIGHT'; display: inline-block; margin-left: 8px; font-family: 'JetBrains Mono', monospace; font-size: 9px; background: var(--accent); color: white; padding: 1px 6px; border-radius: 3px; letter-spacing: 0.1em; font-weight: 600; vertical-align: middle; }
-.section-head { display: flex; align-items: baseline; justify-content: space-between; margin: 40px 0 18px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
-.section-head h2 { font-family: 'Fraunces', Georgia, serif; font-size: 28px; font-weight: 500; font-style: italic; line-height: 1.2; }
-.section-head .meta { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.14em; text-transform: uppercase; }
-.leg { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 10px; padding: 18px 22px; margin-bottom: 10px; box-shadow: var(--shadow-sm); transition: box-shadow 0.2s, border-color 0.2s; }
-.leg:hover { box-shadow: var(--shadow-md); border-color: var(--border); }
-.leg.past { opacity: 0.78; }
-.leg-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
-.leg-title { font-family: 'Fraunces', Georgia, serif; font-size: 20px; font-weight: 500; line-height: 1.2; }
-.leg-title .country { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.1em; font-weight: 400; text-transform: uppercase; margin-left: 10px; vertical-align: middle; }
-.leg-dates { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-2); letter-spacing: 0.03em; }
-.leg-accom { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-light); }
-.pill { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; font-weight: 500; margin-left: 8px; vertical-align: middle; display: inline-block; }
-.pill.booked { background: var(--green-soft); color: var(--green-strong); }
-.pill.shortlisted { background: var(--blue-soft); color: var(--blue); }
-.pill.tentative { background: var(--amber-soft); color: var(--amber-strong); }
-/* The two-app seam, on the family page. A stop with a cityops guide gets the
-   accent-outlined "City guide" pill; a stop without one gets the dashed, muted
-   "Plan this city", which opens cityops rather than promising a guide that is
-   not there. Which one you see was decided at publish time from the traveller's
-   own guide list, so this page never calls out to an account. */
-.guide-link { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 9px; border-radius: 20px; border: 1.5px solid var(--accent); color: var(--accent-strong); background: #fff; text-decoration: none; font-weight: 500; display: inline-block; margin-left: 8px; vertical-align: middle; white-space: nowrap; }
-.guide-link:hover { background: var(--accent-soft); }
-.guide-link.plan-link { border-style: dashed; border-color: var(--border); color: var(--text-3); }
-.guide-link.plan-link:hover { border-color: var(--accent); color: var(--accent-strong); background: #fff; }
-.current-banner .dates .guide-link { margin-left: 10px; }
-.map-wrap { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow-sm); margin-bottom: 8px; }
-#map { height: 420px; z-index: 1; }
-.map-reset-btn { position: absolute; top: 10px; left: 52px; z-index: 1000; background: white; border: 2px solid rgba(0,0,0,0.2); border-radius: 4px; padding: 5px 10px; font-size: 11px; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: all 0.15s; }
-.map-reset-btn:hover { background: var(--accent-soft); color: var(--accent-strong); border-color: var(--accent); }
-.map-legend { display: flex; gap: 16px; flex-wrap: wrap; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.06em; text-transform: uppercase; margin-top: 8px; }
-.map-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; border: 1.5px solid white; box-shadow: 0 0 0 1px var(--border); }
-.empty { color: var(--text-3); font-style: italic; padding: 24px; text-align: center; background: var(--bg-softer); border: 1px dashed var(--border); border-radius: 8px; font-size: 13px; }
-/* Travel legs between cities */
-.transit { display: flex; align-items: center; gap: 12px; margin: 6px 0 6px 22px; padding: 10px 14px; background: var(--bg-softer); border: 1px solid var(--border-light); border-left: 3px solid var(--text-3); border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-2); letter-spacing: 0.02em; }
-.transit.indent { margin-left: 28px; }
-.transit.status-booked { border-left-color: var(--green); }
-.transit.status-shortlisted { border-left-color: var(--blue); }
-.transit.status-tentative { border-left-color: var(--amber); }
-.transit.past { opacity: 0.55; }
-.transit-ic { font-size: 16px; line-height: 1; }
-.transit-main { flex: 1; min-width: 0; }
-.transit-line1 { color: var(--text); font-weight: 500; font-size: 12px; }
-.transit-line2 { color: var(--text-3); margin-top: 2px; }
-.transit-time { color: var(--text-2); white-space: nowrap; }
-footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--border); text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-3); letter-spacing: 0.12em; text-transform: uppercase; }
-footer .stamp { display: inline-block; padding: 6px 14px; border: 1px solid var(--text-3); border-radius: 3px; margin-bottom: 10px; }
-@media (max-width: 600px) {
-  body { padding: 0 0 40px; }
-  .doc { padding: 0 14px; }
-  .hero { margin: 0 -14px 24px; padding: 20px 14px 16px; }
-  .hero h1 { font-size: 29px; }
-  .hero .sub { margin-top: 10px; font-size: 10px; letter-spacing: 0.1em; }
-  .hero .facts { gap: 6px; margin-top: 11px; }
-  .hero .chip { padding: 4px 9px; font-size: 10px; }
-  /* A door needs a thumb; a fact does not. */
-  .hero .chip.door { min-height: 44px; padding: 8px 14px; }
-  .guide-link { min-height: 40px; display: inline-flex; align-items: center; margin-left: 0; margin-top: 6px; }
-  .current-banner { padding: 34px 16px 18px; margin-bottom: 24px; }
-  .current-banner h2 { font-size: 24px; }
-  .current-banner h2 .country { display: block; margin: 4px 0 0; }
-  .current-banner .accom-block { margin-top: 14px; padding-top: 12px; }
-  .section-head { margin: 28px 0 14px; }
-  .section-head h2 { font-size: 22px; }
-  .leg { padding: 14px 16px; }
-  .leg-title { font-size: 17px; }
-  .leg-title .country { display: block; margin: 4px 0 0; }
-  .leg-accom { margin-top: 10px; padding-top: 10px; }
-  .accom-item { padding: 9px 10px; }
-  #map { height: 260px; }
-  /* Narrow-screen transit card: airline + number, then date/times, then the route on one
-     compact line. Rebuilt as a grid so the three rows can be ordered independently of the
-     DOM order (which stays as-is for the desktop flex layout). */
-  .transit { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; row-gap: 2px; align-items: start; margin: 6px 0 6px 10px; padding: 9px 11px; }
-  .transit.indent { margin-left: 14px; }
-  .transit-main { display: contents; }
-  .transit-ic { grid-column: 1; grid-row: 1 / span 3; padding-top: 1px; }
-  .transit-line1 { grid-column: 2; grid-row: 1; min-width: 0; }
-  .transit-time { grid-column: 2; grid-row: 2; white-space: normal; }
-  .transit-line2 { grid-column: 2; grid-row: 3; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-}
-</style>
-</head>
-<body>
-<div class="doc">
-  <header class="hero">
-    <h1>${escapeHTML(payload.travelerName)} · <span class="em">on the move</span></h1>
-    <div class="sub" id="cover-meta">Loading…</div>
-    <div class="facts">
-      <span class="chip gen-date" id="gen-date"></span>
-      <a class="chip door" href="https://cityops.robriggs.com" target="_blank" rel="noopener noreferrer">City guides &#8599;</a>
-    </div>
-  </header>
-
-  <div id="current-section"></div>
-
-  <div class="section-head"><h2>The map</h2><span class="meta">All stops</span></div>
-  <div class="map-wrap"><button class="map-reset-btn" onclick="resetMapView()" title="Fit all pins in view">⤢ Reset view</button><div id="map"></div></div>
-  <div class="map-legend" id="map-legend"></div>
-
-  <div id="future-section"></div>
-  <div id="past-section"></div>
-
-  <footer>
-    <div class="stamp">Eyes only · For family</div>
-    <div id="footer-meta"></div>
-  </footer>
-</div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\/script>
-<script>
-const DATA = ${data};
-const TODAY = new Date().toISOString().slice(0,10);
-const TRAVELER = (DATA.travelerName && DATA.travelerName.trim()) || 'They';
-
-function fmtDate(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso + 'T12:00:00');
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function escapeHTML(s) {
-  return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
-// ---- the two-app seam ----
-// plan-ahead owns getting between cities; cityops owns what to do once you are in
-// one. Every stop therefore offers exactly one door, and which one is a FACT
-// baked in at publish time, not a guess made here: DATA.guideIds is the list of
-// guides the traveller actually has. A stop on that list links straight to its
-// guide; a stop that is not gets "Plan this city", which opens cityops. This page
-// never calls an account, so family see the same thing the traveller does.
-//
-// Slug MUST match cityops' own slug() exactly or a deep link lands on nothing:
-// lowercase, every non-alphanumeric run becomes one hyphen, trim hyphens.
-const CITYOPS_BASE = 'https://cityops.robriggs.com';
-const GUIDE_IDS = Array.isArray(DATA.guideIds) ? DATA.guideIds : [];
-
-function citySlug(name) {
-  return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-}
-
-// Exact match first (same city, same arrival date), then the same city on a
-// nearby date: a check-in that moved by a day does not make the guide wrong.
-function guideIdFor(name, fromISO) {
-  const slug = citySlug(name);
-  if (!slug || !GUIDE_IDS.length) return '';
-  const exact = fromISO ? (slug + '-' + fromISO) : '';
-  if (exact && GUIDE_IDS.indexOf(exact) !== -1) return exact;
-  const prefix = slug + '-';
-  const siblings = GUIDE_IDS.filter(function (id) { return id.indexOf(prefix) === 0; });
-  if (!siblings.length) return '';
-  if (!fromISO || siblings.length === 1) return siblings[0];
-  const want = Date.parse(fromISO);
-  if (isNaN(want)) return siblings[0];
-  let best = siblings[0], bestGap = Infinity;
-  siblings.forEach(function (id) {
-    const at = Date.parse(id.slice(prefix.length));
-    const gap = isNaN(at) ? Infinity : Math.abs(at - want);
-    if (gap < bestGap) { bestGap = gap; best = id; }
-  });
-  return best;
-}
-
-// cityops has no url-driven prefill today (its hash reader only understands
-// #city=), so this opens the app and carries the stop details in a fragment it
-// safely ignores. That fragment is the scaffold hook if cityops ever wants to
-// prefill its Add-city form from a link.
-function cityPlanLink(city) {
-  const parts = ['plan=' + encodeURIComponent(citySlug(city.name))];
-  if (city.name) parts.push('name=' + encodeURIComponent(city.name));
-  if (city.checkIn) parts.push('from=' + encodeURIComponent(city.checkIn));
-  if (city.checkOut) parts.push('to=' + encodeURIComponent(city.checkOut));
-  if (city.country) parts.push('country=' + encodeURIComponent(city.country));
-  return CITYOPS_BASE + '/#' + parts.join('&');
-}
-
-// One door per stop. Past stops get nothing: the guide is no use once you have left.
-function cityGuideLink(city) {
-  if (!city || !city.name) return '';
-  const id = guideIdFor(city.name, city.checkIn);
-  if (id) {
-    return '<a class="guide-link" href="' + escapeHTML(CITYOPS_BASE + '/#city=' + encodeURIComponent(id)) +
-      '" target="_blank" rel="noopener noreferrer" title="What to eat, see and do here">City guide ↗</a>';
-  }
-  return '<a class="guide-link plan-link" href="' + escapeHTML(cityPlanLink(city)) +
-    '" target="_blank" rel="noopener noreferrer" title="No guide for this stop yet. Opens cityops.">Plan this city ↗</a>';
-}
-
-// Status -> marker color (mirrors itinerary pill colors). Past trumps status (gray). Current trumps everything (red).
-function colorFor(city, isCurrent) {
-  if (isCurrent) return '#c72027';
-  if (city.checkOut && city.checkOut <= TODAY) return '#8a8a8a';
-  const s = city.status || 'tentative';
-  if (s === 'booked') return '#2d7d34';
-  if (s === 'shortlisted') return '#2c5d8a';
-  return '#8a6d00';
-}
-
-function isCurrentAccommodation(a) {
-  if (!a.checkIn || !a.checkOut) return false;
-  return a.checkIn <= TODAY && a.checkOut > TODAY;
-}
-
-function renderAccoms(accoms, isCurrentCity) {
-  if (!accoms || !accoms.length) return '';
-  const booked = accoms.filter(a => a.status === 'booked');
-  const list = booked.length > 0 ? booked : accoms;
-  return list.map(a => buildStayRow(a, isCurrentCity)).join('');
-}
-
-// Single stay row (extracted so stays and travel legs can be interleaved chronologically).
-function buildStayRow(a, isCurrentCity) {
-  const isCurrentAccom = isCurrentCity && isCurrentAccommodation(a);
-  const cls = 'accom-item' + (isCurrentAccom ? ' current' : '');
-  const linkBit = a.link ? ' · <a href="' + escapeHTML(a.link) + '" target="_blank" rel="noopener">view booking</a>' : '';
-  const cityBit = (a.city && a.city.trim()) ? escapeHTML(a.city.trim()) + ' · ' : '';
-  const nbhdBit = a.neighborhood ? escapeHTML(a.neighborhood) + ' · ' : '';
-  const datesBit = a.checkIn && a.checkOut ? fmtDate(a.checkIn) + ' → ' + fmtDate(a.checkOut) : '';
-  return '<div class="' + cls + '"><div class="accom-name">' + escapeHTML(a.name) + '</div><div class="accom-meta">' + cityBit + nbhdBit + datesBit + linkBit + '</div></div>';
-}
-
-// Sort a mixed list of stays + legs into one chronological timeline — IDENTICAL logic to the
-// admin app's buildStayAndTravel comparator, so the family view matches what Rob sees.
-function stayTravelSort(entries, parentCityName) {
-  const parent = (parentCityName || '').trim().toLowerCase();
-  function entryDate(e) { return e.kind === 'stay' ? (e.ref.checkIn || '') : (e.ref.departureDate || ''); }
-  entries.sort(function(x, y) {
-    const dx = entryDate(x), dy = entryDate(y);
-    if (dx !== dy) { if (!dx) return -1; if (!dy) return 1; return dx < dy ? -1 : 1; }
-    if (x.kind !== y.kind) {
-      const stayE = x.kind === 'stay' ? x : y;
-      const legE  = x.kind === 'leg'  ? x : y;
-      const legDate = legE.ref.departureDate || '', ci = stayE.ref.checkIn || '', co = stayE.ref.checkOut || '';
-      let legFirst;
-      if (legDate && co && legDate === co) legFirst = false;
-      else if (legDate && ci && legDate === ci) legFirst = true;
-      else {
-        const cityExplicit = !!(stayE.ref.city && stayE.ref.city.trim());
-        const sc = ((stayE.ref.city && stayE.ref.city.trim()) || parentCityName || '').trim().toLowerCase();
-        const dest = (legE.ref.toCity || '').trim().toLowerCase();
-        const orig = (legE.ref.fromCity || parent || '').trim().toLowerCase();
-        if (cityExplicit && sc && dest && sc === dest) legFirst = true;
-        else if (cityExplicit && sc && orig && sc === orig) legFirst = false;
-        else legFirst = (legE.ref.departureTime || '12:00') < '15:00';
-      }
-      if (x.kind === 'leg') return legFirst ? -1 : 1;
-      return legFirst ? 1 : -1;
-    }
-    if (x.kind === 'leg') {
-      const tx = x.ref.departureTime || '99:99', ty = y.ref.departureTime || '99:99';
-      return tx < ty ? -1 : (tx > ty ? 1 : 0);
-    }
-    return (x.ref.name || '').localeCompare(y.ref.name || '');
-  });
-  return entries;
-}
-
-// Merged, chronologically-sorted stay + travel timeline for one city (legs indented).
-function buildStayTravelTimeline(city, isCurrentCity) {
-  const accoms = city.accommodations || [];
-  const booked = accoms.filter(a => a.status === 'booked');
-  const stays = booked.length > 0 ? booked : accoms;
-  const legs = transitsFromCity(city);
-  const entries = [];
-  stays.forEach(a => entries.push({ kind: 'stay', ref: a }));
-  legs.forEach(t => entries.push({ kind: 'leg', ref: t }));
-  if (!entries.length) return '';
-  stayTravelSort(entries, city.name);
-  return entries.map(e => e.kind === 'stay' ? buildStayRow(e.ref, isCurrentCity) : buildTransit(e.ref, true)).join('');
-}
-
-function pill(status) {
-  const valid = ['booked','shortlisted','tentative'];
-  if (!valid.includes(status)) return '';
-  return '<span class="pill ' + status + '">' + status + '</span>';
-}
-
-function render() {
-  let current = null;
-  const past = [], future = [];
-  DATA.cities.forEach(c => {
-    if (!c.checkIn || !c.checkOut) { future.push(c); return; }
-    if (c.checkIn <= TODAY && c.checkOut > TODAY) { current = c; return; }
-    if (c.checkOut <= TODAY) past.push(c);
-    else future.push(c);
-  });
-  past.sort((a,b) => (b.checkIn||'').localeCompare(a.checkIn||''));
-  future.sort((a,b) => (a.checkIn||'').localeCompare(b.checkIn||''));
-
-  const totalLabel = DATA.cities.length + ' stops · ' + past.length + ' past · ' + (current ? '1 current · ' : '') + future.length + ' upcoming';
-  document.getElementById('cover-meta').textContent = totalLabel;
-  (function(){
-    var gd = new Date(DATA.generatedAt);
-    var ageDays = Math.floor((Date.now() - gd.getTime()) / 86400000);
-    var ageText = ageDays <= 0 ? 'today' : (ageDays === 1 ? 'yesterday' : ageDays + ' days ago');
-    var human = gd.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
-    var stale = ageDays >= 21 ? ' · may be out of date' : '';
-    document.getElementById('gen-date').textContent = 'Updated ' + human + ' · ' + ageText + stale;
-  })();
-  document.getElementById('footer-meta').textContent = 'Auto-updating · Last refresh on visit';
-
-  const cs = document.getElementById('current-section');
-  if (current) {
-    const daysLeft = Math.round((new Date(current.checkOut + 'T00:00:00') - new Date(TODAY + 'T00:00:00')) / 86400000);
-    const timeline = buildStayTravelTimeline(current, true);
-    const timelineHTML = timeline
-      ? '<div class="accom-block"><div class="accom-label">Stay &amp; travel</div>' + timeline + '</div>'
-      : '';
-    cs.innerHTML = '<div class="current-banner"><div class="you-are-here-badge">● ' + escapeHTML(TRAVELER) + ' is here</div><h2>' + escapeHTML(current.name) + '<span class="country">' + escapeHTML(current.country) + (current.state ? ' · ' + escapeHTML(current.state) : '') + '</span></h2><div class="dates">' + fmtDate(current.checkIn) + ' → ' + fmtDate(current.checkOut) + '<span class="days-left">' + daysLeft + ' day' + (daysLeft===1?'':'s') + ' left</span>' + cityGuideLink(current) + '</div>' + timelineHTML + '</div>';
-  } else {
-    cs.innerHTML = '<div class="current-banner" style="border-color:var(--border);box-shadow:var(--shadow-sm);padding-top:24px"><div style="text-align:center;color:var(--text-3);font-style:italic;font-family:Fraunces,serif;font-size:18px">Between stays — see upcoming below</div></div>';
-  }
-
-  document.getElementById('map-legend').innerHTML =
-    '<span><span class="dot" style="background:#c72027"></span>Currently here</span>' +
-    '<span><span class="dot" style="background:#2d7d34"></span>Booked</span>' +
-    '<span><span class="dot" style="background:#2c5d8a"></span>Shortlisted</span>' +
-    '<span><span class="dot" style="background:#8a6d00"></span>Tentative</span>' +
-    '<span><span class="dot" style="background:#8a8a8a"></span>Past</span>';
-
-  const fs = document.getElementById('future-section');
-  fs.innerHTML = '<div class="section-head"><h2>What\\'s coming up</h2><span class="meta">' + future.length + ' stop' + (future.length===1?'':'s') + '</span></div>';
-  if (future.length === 0) {
-    fs.innerHTML += '<div class="empty">No upcoming trips planned yet.</div>';
-  } else {
-    future.forEach(c => {
-      fs.innerHTML += buildLeg(c, false);
-    });
-  }
-
-  if (past.length > 0) {
-    const ps = document.getElementById('past-section');
-    ps.innerHTML = '<div class="section-head"><h2>Where ' + escapeHTML(TRAVELER) + ' has been</h2><span class="meta">' + past.length + ' stop' + (past.length===1?'':'s') + '</span></div>';
-    past.forEach(c => {
-      ps.innerHTML += buildLeg(c, true);
-    });
-  }
-
-  initMap(DATA.cities, current);
-}
-
-function buildLeg(c, isPast) {
-  const cls = isPast ? 'leg past' : 'leg';
-  const timeline = buildStayTravelTimeline(c, false);
-  return '<div class="' + cls + '"><div class="leg-head"><div class="leg-title">' + escapeHTML(c.name) + '<span class="country">' + escapeHTML(c.country) + (c.state ? ' · ' + escapeHTML(c.state) : '') + '</span>' + pill(c.status) + (isPast ? '' : cityGuideLink(c)) + '</div><div class="leg-dates">' + fmtDate(c.checkIn) + ' → ' + fmtDate(c.checkOut) + '</div></div>' + (timeline ? '<div class="leg-accom">' + timeline + '</div>' : '') + '</div>';
-}
-
-// Icon mapper for transit modes (must match the admin app's TRANSITION_MODES)
-const TRANSIT_ICONS = { flight: '✈', train: '🚆', cruise: '🚢', bus: '🚌', ferry: '⛴', drive: '🚗', rideshare: '🚖', other: '➜' };
-const TRANSIT_LABELS = { flight: 'Flight', train: 'Train', cruise: 'Cruise', bus: 'Bus', ferry: 'Ferry', drive: 'Drive', rideshare: 'Rideshare', other: 'Travel' };
-
-function buildTransit(t, indent) {
-  if (!t) return '';
-  const isPast = t.arrivalDate && t.arrivalDate < TODAY;
-  const cls = 'transit status-' + (t.status || 'tentative') + (isPast ? ' past' : '') + (indent ? ' indent' : '');
-  const icon = TRANSIT_ICONS[t.mode] || '➜';
-  const label = TRANSIT_LABELS[t.mode] || 'Travel';
-  const carrierBit = (t.carrier || t.number) ? [t.carrier, t.number].filter(Boolean).join(' ') : label;
-  const route = (t.fromCity && t.toCity) ? escapeHTML(t.fromCity) + ' → ' + escapeHTML(t.toCity) : (t.toCity ? '→ ' + escapeHTML(t.toCity) : '');
-  let timeBit = '';
-  if (t.departureDate) {
-    timeBit = fmtDate(t.departureDate);
-    if (t.departureTime) timeBit += ' · ' + t.departureTime;
-    if (t.arrivalTime) timeBit += ' → ' + t.arrivalTime;
-  }
-  return '<div class="' + cls + '">' +
-    '<span class="transit-ic">' + icon + '</span>' +
-    '<div class="transit-main">' +
-      '<div class="transit-line1">' + escapeHTML(carrierBit) + '</div>' +
-      '<div class="transit-line2">' + route + '</div>' +
-    '</div>' +
-    '<div class="transit-time">' + timeBit + '</div>' +
-  '</div>';
-}
-
-// Find transitions departing from a given city.
-// Match strictly by ID when both sides have one (handles multiple cities with the same name,
-// e.g. past Atlanta vs. future Atlanta). Fall back to case-insensitive name only when ID is
-// missing on either side (older data or legacy imports).
-function transitsFromCity(city) {
-  if (!DATA.transitions || !city) return [];
-  const targetId = city.id || '';
-  const targetName = (city.name || '').trim().toLowerCase();
-  return DATA.transitions.filter(t => {
-    if (targetId && t.fromCityId) return t.fromCityId === targetId;
-    return (t.fromCity || '').trim().toLowerCase() === targetName;
-  });
-}
-
-function initMap(cities, current) {
-  const valid = cities.filter(c => typeof c.lat === 'number' && typeof c.lng === 'number');
-  if (valid.length === 0) {
-    document.getElementById('map').innerHTML = '<div class="empty" style="margin:20px">No locations to map yet.</div>';
-    document.querySelector('.map-reset-btn').style.display = 'none';
-    return;
-  }
-  const map = L.map('map').setView([valid[0].lat, valid[0].lng], 3);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 18 }).addTo(map);
-  const bounds = [];
-  valid.forEach(c => {
-    const isCurrent = current && c.name === current.name && c.checkIn === current.checkIn;
-    const color = colorFor(c, isCurrent);
-    const radius = isCurrent ? 12 : 7;
-    const marker = L.circleMarker([c.lat, c.lng], { radius: radius, color: 'white', weight: 2, fillColor: color, fillOpacity: 0.95 }).addTo(map);
-    const datesBit = c.checkIn ? '<br><small style="font-family:JetBrains Mono,monospace;color:#666">' + fmtDate(c.checkIn) + ' → ' + fmtDate(c.checkOut) + '</small>' : '';
-    const statusBit = !isCurrent && c.status ? '<br><small style="color:' + color + ';font-weight:600;text-transform:uppercase;letter-spacing:0.08em;font-family:JetBrains Mono,monospace;font-size:9px">' + c.status + '</small>' : '';
-    marker.bindPopup('<strong style="font-family:Fraunces,serif;font-size:15px">' + escapeHTML(c.name) + '</strong><br><span style="font-family:JetBrains Mono,monospace;font-size:10px;color:#666;letter-spacing:0.08em;text-transform:uppercase">' + escapeHTML(c.country) + '</span>' + datesBit + statusBit + (isCurrent ? '<br><strong style="color:#c72027;font-family:JetBrains Mono,monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase">★ ' + escapeHTML(TRAVELER) + ' is here</strong>' : ''));
-    bounds.push([c.lat, c.lng]);
-  });
-  // Store for reset button
-  window._famMap = map;
-  window._famBounds = bounds;
-  if (bounds.length > 1) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 8 });
-}
-
-function resetMapView() {
-  if (!window._famMap || !window._famBounds) return;
-  if (window._famBounds.length > 1) {
-    window._famMap.fitBounds(window._famBounds, { padding: [40, 40], maxZoom: 8 });
-  } else if (window._famBounds.length === 1) {
-    window._famMap.setView(window._famBounds[0], 8);
-  }
-}
-
-render();
-<\/script>
-</body>
-</html>`;
+  shareStatus('✓ Downloaded <strong>family-share-' + todayISO() + '.html</strong> with ' + cityCount +
+    ' cities. It works offline and needs no account, but it does not update: Publish share if you want one link that you can refresh.', 'ok');
 }
 
 function exportData() {
@@ -15481,7 +16168,10 @@ function noteProfileTable(e) {
 function adoptCredSidecars(rowData) {
   const remote = CityOps.syncKit.readSidecars(rowData);
   const changed = [];
-  [['apiKey', 'anthropic', 'Claude API key'], ['github', 'github', 'GitHub token']]
+  // One credential left. The `github` sidecar is deliberately NOT adopted: it
+  // has no reader in this app any more, and adopting it would write a dead
+  // token back onto a device the migration just cleaned.
+  [['apiKey', 'anthropic', 'Claude API key']]
     .forEach(([field, which, label]) => {
       const block = remote[field];
       if (!block) return;
@@ -16057,6 +16747,11 @@ if (_credsMigrated) {
   } catch (e) { console.warn('[trip] could not persist the credential migration', e); }
 }
 scrubSnapshotCredentials();
+
+// The retired GitHub publish token, off this device. The account's copy goes on
+// the next profile push (see LEGACY_GITHUB_KEYS above and buildProfileRow in
+// the engine): together those two are the whole migration.
+purgeLegacyGithubToken();
 
 // Daily auto-snapshot: takes one per calendar day on first load, capped at 7.
 // Critical: runs BEFORE any state mutations so it captures the pristine loaded state.

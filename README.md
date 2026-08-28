@@ -118,15 +118,23 @@ The short version of [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md):
   city) and the trip side (`/trip/`, stops, stays and travel legs)
   share an origin, a session, and a credential store. Both are assembled
   from `src/` by the same assembler, so the drift guard covers both.
-- Credentials never live in synced data. The Anthropic key and the GitHub
-  publish token each keep their own localStorage entry with their own ISO
-  stamp, and sync as stamped sidecars on the profile row, reconciled one
-  by one. No export, snapshot or published page can carry one.
+- A third, public surface: `/share/`, a read-only snapshot of a trip
+  (optionally with chosen city guides) at an unguessable token, for
+  people with no account. Anonymous readers get exactly one door, the
+  `get_share(token)` security-definer function; the `shares` table itself
+  grants nothing to `anon`, so enumeration is impossible and a rotated
+  token dies instantly. What a snapshot may contain is a fixed field list
+  in the engine (`CityOps.shareKit`), pure and unit tested: no costs, no
+  booking confirmations, no paid flags, no private notes, no addresses.
+- Credentials never live in synced data. The Anthropic key keeps its own
+  localStorage entry with its own ISO stamp and syncs as a stamped
+  sidecar on the profile row. No export, snapshot or published page can
+  carry one.
 - The AI integration is a prompt contract: `PROMPT.md` doubles as
   documentation and machine-readable source, sliced by landmark into
   generated prompts; the merge path is validation-gated and
   prototype-safe.
-- 298 tests on Node built-ins; the harness tests the exact bytes that
+- 357 tests on Node built-ins; the harness tests the exact bytes that
   ship. Every feature landed through a written spec, plan, and
   independent review (committed under `docs/superpowers/`), a workflow
   run with AI agents doing implementation and adversarial review under
