@@ -915,12 +915,22 @@
      innerHTML='' on every render without taking the shared chrome with it. A
      standalone exported guide has no shared header at all (guide-shell.html
      does not carry this marker), which is why renderHeader falls back to #hdr
-     when #hdr-mid is absent. -->
+     when #hdr-mid is absent.
+
+     The two hrefs are ROOT-ABSOLUTE, not relative, and that is load bearing.
+     One header block ships into two surfaces that now sit at two different
+     depths: the guide side at / and the trip side at /trip/. A relative
+     "./trip/" would resolve to /trip/trip/ from the trip page, and "./" would
+     resolve to /trip/ rather than the root, so the switch would point at
+     itself from one side. The custom domain serves this repo from the root, so
+     / and /trip/ are the real addresses. Known cost, accepted with the
+     clean-URL move: a built file opened straight off disk over file:// no
+     longer follows these two links. -->
 <header class="apphdr" id="hdr">
   <div class="apphdr-bar">
     <nav class="surfsw" id="surfsw" aria-label="App surface">
-      <a class="surf" id="surf-trip" href="./trip.html">Trip</a>
-      <a class="surf" id="surf-cities" href="./">Cities</a>
+      <a class="surf" id="surf-trip" href="/trip/">Trip</a>
+      <a class="surf" id="surf-cities" href="/">Cities</a>
     </nav>
     <div class="apphdr-acts" id="hdr-acts"></div>
   </div>
@@ -3455,7 +3465,7 @@ var CityOps = (function () {
   // destination, even when the stop covering today names it.
   //
   // Lives here, not in the trip shell, for two reasons: the engine already
-  // ships into trip.html, and a pure function here is one the Node tests can
+  // ships into the trip surface, and a pure function here is one the Node tests can
   // reach. The shell keeps the fetch and the DOM.
 
   // cityops' own id shape: slug(name) + '-' + arrival date.
@@ -10053,7 +10063,7 @@ var CityOps = (function () {
   // destination, even when the stop covering today names it.
   //
   // Lives here, not in the trip shell, for two reasons: the engine already
-  // ships into trip.html, and a pure function here is one the Node tests can
+  // ships into the trip surface, and a pure function here is one the Node tests can
   // reach. The shell keeps the fetch and the DOM.
 
   // cityops' own id shape: slug(name) + '-' + arrival date.
@@ -14093,7 +14103,7 @@ only judges it. `ratings` may be omitted when you could not verify the place;
   var CLAUDE_KEY = 'cityops.claude.apikey.v1';
   var CLAUDE_KEY_AT = 'cityops.claude.apikey.updated.v1';  // ISO stamp for the reconcile
 
-  // The GitHub personal access token the TRIP surface (trip.html, same origin)
+  // The GitHub personal access token the TRIP surface (/trip/, same origin)
   // publishes the family page with. This shell has no UI for it and never reads
   // its value; it only carries it through the profile row, because a
   // PostgREST upsert replaces the whole row and a shell that did not know about
@@ -17521,7 +17531,7 @@ only judges it. `ratings` may be omitted when you could not verify the place;
     // all caps", and a lone lowercase "trip" beside "Feedback and
     // suggestions" reads as a typo rather than a style).
     var t = el('a', 'foot-trip', 'Trip');
-    t.href = './trip.html';
+    t.href = '/trip/';
     t.title = 'Your trip: stops, stays and travel legs';
     foot.appendChild(t);
     foot.appendChild(document.createTextNode(' · Family: '));

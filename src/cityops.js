@@ -2512,7 +2512,7 @@ var CityOps = (function () {
   // destination, even when the stop covering today names it.
   //
   // Lives here, not in the trip shell, for two reasons: the engine already
-  // ships into trip.html, and a pure function here is one the Node tests can
+  // ships into the trip surface, and a pure function here is one the Node tests can
   // reach. The shell keeps the fetch and the DOM.
 
   // cityops' own id shape: slug(name) + '-' + arrival date.

@@ -144,9 +144,16 @@ if (fs.existsSync(path.join(root, 'src', 'trip-shell.html'))) {
   // surfaces": neither shell owns the band any more.
   let tripOut = withHeaderCss(shell, shellName);
   tripOut = withHeaderHtml(tripOut, shellName);
-  fs.writeFileSync(path.join(root, 'trip.html'),
+  // The trip surface is a DIRECTORY now, so its public address is /trip/ with
+  // no .html: Pages serves trip/index.html for it. The old trip.html is still
+  // committed at the root as a hand-written redirect stub. It is deliberately
+  // NOT assembled and NOT written here, which is exactly how it stays out of
+  // the drift guard: the guard is "assemble, then git diff --exit-code", and a
+  // file the assembler never touches can never drift from src/.
+  fs.mkdirSync(path.join(root, 'trip'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'trip', 'index.html'),
     tripOut.replace('<!--CITYOPS_ENGINE-->', () => engine));
-  console.log('assembled trip.html');
+  console.log('assembled trip/index.html');
 }
 
 if (fs.existsSync(path.join(root, 'src', 'app-shell.html'))) {

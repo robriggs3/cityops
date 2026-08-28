@@ -214,7 +214,7 @@
   var CLAUDE_KEY = 'cityops.claude.apikey.v1';
   var CLAUDE_KEY_AT = 'cityops.claude.apikey.updated.v1';  // ISO stamp for the reconcile
 
-  // The GitHub personal access token the TRIP surface (trip.html, same origin)
+  // The GitHub personal access token the TRIP surface (/trip/, same origin)
   // publishes the family page with. This shell has no UI for it and never reads
   // its value; it only carries it through the profile row, because a
   // PostgREST upsert replaces the whole row and a shell that did not know about
@@ -3642,7 +3642,7 @@
     // all caps", and a lone lowercase "trip" beside "Feedback and
     // suggestions" reads as a typo rather than a style).
     var t = el('a', 'foot-trip', 'Trip');
-    t.href = './trip.html';
+    t.href = '/trip/';
     t.title = 'Your trip: stops, stays and travel legs';
     foot.appendChild(t);
     foot.appendChild(document.createTextNode(' · Family: '));

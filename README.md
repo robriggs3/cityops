@@ -115,7 +115,7 @@ The short version of [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md):
   newer-wins reconcile, flush-on-hide, RLS-only security with anonymous
   access revoked and verified.
 - Two surfaces, one app: the guide side (`index.html`, what to do in a
-  city) and the trip side (`trip.html`, stops, stays and travel legs)
+  city) and the trip side (`/trip/`, stops, stays and travel legs)
   share an origin, a session, and a credential store. Both are assembled
   from `src/` by the same assembler, so the drift guard covers both.
 - Credentials never live in synced data. The Anthropic key and the GitHub

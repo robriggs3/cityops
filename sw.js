@@ -1,10 +1,16 @@
 // CityOps app-shell service worker. Bump CACHE on each release.
-var CACHE = 'cityops-app-v7';
+var CACHE = 'cityops-app-v8';
 // Both surfaces of the app, because both are things a traveler opens with no
 // signal. The fetch handler is cache-first with a background refresh, so
 // without the bump above a phone would serve the previous build once after
 // every release; activate deletes the older cache outright.
-var SHELL = ['./', './index.html', './trip.html'];
+//
+// Root-absolute, and the trip surface is the DIRECTORY /trip/ now (served from
+// trip/index.html). This worker registers from the app root so its scope is /,
+// which covers /trip/ as well. The retired .html path is a redirect stub and is
+// deliberately NOT precached: caching a redirect would keep serving the hop
+// after the stub is eventually deleted.
+var SHELL = ['/', '/index.html', '/trip/'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); }));
 });

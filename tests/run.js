@@ -569,7 +569,8 @@ test('both surfaces ship the SAME header, from one source', () => {
   const root = path.join(__dirname, '..');
   const frag = fs.readFileSync(path.join(root, 'src', 'header.html'), 'utf8').replace(/\n$/, '');
   const headerCss = fs.readFileSync(path.join(root, 'src', 'header.css'), 'utf8').replace(/\n$/, '');
-  ['index.html', 'trip.html'].forEach(name => {
+  // The trip surface is a directory now: /trip/ is served from trip/index.html.
+  ['index.html', 'trip/index.html'].forEach(name => {
     const html = fs.readFileSync(path.join(root, name), 'utf8');
     assert.ok(html.includes(frag), name + ': shared header fragment missing (run node tools/assemble.js)');
     assert.ok(html.includes(headerCss), name + ': shared header CSS missing (run node tools/assemble.js)');
@@ -2966,7 +2967,7 @@ test('sidecarsWorthPushing says no when the account already has it all', () => {
 test('the built trip page keeps no credential in its trip state shape', () => {
   const fs = require('fs');
   const path = require('path');
-  const trip = fs.readFileSync(path.join(__dirname, '..', 'trip.html'), 'utf8');
+  const trip = fs.readFileSync(path.join(__dirname, '..', 'trip', 'index.html'), 'utf8');
   // defaultState() is the whole contract: a field that is not there cannot be
   // rehydrated by Object.assign from a pulled or imported blob.
   const def = trip.match(/function defaultState\(\) \{[\s\S]*?\n\}/);
@@ -2985,7 +2986,7 @@ test('the built trip page keeps no credential in its trip state shape', () => {
 test('the built trip page reads the shared session key, not its own', () => {
   const fs = require('fs');
   const path = require('path');
-  const trip = fs.readFileSync(path.join(__dirname, '..', 'trip.html'), 'utf8');
+  const trip = fs.readFileSync(path.join(__dirname, '..', 'trip', 'index.html'), 'utf8');
   assert.ok(/const AUTH_KEY = 'cityops\.auth\.v1'/.test(trip),
     'the trip surface must share the city app session key');
   // And it carries no sign-in flow of its own: one GoTrue redirect URL.
@@ -2998,7 +2999,7 @@ test('the published family page is built from a fixed field list', () => {
   // reach it even if one somehow got back into the blob.
   const fs = require('fs');
   const path = require('path');
-  const trip = fs.readFileSync(path.join(__dirname, '..', 'trip.html'), 'utf8');
+  const trip = fs.readFileSync(path.join(__dirname, '..', 'trip', 'index.html'), 'utf8');
   const fn = trip.match(/function buildFamilyShareForCurrentState\(\) \{[\s\S]*?\n\}/);
   assert.ok(fn, 'buildFamilyShareForCurrentState missing from the built trip page');
   assert.equal(fn[0].indexOf('apiKey'), -1);
@@ -3013,12 +3014,55 @@ test('the built trip page is the engine plus the shell, and nothing else', () =>
   const path = require('path');
   const root = path.join(__dirname, '..');
   const engine = fs.readFileSync(path.join(root, 'src', 'cityops.js'), 'utf8');
-  const trip = fs.readFileSync(path.join(root, 'trip.html'), 'utf8');
+  const trip = fs.readFileSync(path.join(root, 'trip', 'index.html'), 'utf8');
   assert.ok(trip.includes(engine), 'run node tools/assemble.js after editing src/');
   // The seam links are same-origin: a cross-domain hop here would put the two
   // halves back on two origins and split the session again.
-  assert.ok(/const CITYOPS_BASE = '\.'/.test(trip));
+  // Root-absolute and EMPTY, not '.': every use appends '/', and from /trip/ a
+  // '.' base would resolve the guide doors back onto this same page.
+  assert.ok(/const CITYOPS_BASE = '';/.test(trip));
   assert.equal(trip.indexOf('https://cityops.robriggs.com/#city='), -1);
+});
+
+// ---- clean URLs: /trip/ is the address, /trip.html is a stub ----
+// The trip surface moved from /trip.html to the directory /trip/. Two things
+// have to stay true and neither is visible in a passing browser session: the
+// old path must still be a redirect stub (bookmarks, and the retired
+// robriggs3.github.io editor URL, both point at it), and no shipped surface may
+// go on linking to it, or the address bar grows a .html back.
+test('trip.html stays a redirect stub to /trip/, not the app', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const root = path.join(__dirname, '..');
+  const stub = fs.readFileSync(path.join(root, 'trip.html'), 'utf8');
+  const engine = fs.readFileSync(path.join(root, 'src', 'cityops.js'), 'utf8');
+  // Small. If the assembler is ever taught to write this path again, it lands
+  // here as three quarters of a megabyte and this is the assertion that fails.
+  assert.ok(stub.length < 6000, 'trip.html is no longer a stub; is the assembler writing it again?');
+  assert.equal(stub.indexOf(engine), -1, 'the engine must not ship at the retired path');
+  // Three redirects, because a JS-only redirect is a dead link with JS off.
+  assert.ok(/location\.replace\('\/trip\/' \+ location\.search \+ location\.hash\)/.test(stub),
+    'the scripted hop must carry the query and the hash across');
+  assert.ok(/<meta http-equiv="refresh" content="0; url=\/trip\/">/.test(stub),
+    'the no-JS meta refresh fallback is missing');
+  assert.ok(/<a href="\/trip\/">/.test(stub), 'the visible manual link is missing');
+  // Same origin as the app: clearing that store would destroy the only local
+  // copy for anyone who never signed in, so the stub reads and writes none of it.
+  assert.equal(stub.indexOf('ocalStorage'), -1, 'the stub must never touch browser storage');
+});
+
+test('no shipped surface links to the retired .html trip path', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const root = path.join(__dirname, '..');
+  ['index.html', 'trip/index.html', 'template.html', 'example.html', 'sw.js'].forEach(name => {
+    const text = fs.readFileSync(path.join(root, name), 'utf8');
+    assert.equal(text.indexOf('trip.html'), -1, name + ': a reference to the retired trip.html survived');
+  });
+  // And the switch in the one shared header points at the clean URLs.
+  const frag = fs.readFileSync(path.join(root, 'src', 'header.html'), 'utf8');
+  assert.ok(/id="surf-trip" href="\/trip\/"/.test(frag), 'the Trip peer must point at /trip/');
+  assert.ok(/id="surf-cities" href="\/"/.test(frag), 'the Cities peer must point at the root');
 });
 
 test('readSidecars tolerates every shape a stored row can be in', () => {
