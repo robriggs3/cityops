@@ -1577,7 +1577,8 @@
      assemble and diffs, so the two surfaces cannot drift again without the
      build going red.
 
-     What is SHARED: the band itself, the Cities|Trip switch, the sync chip and
+     What is SHARED: the band itself, the Trip|Cities switch (Trip first, it
+     happens first chronologically), the sync chip and
      the Profile door. What each surface fills in is #hdr-mid: the guide side
      writes the city title, its dates and its highlights row; the trip side
      writes the trip title and the NOW chip. Same box, different contents.
@@ -1590,8 +1591,8 @@
 <header class="apphdr" id="hdr">
   <div class="apphdr-bar">
     <nav class="surfsw" id="surfsw" aria-label="App surface">
-      <a class="surf" id="surf-cities" href="./">Cities</a>
       <a class="surf" id="surf-trip" href="./trip.html">Trip</a>
+      <a class="surf" id="surf-cities" href="./">Cities</a>
     </nav>
     <div class="apphdr-acts" id="hdr-acts"></div>
   </div>
