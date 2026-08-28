@@ -4593,6 +4593,111 @@ asyncTest('a reply with no JSON fence is reported, never half applied', () => {
   });
 });
 
+// Boot lands on the city the calendar says he is in (owner ask 2026-08-28).
+// Rows are {id, from, to, archived}: the caller resolves the dates and the
+// Past flag, pickCurrentCity only decides between them.
+const STAYS = [
+  { id: 'batumi', from: '2026-08-08', to: '2026-08-15', archived: false },
+  { id: 'yerevan', from: '2026-08-18', to: '2026-08-24', archived: false },
+  { id: 'tirana', from: '2026-08-24', to: '2026-08-29', archived: false },
+  { id: 'ksamil', from: '2026-08-29', to: '2026-09-04', archived: false }
+];
+
+test('mid-stay boots the city whose dates contain today', () => {
+  assert.equal(C.appStore.pickCurrentCity(STAYS, '2026-08-26'), 'tirana');
+  assert.equal(C.appStore.pickCurrentCity(STAYS, '2026-08-11'), 'batumi');
+});
+
+test('a travel day picks the arrival city, not the one being left', () => {
+  // Tirana runs to the 29th and Ksamil starts on the 29th, so both contain
+  // today. The later `from` wins: arrival beats departure.
+  assert.equal(C.appStore.pickCurrentCity(STAYS, '2026-08-29'), 'ksamil');
+  // And the same tie read from the other order, so it is the dates deciding
+  // and not the position in the list.
+  assert.equal(C.appStore.pickCurrentCity(STAYS.slice().reverse(), '2026-08-29'), 'ksamil');
+});
+
+test('a gap between stays boots the next city ahead', () => {
+  // The 16th is after Batumi and before Yerevan: nothing contains today, so
+  // the smallest `from` still in the future takes it.
+  assert.equal(C.appStore.pickCurrentCity(STAYS, '2026-08-16'), 'yerevan');
+  // Before every stay begins, it is still the earliest one ahead.
+  assert.equal(C.appStore.pickCurrentCity(STAYS, '2026-07-01'), 'batumi');
+});
+
+test('when every stay is behind him there is no calendar answer', () => {
+  assert.equal(C.appStore.pickCurrentCity(STAYS, '2026-10-01'), null);
+  assert.equal(C.appStore.pickCurrentCity([], '2026-08-26'), null);
+});
+
+test('an archived city is skipped even when its dates contain today', () => {
+  const withArchived = STAYS.map((s) =>
+    s.id === 'tirana' ? Object.assign({}, s, { archived: true }) : s);
+  // The 26th is inside Tirana and inside nothing else, so skipping it has to
+  // fall through to the next city ahead rather than return Tirana anyway.
+  assert.equal(C.appStore.pickCurrentCity(withArchived, '2026-08-26'), 'ksamil');
+  // Archiving the arrival city on a travel day hands the day back to the
+  // city he is leaving, which still contains today.
+  const noKsamil = STAYS.map((s) =>
+    s.id === 'ksamil' ? Object.assign({}, s, { archived: true }) : s);
+  assert.equal(C.appStore.pickCurrentCity(noKsamil, '2026-08-29'), 'tirana');
+});
+
+test('rows with junk dates are ignored, never picked', () => {
+  const junk = [
+    { id: 'nodates', from: null, to: null, archived: false },
+    { id: 'backwards', from: '2026-08-30', to: '2026-08-20', archived: false },
+    { id: '', from: '2026-08-25', to: '2026-08-27', archived: false },
+    null,
+    { id: 'good', from: '2026-08-25', to: '2026-08-27', archived: false }
+  ];
+  assert.equal(C.appStore.pickCurrentCity(junk, '2026-08-26'), 'good');
+  assert.equal(C.appStore.pickCurrentCity(null, '2026-08-26'), null);
+});
+
+test('an Edit-dates stayOverride is the range the boot pick reads', () => {
+  // The app shell feeds pickCurrentCity through effectiveDates, so a stay the
+  // traveler moved by hand has to move the boot with it. GOOD ships
+  // 2026-08-08..2026-08-15; the override pushes it over today.
+  const shipped = C.effectiveDates(clone(GOOD), C.emptyState());
+  assert.deepEqual(shipped, { from: '2026-08-08', to: '2026-08-15' });
+  const moved = C.emptyState();
+  moved.stayOverride = { from: '2026-08-25', to: '2026-08-27' };
+  const eff = C.effectiveDates(clone(GOOD), moved);
+  assert.deepEqual(eff, { from: '2026-08-25', to: '2026-08-27' });
+  const row = { id: 'batumi', from: eff.from, to: eff.to, archived: false };
+  assert.equal(C.appStore.pickCurrentCity([row], '2026-08-26'), 'batumi');
+  // Without the override the same day falls outside and there is no answer.
+  assert.equal(C.appStore.pickCurrentCity(
+    [{ id: 'batumi', from: shipped.from, to: shipped.to, archived: false }],
+    '2026-08-26'), null);
+});
+
+test('an explicit #city= hash always beats the calendar pick', () => {
+  const store = C.appStore.normalize({
+    cities: {
+      tirana: { city: { name: 'Tirana', dates: { from: '2026-08-24', to: '2026-08-29' } } },
+      ksamil: { city: { name: 'Ksamil', dates: { from: '2026-08-29', to: '2026-09-04' } } },
+      batumi: { city: { name: 'Batumi', dates: { from: '2026-08-08', to: '2026-08-15' } } }
+    },
+    order: ['batumi', 'tirana', 'ksamil'],
+    active: 'batumi'
+  });
+  // A deep link is an explicit request and outranks everything.
+  assert.equal(C.appStore.resolveStartCity(store, 'tirana', 'ksamil'), 'tirana');
+  // A plain load takes the calendar's answer over the stale active city.
+  assert.equal(C.appStore.resolveStartCity(store, null, 'ksamil'), 'ksamil');
+  // A hash naming a city this device no longer holds is a dead link, so it
+  // falls through to the calendar rather than to whatever was last open.
+  assert.equal(C.appStore.resolveStartCity(store, 'gone', 'ksamil'), 'ksamil');
+  // No calendar answer keeps the old behaviour exactly: stored active, then
+  // the first city in order.
+  assert.equal(C.appStore.resolveStartCity(store, null, null), 'batumi');
+  assert.equal(C.appStore.resolveStartCity(store, null), 'batumi');
+  // An auto id for a city that is not in the store is ignored, not returned.
+  assert.equal(C.appStore.resolveStartCity(store, null, 'nowhere'), 'batumi');
+});
+
 
 // The async tests above resolve on a microtask, so the summary has to wait
 // for them or it reports before they have run and the exit code lies.

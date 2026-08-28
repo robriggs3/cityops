@@ -1833,10 +1833,6 @@ var CityOps = (function () {
     return String(name) + ' 2';
   }
 
-  // Pure start-city resolution: hash (if it names a known city) wins, else the
-  // stored active city (if still present), else the first city in order, else
-  // null when the store is empty. Extracted so the app shell's boot-target
-  // logic is unit-testable without a DOM.
   function blankCity(name, country, from, to) {
     if (!name || !String(name).replace(/^\s+|\s+$/g, '')) throw new Error('city name required');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new Error('dates must be YYYY-MM-DD');
@@ -1873,8 +1869,67 @@ var CityOps = (function () {
     };
   }
 
-  function resolveStartCity(store, hashId) {
+  // ---- Which city am I in right now? (pure) ----
+  // Owner ask 2026-08-28: "on page load, load current city (based on
+  // date/time)". Boot used to restore whichever city was last open, which on
+  // a travel morning is the city he has just left.
+  //
+  // `metas` is one row per city the store holds: {id, from, to, archived}.
+  // from/to are the EFFECTIVE stay dates (a stayOverride set in Edit dates
+  // already applied by the caller) and `archived` is the resolved Past flag.
+  // Taking both pre-resolved keeps this function pure and leaves "which dates
+  // count" and "what counts as archived" with the two helpers that already
+  // own those rules, effectiveDates and cityIsPast, rather than forking them.
+  //
+  // The rules, in order:
+  //   1. a stay that CONTAINS today wins. On a travel day two of them do
+  //      (Tirana runs to the 29th, Ksamil starts on the 29th), and the later
+  //      `from` takes it: arrival beats departure, because the city being
+  //      landed in is the one the guide is needed for.
+  //   2. otherwise the next stay AHEAD: the smallest `from` after today.
+  //   3. otherwise null, and boot keeps its existing behaviour (the stored
+  //      active city, then the first city in order).
+  // An exact tie on `from` keeps the earlier row, so the caller's order is
+  // the tiebreak and the answer is stable across loads.
+  //
+  // Both sides are LOCAL calendar dates: `todayIsoStr` comes from todayIso(),
+  // which formats the device clock in local time on purpose. Do not reach for
+  // toISOString() here, that is UTC, and it would hand a traveler east of
+  // Greenwich yesterday's city for the whole evening. Cities carry a
+  // utc_offset for the sunset maths and it is deliberately unused: he is
+  // standing in the city, so the device's own date is already the right one.
+  function pickCurrentCity(metas, todayIsoStr) {
+    var today = todayIsoStr || todayIso();
+    var live = (Array.isArray(metas) ? metas : []).filter(function (m) {
+      return m && typeof m.id === 'string' && m.id && !m.archived
+        && isIso(m.from) && isIso(m.to) && m.from <= m.to;
+    });
+    var here = null;
+    live.forEach(function (m) {
+      if (m.from <= today && today <= m.to && (!here || m.from > here.from)) here = m;
+    });
+    if (here) return here.id;
+    var next = null;
+    live.forEach(function (m) {
+      if (m.from > today && (!next || m.from < next.from)) next = m;
+    });
+    return next ? next.id : null;
+  }
+
+  // Pure start-city resolution, in precedence order: an explicit #city= hash
+  // (when it names a city this device still holds) always wins, then the
+  // calendar's answer from pickCurrentCity, then the stored active city, then
+  // the first city in order, then null when the store is empty. Extracted so
+  // the app shell's boot-target logic is unit-testable without a DOM.
+  //
+  // autoId sits BELOW the hash and ABOVE store.active by design: a deep link
+  // is an explicit request and must never be overridden, while a plain load
+  // carries no request at all, and on that load the calendar knows better
+  // than a stale active city does. autoId is optional, so a caller that has
+  // no calendar answer (or does not want one) gets the old behaviour.
+  function resolveStartCity(store, hashId, autoId) {
     if (hashId && Object.prototype.hasOwnProperty.call(store.cities, hashId)) return hashId;
+    if (autoId && Object.prototype.hasOwnProperty.call(store.cities, autoId)) return autoId;
     if (store.active && Object.prototype.hasOwnProperty.call(store.cities, store.active)) return store.active;
     return store.order.length ? store.order[0] : null;
   }
@@ -5670,7 +5725,7 @@ var CityOps = (function () {
       normalize: normalizeAppStore, add: appAddCity,
       remove: appRemoveCity, keepBothName: keepBothName,
       resolveStartCity: resolveStartCity, blankCity: blankCity,
-      exampleVisible: exampleCityVisible
+      exampleVisible: exampleCityVisible, pickCurrentCity: pickCurrentCity
     },
     profile: {
       normalize: normalizeProfile, isEmpty: profileIsEmpty,

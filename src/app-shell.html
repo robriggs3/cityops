@@ -658,6 +658,39 @@
       readStateFull(id) || CityOps.emptyState(), cityDatesFor(id), todayIsoLocal(), !!isCurrent);
   }
 
+  // ---- Boot lands on the city the calendar says he is in ----
+  // One {id, from, to, archived} row per city, the input to the engine's
+  // pickCurrentCity. Effective dates and the Past flag come from the same two
+  // helpers the switcher's Past group reads, so boot and the switcher can
+  // never disagree about where he is.
+  //
+  // isCurrent is false for every row on purpose. cityIsPastNow exempts the
+  // ACTIVE city from the date rule so a stay does not slide into Past under
+  // the cursor on its last day, but boot is the call that decides which city
+  // is active, so honouring that exemption here would be circular: the city
+  // he last had open would keep exempting itself from the rule meant to move
+  // him on.
+  //
+  // A hidden example city is dropped rather than picked and then corrected
+  // downstream: its shipped dates would otherwise win the boot on a device
+  // that has real cities but keeps the example switched off.
+  function currentCityMetas() {
+    var exVisible = exampleVisible();
+    var today = todayIsoLocal();
+    var out = [];
+    store.order.forEach(function (id) {
+      if (id === SEED_ID && !exVisible) return;
+      var dates = cityDatesFor(id);
+      if (!dates) return;
+      out.push({
+        id: id, from: dates.from, to: dates.to,
+        archived: CityOps.archiveKit.isPast(
+          readStateFull(id) || CityOps.emptyState(), dates, today, false)
+      });
+    });
+    return out;
+  }
+
   // Writes the flag and queues the state push so the other device sees it.
   //
   // The re-boot on the active city is load-bearing, not tidiness. The engine
@@ -3707,7 +3740,22 @@
       return;
     }
     var wanted = hashCity();
-    var target = CityOps.appStore.resolveStartCity(store, wanted);
+    // Owner ask 2026-08-28: "on page load, load current city (based on
+    // date/time)". The calendar's answer is offered to resolveStartCity,
+    // which ranks it below an explicit #city= and above the stored active
+    // city, so a deep link always wins and only a plain load moves. #plan=
+    // never reaches here at all: it returned above with the boot it started.
+    //
+    // Computed unconditionally, not skipped when a hash is present, so a
+    // STALE #city= naming a city this device no longer holds falls through to
+    // the calendar rather than to whatever was last open.
+    //
+    // This runs on boot and nowhere else. bindHashChange and the sync layer's
+    // visibilitychange/pageshow handlers are deliberately left alone: a
+    // re-pick while he is reading would yank the surface out from under him,
+    // and after boot the active city is his choice, not the calendar's.
+    var auto = CityOps.appStore.pickCurrentCity(currentCityMetas(), todayIsoLocal());
+    var target = CityOps.appStore.resolveStartCity(store, wanted, auto);
     // Feature 3: never boot straight into a hidden example. If it hides
     // (a real city exists and the toggle is off) there is always at least
     // one non-seed city to fall back to, by the same rule that hides it.
