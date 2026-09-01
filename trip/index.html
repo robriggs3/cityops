@@ -1898,9 +1898,9 @@
     <div class="muted" style="margin-top:8px;font-size:11px;line-height:1.5">Run via API answers from the model's own knowledge, with no web access. Copy prompt into Claude.ai or ChatGPT if you want it to search the web for the listing.</div>
 
     <!-- The paste-back block that used to sit here is gone (2026-09-01). Its
-         Apply button called applyAIResponse(), a function that has never
-         existed in this file, so the only thing it could do was throw. It was
-         never wired to anything either: this modal has exactly one caller,
+         Apply button called a function that has never existed in this file, so
+         the only thing it could do was throw. It was never wired to anything
+         either: this modal has exactly one caller,
          openAccomAssessment, whose prompt asks for a fit score, pros, concerns
          and questions to ask the host. That is prose for a person to read, not
          JSON with anywhere to be applied. The Result panel below is where an
@@ -2004,9 +2004,9 @@
 <div class="toast" id="toast"></div>
 
 <!-- The Cloudflare Web Analytics beacon that sat here is gone (2026-09-01).
-     It shipped a literal "YOUR_TOKEN_HERE" placeholder, so for its whole life
-     it reported nothing while still fetching a third-party script from
-     static.cloudflareinsights.com on every load of this page. A tag that costs
+     It shipped the setup placeholder rather than a real site token, so for its
+     whole life it reported nothing while still fetching a third-party script
+     from Cloudflare on every load of this page. A tag that costs
      a request and a third party on every visit and returns no measurement is
      not analytics. If usage stats are wanted later, add it back WITH a real
      token, on both surfaces, in one deliberate change. -->
@@ -9425,10 +9425,10 @@ function render() {
     var stale = ageDays >= 21 ? ' · may be out of date' : '';
     document.getElementById('gen-date').textContent = 'Updated ' + human + ' · ' + ageText + stale;
   })();
-  // The footer used to print "Auto-updating · Last refresh on visit" directly
-  // above the note explaining that this page is a snapshot. Both cannot be
-  // true, and the snapshot one is. The false line is gone; #gen-date above
-  // already says how old the snapshot is.
+  // Until 2026-09-01 the footer printed a line claiming this page refreshes
+  // itself, directly above the note explaining that it is a snapshot. Both
+  // cannot be true, and the snapshot one is. The false line is gone; #gen-date
+  // above already says how old the snapshot is.
 
   const cs = document.getElementById('current-section');
   if (current) {
@@ -9569,9 +9569,9 @@ function guideItemHTML(it) {
   var body = '';
   if (it.note) body += '<div class="gi-note">' + escapeHTML(it.note) + '</div>';
   // Must / Good / Skip, the same three words and the same bold-tag-then-reason
-  // shape the app's own Share view uses. This read `v.label` until 2026-09-01,
-  // a field no verdict has ever carried, so every published share showed the
-  // reason with the judgement missing.
+  // shape the app's own Share view uses. Until 2026-09-01 this read a field no
+  // verdict has ever carried, so every published share showed the reason with
+  // the judgement missing.
   (it.verdicts || []).forEach(function (v) {
     if (!v || !v.text) return;
     var tier = (v.tier === 'must' || v.tier === 'skip') ? v.tier : 'good';
@@ -15347,9 +15347,10 @@ function openAccomAssessment(city, acc) {
   document.getElementById('modal-title').textContent = 'AI assessment prompt';
   document.getElementById('modal-sub').textContent = `${city.name} · ${acc.name || '(unnamed)'}`;
   document.getElementById('modal-textarea').value = currentPrompt;
-  // #modal-result, not #modal-response. This line named an element that is not
-  // in the markup, so it threw before the modal was ever shown and every
-  // "Assess with AI" button on every stay silently did nothing.
+  // Until 2026-09-01 this line named an element that is not in the markup, so
+  // it threw before the modal was ever shown and every "Assess with AI" button
+  // on every stay silently did nothing. The ids here must match the markup
+  // above; nothing else checks them.
   document.getElementById('modal-result').style.display = 'none';
   document.getElementById('modal-result-content').textContent = '';
   document.getElementById('modal-api-btn').style.display = state.aiMode === 'api' ? 'inline-block' : 'none';
@@ -17045,8 +17046,8 @@ function initCollapsibleSections() {
 
   // One control to turn the whole page into an index and back again.
   // The anchor is the SHARED header (src/header.html), which is
-  // `header.apphdr#hdr` and is the first child of .wrap. This looked for
-  // `header.hero`, a class this surface has never had, so the whole bar was
+  // `header.apphdr#hdr` and is the first child of .wrap. Until 2026-09-01 this
+  // looked for a header class this surface has never had, so the whole bar was
   // built into a null check and no one ever saw a Collapse all button.
   const hero = document.querySelector('.wrap > header.apphdr');
   if (hero && !document.getElementById('sec-allbar')) {

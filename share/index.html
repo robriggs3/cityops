@@ -613,10 +613,10 @@ function render() {
     var stale = ageDays >= 21 ? ' · may be out of date' : '';
     document.getElementById('gen-date').textContent = 'Updated ' + human + ' · ' + ageText + stale;
   })();
-  // The footer used to print "Auto-updating · Last refresh on visit" directly
-  // above the note explaining that this page is a snapshot. Both cannot be
-  // true, and the snapshot one is. The false line is gone; #gen-date above
-  // already says how old the snapshot is.
+  // Until 2026-09-01 the footer printed a line claiming this page refreshes
+  // itself, directly above the note explaining that it is a snapshot. Both
+  // cannot be true, and the snapshot one is. The false line is gone; #gen-date
+  // above already says how old the snapshot is.
 
   const cs = document.getElementById('current-section');
   if (current) {
@@ -757,9 +757,9 @@ function guideItemHTML(it) {
   var body = '';
   if (it.note) body += '<div class="gi-note">' + escapeHTML(it.note) + '</div>';
   // Must / Good / Skip, the same three words and the same bold-tag-then-reason
-  // shape the app's own Share view uses. This read `v.label` until 2026-09-01,
-  // a field no verdict has ever carried, so every published share showed the
-  // reason with the judgement missing.
+  // shape the app's own Share view uses. Until 2026-09-01 this read a field no
+  // verdict has ever carried, so every published share showed the reason with
+  // the judgement missing.
   (it.verdicts || []).forEach(function (v) {
     if (!v || !v.text) return;
     var tier = (v.tier === 'must' || v.tier === 'skip') ? v.tier : 'good';

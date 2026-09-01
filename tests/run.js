@@ -6288,25 +6288,27 @@ test('the trip surface leaves no control that cannot succeed', () => {
   // The AI modal read #modal-response, which is not in the markup, so every
   // "Assess with AI" button threw before the modal could open.
   assert.ok(trip.indexOf('id="modal-result"') !== -1);
-  // Pin the CODE, not the prose: the comments explaining each fix quote the old
-  // identifier by name, so a bare substring search would match the explanation.
-  assert.equal(trip.indexOf("getElementById('modal-response"), -1, 'the wrong modal id came back');
+  // A plain absence check, which is only possible because the comments
+  // explaining each of these removals carry the DATE and not the string. That
+  // is the repo's own rule, learned when the retired-host test tripped over its
+  // own explanation; keep it when editing the comments below these lines.
+  assert.equal(trip.indexOf('modal-response'), -1, 'the wrong modal id came back');
   assert.ok(trip.indexOf("getElementById('modal-result')") !== -1);
   assert.ok(trip.indexOf("getElementById('modal-result-content')") !== -1);
   // applyAIResponse() was called by a button and defined nowhere.
-  assert.equal(trip.indexOf('applyAIResponse()"'), -1, 'a call to an undefined function came back');
+  assert.equal(trip.indexOf('applyAIResponse'), -1, 'a call to an undefined function came back');
   assert.equal(trip.indexOf('id="modal-paste-back"'), -1, 'the dead paste-back box came back');
   // The Collapse all bar hung off `.wrap > header.hero`, a class this surface
   // has never had, so the bar was never built.
-  assert.equal(trip.indexOf("'.wrap > header.hero'"), -1, 'the dead header selector came back');
+  assert.equal(trip.indexOf('header.hero'), -1, 'the dead header selector came back');
   assert.ok(trip.indexOf(".querySelector('.wrap > header.apphdr')") !== -1);
   // Deleting a stay or an idea now arms the same way deleting a stop does.
   ['deleteCity:', 'removeAccom:', 'removeIdea:'].forEach(function (key) {
     assert.ok(trip.indexOf("armConfirm('" + key) !== -1, key + ' lost its confirmation');
   });
   // A beacon that reports nothing still costs a third-party request per load.
-  assert.equal(trip.indexOf('cloudflareinsights.com/beacon'), -1);
-  assert.equal(trip.indexOf('"token": "YOUR_TOKEN_HERE"'), -1);
+  assert.equal(trip.indexOf('cloudflareinsights'), -1);
+  assert.equal(trip.indexOf('YOUR_TOKEN_HERE'), -1);
 });
 
 test('a published share carries the verdict tier, and the page renders it', () => {
@@ -6345,11 +6347,11 @@ test('a published share carries the verdict tier, and the page renders it', () =
   const path = require('path');
   const page = fs.readFileSync(path.join(__dirname, '..', 'share', 'index.html'), 'utf8');
   assert.ok(page.indexOf("tier === 'must' ? 'Must'") !== -1);
-  assert.equal(page.indexOf('escapeHTML(v.label)'), -1, 'the share page still reads the dead field');
+  assert.equal(page.indexOf('v.label'), -1, 'the share page still reads the dead field');
   // The footer claimed to auto-update directly above the note saying it is a
   // snapshot. Both cannot be true and the snapshot one is.
-  assert.equal(page.indexOf("'Auto-updating"), -1, 'the false auto-update line came back');
-  assert.equal(page.indexOf('id="footer-meta"'), -1, 'the element it wrote into came back');
+  assert.equal(page.indexOf('Auto-updating'), -1, 'the false auto-update line came back');
+  assert.equal(page.indexOf('footer-meta'), -1, 'the element it wrote into came back');
   assert.ok(page.indexOf('This page is a snapshot taken when the traveler pressed Publish') !== -1);
 });
 
