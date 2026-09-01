@@ -1657,6 +1657,7 @@
     <div class="settings-grid">
       <div class="setting-card" id="ai-card">
         <h3>AI integration</h3>
+        <div class="muted" id="ai-gate-note" style="display:none;margin-bottom:10px;line-height:1.55"></div>
         <div class="setting-radio-row">
           <label><input type="radio" name="ai-mode" value="copy" onchange="setAIMode('copy')"> Copy to clipboard</label>
           <label><input type="radio" name="ai-mode" value="api" onchange="setAIMode('api')"> Anthropic API</label>
@@ -1706,6 +1707,11 @@
           <div style="font-size:11px;color:var(--text-3);margin-bottom:8px;font-family:'JetBrains Mono',monospace">Auto: 1/day · max 7 · Manual: max 10 · Safety snapshots taken before destructive actions</div>
           <div id="snapshots-list" style="display:flex;flex-direction:column;gap:6px"></div>
         </div>
+      </div>
+
+      <div class="setting-card" id="plan-card">
+        <h3>Your plan</h3>
+        <div id="plan-card-body"></div>
       </div>
 
       <div class="setting-card" id="sync-card">
@@ -4720,7 +4726,7 @@ Return ONLY valid JSON in this exact format (no markdown fences, no preamble):
 }
 
 async function runCityResearch(city) {
-  if (state.aiMode !== 'api' || !credGet('anthropic')) {
+  if (!apiAiReady()) {
     toast('API mode + key required for AI research. Configure in Settings.', 'error');
     return null;
   }
@@ -4779,7 +4785,7 @@ function applyCityResearch(city, research) {
 }
 
 function openCityResearchModal(city) {
-  if (state.aiMode !== 'api' || !credGet('anthropic')) {
+  if (!apiAiReady()) {
     toast('AI research needs API mode + key. Configure in Settings → AI Mode.', 'error');
     return;
   }
@@ -5164,6 +5170,12 @@ function resetProfile() {
 // ==================== SETTINGS ====================
 
 function setAIMode(mode) {
+  if (mode === 'api' && !entAllows()) {
+    const g = entGate('ai');
+    toast(g.title + '. ' + g.body, 'error');
+    renderSettings();
+    return;
+  }
   state.aiMode = mode;
   document.getElementById('api-key-block').style.display = mode === 'api' ? 'block' : 'none';
   saveState();
@@ -5185,8 +5197,16 @@ function setBudgetTarget(v) {
 }
 
 function renderSettings() {
-  document.querySelector('input[name="ai-mode"][value="'+(state.aiMode||'copy')+'"]').checked = true;
-  document.getElementById('api-key-block').style.display = state.aiMode === 'api' ? 'block' : 'none';
+  const aiGated = state.aiMode === 'api' && !entAllows();
+  const shownMode = aiGated ? 'copy' : (state.aiMode || 'copy');
+  document.querySelector('input[name="ai-mode"][value="'+shownMode+'"]').checked = true;
+  document.getElementById('api-key-block').style.display = shownMode === 'api' ? 'block' : 'none';
+  const aiNote = document.getElementById('ai-gate-note');
+  if (aiNote) {
+    const g = aiGated ? entGate('ai') : null;
+    aiNote.textContent = g ? (g.title + '. ' + g.body + ' ' + g.keeps) : '';
+    aiNote.style.display = g ? 'block' : 'none';
+  }
   document.getElementById('api-key-input').value = credGet('anthropic') || '';
   const budgetInput = document.getElementById('budget-target-input');
   if (budgetInput) budgetInput.value = state.budgetMonthlyTarget || '';
@@ -5858,6 +5878,12 @@ function publishShare(id) {
     shareRowStatus(id, 'Sign in to sync first. A share lives in your account, not in this browser.', 'error');
     return Promise.resolve(false);
   }
+  if (!entAllows()) {
+    const g = entGate('publish');
+    shareRowStatus(id, escapeHTML(g.title + '. ' + g.body + ' ' + g.keeps), 'error');
+    toast(g.title, 'error');
+    return Promise.resolve(false);
+  }
   let snapshot, token;
   try {
     snapshot = buildShareSnapshot(row);
@@ -5921,6 +5947,11 @@ function publishShare(id) {
 function rotateShareLink(id) {
   const row = shareRow(id);
   if (!row || !row.token) return Promise.resolve(false);
+  if (!entAllows()) {
+    const g = entGate('publish');
+    shareRowStatus(id, escapeHTML(g.title + '. ' + g.body + ' Deleting a link still works.'), 'error');
+    return Promise.resolve(false);
+  }
   const named = row.label || 'this link';
   if (armConfirm('rotateShare:' + id, 'Click again to confirm. The "' + named +
     '" link you already sent will stop working immediately. Your other links are not affected.')) return Promise.resolve(false);
@@ -6341,7 +6372,7 @@ function openNotesImport() {
 
   // Show/hide AI button based on whether API is configured
   const aiBtn = document.getElementById('notes-ai-btn');
-  if (state.aiMode === 'api' && credGet('anthropic')) {
+  if (apiAiReady()) {
     aiBtn.disabled = false;
     aiBtn.title = '';
     aiBtn.textContent = '⚡ Process with AI (live)';
@@ -6383,7 +6414,7 @@ function copyNotesPrompt() {
 async function runNotesAI() {
   const notes = document.getElementById('notes-input').value.trim();
   if (!notes) { setNotesStatus('Paste notes first.', 'error'); return; }
-  if (state.aiMode !== 'api' || !credGet('anthropic')) {
+  if (!apiAiReady()) {
     setNotesStatus('API mode + key required. Configure in Settings, or use Copy extraction prompt.', 'error');
     return;
   }
@@ -7703,7 +7734,7 @@ async function geocode(name, country) {
   const localHit = lookupCity(name, country);
   if (localHit) return localHit;
   // 2. Anthropic API (if configured) — broad knowledge, reliable in any sandbox
-  if (state.aiMode === 'api' && credGet('anthropic')) {
+  if (apiAiReady()) {
     const apiHit = await geocodeViaAPI(name, country);
     if (apiHit) return apiHit;
   }
@@ -8106,7 +8137,7 @@ function buildCityScorePrompt(city) {
 }
 
 async function runAICityScore(city) {
-  if (state.aiMode !== 'api' || !credGet('anthropic')) return null;
+  if (!apiAiReady()) return null;
   try {
     const prompt = buildCityScorePrompt(city);
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -8143,7 +8174,7 @@ async function runAICityScore(city) {
 let _batchScoreContext = null; // { type: 'cities' } or { type: 'accoms', cityId }
 
 function openBatchScoreModalForCities() {
-  if (state.aiMode !== 'api' || !credGet('anthropic')) {
+  if (!apiAiReady()) {
     toast('API mode + key required for batch scoring. Configure in Settings or use Copy prompt on individual cities.', 'error');
     return;
   }
@@ -8172,7 +8203,7 @@ function openBatchScoreModalForCities() {
 }
 
 function openBatchScoreModalForAccoms(cityId) {
-  if (state.aiMode !== 'api' || !credGet('anthropic')) {
+  if (!apiAiReady()) {
     toast('API mode + key required for batch scoring. Configure in Settings.', 'error');
     return;
   }
@@ -8295,7 +8326,7 @@ function buildBatchCityScorePrompt(cities) {
 }
 
 async function batchScoreCities(forceRescoreAll) {
-  if (state.aiMode !== 'api' || !credGet('anthropic')) {
+  if (!apiAiReady()) {
     toast('API mode + key required. Configure in Settings.', 'error');
     return;
   }
@@ -8404,7 +8435,7 @@ function buildBatchAccomScorePrompt(city, accoms) {
 }
 
 async function batchScoreAccommodations(cityId, forceRescoreAll) {
-  if (state.aiMode !== 'api' || !credGet('anthropic')) {
+  if (!apiAiReady()) {
     toast('API mode + key required. Configure in Settings.', 'error');
     return;
   }
@@ -8896,7 +8927,7 @@ function openScoreModal(cityId) {
 
   // Show/hide AI button based on config
   const aiBtn = document.getElementById('score-ai-btn');
-  if (state.aiMode === 'api' && credGet('anthropic')) {
+  if (apiAiReady()) {
     aiBtn.disabled = false;
     aiBtn.textContent = '⚡ Run AI assessment (Budget + Culture)';
   } else {
@@ -8980,7 +9011,7 @@ async function runObjectiveScore() {
 async function runFullScoreAI() {
   const city = state.cities.find(c => c.id === _scoreCityId);
   if (!city) return;
-  if (state.aiMode !== 'api' || !credGet('anthropic')) {
+  if (!apiAiReady()) {
     toast('Configure API key in Settings, or use Copy prompt.', 'error');
     return;
   }
@@ -9992,6 +10023,7 @@ function flushPendingPush() {
 
 function pushNow() {
   if (!syncOn() || !syncSignedIn() || _syncTableMissing) return Promise.resolve(false);
+  if (!entAllows()) { entGateToast('sync'); renderPlanCard(); return Promise.resolve(false); }
   if (!_localUpdated) return Promise.resolve(false);   // nothing this device has stamped
   // user_id is omitted on purpose: the column defaults to auth.uid(), so the
   // row can only ever be filed under the signed-in user, whatever we send.
@@ -10100,6 +10132,10 @@ function pullCredentials() {
 // ---- pull ----
 function pullNow(force) {
   if (!syncOn() || !syncSignedIn() || _syncTableMissing || _pullInFlight) return Promise.resolve(false);
+  fetchEntitlement().then(() => {
+    renderPlanCard();
+    if (!entAllows()) entGateToast('sync');
+  });
   const now = Date.now();
   if (!force && now - _lastPullAt < 60000) return Promise.resolve(false);
   _pullInFlight = true;
@@ -10319,7 +10355,237 @@ function updateSyncChip() {
   chip.title = (_syncEmail ? 'Signed in as ' + _syncEmail + '. ' : '') + lastSyncLine();
 }
 
+// ---- billing and entitlement ----
+//
+// The same two constants and the same one read as the city app, because the two
+// surfaces share an account and must never disagree about what it is entitled
+// to. The DECISION itself is not duplicated: both call CityOps.entitlementKit,
+// which is the engine both already share, and the database is what enforces it.
+//
+// Empty URLs until the Stripe products exist. Empty is a state the UI handles.
+const BILLING = {
+  byok: '',
+  managed: '',
+  portal: ''
+};
+// The 29 USD tier runs AI on our key through a server that is not built. It is
+// in the schema and the webhook understands its price, but it is not offered,
+// because selling a capability that does not work is not a rough edge, it is a
+// lie. Flip this the day the proxy ships.
+const BILLING_MANAGED_LIVE = false;
+
+let _entRow = null;
+let _entMissing = false;
+let _entInFlight = null;
+const _entGateShown = {};
+let _entMocked = false;   // a localhost-only state, for looking at the five
+
+function entReady() { return !_entMissing && !!_entRow; }
+
+function sessionUserId() {
+  if (!_session || !_session.access_token) return '';
+  try {
+    const parts = _session.access_token.split('.');
+    if (parts.length < 2) return '';
+    let pad = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (pad.length % 4) pad += '=';
+    const claims = JSON.parse(atob(pad));
+    return typeof claims.sub === 'string' ? claims.sub : '';
+  } catch (e) { return ''; }
+}
+
+function checkoutUrl(tier) {
+  const base = tier === 'managed' ? BILLING.managed : BILLING.byok;
+  if (!base) return '';
+  if (tier === 'managed' && !BILLING_MANAGED_LIVE) return '';
+  const uid = sessionUserId();
+  if (!uid) return '';
+  return base + (base.indexOf('?') === -1 ? '?' : '&') +
+    'client_reference_id=' + encodeURIComponent(uid);
+}
+
+function entView() {
+  return CityOps.entitlementKit.evaluate(
+    _entRow && _entRow.row ? _entRow.row : null,
+    // A mocked state describes a signed-in account by definition; without
+    // this the five states all render as "not signed in" on localhost.
+    { signedIn: _entMocked || syncSignedIn(),
+      accountCreated: _entRow ? _entRow.account_created : null }
+  );
+}
+
+// Open when signed out, open before the migration has run, otherwise the
+// database's own answer. The app and the SQL land in whichever order they land
+// and neither order may break the product.
+function entAllows() {
+  if (_entMocked) return !!_entRow.entitled;
+  if (!syncSignedIn()) return true;
+  if (!entReady()) return true;
+  return !!_entRow.entitled;
+}
+
+// What a usable answer looks like; see the city app for the argument. An
+// unrecognised shape FAILS OPEN, because the database is the real gate and
+// refusing a paying account on our own parse error is the worse mistake.
+function entAdopt(r) {
+  const row = Array.isArray(r) ? r[0] : r;
+  if (!row || typeof row !== 'object') return null;
+  if (typeof row.entitled !== 'boolean') return null;
+  return row;
+}
+
+function fetchEntitlement() {
+  // Localhost only, checked inside the kit. See the city app for why.
+  const mock = CityOps.entitlementKit.mock(location.href || '', location.hostname || '');
+  if (mock) { _entMocked = true; _entMissing = false; _entRow = mock; return Promise.resolve(_entRow); }
+  if (!syncOn() || !syncSignedIn()) { _entRow = null; return Promise.resolve(null); }
+  if (_entInFlight) return _entInFlight;
+  _entInFlight = syncApi('/rest/v1/rpc/my_entitlement', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}'
+  }).then(r => {
+    _entInFlight = null;
+    const adopted = entAdopt(r);
+    if (!adopted) {
+      syncWarn('entitlement read came back in an unexpected shape; leaving writes open');
+      _entMissing = true;
+      _entRow = null;
+      return null;
+    }
+    _entMissing = false;
+    _entRow = adopted;
+    return _entRow;
+  }).catch(e => {
+    _entInFlight = null;
+    if (/\b404\b/.test(e.message || '')) _entMissing = true;
+    syncWarn('entitlement read failed', e);
+    return null;
+  });
+  return _entInFlight;
+}
+
+// One explanation per gate per page load, and never a bare refusal: the title
+// says what is gated, the body says why, and `keeps` names the free thing that
+// still does the job. A gate with no alternative is a dead end.
+function entGate(action) {
+  const g = CityOps.entitlementKit.gate(action, entView());
+  return g;
+}
+
+function entGateToast(action) {
+  const g = entGate(action);
+  if (_entGateShown[action]) return g;
+  _entGateShown[action] = true;
+  toast(g.title + '. ' + g.body, 'error');
+  return g;
+}
+
+// One-tap AI is allowed when the traveler chose API mode, has a key, AND the
+// account may write. Before this there were a dozen copies of the first two
+// conditions scattered through the file; there is one now, which is the only
+// way the third can be added without missing one of them.
+function apiAiReady() {
+  return state.aiMode === 'api' && !!credGet('anthropic') && entAllows();
+}
+
+// The plan card in Settings. Same facts as the city app's Profile block, drawn
+// in this surface's idiom. It states where the account stands, what free keeps,
+// and what a plan adds. No countdown, and no control that cannot succeed.
+function renderPlanCard() {
+  const host = document.getElementById('plan-card-body');
+  if (!host) return;
+  // The mock is read on the first draw too, so opening Settings with a
+  // ?plan= on localhost shows that state without waiting for a sync round.
+  if (!_entRow && !_entMocked) {
+    const m = CityOps.entitlementKit.mock(location.href || '', location.hostname || '');
+    if (m) { _entMocked = true; _entRow = m; }
+  }
+  host.innerHTML = '';
+
+  function line(text, cls) {
+    const d = document.createElement('div');
+    d.className = cls || 'muted';
+    d.style.cssText = 'margin-bottom:8px;line-height:1.55';
+    d.textContent = text;
+    host.appendChild(d);
+    return d;
+  }
+
+  if (!syncOn()) { line('Plans are not configured in this build.'); return; }
+  if (!_entMocked && !syncSignedIn()) {
+    line('Sign in to see your plan. Everything on this page works signed out, and stays on this device.');
+    const a = document.createElement('a');
+    a.className = 'btn-secondary green';
+    a.href = PROFILE_DOOR;
+    a.textContent = 'Sign in (Profile)';
+    host.appendChild(a);
+    return;
+  }
+  if (_entMissing) { line('Plans are not switched on for this project yet. Everything works as it always has.'); return; }
+  if (!_entRow) { line('Checking your plan...'); return; }
+
+  const ev = entView();
+  const s = CityOps.entitlementKit.summary(ev);
+  const head = line(s.headline);
+  head.style.cssText = 'margin-bottom:6px;font-weight:600;color:var(--text-1);line-height:1.5';
+  line(s.detail);
+
+  if (BILLING.portal && _entRow.row && _entRow.row.has_customer) {
+    const manage = document.createElement('a');
+    manage.className = 'btn-secondary';
+    manage.href = BILLING.portal;
+    manage.target = '_blank';
+    manage.rel = 'noopener';
+    manage.textContent = 'Manage billing';
+    host.appendChild(manage);
+    line('Opens Stripe, where you can change the card, read every invoice, or cancel. ' +
+      'Cancelling is one click and asks you nothing.');
+  }
+
+  if (ev.state === 'complimentary') return;
+
+  const free = CityOps.entitlementKit.free();
+  const keeps = document.createElement('div');
+  keeps.className = 'muted';
+  keeps.style.cssText = 'margin-top:12px;line-height:1.6';
+  keeps.innerHTML = '<strong>Free, with no time limit:</strong> ' +
+    free.keeps.map(t => escapeHTML(t.charAt(0).toLowerCase() + t.slice(1))).join('; ') + '.';
+  host.appendChild(keeps);
+
+  const adds = document.createElement('div');
+  adds.className = 'muted';
+  adds.style.cssText = 'margin-top:8px;line-height:1.6';
+  adds.innerHTML = '<strong>What a plan adds:</strong> ' +
+    free.pauses.map(t => escapeHTML(t.charAt(0).toLowerCase() + t.slice(1))).join('; ') + '.';
+  host.appendChild(adds);
+
+  const acts = document.createElement('div');
+  acts.className = 'setting-actions';
+  acts.style.marginTop = '12px';
+  CityOps.entitlementKit.plans().forEach(p => {
+    if (p.tier === 'managed' && !BILLING_MANAGED_LIVE) return;
+    line(p.name + ', ' + p.price + '. ' + p.blurb);
+    const url = checkoutUrl(p.tier);
+    if (!url) return;
+    const buy = document.createElement('a');
+    buy.className = 'btn';
+    buy.href = url;
+    buy.target = '_blank';
+    buy.rel = 'noopener';
+    buy.textContent = ev.state === 'lapsed' ? 'Subscribe again' : 'Subscribe';
+    acts.appendChild(buy);
+  });
+  if (acts.children.length) host.appendChild(acts);
+
+  if (!checkoutUrl('byok')) {
+    line('Checkout is not connected yet, so there is nothing to buy here today. ' +
+      'Your account keeps working exactly as it does now until it is.');
+  }
+}
+
 function renderSyncCard() {
+  renderPlanCard();
   const host = document.getElementById('sync-card-body');
   if (!host) return;
   host.innerHTML = '';

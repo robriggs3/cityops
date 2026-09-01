@@ -1085,6 +1085,159 @@
   // stale data with no warning. Here the state is the first thing Profile
   // says, in the words that matter to the reader: is my work reaching my
   // other devices or not.
+  // ---- billing ----
+  //
+  // Stripe Payment Links, which means nothing on this origin creates a checkout
+  // session, holds a Stripe key, or ever sees a card. The link carries the
+  // Supabase user id as client_reference_id, and that id is the ONLY thing that
+  // tells the webhook whose account just paid.
+  //
+  // The URLs are empty until the products exist in Stripe. Empty is a state the
+  // UI handles rather than a bug: the plan block says checkout is not connected
+  // yet and offers nothing to click, because a button that cannot succeed is
+  // worse than no button. Filling these three strings is what turns billing on.
+  var BILLING = {
+    byok: '',
+    managed: '',
+    portal: ''
+  };
+
+  // The managed tier runs AI on OUR key through a server that does not exist
+  // yet. It is in the schema, the webhook maps its price, and the app can
+  // already display it, but it is not offered for sale, because taking 29 USD a
+  // month for a capability that is not built is a lie with a price on it. Flip
+  // this the day the proxy ships.
+  var BILLING_MANAGED_LIVE = false;
+
+  function checkoutUrl(tier) {
+    var base = tier === 'managed' ? BILLING.managed : BILLING.byok;
+    if (!base) return '';
+    if (tier === 'managed' && !BILLING_MANAGED_LIVE) return '';
+    var uid = sessionUserId();
+    if (!uid) return '';
+    return base + (base.indexOf('?') === -1 ? '?' : '&') +
+      'client_reference_id=' + encodeURIComponent(uid);
+  }
+
+  // The Supabase user id, read out of the access token. It is the subject claim
+  // of a JWT this device was handed, so reading it is not a trust decision: the
+  // webhook re-derives everything it needs from Stripe and the id is only a
+  // pointer at a row.
+  function sessionUserId() {
+    if (!session || !session.access_token) return '';
+    try {
+      var parts = session.access_token.split('.');
+      if (parts.length < 2) return '';
+      var pad = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      while (pad.length % 4) pad += '=';
+      var claims = JSON.parse(atob(pad));
+      return typeof claims.sub === 'string' ? claims.sub : '';
+    } catch (e) { return ''; }
+  }
+
+  // ---- entitlement ----
+  //
+  // ONE read, my_entitlement(), which answers for the no-row case as well: no
+  // row is the trial, and a plain select on subscriptions cannot tell a trial
+  // from a lapse. The database is what enforces this; the copy below is only
+  // what the app SAYS, so that nobody meets a refusal without an explanation.
+  var entRow = null;          // last answer, or null before the first read
+  var entMissing = false;     // the SQL has not been run on this project yet
+  var entInFlight = null;
+  var entGateShown = {};      // one explanation per gate per page load
+  var entMocked = false;      // a localhost-only state, for looking at the five
+
+  // Until the migration is run there is nothing to enforce and nothing to say,
+  // so every gate opens. That is deliberate: the app and the SQL land in
+  // whichever order they land, and neither order may break the product.
+  function entReady() { return !entMissing && !!entRow; }
+
+  function entView() {
+    return CityOps.entitlementKit.evaluate(
+      entRow && entRow.row ? entRow.row : null,
+      {
+        // A mocked state describes a signed-in account by definition.
+        signedIn: entMocked || !!(session && session.access_token),
+        accountCreated: entRow ? entRow.account_created : null
+      }
+    );
+  }
+
+  // True when a write may go out. Open when signed out (nothing syncs anyway),
+  // open when the migration has not run, otherwise the database's own answer.
+  function entAllows() {
+    if (entMocked) return !!entRow.entitled;
+    if (!session || !session.access_token) return true;
+    if (!entReady()) return true;
+    return !!entRow.entitled;
+  }
+
+
+  // What a usable answer looks like. PostgREST returns a scalar-returning
+  // rpc as the value itself, but a single-element array is a shape other
+  // versions and proxies have been known to send, so both are accepted and
+  // anything else is refused. Refused means FAIL OPEN: see entAllows.
+  function entAdopt(r) {
+    var row = (Object.prototype.toString.call(r) === '[object Array]') ? r[0] : r;
+    if (!row || typeof row !== 'object') return null;
+    if (typeof row.entitled !== 'boolean') return null;
+    return row;
+  }
+
+  function fetchEntitlement() {
+    // Localhost only, and that is checked inside the kit rather than here.
+    // It is how the five states get LOOKED at, at both widths, without five
+    // Stripe subscriptions and five rows written against a live account.
+    var mock = CityOps.entitlementKit.mock(
+      (typeof location !== 'undefined' && location.href) || '',
+      (typeof location !== 'undefined' && location.hostname) || '');
+    if (mock) { entMocked = true; entMissing = false; entRow = mock; return Promise.resolve(entRow); }
+    if (!syncOn() || !session || !session.access_token) { entRow = null; return Promise.resolve(null); }
+    if (entInFlight) return entInFlight;
+    entInFlight = api('/rest/v1/rpc/my_entitlement', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    }).then(function (r) {
+      entInFlight = null;
+      var adopted = entAdopt(r);
+      if (!adopted) {
+        // Do not gate on something we cannot read.
+        warn('entitlement read came back in an unexpected shape; leaving writes open', new Error('shape'));
+        entMissing = true;
+        entRow = null;
+        return null;
+      }
+      entMissing = false;
+      entRow = adopted;
+      return entRow;
+    }).catch(function (e) {
+      entInFlight = null;
+      // 404 and PGRST202 both mean the function is not there, which means the
+      // migration has not been run. Not an error, and not a reason to gate.
+      // Any 404 means the function is not there, which means the migration
+      // has not been run. Not an error, and not a reason to gate.
+      if (/\b404\b/.test(e.message || '')) entMissing = true;
+      warn('entitlement read failed', e);
+      return null;
+    });
+    return entInFlight;
+  }
+
+  // The one place a gate is explained. Never a bare refusal: the gate copy
+  // names the free thing that still works in the same breath as the paid thing
+  // that does not, and this shows both.
+  function entGateText(action) {
+    var g = CityOps.entitlementKit.gate(action, entView());
+    return g.title + '. ' + g.body + ' ' + g.keeps;
+  }
+
+  function entGateOnce(action) {
+    if (entGateShown[action]) return;
+    entGateShown[action] = true;
+    showSyncNotice(entGateText(action));
+  }
+
   function accountBlock(box) {
     box.appendChild(el('p', 'section-lead', 'Account'));
     if (!syncOn()) {
@@ -1134,6 +1287,104 @@
     box.appendChild(row);
   }
 
+  // The plan block in Profile. It states where the account stands, what a
+  // lapsed account keeps, and what the two tiers are. It never counts down and
+  // it never offers a control that cannot succeed: with no checkout link
+  // configured there is a sentence instead of a button.
+  function planBlock(box) {
+    if (!syncOn()) return;
+    box.appendChild(el('p', 'section-lead', 'Plan'));
+
+    var body = el('div', 'planblock');
+    box.appendChild(body);
+
+    function draw() {
+      body.innerHTML = '';
+      if (!entMocked && (!session || !session.access_token)) {
+        body.appendChild(el('p', 'diff', 'Sign in above to see your plan. Everything you do stays ' +
+          'in this browser until you do, and none of it is lost either way.'));
+        return;
+      }
+      if (entMissing) {
+        // Honest about our own state rather than guessing at the traveler's.
+        body.appendChild(el('p', 'diff', 'Plans are not switched on for this project yet. ' +
+          'Everything works as it always has.'));
+        return;
+      }
+      if (!entRow) {
+        body.appendChild(el('p', 'diff', 'Checking your plan...'));
+        return;
+      }
+
+      var ev = entView();
+      var s = CityOps.entitlementKit.summary(ev);
+      var head = el('p', 'diff', s.headline);
+      head.style.fontWeight = '600';
+      body.appendChild(head);
+      body.appendChild(el('p', 'diff', s.detail));
+
+      // Manage billing, only when there is a portal to open AND a customer to
+      // open it for. A comp account has neither, and is offered neither.
+      if (BILLING.portal && entRow.row && entRow.row.has_customer) {
+        var manage = document.createElement('a');
+        manage.className = 'ctl';
+        manage.href = BILLING.portal;
+        manage.target = '_blank';
+        manage.rel = 'noopener';
+        manage.textContent = 'Manage billing';
+        body.appendChild(manage);
+        body.appendChild(el('p', 'diff', 'Opens Stripe, where you can change the card, ' +
+          'see every invoice, or cancel. Cancelling takes one click and asks you nothing.'));
+      }
+
+      if (ev.state === 'complimentary') return;
+
+      // What free is. Said plainly, and said to everyone, because a person
+      // deciding whether to pay deserves to know what happens if they do not.
+      var free = CityOps.entitlementKit.free();
+      body.appendChild(el('p', 'section-lead', 'Free, with no time limit'));
+      var keeps = document.createElement('ul');
+      keeps.className = 'planlist';
+      free.keeps.forEach(function (t) { keeps.appendChild(el('li', '', t)); });
+      body.appendChild(keeps);
+
+      body.appendChild(el('p', 'section-lead', 'What a plan adds'));
+      var adds = document.createElement('ul');
+      adds.className = 'planlist';
+      free.pauses.forEach(function (t) { adds.appendChild(el('li', '', t)); });
+      body.appendChild(adds);
+
+      CityOps.entitlementKit.plans().forEach(function (p) {
+        // The managed tier is not shown at all while its server does not exist.
+        // Showing it with an asterisk would still be advertising it.
+        if (p.tier === 'managed' && !BILLING_MANAGED_LIVE) return;
+        var row = el('div', 'mrow');
+        row.appendChild(el('span', 'diff', p.name + ', ' + p.price + '. ' + p.blurb));
+        body.appendChild(row);
+        var url = checkoutUrl(p.tier);
+        if (url) {
+          var buy = document.createElement('a');
+          buy.className = 'ctl to-done';
+          buy.href = url;
+          buy.target = '_blank';
+          buy.rel = 'noopener';
+          buy.textContent = ev.state === 'lapsed' ? 'Subscribe again' : 'Subscribe';
+          body.appendChild(buy);
+        }
+      });
+
+      if (!checkoutUrl('byok')) {
+        body.appendChild(el('p', 'diff', 'Checkout is not connected yet, so there is nothing to ' +
+          'buy here today. Your account keeps working exactly as it does now until it is.'));
+      }
+    }
+
+    draw();
+    // The read is cheap and the modal is where a person goes to ask this, so
+    // it is refreshed on open rather than trusted from whenever it last ran.
+    fetchEntitlement().then(draw);
+  }
+
   // Closes the modal that owns `box`. The account buttons live inside the
   // Profile modal but are built by a helper that has no handle on it.
   function closeModalOf(box) {
@@ -1144,6 +1395,7 @@
   function openProfileModal() {
     var m = modalShell('Profile');
     accountBlock(m.box);
+    planBlock(m.box);
     m.box.appendChild(el('p', 'section-lead', 'Your interests'));
     m.box.appendChild(el('p', 'diff', 'What you seek out in a new city, and what you never want suggested. ' +
       'Build my prompt hands this to your own AI so it finds places that match you. ' +
@@ -1775,6 +2027,9 @@
   // cancelled generation costs nothing further. Omitted by every caller that
   // has no cancel control, and by the unit tests' mocked fetch.
   function callClaudeStream(prompt, apiKey, onProgress, signal) {
+    // The one-tap path is what a plan buys. The copy-a-prompt path in the
+    // same modal is free, is unaffected, and is named in the message.
+    if (!entAllows()) return Promise.reject(new Error(entGateText('ai')));
     return fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       signal: signal || undefined,
@@ -2894,6 +3149,9 @@
   // ---- push ----
   function pushNow(kind, entries) {
     if (!syncOn() || !session || !entries || !entries.length) return;
+    // Write-sync is what a plan buys. The row is already saved on this
+    // device and stays saved; what pauses is the copy going up.
+    if (!entAllows()) { entGateOnce('sync'); return; }
     var field = (kind === 'state') ? 'state' : 'data';
     var table = (kind === 'state') ? 'city_state' : 'cities';
     var rows = CityOps.syncKit.buildRows(field, entries);
@@ -3012,6 +3270,7 @@
   // key change cannot make a stale profile win.
   function pushProfileNow() {
     if (!syncOn() || !session || profileTableMissing) return;
+    if (!entAllows()) { entGateOnce('sync'); return; }
     if (!sidecarsKnown) {
       profilePreflight().then(function (ok) { if (ok) pushProfileRow(); });
       return;
@@ -3128,6 +3387,12 @@
   // ---- pull ----
   function pullAll(force) {
     if (!syncOn() || !session || pullInFlight) return Promise.resolve(false);
+    // Asked alongside the pull, not before it: the answer is only needed
+    // once there is something to say about it, and a failed read here must
+    // never stop a pull.
+    fetchEntitlement().then(function () {
+      if (!entAllows()) entGateOnce('sync');
+    });
     var now = Date.now();
     if (!force && now - lastPullAt < 60000) return Promise.resolve(false);
     pullInFlight = true;

@@ -5098,6 +5098,364 @@ var CityOps = (function () {
     return (ms - now) < 60000;
   }
 
+  // ---- entitlement: who may write, and what a lapsed account keeps ----
+  //
+  // The DATABASE is the enforcer. public.has_active_entitlement(uid) is checked
+  // in the WITH CHECK of every write policy on cities, city_state, planahead and
+  // shares, so a client that lied about any of this would simply have its writes
+  // refused by Postgres. What lives here is the SAME decision in pure JS, for one
+  // purpose only: saying so in words before the traveler walks into a wall.
+  //
+  // The two copies have to agree, which is why every number below is a named
+  // constant that reads the same on the SQL side, and why the boundary cases
+  // (trial expiry, the far edge of the grace window, a complimentary row, no row
+  // at all) are unit tested here rather than discovered in production.
+  //
+  // Reads are never gated. A lapsed account keeps every city, every plan and
+  // every export it ever made; what pauses is write-sync, one-tap AI and
+  // publishing a link. That asymmetry is the product promise, not a detail.
+  var ENT_TRIAL_DAYS = 14;
+  var ENT_GRACE_DAYS = 7;
+  var ENT_DAY_MS = 86400000;
+  var ENT_TIERS = ['byok', 'managed', 'complimentary'];
+  // What the paid tiers cost, in one place, so the gate copy and the plan block
+  // cannot quote different numbers at the same person.
+  var ENT_PRICE = {
+    byok: '15 USD a month',
+    managed: '29 USD a month'
+  };
+  var ENT_FROM = 'from ' + ENT_PRICE.byok;
+
+  // Milliseconds, or null when there is nothing parseable. Date.parse returns
+  // NaN for junk, and NaN is the one value that is not equal to itself.
+  function entMs(v) {
+    if (v === null || v === undefined || v === '') return null;
+    var t = (v instanceof Date) ? v.getTime() : Date.parse(String(v));
+    return t === t ? t : null;
+  }
+
+  // Whole days still to run, rounded UP, floored at zero: with six hours left
+  // the honest thing to show a person is "1 day", not "0 days". Exactly at the
+  // boundary it is 0, and the boundary is also where `entitled` goes false.
+  function entDaysLeft(now, end) {
+    if (end === null) return null;
+    var d = Math.ceil((end - now) / ENT_DAY_MS);
+    return d > 0 ? d : 0;
+  }
+
+  function entIso(ms) {
+    return ms === null ? null : new Date(ms).toISOString();
+  }
+
+  // row: the subscriptions row for this user, or null when there is none.
+  //      {tier, status, current_period_end, trial_ends_at, updated_at}
+  // ctx: {now, accountCreated, signedIn}
+  //
+  // Returns a view model, never throws, and treats every unknown shape as
+  // "not entitled" rather than guessing generously: the database would refuse
+  // the write anyway, and promising otherwise is how a person loses work.
+  function evaluateEntitlement(row, ctx) {
+    var c = ctx || {};
+    var now = entMs(c.now);
+    if (now === null) now = Date.now();
+    var out = {
+      entitled: false,
+      state: 'free',        // signed-out | trial | active | complimentary | grace | lapsed | free
+      tier: '',             // '' | byok | managed | complimentary
+      status: '',
+      endsAt: null,         // when this state runs out; null when nothing runs out
+      daysLeft: null,
+      trialDays: ENT_TRIAL_DAYS,
+      graceDays: ENT_GRACE_DAYS
+    };
+    if (c.signedIn === false) { out.state = 'signed-out'; return out; }
+
+    if (!row || typeof row !== 'object') {
+      // No row is not an error and not a refusal: it is the trial. The window
+      // is measured from when the ACCOUNT was created, which is a fact only
+      // auth.users holds, so there is nothing here for a client to forge.
+      var made = entMs(c.accountCreated);
+      if (made === null) return out;
+      var trialEnds = made + ENT_TRIAL_DAYS * ENT_DAY_MS;
+      if (now < trialEnds) {
+        out.entitled = true;
+        out.state = 'trial';
+        out.status = 'trialing';
+        out.endsAt = entIso(trialEnds);
+        out.daysLeft = entDaysLeft(now, trialEnds);
+      }
+      return out;
+    }
+
+    out.tier = ENT_TIERS.indexOf(row.tier) === -1 ? '' : row.tier;
+    out.status = typeof row.status === 'string' ? row.status : '';
+    var periodEnd = entMs(row.current_period_end);
+    var trialEnd = entMs(row.trial_ends_at);
+
+    // Complimentary outranks status entirely. It is the row a person gets for
+    // having been here before there was anything to pay for, and no Stripe
+    // event can age it out, because no Stripe event ever touches it.
+    if (out.tier === 'complimentary') {
+      out.entitled = true;
+      out.state = 'complimentary';
+      return out;
+    }
+    if (out.status === 'active') {
+      out.entitled = true;
+      out.state = 'active';
+      out.endsAt = entIso(periodEnd);
+      out.daysLeft = entDaysLeft(now, periodEnd);
+      return out;
+    }
+    if (out.status === 'trialing') {
+      // A trial Stripe itself is running. trial_ends_at is respected whenever it
+      // is present, because a webhook can arrive late and a trial that has ended
+      // is over whatever the last stored status still says.
+      if (trialEnd === null || now < trialEnd) {
+        out.entitled = true;
+        out.state = 'trial';
+        out.endsAt = entIso(trialEnd);
+        out.daysLeft = entDaysLeft(now, trialEnd);
+        return out;
+      }
+      out.state = 'lapsed';
+      return out;
+    }
+    if (out.status === 'past_due') {
+      // A card that failed is usually a card that expired, not a person who
+      // left. The grace window runs from the end of the period they already
+      // paid for; with no period end stored, from when the row was last
+      // written, so the window can never slide forward on every read.
+      var base = periodEnd === null ? entMs(row.updated_at) : periodEnd;
+      if (base === null) { out.state = 'lapsed'; return out; }
+      var graceEnd = base + ENT_GRACE_DAYS * ENT_DAY_MS;
+      if (now < graceEnd) {
+        out.entitled = true;
+        out.state = 'grace';
+        out.endsAt = entIso(graceEnd);
+        out.daysLeft = entDaysLeft(now, graceEnd);
+        return out;
+      }
+      out.state = 'lapsed';
+      return out;
+    }
+    // canceled, unpaid, incomplete, incomplete_expired, paused, or a status
+    // Stripe has not invented yet. All of them mean the same thing here.
+    out.state = 'lapsed';
+    return out;
+  }
+
+  // What the Profile plan block says. Plain words, no countdown, no urgency:
+  // a trial reports how many days are left because that is a fact the person
+  // needs, and then stops talking about it.
+  function entitlementSummary(ev) {
+    var e = ev || {};
+    var days = e.daysLeft;
+    var tierName = e.tier === 'byok' ? 'Bring your own key'
+      : e.tier === 'managed' ? 'Everything included'
+      : e.tier === 'complimentary' ? 'Complimentary' : '';
+    switch (e.state) {
+      case 'signed-out':
+        return {
+          headline: 'Not signed in',
+          detail: 'Everything you do is saved in this browser. Sign in above to see your plan.',
+          cta: ''
+        };
+      case 'trial':
+        return {
+          headline: 'Free trial, ' + days + ' day' + (days === 1 ? '' : 's') + ' left',
+          detail: 'You have all of it: your cities and plans on every device, one-tap AI, and share ' +
+            'links. When the trial ends this account keeps working on this device, and everything ' +
+            'you made stays yours to export.',
+          cta: 'See the plans'
+        };
+      case 'active':
+        return {
+          headline: tierName || 'Subscribed',
+          detail: (e.tier === 'byok' ? ENT_PRICE.byok
+            : e.tier === 'managed' ? ENT_PRICE.managed
+            : 'Your subscription is active') +
+            (e.endsAt ? ', renews ' + entitlementDate(e.endsAt) + '.' : '.') +
+            ' Everything is switched on: your work on every device, one-tap AI, and share links.',
+          cta: 'Manage billing'
+        };
+      case 'complimentary':
+        return {
+          headline: 'Complimentary',
+          detail: 'Full access, no charge and no renewal date. Nothing to do here.',
+          cta: ''
+        };
+      case 'grace':
+        return {
+          headline: 'Your last payment did not go through',
+          detail: 'Sync, one-tap AI and share links keep working until ' + entitlementDate(e.endsAt) +
+            ' while you sort the card out. Nothing is deleted either way.',
+          cta: 'Manage billing'
+        };
+      case 'lapsed':
+        return {
+          headline: 'Subscription ended',
+          detail: 'You keep every city, every plan and every export you made. Sync across devices, ' +
+            'one-tap AI and share links are paused until you subscribe again.',
+          cta: 'See the plans'
+        };
+      default:
+        return {
+          headline: 'Free',
+          detail: 'The whole app on this device, the copy-a-prompt AI path, and every export, at no ' +
+            'charge and with no time limit. Carrying your work to another device, running AI in one ' +
+            'tap, and share links are what a plan adds.',
+          cta: 'See the plans'
+        };
+    }
+  }
+
+  // A date a person reads, not a timestamp. Deliberately no time of day: the
+  // hour a subscription renews is not something anyone needs to plan around.
+  var ENT_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
+    'August', 'September', 'October', 'November', 'December'];
+  function entitlementDate(iso) {
+    var ms = entMs(iso);
+    if (ms === null) return 'its renewal date';
+    var d = new Date(ms);
+    return ENT_MONTHS[d.getUTCMonth()] + ' ' + d.getUTCDate() + ', ' + d.getUTCFullYear();
+  }
+
+  // The three moments the plan names: opening on a second device, tapping a
+  // one-tap AI action, and tapping Publish. Every one of them names the free
+  // thing that still works, in the same breath as the paid thing that does not.
+  // A gate with no alternative is a dead end, and this app does not ship those.
+  var ENT_GATE_ACTIONS = ['sync', 'ai', 'publish'];
+
+  function entitlementGate(action, ev) {
+    var e = ev || {};
+    var lapsed = e.state === 'lapsed';
+    var out = { title: '', body: '', keeps: '', cta: 'See the plans' };
+    if (ENT_GATE_ACTIONS.indexOf(action) === -1) return out;
+
+    if (action === 'sync') {
+      out.title = lapsed ? 'Sync is paused' : 'Sync across devices needs a plan';
+      out.body = lapsed
+        ? 'Your subscription ended, so this device is on its own again. Everything you made is ' +
+          'still here. Subscribe again and your devices catch up from where they left off.'
+        : 'This device has everything you made and will keep it. Carrying it to your phone or ' +
+          'your laptop is what a plan adds, ' + ENT_FROM + ' if you bring your own Claude key.';
+      out.keeps = 'Either way you can export any guide or plan right now, as a file that needs ' +
+        'no account and no internet to open.';
+      return out;
+    }
+    if (action === 'ai') {
+      out.title = lapsed ? 'One-tap AI is paused' : 'One-tap AI needs a plan';
+      out.body = 'Copy the prompt, paste it into Claude or ChatGPT, and paste the answer back: ' +
+        'that path is free, it is right here, and it is staying free. Running the same prompt in ' +
+        'one tap with your own key is what a plan adds, ' + ENT_FROM + '.';
+      out.keeps = 'The prompt is the same prompt. You are paying for the tap, not for the answer.';
+      return out;
+    }
+    out.title = lapsed ? 'Publishing a link is paused' : 'Publishing a link needs a plan';
+    out.body = 'Download the plan as an HTML file instead: it opens on anyone\'s phone, needs no ' +
+      'account at the other end, and costs nothing. A link you can refresh from here, and switch ' +
+      'off later, is what a plan adds, ' + ENT_FROM + '.';
+    out.keeps = lapsed
+      ? 'Links you already published keep working, and you can still delete any of them.'
+      : 'Nothing you have already published is affected.';
+    return out;
+  }
+
+  // The two paid tiers as the app describes them. `managed` is DECLARED here and
+  // deliberately not SOLD yet: the server-side proxy that would run AI on our
+  // key does not exist, and a tier that takes 29 USD for a capability that is
+  // not built is a lie with a price on it. The shells read `sellable` and show
+  // only what is true today; the day the proxy ships, this flag flips and the
+  // schema, the webhook and the copy are already waiting for it.
+  function entitlementPlans() {
+    return [
+      {
+        tier: 'byok',
+        name: 'Bring your own key',
+        price: ENT_PRICE.byok,
+        sellable: true,
+        blurb: 'Your cities and plans on every device, one-tap AI using your own Anthropic key, ' +
+          'and share links you can refresh or switch off.'
+      },
+      {
+        tier: 'managed',
+        name: 'Everything included',
+        price: ENT_PRICE.managed,
+        sellable: false,
+        blurb: 'Everything above, with the AI running on our key so you never need one of your own.'
+      }
+    ];
+  }
+
+  // ---- the five states, on a laptop, with no Stripe account ----
+  //
+  // Free, trialing, active, past-due-in-grace and lapsed all have to be looked
+  // at, at two widths, before they are shown to a stranger. Reaching them for
+  // real would mean five Stripe subscriptions and five rows written against a
+  // live account, so this builds the row instead, from the URL, ON LOCALHOST
+  // ONLY.
+  //
+  // The hostname check is the whole safety property and it is checked here
+  // rather than at the call site, because there is exactly one of these and
+  // there would have been two of those. On the real origin it returns null for
+  // every input, which is what the shipped-bytes test pins.
+  function entitlementMock(href, hostname) {
+    var host = String(hostname || '');
+    if (host !== 'localhost' && host !== '127.0.0.1') return null;
+    var m = /[?&#]plan=([a-z_-]+)/.exec(String(href || ''));
+    if (!m) return null;
+    var now = Date.now();
+    var iso = function (ms) { return new Date(ms).toISOString(); };
+    switch (m[1]) {
+      case 'free':
+        return { signed_in: true, entitled: false, account_created: iso(now - 60 * ENT_DAY_MS), row: null };
+      case 'trial':
+      case 'trialing':
+        return { signed_in: true, entitled: true, account_created: iso(now - 3 * ENT_DAY_MS), row: null };
+      case 'active':
+        return { signed_in: true, entitled: true, account_created: iso(now - 90 * ENT_DAY_MS),
+          row: { tier: 'byok', status: 'active', current_period_end: iso(now + 12 * ENT_DAY_MS),
+            trial_ends_at: null, updated_at: iso(now), has_customer: true } };
+      case 'grace':
+      case 'past_due':
+        return { signed_in: true, entitled: true, account_created: iso(now - 90 * ENT_DAY_MS),
+          row: { tier: 'byok', status: 'past_due', current_period_end: iso(now - 2 * ENT_DAY_MS),
+            trial_ends_at: null, updated_at: iso(now), has_customer: true } };
+      case 'lapsed':
+        return { signed_in: true, entitled: false, account_created: iso(now - 90 * ENT_DAY_MS),
+          row: { tier: 'byok', status: 'canceled', current_period_end: iso(now - 30 * ENT_DAY_MS),
+            trial_ends_at: null, updated_at: iso(now - 30 * ENT_DAY_MS), has_customer: true } };
+      case 'comp':
+      case 'complimentary':
+        return { signed_in: true, entitled: true, account_created: iso(now - 200 * ENT_DAY_MS),
+          row: { tier: 'complimentary', status: 'complimentary', current_period_end: null,
+            trial_ends_at: null, updated_at: iso(now), has_customer: false } };
+      default:
+        return null;
+    }
+  }
+
+  // What the free tier is, said once, so no two places in the app describe it
+  // differently. This is a promise, not marketing: the copy-a-prompt path stays
+  // free forever, and so does every export.
+  function entitlementFree() {
+    return {
+      name: 'Free',
+      price: 'no charge, no time limit',
+      keeps: [
+        'The whole app on one device, with as many cities and plans as you like',
+        'The copy-a-prompt AI path, into Claude or ChatGPT or anything else',
+        'Every export: standalone city guides, and the downloadable plan page'
+      ],
+      pauses: [
+        'Your work following you to a second device',
+        'Running an AI prompt in one tap from inside the app',
+        'Share links you can refresh from here'
+      ]
+    };
+  }
+
   // ---- DOM rendering (browser only) ----
   var ctx = null; // { base, store }; replaced wholesale when the app boots another city
   var drag = null; // { card, grip, startY, list, cards, sec } while a pointer drag is in progress
@@ -7740,6 +8098,20 @@ var CityOps = (function () {
     },
     extractJsonBlock: extractJsonBlock, RETRY_INSTRUCTION: RETRY_INSTRUCTION,
     isJsonSyntaxError: isJsonSyntaxError, fetchTextToCity: fetchTextToCity,
+    // Who may write, and what a lapsed account keeps. The DATABASE enforces
+    // this (public.has_active_entitlement, checked in the WITH CHECK of every
+    // write policy); the kit is the same decision in pure JS so the app can
+    // say WHY before a refusal happens, and never after.
+    entitlementKit: {
+      TRIAL_DAYS: ENT_TRIAL_DAYS, GRACE_DAYS: ENT_GRACE_DAYS, PRICE: ENT_PRICE,
+      GATE_ACTIONS: ENT_GATE_ACTIONS,
+      evaluate: evaluateEntitlement, summary: entitlementSummary, gate: entitlementGate,
+      date: entitlementDate, plans: entitlementPlans, free: entitlementFree,
+      // Localhost only, and that is checked inside the function rather than at
+      // its call sites, because there is one of these and there would have
+      // been two of those.
+      mock: entitlementMock
+    },
     syncKit: {
       EPOCH: EPOCH_ISO, decide: decideSync, plan: planSync, buildRows: buildRows,
       parseAuthHash: parseAuthHash, sessionExpiringSoon: sessionExpiringSoon,
@@ -12772,6 +13144,364 @@ var CityOps = (function () {
     return (ms - now) < 60000;
   }
 
+  // ---- entitlement: who may write, and what a lapsed account keeps ----
+  //
+  // The DATABASE is the enforcer. public.has_active_entitlement(uid) is checked
+  // in the WITH CHECK of every write policy on cities, city_state, planahead and
+  // shares, so a client that lied about any of this would simply have its writes
+  // refused by Postgres. What lives here is the SAME decision in pure JS, for one
+  // purpose only: saying so in words before the traveler walks into a wall.
+  //
+  // The two copies have to agree, which is why every number below is a named
+  // constant that reads the same on the SQL side, and why the boundary cases
+  // (trial expiry, the far edge of the grace window, a complimentary row, no row
+  // at all) are unit tested here rather than discovered in production.
+  //
+  // Reads are never gated. A lapsed account keeps every city, every plan and
+  // every export it ever made; what pauses is write-sync, one-tap AI and
+  // publishing a link. That asymmetry is the product promise, not a detail.
+  var ENT_TRIAL_DAYS = 14;
+  var ENT_GRACE_DAYS = 7;
+  var ENT_DAY_MS = 86400000;
+  var ENT_TIERS = ['byok', 'managed', 'complimentary'];
+  // What the paid tiers cost, in one place, so the gate copy and the plan block
+  // cannot quote different numbers at the same person.
+  var ENT_PRICE = {
+    byok: '15 USD a month',
+    managed: '29 USD a month'
+  };
+  var ENT_FROM = 'from ' + ENT_PRICE.byok;
+
+  // Milliseconds, or null when there is nothing parseable. Date.parse returns
+  // NaN for junk, and NaN is the one value that is not equal to itself.
+  function entMs(v) {
+    if (v === null || v === undefined || v === '') return null;
+    var t = (v instanceof Date) ? v.getTime() : Date.parse(String(v));
+    return t === t ? t : null;
+  }
+
+  // Whole days still to run, rounded UP, floored at zero: with six hours left
+  // the honest thing to show a person is "1 day", not "0 days". Exactly at the
+  // boundary it is 0, and the boundary is also where `entitled` goes false.
+  function entDaysLeft(now, end) {
+    if (end === null) return null;
+    var d = Math.ceil((end - now) / ENT_DAY_MS);
+    return d > 0 ? d : 0;
+  }
+
+  function entIso(ms) {
+    return ms === null ? null : new Date(ms).toISOString();
+  }
+
+  // row: the subscriptions row for this user, or null when there is none.
+  //      {tier, status, current_period_end, trial_ends_at, updated_at}
+  // ctx: {now, accountCreated, signedIn}
+  //
+  // Returns a view model, never throws, and treats every unknown shape as
+  // "not entitled" rather than guessing generously: the database would refuse
+  // the write anyway, and promising otherwise is how a person loses work.
+  function evaluateEntitlement(row, ctx) {
+    var c = ctx || {};
+    var now = entMs(c.now);
+    if (now === null) now = Date.now();
+    var out = {
+      entitled: false,
+      state: 'free',        // signed-out | trial | active | complimentary | grace | lapsed | free
+      tier: '',             // '' | byok | managed | complimentary
+      status: '',
+      endsAt: null,         // when this state runs out; null when nothing runs out
+      daysLeft: null,
+      trialDays: ENT_TRIAL_DAYS,
+      graceDays: ENT_GRACE_DAYS
+    };
+    if (c.signedIn === false) { out.state = 'signed-out'; return out; }
+
+    if (!row || typeof row !== 'object') {
+      // No row is not an error and not a refusal: it is the trial. The window
+      // is measured from when the ACCOUNT was created, which is a fact only
+      // auth.users holds, so there is nothing here for a client to forge.
+      var made = entMs(c.accountCreated);
+      if (made === null) return out;
+      var trialEnds = made + ENT_TRIAL_DAYS * ENT_DAY_MS;
+      if (now < trialEnds) {
+        out.entitled = true;
+        out.state = 'trial';
+        out.status = 'trialing';
+        out.endsAt = entIso(trialEnds);
+        out.daysLeft = entDaysLeft(now, trialEnds);
+      }
+      return out;
+    }
+
+    out.tier = ENT_TIERS.indexOf(row.tier) === -1 ? '' : row.tier;
+    out.status = typeof row.status === 'string' ? row.status : '';
+    var periodEnd = entMs(row.current_period_end);
+    var trialEnd = entMs(row.trial_ends_at);
+
+    // Complimentary outranks status entirely. It is the row a person gets for
+    // having been here before there was anything to pay for, and no Stripe
+    // event can age it out, because no Stripe event ever touches it.
+    if (out.tier === 'complimentary') {
+      out.entitled = true;
+      out.state = 'complimentary';
+      return out;
+    }
+    if (out.status === 'active') {
+      out.entitled = true;
+      out.state = 'active';
+      out.endsAt = entIso(periodEnd);
+      out.daysLeft = entDaysLeft(now, periodEnd);
+      return out;
+    }
+    if (out.status === 'trialing') {
+      // A trial Stripe itself is running. trial_ends_at is respected whenever it
+      // is present, because a webhook can arrive late and a trial that has ended
+      // is over whatever the last stored status still says.
+      if (trialEnd === null || now < trialEnd) {
+        out.entitled = true;
+        out.state = 'trial';
+        out.endsAt = entIso(trialEnd);
+        out.daysLeft = entDaysLeft(now, trialEnd);
+        return out;
+      }
+      out.state = 'lapsed';
+      return out;
+    }
+    if (out.status === 'past_due') {
+      // A card that failed is usually a card that expired, not a person who
+      // left. The grace window runs from the end of the period they already
+      // paid for; with no period end stored, from when the row was last
+      // written, so the window can never slide forward on every read.
+      var base = periodEnd === null ? entMs(row.updated_at) : periodEnd;
+      if (base === null) { out.state = 'lapsed'; return out; }
+      var graceEnd = base + ENT_GRACE_DAYS * ENT_DAY_MS;
+      if (now < graceEnd) {
+        out.entitled = true;
+        out.state = 'grace';
+        out.endsAt = entIso(graceEnd);
+        out.daysLeft = entDaysLeft(now, graceEnd);
+        return out;
+      }
+      out.state = 'lapsed';
+      return out;
+    }
+    // canceled, unpaid, incomplete, incomplete_expired, paused, or a status
+    // Stripe has not invented yet. All of them mean the same thing here.
+    out.state = 'lapsed';
+    return out;
+  }
+
+  // What the Profile plan block says. Plain words, no countdown, no urgency:
+  // a trial reports how many days are left because that is a fact the person
+  // needs, and then stops talking about it.
+  function entitlementSummary(ev) {
+    var e = ev || {};
+    var days = e.daysLeft;
+    var tierName = e.tier === 'byok' ? 'Bring your own key'
+      : e.tier === 'managed' ? 'Everything included'
+      : e.tier === 'complimentary' ? 'Complimentary' : '';
+    switch (e.state) {
+      case 'signed-out':
+        return {
+          headline: 'Not signed in',
+          detail: 'Everything you do is saved in this browser. Sign in above to see your plan.',
+          cta: ''
+        };
+      case 'trial':
+        return {
+          headline: 'Free trial, ' + days + ' day' + (days === 1 ? '' : 's') + ' left',
+          detail: 'You have all of it: your cities and plans on every device, one-tap AI, and share ' +
+            'links. When the trial ends this account keeps working on this device, and everything ' +
+            'you made stays yours to export.',
+          cta: 'See the plans'
+        };
+      case 'active':
+        return {
+          headline: tierName || 'Subscribed',
+          detail: (e.tier === 'byok' ? ENT_PRICE.byok
+            : e.tier === 'managed' ? ENT_PRICE.managed
+            : 'Your subscription is active') +
+            (e.endsAt ? ', renews ' + entitlementDate(e.endsAt) + '.' : '.') +
+            ' Everything is switched on: your work on every device, one-tap AI, and share links.',
+          cta: 'Manage billing'
+        };
+      case 'complimentary':
+        return {
+          headline: 'Complimentary',
+          detail: 'Full access, no charge and no renewal date. Nothing to do here.',
+          cta: ''
+        };
+      case 'grace':
+        return {
+          headline: 'Your last payment did not go through',
+          detail: 'Sync, one-tap AI and share links keep working until ' + entitlementDate(e.endsAt) +
+            ' while you sort the card out. Nothing is deleted either way.',
+          cta: 'Manage billing'
+        };
+      case 'lapsed':
+        return {
+          headline: 'Subscription ended',
+          detail: 'You keep every city, every plan and every export you made. Sync across devices, ' +
+            'one-tap AI and share links are paused until you subscribe again.',
+          cta: 'See the plans'
+        };
+      default:
+        return {
+          headline: 'Free',
+          detail: 'The whole app on this device, the copy-a-prompt AI path, and every export, at no ' +
+            'charge and with no time limit. Carrying your work to another device, running AI in one ' +
+            'tap, and share links are what a plan adds.',
+          cta: 'See the plans'
+        };
+    }
+  }
+
+  // A date a person reads, not a timestamp. Deliberately no time of day: the
+  // hour a subscription renews is not something anyone needs to plan around.
+  var ENT_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
+    'August', 'September', 'October', 'November', 'December'];
+  function entitlementDate(iso) {
+    var ms = entMs(iso);
+    if (ms === null) return 'its renewal date';
+    var d = new Date(ms);
+    return ENT_MONTHS[d.getUTCMonth()] + ' ' + d.getUTCDate() + ', ' + d.getUTCFullYear();
+  }
+
+  // The three moments the plan names: opening on a second device, tapping a
+  // one-tap AI action, and tapping Publish. Every one of them names the free
+  // thing that still works, in the same breath as the paid thing that does not.
+  // A gate with no alternative is a dead end, and this app does not ship those.
+  var ENT_GATE_ACTIONS = ['sync', 'ai', 'publish'];
+
+  function entitlementGate(action, ev) {
+    var e = ev || {};
+    var lapsed = e.state === 'lapsed';
+    var out = { title: '', body: '', keeps: '', cta: 'See the plans' };
+    if (ENT_GATE_ACTIONS.indexOf(action) === -1) return out;
+
+    if (action === 'sync') {
+      out.title = lapsed ? 'Sync is paused' : 'Sync across devices needs a plan';
+      out.body = lapsed
+        ? 'Your subscription ended, so this device is on its own again. Everything you made is ' +
+          'still here. Subscribe again and your devices catch up from where they left off.'
+        : 'This device has everything you made and will keep it. Carrying it to your phone or ' +
+          'your laptop is what a plan adds, ' + ENT_FROM + ' if you bring your own Claude key.';
+      out.keeps = 'Either way you can export any guide or plan right now, as a file that needs ' +
+        'no account and no internet to open.';
+      return out;
+    }
+    if (action === 'ai') {
+      out.title = lapsed ? 'One-tap AI is paused' : 'One-tap AI needs a plan';
+      out.body = 'Copy the prompt, paste it into Claude or ChatGPT, and paste the answer back: ' +
+        'that path is free, it is right here, and it is staying free. Running the same prompt in ' +
+        'one tap with your own key is what a plan adds, ' + ENT_FROM + '.';
+      out.keeps = 'The prompt is the same prompt. You are paying for the tap, not for the answer.';
+      return out;
+    }
+    out.title = lapsed ? 'Publishing a link is paused' : 'Publishing a link needs a plan';
+    out.body = 'Download the plan as an HTML file instead: it opens on anyone\'s phone, needs no ' +
+      'account at the other end, and costs nothing. A link you can refresh from here, and switch ' +
+      'off later, is what a plan adds, ' + ENT_FROM + '.';
+    out.keeps = lapsed
+      ? 'Links you already published keep working, and you can still delete any of them.'
+      : 'Nothing you have already published is affected.';
+    return out;
+  }
+
+  // The two paid tiers as the app describes them. `managed` is DECLARED here and
+  // deliberately not SOLD yet: the server-side proxy that would run AI on our
+  // key does not exist, and a tier that takes 29 USD for a capability that is
+  // not built is a lie with a price on it. The shells read `sellable` and show
+  // only what is true today; the day the proxy ships, this flag flips and the
+  // schema, the webhook and the copy are already waiting for it.
+  function entitlementPlans() {
+    return [
+      {
+        tier: 'byok',
+        name: 'Bring your own key',
+        price: ENT_PRICE.byok,
+        sellable: true,
+        blurb: 'Your cities and plans on every device, one-tap AI using your own Anthropic key, ' +
+          'and share links you can refresh or switch off.'
+      },
+      {
+        tier: 'managed',
+        name: 'Everything included',
+        price: ENT_PRICE.managed,
+        sellable: false,
+        blurb: 'Everything above, with the AI running on our key so you never need one of your own.'
+      }
+    ];
+  }
+
+  // ---- the five states, on a laptop, with no Stripe account ----
+  //
+  // Free, trialing, active, past-due-in-grace and lapsed all have to be looked
+  // at, at two widths, before they are shown to a stranger. Reaching them for
+  // real would mean five Stripe subscriptions and five rows written against a
+  // live account, so this builds the row instead, from the URL, ON LOCALHOST
+  // ONLY.
+  //
+  // The hostname check is the whole safety property and it is checked here
+  // rather than at the call site, because there is exactly one of these and
+  // there would have been two of those. On the real origin it returns null for
+  // every input, which is what the shipped-bytes test pins.
+  function entitlementMock(href, hostname) {
+    var host = String(hostname || '');
+    if (host !== 'localhost' && host !== '127.0.0.1') return null;
+    var m = /[?&#]plan=([a-z_-]+)/.exec(String(href || ''));
+    if (!m) return null;
+    var now = Date.now();
+    var iso = function (ms) { return new Date(ms).toISOString(); };
+    switch (m[1]) {
+      case 'free':
+        return { signed_in: true, entitled: false, account_created: iso(now - 60 * ENT_DAY_MS), row: null };
+      case 'trial':
+      case 'trialing':
+        return { signed_in: true, entitled: true, account_created: iso(now - 3 * ENT_DAY_MS), row: null };
+      case 'active':
+        return { signed_in: true, entitled: true, account_created: iso(now - 90 * ENT_DAY_MS),
+          row: { tier: 'byok', status: 'active', current_period_end: iso(now + 12 * ENT_DAY_MS),
+            trial_ends_at: null, updated_at: iso(now), has_customer: true } };
+      case 'grace':
+      case 'past_due':
+        return { signed_in: true, entitled: true, account_created: iso(now - 90 * ENT_DAY_MS),
+          row: { tier: 'byok', status: 'past_due', current_period_end: iso(now - 2 * ENT_DAY_MS),
+            trial_ends_at: null, updated_at: iso(now), has_customer: true } };
+      case 'lapsed':
+        return { signed_in: true, entitled: false, account_created: iso(now - 90 * ENT_DAY_MS),
+          row: { tier: 'byok', status: 'canceled', current_period_end: iso(now - 30 * ENT_DAY_MS),
+            trial_ends_at: null, updated_at: iso(now - 30 * ENT_DAY_MS), has_customer: true } };
+      case 'comp':
+      case 'complimentary':
+        return { signed_in: true, entitled: true, account_created: iso(now - 200 * ENT_DAY_MS),
+          row: { tier: 'complimentary', status: 'complimentary', current_period_end: null,
+            trial_ends_at: null, updated_at: iso(now), has_customer: false } };
+      default:
+        return null;
+    }
+  }
+
+  // What the free tier is, said once, so no two places in the app describe it
+  // differently. This is a promise, not marketing: the copy-a-prompt path stays
+  // free forever, and so does every export.
+  function entitlementFree() {
+    return {
+      name: 'Free',
+      price: 'no charge, no time limit',
+      keeps: [
+        'The whole app on one device, with as many cities and plans as you like',
+        'The copy-a-prompt AI path, into Claude or ChatGPT or anything else',
+        'Every export: standalone city guides, and the downloadable plan page'
+      ],
+      pauses: [
+        'Your work following you to a second device',
+        'Running an AI prompt in one tap from inside the app',
+        'Share links you can refresh from here'
+      ]
+    };
+  }
+
   // ---- DOM rendering (browser only) ----
   var ctx = null; // { base, store }; replaced wholesale when the app boots another city
   var drag = null; // { card, grip, startY, list, cards, sec } while a pointer drag is in progress
@@ -15414,6 +16144,20 @@ var CityOps = (function () {
     },
     extractJsonBlock: extractJsonBlock, RETRY_INSTRUCTION: RETRY_INSTRUCTION,
     isJsonSyntaxError: isJsonSyntaxError, fetchTextToCity: fetchTextToCity,
+    // Who may write, and what a lapsed account keeps. The DATABASE enforces
+    // this (public.has_active_entitlement, checked in the WITH CHECK of every
+    // write policy); the kit is the same decision in pure JS so the app can
+    // say WHY before a refusal happens, and never after.
+    entitlementKit: {
+      TRIAL_DAYS: ENT_TRIAL_DAYS, GRACE_DAYS: ENT_GRACE_DAYS, PRICE: ENT_PRICE,
+      GATE_ACTIONS: ENT_GATE_ACTIONS,
+      evaluate: evaluateEntitlement, summary: entitlementSummary, gate: entitlementGate,
+      date: entitlementDate, plans: entitlementPlans, free: entitlementFree,
+      // Localhost only, and that is checked inside the function rather than at
+      // its call sites, because there is one of these and there would have
+      // been two of those.
+      mock: entitlementMock
+    },
     syncKit: {
       EPOCH: EPOCH_ISO, decide: decideSync, plan: planSync, buildRows: buildRows,
       parseAuthHash: parseAuthHash, sessionExpiringSoon: sessionExpiringSoon,
@@ -17126,6 +17870,159 @@ only judges it. `ratings` may be omitted when you could not verify the place;
   // stale data with no warning. Here the state is the first thing Profile
   // says, in the words that matter to the reader: is my work reaching my
   // other devices or not.
+  // ---- billing ----
+  //
+  // Stripe Payment Links, which means nothing on this origin creates a checkout
+  // session, holds a Stripe key, or ever sees a card. The link carries the
+  // Supabase user id as client_reference_id, and that id is the ONLY thing that
+  // tells the webhook whose account just paid.
+  //
+  // The URLs are empty until the products exist in Stripe. Empty is a state the
+  // UI handles rather than a bug: the plan block says checkout is not connected
+  // yet and offers nothing to click, because a button that cannot succeed is
+  // worse than no button. Filling these three strings is what turns billing on.
+  var BILLING = {
+    byok: '',
+    managed: '',
+    portal: ''
+  };
+
+  // The managed tier runs AI on OUR key through a server that does not exist
+  // yet. It is in the schema, the webhook maps its price, and the app can
+  // already display it, but it is not offered for sale, because taking 29 USD a
+  // month for a capability that is not built is a lie with a price on it. Flip
+  // this the day the proxy ships.
+  var BILLING_MANAGED_LIVE = false;
+
+  function checkoutUrl(tier) {
+    var base = tier === 'managed' ? BILLING.managed : BILLING.byok;
+    if (!base) return '';
+    if (tier === 'managed' && !BILLING_MANAGED_LIVE) return '';
+    var uid = sessionUserId();
+    if (!uid) return '';
+    return base + (base.indexOf('?') === -1 ? '?' : '&') +
+      'client_reference_id=' + encodeURIComponent(uid);
+  }
+
+  // The Supabase user id, read out of the access token. It is the subject claim
+  // of a JWT this device was handed, so reading it is not a trust decision: the
+  // webhook re-derives everything it needs from Stripe and the id is only a
+  // pointer at a row.
+  function sessionUserId() {
+    if (!session || !session.access_token) return '';
+    try {
+      var parts = session.access_token.split('.');
+      if (parts.length < 2) return '';
+      var pad = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      while (pad.length % 4) pad += '=';
+      var claims = JSON.parse(atob(pad));
+      return typeof claims.sub === 'string' ? claims.sub : '';
+    } catch (e) { return ''; }
+  }
+
+  // ---- entitlement ----
+  //
+  // ONE read, my_entitlement(), which answers for the no-row case as well: no
+  // row is the trial, and a plain select on subscriptions cannot tell a trial
+  // from a lapse. The database is what enforces this; the copy below is only
+  // what the app SAYS, so that nobody meets a refusal without an explanation.
+  var entRow = null;          // last answer, or null before the first read
+  var entMissing = false;     // the SQL has not been run on this project yet
+  var entInFlight = null;
+  var entGateShown = {};      // one explanation per gate per page load
+  var entMocked = false;      // a localhost-only state, for looking at the five
+
+  // Until the migration is run there is nothing to enforce and nothing to say,
+  // so every gate opens. That is deliberate: the app and the SQL land in
+  // whichever order they land, and neither order may break the product.
+  function entReady() { return !entMissing && !!entRow; }
+
+  function entView() {
+    return CityOps.entitlementKit.evaluate(
+      entRow && entRow.row ? entRow.row : null,
+      {
+        // A mocked state describes a signed-in account by definition.
+        signedIn: entMocked || !!(session && session.access_token),
+        accountCreated: entRow ? entRow.account_created : null
+      }
+    );
+  }
+
+  // True when a write may go out. Open when signed out (nothing syncs anyway),
+  // open when the migration has not run, otherwise the database's own answer.
+  function entAllows() {
+    if (entMocked) return !!entRow.entitled;
+    if (!session || !session.access_token) return true;
+    if (!entReady()) return true;
+    return !!entRow.entitled;
+  }
+
+
+  // What a usable answer looks like. PostgREST returns a scalar-returning
+  // rpc as the value itself, but a single-element array is a shape other
+  // versions and proxies have been known to send, so both are accepted and
+  // anything else is refused. Refused means FAIL OPEN: see entAllows.
+  function entAdopt(r) {
+    var row = (Object.prototype.toString.call(r) === '[object Array]') ? r[0] : r;
+    if (!row || typeof row !== 'object') return null;
+    if (typeof row.entitled !== 'boolean') return null;
+    return row;
+  }
+
+  function fetchEntitlement() {
+    // Localhost only, and that is checked inside the kit rather than here.
+    // It is how the five states get LOOKED at, at both widths, without five
+    // Stripe subscriptions and five rows written against a live account.
+    var mock = CityOps.entitlementKit.mock(
+      (typeof location !== 'undefined' && location.href) || '',
+      (typeof location !== 'undefined' && location.hostname) || '');
+    if (mock) { entMocked = true; entMissing = false; entRow = mock; return Promise.resolve(entRow); }
+    if (!syncOn() || !session || !session.access_token) { entRow = null; return Promise.resolve(null); }
+    if (entInFlight) return entInFlight;
+    entInFlight = api('/rest/v1/rpc/my_entitlement', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    }).then(function (r) {
+      entInFlight = null;
+      var adopted = entAdopt(r);
+      if (!adopted) {
+        // Do not gate on something we cannot read.
+        warn('entitlement read came back in an unexpected shape; leaving writes open', new Error('shape'));
+        entMissing = true;
+        entRow = null;
+        return null;
+      }
+      entMissing = false;
+      entRow = adopted;
+      return entRow;
+    }).catch(function (e) {
+      entInFlight = null;
+      // 404 and PGRST202 both mean the function is not there, which means the
+      // migration has not been run. Not an error, and not a reason to gate.
+      // Any 404 means the function is not there, which means the migration
+      // has not been run. Not an error, and not a reason to gate.
+      if (/\b404\b/.test(e.message || '')) entMissing = true;
+      warn('entitlement read failed', e);
+      return null;
+    });
+    return entInFlight;
+  }
+
+  // The one place a gate is explained. Never a bare refusal: the gate copy
+  // names the free thing that still works in the same breath as the paid thing
+  // that does not, and this shows both.
+  function entGateText(action) {
+    var g = CityOps.entitlementKit.gate(action, entView());
+    return g.title + '. ' + g.body + ' ' + g.keeps;
+  }
+
+  function entGateOnce(action) {
+    if (entGateShown[action]) return;
+    entGateShown[action] = true;
+    showSyncNotice(entGateText(action));
+  }
+
   function accountBlock(box) {
     box.appendChild(el('p', 'section-lead', 'Account'));
     if (!syncOn()) {
@@ -17175,6 +18072,104 @@ only judges it. `ratings` may be omitted when you could not verify the place;
     box.appendChild(row);
   }
 
+  // The plan block in Profile. It states where the account stands, what a
+  // lapsed account keeps, and what the two tiers are. It never counts down and
+  // it never offers a control that cannot succeed: with no checkout link
+  // configured there is a sentence instead of a button.
+  function planBlock(box) {
+    if (!syncOn()) return;
+    box.appendChild(el('p', 'section-lead', 'Plan'));
+
+    var body = el('div', 'planblock');
+    box.appendChild(body);
+
+    function draw() {
+      body.innerHTML = '';
+      if (!entMocked && (!session || !session.access_token)) {
+        body.appendChild(el('p', 'diff', 'Sign in above to see your plan. Everything you do stays ' +
+          'in this browser until you do, and none of it is lost either way.'));
+        return;
+      }
+      if (entMissing) {
+        // Honest about our own state rather than guessing at the traveler's.
+        body.appendChild(el('p', 'diff', 'Plans are not switched on for this project yet. ' +
+          'Everything works as it always has.'));
+        return;
+      }
+      if (!entRow) {
+        body.appendChild(el('p', 'diff', 'Checking your plan...'));
+        return;
+      }
+
+      var ev = entView();
+      var s = CityOps.entitlementKit.summary(ev);
+      var head = el('p', 'diff', s.headline);
+      head.style.fontWeight = '600';
+      body.appendChild(head);
+      body.appendChild(el('p', 'diff', s.detail));
+
+      // Manage billing, only when there is a portal to open AND a customer to
+      // open it for. A comp account has neither, and is offered neither.
+      if (BILLING.portal && entRow.row && entRow.row.has_customer) {
+        var manage = document.createElement('a');
+        manage.className = 'ctl';
+        manage.href = BILLING.portal;
+        manage.target = '_blank';
+        manage.rel = 'noopener';
+        manage.textContent = 'Manage billing';
+        body.appendChild(manage);
+        body.appendChild(el('p', 'diff', 'Opens Stripe, where you can change the card, ' +
+          'see every invoice, or cancel. Cancelling takes one click and asks you nothing.'));
+      }
+
+      if (ev.state === 'complimentary') return;
+
+      // What free is. Said plainly, and said to everyone, because a person
+      // deciding whether to pay deserves to know what happens if they do not.
+      var free = CityOps.entitlementKit.free();
+      body.appendChild(el('p', 'section-lead', 'Free, with no time limit'));
+      var keeps = document.createElement('ul');
+      keeps.className = 'planlist';
+      free.keeps.forEach(function (t) { keeps.appendChild(el('li', '', t)); });
+      body.appendChild(keeps);
+
+      body.appendChild(el('p', 'section-lead', 'What a plan adds'));
+      var adds = document.createElement('ul');
+      adds.className = 'planlist';
+      free.pauses.forEach(function (t) { adds.appendChild(el('li', '', t)); });
+      body.appendChild(adds);
+
+      CityOps.entitlementKit.plans().forEach(function (p) {
+        // The managed tier is not shown at all while its server does not exist.
+        // Showing it with an asterisk would still be advertising it.
+        if (p.tier === 'managed' && !BILLING_MANAGED_LIVE) return;
+        var row = el('div', 'mrow');
+        row.appendChild(el('span', 'diff', p.name + ', ' + p.price + '. ' + p.blurb));
+        body.appendChild(row);
+        var url = checkoutUrl(p.tier);
+        if (url) {
+          var buy = document.createElement('a');
+          buy.className = 'ctl to-done';
+          buy.href = url;
+          buy.target = '_blank';
+          buy.rel = 'noopener';
+          buy.textContent = ev.state === 'lapsed' ? 'Subscribe again' : 'Subscribe';
+          body.appendChild(buy);
+        }
+      });
+
+      if (!checkoutUrl('byok')) {
+        body.appendChild(el('p', 'diff', 'Checkout is not connected yet, so there is nothing to ' +
+          'buy here today. Your account keeps working exactly as it does now until it is.'));
+      }
+    }
+
+    draw();
+    // The read is cheap and the modal is where a person goes to ask this, so
+    // it is refreshed on open rather than trusted from whenever it last ran.
+    fetchEntitlement().then(draw);
+  }
+
   // Closes the modal that owns `box`. The account buttons live inside the
   // Profile modal but are built by a helper that has no handle on it.
   function closeModalOf(box) {
@@ -17185,6 +18180,7 @@ only judges it. `ratings` may be omitted when you could not verify the place;
   function openProfileModal() {
     var m = modalShell('Profile');
     accountBlock(m.box);
+    planBlock(m.box);
     m.box.appendChild(el('p', 'section-lead', 'Your interests'));
     m.box.appendChild(el('p', 'diff', 'What you seek out in a new city, and what you never want suggested. ' +
       'Build my prompt hands this to your own AI so it finds places that match you. ' +
@@ -17816,6 +18812,9 @@ only judges it. `ratings` may be omitted when you could not verify the place;
   // cancelled generation costs nothing further. Omitted by every caller that
   // has no cancel control, and by the unit tests' mocked fetch.
   function callClaudeStream(prompt, apiKey, onProgress, signal) {
+    // The one-tap path is what a plan buys. The copy-a-prompt path in the
+    // same modal is free, is unaffected, and is named in the message.
+    if (!entAllows()) return Promise.reject(new Error(entGateText('ai')));
     return fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       signal: signal || undefined,
@@ -18935,6 +19934,9 @@ only judges it. `ratings` may be omitted when you could not verify the place;
   // ---- push ----
   function pushNow(kind, entries) {
     if (!syncOn() || !session || !entries || !entries.length) return;
+    // Write-sync is what a plan buys. The row is already saved on this
+    // device and stays saved; what pauses is the copy going up.
+    if (!entAllows()) { entGateOnce('sync'); return; }
     var field = (kind === 'state') ? 'state' : 'data';
     var table = (kind === 'state') ? 'city_state' : 'cities';
     var rows = CityOps.syncKit.buildRows(field, entries);
@@ -19053,6 +20055,7 @@ only judges it. `ratings` may be omitted when you could not verify the place;
   // key change cannot make a stale profile win.
   function pushProfileNow() {
     if (!syncOn() || !session || profileTableMissing) return;
+    if (!entAllows()) { entGateOnce('sync'); return; }
     if (!sidecarsKnown) {
       profilePreflight().then(function (ok) { if (ok) pushProfileRow(); });
       return;
@@ -19169,6 +20172,12 @@ only judges it. `ratings` may be omitted when you could not verify the place;
   // ---- pull ----
   function pullAll(force) {
     if (!syncOn() || !session || pullInFlight) return Promise.resolve(false);
+    // Asked alongside the pull, not before it: the answer is only needed
+    // once there is something to say about it, and a failed read here must
+    // never stop a pull.
+    fetchEntitlement().then(function () {
+      if (!entAllows()) entGateOnce('sync');
+    });
     var now = Date.now();
     if (!force && now - lastPullAt < 60000) return Promise.resolve(false);
     pullInFlight = true;

@@ -4038,7 +4038,10 @@ test('the service worker precaches the share shell and nothing token-shaped', ()
   // v15: the owner's personal itinerary link came out of both footers. Without
   // the bump a phone keeps serving the build that still has it, which is the
   // one build nobody should be handed once sign-ups are open.
-  assert.ok(/var CACHE = 'cityops-app-v16';/.test(sw));
+  // v17: the subscription gates. A phone still serving v16 would let a lapsed
+  // account tap sync, one-tap AI and Publish with no explanation attached to
+  // any of them, and then watch the database refuse all three in silence.
+  assert.ok(/var CACHE = 'cityops-app-v17';/.test(sw));
   // GET only, so the rpc POST that carries the token is never cached, and a
   // rotated share cannot keep answering out of a stale cache.
   assert.ok(/if \(e\.request\.method !== 'GET'\) return;/.test(sw));
@@ -5266,7 +5269,11 @@ test('a place pass reply that names the wrong id changes nothing, and says so', 
 // streaming response. This is what proves the one-tap path parses a real
 // Anthropic SSE stream into the fenced JSON the Apply path then merges,
 // without spending anything to find out.
-function loadCallClaudeStream(fetchImpl) {
+// `entitled` is the subscription gate this function now sits behind, injected
+// the same way the transport is. It defaults to true so every existing test
+// below describes the paying case unchanged; passing false is what exercises
+// the gate, and the point of that test is that it never reaches fetch at all.
+function loadCallClaudeStream(fetchImpl, entitled) {
   const fs = require('fs');
   const path = require('path');
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
@@ -5276,8 +5283,11 @@ function loadCallClaudeStream(fetchImpl) {
   assert.ok(end !== -1, 'could not find the end of callClaudeStream');
   const src = html.slice(start, end + 4);
   const fn = new Function('fetch', 'TextDecoder', 'CLAUDE_MODEL', 'CLAUDE_MAX_TOKENS',
+    'entAllows', 'entGateText',
     src + '\nreturn callClaudeStream;');
-  return fn(fetchImpl, TextDecoder, 'claude-test', 1000);
+  return fn(fetchImpl, TextDecoder, 'claude-test', 1000,
+    function () { return entitled !== false; },
+    function () { return 'ONE TAP NEEDS A PLAN, and the paste path is free.'; });
 }
 
 // ---------------------------------------------------------------------------
@@ -6574,6 +6584,335 @@ test('no shipped surface links the owner personal pages', () => {
     'the city app footer lost its sample-plan link');
   assert.ok(trip.indexOf('https://nomadding.com/demo/') !== -1,
     'the trip footer lost its sample-plan link');
+});
+
+// ---- entitlement: who may write ----
+//
+// These are the boundary cases, and they are the whole point of the kit being
+// pure. The DATABASE is what actually refuses a write; this JS exists only so
+// the app can say why before the refusal happens. If the two ever disagree, a
+// person is told one thing and handed another, which is the single worst
+// outcome available here. So every number below is also the number in
+// public.has_active_entitlement, and these tests are what pins them together.
+//
+// The clock is fixed. A test that reads Date.now() passes at 14:00 and fails at
+// midnight on the day a boundary is crossed.
+const ENT_NOW = '2026-09-01T12:00:00.000Z';
+const ENT_NOW_MS = Date.parse(ENT_NOW);
+const E = C.entitlementKit;
+function entAgo(ms) { return new Date(ENT_NOW_MS - ms).toISOString(); }
+function entAhead(ms) { return new Date(ENT_NOW_MS + ms).toISOString(); }
+const ENT_DAY = 86400000;
+function ent(row, extra) {
+  return E.evaluate(row, Object.assign({ now: ENT_NOW, signedIn: true }, extra || {}));
+}
+
+test('no row inside the trial window is entitled, and says how many days are left', () => {
+  const r = ent(null, { accountCreated: entAgo(ENT_DAY) });
+  assert.equal(r.entitled, true);
+  assert.equal(r.state, 'trial');
+  assert.equal(r.daysLeft, 13);
+});
+test('the last day of the trial still counts as a day', () => {
+  // 13 days and 23 hours in: six hours left is one day left, not zero.
+  const r = ent(null, { accountCreated: entAgo(13 * ENT_DAY + 23 * 3600000) });
+  assert.equal(r.entitled, true);
+  assert.equal(r.daysLeft, 1);
+});
+test('the trial ends exactly 14 days after the account was made', () => {
+  const r = ent(null, { accountCreated: entAgo(14 * ENT_DAY) });
+  assert.equal(r.entitled, false);
+  assert.equal(r.state, 'free');
+});
+test('an old account with no row is free, not trialing', () => {
+  const r = ent(null, { accountCreated: entAgo(60 * ENT_DAY) });
+  assert.equal(r.entitled, false);
+  assert.equal(r.state, 'free');
+  assert.equal(r.daysLeft, null);
+});
+test('no row and no account date is refused rather than guessed', () => {
+  assert.equal(ent(null, { accountCreated: null }).entitled, false);
+  assert.equal(ent(null, { accountCreated: 'not a date' }).entitled, false);
+});
+test('signed out is its own state, not a lapsed one', () => {
+  const r = E.evaluate(null, { now: ENT_NOW, signedIn: false });
+  assert.equal(r.state, 'signed-out');
+  assert.equal(r.entitled, false);
+});
+
+test('complimentary outranks every status and every date', () => {
+  const r = ent({ tier: 'complimentary', status: 'canceled',
+    current_period_end: entAgo(400 * ENT_DAY), trial_ends_at: entAgo(400 * ENT_DAY) });
+  assert.equal(r.entitled, true);
+  assert.equal(r.state, 'complimentary');
+  assert.equal(r.endsAt, null, 'a complimentary account has no end date to show');
+});
+test('active is entitled and reports its renewal date', () => {
+  const end = entAhead(9 * ENT_DAY);
+  const r = ent({ tier: 'byok', status: 'active', current_period_end: end });
+  assert.equal(r.entitled, true);
+  assert.equal(r.state, 'active');
+  assert.equal(r.tier, 'byok');
+  assert.equal(r.endsAt, end);
+  assert.equal(r.daysLeft, 9);
+});
+test('a Stripe trial still running is entitled', () => {
+  const r = ent({ tier: 'byok', status: 'trialing', trial_ends_at: entAhead(3 * ENT_DAY) });
+  assert.equal(r.entitled, true);
+  assert.equal(r.state, 'trial');
+  assert.equal(r.daysLeft, 3);
+});
+test('a trialing row whose trial end has passed is over, whatever the status says', () => {
+  // The webhook can be late. A trial that ended is ended.
+  const r = ent({ tier: 'byok', status: 'trialing', trial_ends_at: entAgo(1) });
+  assert.equal(r.entitled, false);
+  assert.equal(r.state, 'lapsed');
+});
+test('trialing with no trial end recorded is taken at its word', () => {
+  const r = ent({ tier: 'byok', status: 'trialing', trial_ends_at: null });
+  assert.equal(r.entitled, true);
+  assert.equal(r.state, 'trial');
+});
+
+test('past_due keeps working inside the 7 day grace window', () => {
+  const r = ent({ tier: 'byok', status: 'past_due', current_period_end: entAgo(3 * ENT_DAY) });
+  assert.equal(r.entitled, true);
+  assert.equal(r.state, 'grace');
+  assert.equal(r.daysLeft, 4);
+});
+test('grace ends exactly 7 days past the end of the paid period', () => {
+  const r = ent({ tier: 'byok', status: 'past_due', current_period_end: entAgo(7 * ENT_DAY) });
+  assert.equal(r.entitled, false);
+  assert.equal(r.state, 'lapsed');
+});
+test('past_due well beyond the window is lapsed', () => {
+  const r = ent({ tier: 'byok', status: 'past_due', current_period_end: entAgo(30 * ENT_DAY) });
+  assert.equal(r.entitled, false);
+});
+test('past_due with no period end measures grace from the row, not from now', () => {
+  // Measuring from now would slide the window forward on every single read and
+  // the account would never lapse at all.
+  const near = ent({ tier: 'byok', status: 'past_due', current_period_end: null,
+    updated_at: entAgo(2 * ENT_DAY) });
+  assert.equal(near.entitled, true);
+  assert.equal(near.state, 'grace');
+  const far = ent({ tier: 'byok', status: 'past_due', current_period_end: null,
+    updated_at: entAgo(9 * ENT_DAY) });
+  assert.equal(far.entitled, false);
+});
+test('past_due with nothing to measure from is refused', () => {
+  const r = ent({ tier: 'byok', status: 'past_due', current_period_end: null, updated_at: null });
+  assert.equal(r.entitled, false);
+});
+
+test('canceled and every unknown status are lapsed', () => {
+  ['canceled', 'unpaid', 'incomplete', 'incomplete_expired', 'paused', 'invented_next_year']
+    .forEach(function (s) {
+      const r = ent({ tier: 'byok', status: s, current_period_end: entAhead(30 * ENT_DAY) });
+      assert.equal(r.entitled, false, s + ' should not be entitled');
+      assert.equal(r.state, 'lapsed', s + ' should read as lapsed');
+    });
+});
+test('a tier the schema does not know is not carried into the view', () => {
+  const r = ent({ tier: 'enterprise_plus', status: 'active' });
+  assert.equal(r.tier, '', 'only byok, managed and complimentary are real tiers');
+  assert.equal(r.entitled, true, 'the STATUS is what entitles, and it is active');
+});
+test('the JS constants are the SQL constants', () => {
+  const r = ent(null, { accountCreated: entAgo(ENT_DAY) });
+  assert.equal(r.trialDays, 14);
+  assert.equal(r.graceDays, 7);
+});
+
+// ---- what a person is actually told ----
+
+test('every state has something to say, and none of it is empty', () => {
+  const cases = [
+    ['signed-out', E.evaluate(null, { now: ENT_NOW, signedIn: false })],
+    ['trial', ent(null, { accountCreated: entAgo(2 * ENT_DAY) })],
+    ['active', ent({ tier: 'byok', status: 'active', current_period_end: entAhead(9 * ENT_DAY) })],
+    ['complimentary', ent({ tier: 'complimentary', status: 'complimentary' })],
+    ['grace', ent({ tier: 'byok', status: 'past_due', current_period_end: entAgo(2 * ENT_DAY) })],
+    ['lapsed', ent({ tier: 'byok', status: 'canceled' })],
+    ['free', ent(null, { accountCreated: entAgo(60 * ENT_DAY) })]
+  ];
+  cases.forEach(function (pair) {
+    assert.equal(pair[1].state, pair[0], 'expected state ' + pair[0]);
+    const s = E.summary(pair[1]);
+    assert.ok(s.headline && s.headline.length > 2, pair[0] + ' has no headline');
+    assert.ok(s.detail && s.detail.length > 20, pair[0] + ' has no detail worth reading');
+  });
+});
+test('a complimentary account is never sold anything', () => {
+  const s = E.summary(ent({ tier: 'complimentary', status: 'complimentary' }));
+  assert.equal(s.cta, '', 'there is nothing for a comp account to buy');
+});
+test('a lapsed account is told what it KEEPS before what it lost', () => {
+  const s = E.summary(ent({ tier: 'byok', status: 'canceled' }));
+  assert.ok(/keep every city/i.test(s.detail), 'the detail must lead with what survives');
+  assert.ok(/paused/i.test(s.detail), 'and name what stopped, in plain words');
+});
+
+test('each of the three gates names a free thing that still works', () => {
+  ['sync', 'ai', 'publish'].forEach(function (action) {
+    const g = E.gate(action, ent(null, { accountCreated: entAgo(60 * ENT_DAY) }));
+    assert.ok(g.title, action + ' gate has no title');
+    assert.ok(g.body && g.body.length > 40, action + ' gate has no explanation');
+    assert.ok(g.keeps && g.keeps.length > 20, action + ' gate offers no alternative, which is a dead end');
+    assert.ok(g.cta, action + ' gate has no way forward');
+  });
+});
+test('the AI gate promises the copy-a-prompt path stays free', () => {
+  const g = E.gate('ai', ent(null, { accountCreated: entAgo(60 * ENT_DAY) }));
+  assert.ok(/free/i.test(g.body), 'the free path has to be named in the same breath');
+  assert.ok(/paste/i.test(g.body), 'and it has to say what the free path IS');
+});
+test('the publish gate points at the download, which needs no plan', () => {
+  const g = E.gate('publish', ent(null, { accountCreated: entAgo(60 * ENT_DAY) }));
+  assert.ok(/download/i.test(g.body), 'the HTML download is the free answer here');
+});
+test('a lapsed user is told their published links keep working', () => {
+  const g = E.gate('publish', ent({ tier: 'byok', status: 'canceled' }));
+  assert.ok(/keep working/i.test(g.keeps));
+});
+test('an unknown gate action returns an empty gate rather than inventing copy', () => {
+  const g = E.gate('teleport', ent(null, {}));
+  assert.equal(g.title, '');
+  assert.equal(g.body, '');
+});
+
+test('no gate or summary copy carries pressure, scarcity or an em-dash', () => {
+  const states = [
+    E.evaluate(null, { now: ENT_NOW, signedIn: false }),
+    ent(null, { accountCreated: entAgo(2 * ENT_DAY) }),
+    ent({ tier: 'byok', status: 'active', current_period_end: entAhead(9 * ENT_DAY) }),
+    ent({ tier: 'complimentary', status: 'complimentary' }),
+    ent({ tier: 'byok', status: 'past_due', current_period_end: entAgo(2 * ENT_DAY) }),
+    ent({ tier: 'byok', status: 'canceled' }),
+    ent(null, { accountCreated: entAgo(60 * ENT_DAY) })
+  ];
+  const banned = [
+    ['—', 'an em-dash, which this repo does not ship'],
+    ['Hurry', 'urgency'],
+    ['hurry', 'urgency'],
+    ['Only ', 'scarcity'],
+    ['last chance', 'scarcity'],
+    ['expires soon', 'a countdown'],
+    ['!', 'an exclamation point']
+  ];
+  const all = [];
+  states.forEach(function (s) {
+    const sum = E.summary(s);
+    all.push(sum.headline, sum.detail, sum.cta);
+    ['sync', 'ai', 'publish'].forEach(function (a) {
+      const g = E.gate(a, s);
+      all.push(g.title, g.body, g.keeps, g.cta);
+    });
+  });
+  E.plans().forEach(function (p) { all.push(p.name, p.price, p.blurb); });
+  const free = E.free();
+  all.push(free.name, free.price);
+  free.keeps.forEach(function (t) { all.push(t); });
+  free.pauses.forEach(function (t) { all.push(t); });
+  all.forEach(function (text) {
+    banned.forEach(function (pair) {
+      assert.equal(String(text || '').indexOf(pair[0]), -1,
+        'subscription copy carries ' + pair[1] + ': ' + JSON.stringify(text));
+    });
+  });
+});
+
+test('the managed tier is declared but not sellable while its proxy does not exist', () => {
+  const plans = E.plans();
+  const byok = plans.filter(function (p) { return p.tier === 'byok'; })[0];
+  const managed = plans.filter(function (p) { return p.tier === 'managed'; })[0];
+  assert.ok(byok && byok.sellable, 'the 15 USD tier works today and is sellable');
+  assert.ok(managed && !managed.sellable,
+    'the 29 USD tier runs AI on OUR key, and that server does not exist yet. ' +
+    'Selling it would be selling a capability that does not work.');
+});
+// ---- the localhost-only state mock ----
+//
+// This exists so the five states can be LOOKED at, at both widths, without five
+// Stripe subscriptions and five rows written against a live account. The
+// hostname check is the entire safety property, so it is what gets pinned.
+
+test('the plan mock answers on localhost and nowhere else', () => {
+  assert.ok(E.mock('http://localhost:8080/#plan=lapsed', 'localhost'));
+  assert.ok(E.mock('http://127.0.0.1:8080/#plan=lapsed', '127.0.0.1'));
+  ['app.nomadding.com', 'nomadding.com', 'robriggs3.github.io', 'localhost.evil.com',
+   'notlocalhost', ''].forEach(function (h) {
+    assert.equal(E.mock('https://' + h + '/#plan=lapsed', h), null,
+      h + ' must never be able to mock a plan state');
+  });
+});
+test('the plan mock covers the five states a stranger can be in', () => {
+  const seen = {};
+  ['free', 'trial', 'active', 'grace', 'lapsed'].forEach(function (name) {
+    const m = E.mock('http://localhost/#plan=' + name, 'localhost');
+    assert.ok(m, name + ' has no mock');
+    const ev = E.evaluate(m.row, { signedIn: true, accountCreated: m.account_created });
+    seen[ev.state] = true;
+    assert.equal(ev.entitled, m.entitled,
+      name + ': the mock claims entitled=' + m.entitled + ' but the kit computes ' + ev.entitled);
+  });
+  ['free', 'trial', 'active', 'grace', 'lapsed'].forEach(function (s) {
+    assert.ok(seen[s], 'no mock produces the ' + s + ' state');
+  });
+});
+test('an unknown or absent plan name mocks nothing', () => {
+  assert.equal(E.mock('http://localhost/#plan=platinum', 'localhost'), null);
+  assert.equal(E.mock('http://localhost/', 'localhost'), null);
+  assert.equal(E.mock('', 'localhost'), null);
+});
+
+test('the free tier keeps the copy-a-prompt path and every export, forever', () => {
+  const free = E.free();
+  assert.ok(free.keeps.some(function (t) { return /copy-a-prompt/i.test(t); }),
+    'the copy-prompt AI path is the product promise and stays free');
+  assert.ok(free.keeps.some(function (t) { return /export/i.test(t); }),
+    'exports stay free');
+  assert.ok(free.pauses.length === 3, 'exactly three things a plan adds');
+});
+
+// The gate is checked BEFORE the transport, which is the whole point: an
+// account without an entitlement must not spend a request, a token or a
+// second of the traveler's Anthropic balance discovering it cannot do this.
+asyncTest("one-tap AI without an entitlement never reaches the network", () => {
+  let called = 0;
+  const call = loadCallClaudeStream(function () { called++; return Promise.resolve({ ok: true }); }, false);
+  return call('prompt', 'sk-ant-test', function () {}).then(function () {
+    throw new Error('a gated call resolved; it must reject instead');
+  }, function (e) {
+    assert.equal(called, 0, 'the gate let a request through');
+    assert.ok(/needs a plan/i.test(e.message), 'the rejection has to carry the explanation: ' + e.message);
+  });
+});
+
+// ---- the shipped bytes, on the two claims that matter to a stranger ----
+
+test("no shipped surface can mock a plan state off localhost", () => {
+  const fs2 = require("fs"); const path2 = require("path");
+  const root2 = path2.join(__dirname, "..");
+  ["index.html", "trip/index.html", "template.html", "example.html"].forEach(function (rel) {
+    const html = fs2.readFileSync(path2.join(root2, rel), "utf8");
+    const i = html.indexOf("function entitlementMock(");
+    assert.ok(i !== -1, rel + " has no entitlementMock");
+    const head = html.slice(i, i + 400);
+    assert.ok(head.indexOf("127.0.0.1") !== -1 && head.indexOf("localhost") !== -1,
+      rel + ": the mock lost its hostname gate, so a live page could fake an entitlement");
+  });
+});
+
+test("the managed tier is not offered for sale in any shipped surface", () => {
+  const fs2 = require("fs"); const path2 = require("path");
+  const root2 = path2.join(__dirname, "..");
+  ["index.html", "trip/index.html"].forEach(function (rel) {
+    const html = fs2.readFileSync(path2.join(root2, rel), "utf8");
+    assert.ok(/BILLING_MANAGED_LIVE = false/.test(html),
+      rel + ": the 29 USD tier runs AI on OUR key and that server does not exist. " +
+      "It must stay unsellable until it does.");
+  });
 });
 
 // The async tests above resolve on a microtask, so the summary has to wait

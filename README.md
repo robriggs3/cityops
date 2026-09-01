@@ -134,7 +134,19 @@ The short version of [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md):
   documentation and machine-readable source, sliced by landmark into
   generated prompts; the merge path is validation-gated and
   prototype-safe.
-- 390 tests on Node built-ins; the harness tests the exact bytes that
+- Billing is enforced in the DATABASE, not the UI.
+  `has_active_entitlement(uid)` is a security-definer helper checked in
+  the `WITH CHECK` of every write policy on `cities`, `city_state`,
+  `planahead` and `shares`. Reads and deletes stay own-rows, so a lapsed
+  account keeps everything it made, can still export it, and can still
+  delete it; what pauses is write-sync, one-tap AI and publishing a
+  share link. The same decision is mirrored in the engine
+  (`CityOps.entitlementKit`, pure and unit tested) for one purpose only:
+  saying why before a refusal happens, never after. Stripe reaches the
+  project through one Payment Link per tier and one edge function
+  (`supabase/functions/stripe-webhook`) whose signature check IS its
+  inbound auth gate.
+- 447 tests on Node built-ins; the harness tests the exact bytes that
   ship. Every feature landed through a written spec, plan, and
   independent review (committed under `docs/superpowers/`), a workflow
   run with AI agents doing implementation and adversarial review under
