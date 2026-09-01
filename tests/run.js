@@ -587,6 +587,117 @@ test('both surfaces ship the SAME header, from one source', () => {
   const tpl = fs.readFileSync(path.join(root, 'template.html'), 'utf8');
   assert.equal(tpl.indexOf('id="surfsw"'), -1, 'a standalone guide must not offer a surface switch');
 });
+// The navigation chrome joined the header in src/header.css on 2026-09-01, so
+// "one source, both surfaces" now has to hold for three vocabularies, not one.
+// A hand-rolled .secnav or .sheet-row rule in either per-surface stylesheet
+// would look right on the day it was written and drift from that day on, which
+// is exactly what happened to the red band twice before it moved.
+test('the section nav and the action sheet are styled from one source', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const root = path.join(__dirname, '..');
+  const headerCss = fs.readFileSync(path.join(root, 'src', 'header.css'), 'utf8');
+  // The shared stylesheet is where these live.
+  ['.secnav{', '.secnav-chip{', '.sheet-row{', '.sheet-group{', '.sheet-grouplabel{']
+    .forEach(function (sel) {
+      assert.ok(headerCss.indexOf(sel) !== -1,
+        'src/header.css lost ' + sel + ', which both surfaces depend on');
+    });
+  // And nowhere else. Each per-surface stylesheet is checked BEFORE assembly,
+  // because after it every surface legitimately contains one injected copy.
+  [['src/cityops.css', 'the guide stylesheet'], ['src/trip-shell.html', 'the trip stylesheet']]
+    .forEach(function (pair) {
+      const text = fs.readFileSync(path.join(root, pair[0]), 'utf8');
+      ['.secnav{', '.secnav-chip{', '.sheet-row{', '.sheet-group{'].forEach(function (sel) {
+        assert.equal(text.indexOf(sel), -1,
+          pair[0] + ' declares ' + sel + ' again: ' + pair[1] + ' must take it from ' +
+          'src/header.css or the two menus drift.');
+      });
+    });
+  // And each shipped surface carries the shared rules exactly as many times as
+  // src/header.css declares them (the base rule plus its responsive tiers),
+  // times the number of copies of that stylesheet it legitimately contains.
+  // The trip surface has one. The guide surface has two: its own, plus the
+  // standalone guide template it embeds so it can write an offline guide file
+  // with no network. Anything above that count is a hand-written copy.
+  function count(text, needle) { return text.split(needle).length - 1; }
+  [['trip/index.html', 1], ['index.html', 2]].forEach(function (pair) {
+    const html = fs.readFileSync(path.join(root, pair[0]), 'utf8');
+    ['.secnav-chip{', '.sheet-row{', '.hdr-facts{'].forEach(function (sel) {
+      assert.equal(count(html, sel), count(headerCss, sel) * pair[1],
+        pair[0] + ' ships ' + count(html, sel) + ' declarations of ' + sel +
+        ', expected ' + (count(headerCss, sel) * pair[1]) +
+        '. A copy beside the injected one is how the two surfaces drift.');
+    });
+  });
+});
+
+// Owner report 2026-09-01: "i can't find 'settings' on /trip". The fix is a
+// chip row built from the DOM, so the guard that matters is not "the nav has
+// nine chips" (it would need a browser to know) but the CONTRACT the builder
+// relies on: buildTripNav walks `.wrap > section.section[data-sec-key]`, and
+// initCollapsibleSections only stamps that attribute onto a section that has a
+// `.section-head` with an `<h2>`. A section added without that heading is
+// silently missing from the nav and from Collapse all, and looks fine on the
+// page. This test is what catches that.
+test('every section of the trip page can appear in its section nav', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const root = path.join(__dirname, '..');
+  const html = fs.readFileSync(path.join(root, 'trip', 'index.html'), 'utf8');
+  const wrap = html.slice(html.indexOf('<div class="wrap">'), html.indexOf('<footer class="footer">'));
+  assert.ok(wrap.length > 0, 'could not find the trip page content column');
+  // The nav host itself, and only one of it.
+  assert.equal(wrap.split('id="tripnav"').length - 1, 1,
+    'the trip page must carry exactly one section nav host');
+  // Every top-level section, and the heading each one is named by.
+  const labels = [];
+  const re = /<section class="section"[^>]*>([\s\S]*?)<\/section>/g;
+  let m;
+  while ((m = re.exec(wrap)) !== null) {
+    const head = m[1].match(/<div class="section-head">[\s\S]*?<h2>([\s\S]*?)<\/h2>/);
+    assert.ok(head,
+      'a trip section has no <div class="section-head"><h2>: it will be missing from ' +
+      'the section nav and from Collapse all, with nothing on the page to show it.');
+    labels.push(head[1].trim());
+  }
+  // The nine the page has today. A tenth is welcome; a missing one is a
+  // navigation regression, and Settings is the one the owner could not find.
+  ['Travel plans', 'Where you are', 'The map', 'By the numbers', 'Itinerary',
+   'Ideas', 'Past travel', 'Travel profile', 'Settings'].forEach(function (want) {
+    assert.ok(labels.indexOf(want) !== -1,
+      'the trip page lost its "' + want + '" section, or renamed its heading');
+  });
+  assert.ok(labels.length >= 9, 'expected at least 9 trip sections, found ' + labels.length);
+});
+
+// Settings held the actions as well as the settings, at the bottom of nine
+// sections. The actions are now also in the More sheet behind the header's ⋯,
+// which is one tap from the top of the page. If a row is dropped from that
+// sheet the action goes back to being bottom-of-page-only, silently.
+test('the trip More sheet carries every action that was buried in Settings', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const root = path.join(__dirname, '..');
+  const html = fs.readFileSync(path.join(root, 'trip', 'index.html'), 'utf8');
+  const sheet = html.slice(html.indexOf('function openTripMore()'));
+  assert.ok(sheet.length > 0, 'the trip More sheet is gone');
+  ['Snapshots', 'Import from notes', 'Budget target', 'Share a link',
+   'Export JSON', 'Import JSON', 'AI integration and key', 'Sync across devices',
+   'Reset everything'].forEach(function (label) {
+    assert.ok(sheet.indexOf("label: '" + label + "'") !== -1,
+      'the trip More sheet lost its "' + label + '" row');
+  });
+  // The destructive row is fenced off in its own cluster, not sitting one
+  // thumb-width under something anyone meant to tap.
+  assert.ok(/id: 'device', label: 'This device or account', last: true/.test(html),
+    'the trip More sheet stopped isolating its destructive cluster');
+  // And the ⋯ door is in the shared header's action slot, where the guide
+  // surface keeps its own.
+  assert.ok(html.indexOf("more.setAttribute('aria-label', 'More actions')") !== -1,
+    'the trip header lost its More chip, or its accessible name');
+});
+
 test('index.html embeds the standalone template, escaped and reversible', () => {
   const fs = require('fs');
   const path = require('path');
@@ -3927,7 +4038,7 @@ test('the service worker precaches the share shell and nothing token-shaped', ()
   // v15: the owner's personal itinerary link came out of both footers. Without
   // the bump a phone keeps serving the build that still has it, which is the
   // one build nobody should be handed once sign-ups are open.
-  assert.ok(/var CACHE = 'cityops-app-v15';/.test(sw));
+  assert.ok(/var CACHE = 'cityops-app-v16';/.test(sw));
   // GET only, so the rpc POST that carries the token is never cached, and a
   // rotated share cannot keep answering out of a stale cache.
   assert.ok(/if \(e\.request\.method !== 'GET'\) return;/.test(sw));
@@ -4367,6 +4478,46 @@ test('a standalone guide drops the empty app-only cluster', () => {
   assert.deepEqual(gs.map(g => g.id), ['work', 'share']);
   assert.deepEqual(gs[0].rows.map(r => r.label), ['Update data', 'Edit dates']);
   assert.deepEqual(gs[1].rows.map(r => r.label), ['Share view', 'Export JSON']);
+});
+
+// The trip surface reuses this exact function with its own three clusters
+// rather than growing a second grouping rule. If the parameter stops being
+// honoured, the trip menu quietly falls back to the guide surface's clusters
+// and every trip row lands in "Add and update".
+test('moreSheetGroups clusters against a caller supplied group list', () => {
+  const TRIP = [
+    { id: 'everyday', label: 'Everyday' },
+    { id: 'share', label: 'Share and export' },
+    { id: 'device', label: 'This device or account', last: true }
+  ];
+  const gs = C.moreSheetGroups([
+    { label: 'Reset everything', group: 'device', order: 30, cls: 'danger' },
+    { label: 'Snapshots', group: 'everyday', order: 10 },
+    { label: 'Export JSON', group: 'share', order: 20 },
+    { label: 'Sync across devices', group: 'device', order: 20 },
+    { label: 'Budget target', group: 'everyday', order: 30 }
+  ], TRIP);
+  assert.deepEqual(gs.map(g => g.id), ['everyday', 'share', 'device']);
+  assert.deepEqual(gs.map(g => g.label),
+    ['Everyday', 'Share and export', 'This device or account']);
+  assert.deepEqual(gs[0].rows.map(r => r.label), ['Snapshots', 'Budget target']);
+  assert.deepEqual(gs[2].rows.map(r => r.label), ['Sync across devices', 'Reset everything']);
+  // The fenced-off cluster is declared by the group, not inferred from its id:
+  // that inference ('city') is what stopped working the moment a second surface
+  // had clusters of its own.
+  assert.deepEqual(gs.map(g => g.last), [false, false, true]);
+  const lastGroup = gs[gs.length - 1];
+  assert.equal(lastGroup.rows[lastGroup.rows.length - 1].cls, 'danger');
+});
+
+test('the default clusters still apply when no group list is passed', () => {
+  const rows = [{ label: 'Remove city', group: 'city', order: 20, cls: 'danger' }];
+  assert.deepEqual(C.moreSheetGroups(rows).map(g => g.id), ['city']);
+  assert.equal(C.moreSheetGroups(rows)[0].last, true,
+    'the guide surface "This city" cluster must still be the fenced-off one');
+  // Passing an empty list is a caller mistake, not an instruction to render
+  // nothing: a menu with every row missing is the worst outcome available.
+  assert.deepEqual(C.moreSheetGroups(rows, []).map(g => g.id), ['city']);
 });
 
 test('a row with no group is shown, never dropped', () => {

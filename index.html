@@ -47,17 +47,40 @@
      contents back on that column, so the h1 starts exactly where the first
      card starts at every width. The trip surface's .hero does the same with
      the same numbers. */
-  .wrap>header{margin:0 calc(50% - 50vw) 20px; border-radius:0;
+  /* :not(.apphdr) is load bearing, not tidiness. These four rules predate the
+     shared header and now describe ONLY the standalone exported guide, whose
+     header is a bare <header id="hdr"> with no shared band to inherit.
+     Unscoped, `.wrap>header` (0,1,1) outranked the shared `.apphdr` (0,1,0)
+     and quietly won the padding argument on the app surface: at <=430px the
+     narrow tier below set `padding:20px var(--bleed-pad) 16px` as a shorthand,
+     so the city band carried 20px of top padding where the trip band, styled
+     by header.css alone, carried 0. Two headers, same fragment, different
+     heights on the one screen Rob reads them on. Scoped, header.css is the
+     only thing that styles the band on either surface. */
+  .wrap>header:not(.apphdr){margin:0 calc(50% - 50vw) 20px; border-radius:0;
     padding-left:var(--bleed-pad); padding-right:var(--bleed-pad);}
-  header h1{font-size:1.55rem; letter-spacing:.2px;}
-  header .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
+  header:not(.apphdr) h1{font-size:1.55rem; letter-spacing:.2px;}
+  header:not(.apphdr) .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
 
 /* ==========================================================================
-   THE SHARED HEADER
+   THE SHARED CHROME
    One source, assembled into both stylesheets by tools/assemble.js at the
    /*CITYOPS_HEADER_CSS* / marker. Written against tokens BOTH surfaces already
-   declare under the same names (--accent, --accent-hover, --gutter,
-   --content-max, --bleed-pad), so it needs nothing that is not already there.
+   declare under the same names (--accent, --accent-hover, --bg, --bg-card,
+   --text, --text-3, --border, --border-light, --gutter, --content-max,
+   --bleed-pad), so it needs nothing that is not already there.
+
+   It started as the red band alone. It now carries every piece of navigation
+   chrome the two surfaces have in common, because each time a piece stayed
+   per-surface it drifted: the band drifted twice before it moved here, and the
+   narrow-phone padding was still drifting afterwards (see .wrap>header in
+   cityops.css). Three vocabularies live here now:
+     1. the band itself (.apphdr and everything in it)
+     2. the sticky "jump to section" chip row (.secnav)
+     3. the grouped action sheet (.sheet-*)
+   The last two used to be city-only, in cityops.css, which the trip surface
+   does not load. Giving the trip surface navigation meant either copying them
+   (a third drift waiting to happen) or moving them here. They are here.
 
    The band is full bleed: the negative side margins pull it past the content
    column's max-width, and --bleed-pad puts its CONTENTS back on that column,
@@ -125,6 +148,30 @@
 .apphdr-mid h1{font-size:1.55rem; letter-spacing:.2px; line-height:1.15;}
 .apphdr-mid .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
 
+/* The h1 is a CONTROL on both surfaces, not a caption: the guide side opens
+   the city switcher from it, the trip side opens the stop switcher. Both
+   therefore want the same cursor, the same chevron and the same alignment of
+   the two. These four declarations lived in app-shell.html, which is to say on
+   one of the two surfaces that now uses them; the trip h1 became a control on
+   2026-09-01 and would otherwise have needed a second copy. Values are the
+   guide surface's own, unchanged, so nothing moved there.
+   inline-flex keeps the chevron on the title's line rather than letting it
+   wrap alone under a long city name. */
+.apphdr-mid h1[role="button"]{cursor:pointer; display:inline-flex; align-items:center; gap:2px;}
+.apphdr-mid h1[role="button"]:focus-visible{outline:2px solid #fff; outline-offset:3px;}
+.hdr-chev{font-size:.85rem; opacity:.85;}
+
+/* The chip row under the title. Both surfaces put facts and doors here, so
+   the row is shared even though what goes in it is not. Lived in the trip
+   stylesheet until 2026-09-01, which meant the one rule that makes a hidden
+   chip actually hide was per-surface too. */
+.hdr-facts{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; align-items:center;}
+.hdr-chip .chip-sub{opacity:.72;}
+/* display:inline-flex on .hdr-chip beats the hidden attribute, and a chip with
+   nothing in it still takes a chip's worth of width. Anything that hides
+   itself when it has nothing to say needs this to actually go. */
+.hdr-chip[hidden]{display:none;}
+
 /* "Last touched" is a FACT, not a door, and it was wearing a pill that cost
    more width than the words (owner ask 2026-08-27: "that takes a lot of room.
    let's make that smaller, just text, no pill"). Plain muted text now: no
@@ -134,6 +181,71 @@
   white-space:nowrap; align-self:center;
 }
 
+/* ==========================================================================
+   THE STICKY SECTION NAV
+   One chip per section of the page, pinned under the band. The guide side has
+   had this since Phase 3 (scoped to whichever tab is open); the trip side got
+   it on 2026-09-01, when its nine stacked sections turned out to have no
+   navigation at all and Settings was only reachable by scrolling to the
+   bottom and knowing it was there.
+
+   ONE ROW, ALWAYS. flex-wrap defaults to nowrap and overflow-x:auto carries
+   the overflow sideways, which is the same contract the header highlights row
+   (.hl) keeps and for the same reason: a jump bar that grows a second line is
+   not a bar any more, it is a menu that moves the page under your thumb. The
+   scrollbar is hidden wherever an engine allows it; the chips stay tappable.
+
+   `top` reads --tabbar-h so the guide side stacks this UNDER its own sticky
+   tab bar rather than underneath it (both were pinned to 0 and #tabbar's
+   z-index won, so this one simply vanished). The trip surface has no tab bar
+   and never sets that property, so the fallback pins it to the top of the
+   viewport. One rule, two correct answers, no per-surface override.
+   ========================================================================== */
+.secnav{position:sticky; top:var(--tabbar-h, 0px); z-index:20; display:flex; gap:8px;
+  overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;
+  background:var(--bg); padding:8px 0 10px; margin:0 0 6px;}
+.secnav::-webkit-scrollbar{display:none;}
+.secnav[hidden]{display:none;}
+.secnav-chip{flex:0 0 auto; font:inherit; font-size:.78rem; font-weight:700; color:var(--accent-hover);
+  background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
+  padding:5px 13px; cursor:pointer; white-space:nowrap;}
+.secnav-chip:hover{border-color:var(--accent);}
+.secnav-chip:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+
+/* ==========================================================================
+   THE GROUPED ACTION SHEET
+   Every utility action on a surface, in labelled clusters, one icon plus one
+   muted line of what it does per row. Built by CityOps.renderSheetInto so the
+   two surfaces cannot drift into two different-looking menus; styled here so
+   they cannot drift into two different-looking rows either.
+
+   The grouping pass this came from (Aug 2026, owner ask: "better layout our
+   nav to be better ux, more clear without having to study each line item.
+   prioritize functions that are more likely to be used, group related items")
+   replaced a flat list of bare labels that made the reader rank every line
+   from scratch each time.
+   ========================================================================== */
+.sheet-group{margin-top:14px;}
+.modal h3 + .sheet-group{margin-top:6px;}
+.sheet-grouplabel{font-size:.72rem; font-weight:800; letter-spacing:.6px;
+  text-transform:uppercase; color:var(--text-3); padding:0 4px 2px;}
+/* The destructive cluster is pushed clear of the rest and fenced off with a
+   rule of its own: Remove city, and Reset everything on the other surface,
+   must never sit one careless thumb-width below a row someone meant to tap. */
+.sheet-group-last{margin-top:20px; border-top:1px solid var(--border); padding-top:10px;}
+.sheet-list{display:flex; flex-direction:column;}
+.sheet-row{font:inherit; color:var(--text); background:none;
+  border:none; border-bottom:1px solid var(--border-light); text-align:left; padding:10px 4px;
+  cursor:pointer; min-height:52px; display:flex; align-items:center; gap:12px;
+  width:100%; text-decoration:none;}
+.sheet-row:last-child{border-bottom:none;}
+.sheet-row:hover .sheet-label{color:var(--accent-hover);}
+.sheet-ic{flex:0 0 22px; font-size:1.05rem; line-height:1.2; text-align:center;}
+.sheet-txt{display:flex; flex-direction:column; gap:1px; min-width:0;}
+.sheet-label{font-size:.95rem; font-weight:700;}
+.sheet-desc{font-size:.78rem; font-weight:400; color:var(--text-3); line-height:1.35;}
+.sheet-row.danger .sheet-label{color:var(--accent-hover); font-weight:800;}
+
 @media (max-width: 430px){
   .apphdr{margin:0 calc(50% - 50vw) 16px; padding:0 var(--bleed-pad) 16px;}
   .apphdr-bar{padding:8px 0 10px; margin-bottom:12px; gap:8px;}
@@ -141,6 +253,9 @@
   .hdr-chip{font-size:.74rem; padding:5px 10px;}
   .apphdr-mid h1{font-size:1.35rem;}
   .hdr-meta{font-size:.68rem;}
+  .hdr-facts{gap:6px; margin-top:10px;}
+  .secnav{gap:6px;}
+  .secnav-chip{padding:4px 10px; font-size:.74rem;}
 }
 
 /* A door gets a thumb on a touch screen. The width test is here as well as the
@@ -148,9 +263,16 @@
    Rob's phone is 390px, so width is the reliable signal of the two. */
 @media (hover: none), (pointer: coarse){
   .surfsw .surf, .hdr-chip{min-height:44px;}
+  .secnav-chip{min-height:40px;}
 }
 @media (max-width: 430px){
   .surfsw .surf, .hdr-chip{min-height:44px;}
+  .secnav-chip{min-height:40px;}
+}
+
+/* Controls do not belong on paper, on either surface. */
+@media print{
+  .secnav{display:none !important;}
 }
 
   .facts{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;}
@@ -482,20 +604,13 @@
     .card.just-moved, .daycard.just-moved{animation:none; box-shadow:0 0 0 3px var(--accent);}
   }
 
-  /* --- Phase 3: section header counts + sticky section nav --- */
-  /* top is the rendered #tabbar height (Phase 4), kept in sync by
-     updateTabbarHeightVar() in the engine so the two sticky bars stack
-     instead of overlapping; 0px is the safe fallback before that JS runs (or
-     on a shell that predates the tab bar). z-index stays below #tabbar's 26
-     so #tabbar is always the one on top if a scroll ever puts them in the
-     same few pixels. */
-  #secnav{position:sticky; top:var(--tabbar-h, 0px); z-index:20; display:flex; gap:8px; overflow-x:auto;
-    -webkit-overflow-scrolling:touch; background:var(--bg); padding:8px 0 10px; margin:0 0 6px;}
-  #secnav[hidden]{display:none;}
-  .secnav-chip{flex:0 0 auto; font:inherit; font-size:.78rem; font-weight:700; color:var(--accent-hover);
-    background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
-    padding:5px 13px; cursor:pointer; white-space:nowrap;}
-  .secnav-chip:hover{border-color:var(--accent);}
+  /* The sticky section nav (.secnav / .secnav-chip) moved to src/header.css on
+     2026-09-01: the trip surface needed the same chip row and does not load
+     this stylesheet, so the choice was to copy it or to share it. Its `top`
+     still reads --tabbar-h, which updateTabbarHeightVar() in the engine keeps
+     in sync with the rendered tab bar so the two sticky bars stack instead of
+     overlapping. That property is set on THIS surface only; the trip surface
+     has no tab bar and falls back to 0px. */
 
   /* --- Phase 3: Today / Guide / Calendar segmented control --- */
   .viewseg{display:flex; border:1.5px solid var(--border-light); border-radius:20px; overflow:hidden;}
@@ -515,9 +630,9 @@
        Only the VERTICAL rhythm tightens here, which is what the density pass
        this tier came from was actually about. */
     .wrap{padding:0 var(--gutter) 48px;}
-    .wrap>header{margin:0 calc(50% - 50vw) 16px; border-radius:0;
+    .wrap>header:not(.apphdr){margin:0 calc(50% - 50vw) 16px; border-radius:0;
       padding:20px var(--bleed-pad) 16px;}
-    header h1{font-size:1.35rem;}
+    header:not(.apphdr) h1{font-size:1.35rem;}
     .facts{gap:6px; margin-top:10px;}
     .chip{padding:4px 9px; font-size:.75rem;}
     .hl{gap:5px; margin-top:10px;}
@@ -536,12 +651,10 @@
     .ctl-row{gap:4px;}
     .ctl{padding:4px 9px;}
     .planday-today{padding:26px 8px 10px; margin:0 0 18px;}
-    #secnav{gap:6px;}
-    .secnav-chip{padding:4px 10px; font-size:.74rem;}
     .viewtab{padding:5px 10px; font-size:.75rem;}
   }
   @media print{
-    .toolbar, .ctl-row, .plangrip, #notice, #secnav, #tabbar{display:none !important;}
+    .toolbar, .ctl-row, .plangrip, #notice, #tabbar{display:none !important;}
     /* The pin chips are shortcuts to cards the printed page already carries
        in full, so they print as noise; the sunset is a fact nothing else on
        the page states, so it stays. Same reasoning for the section + and the
@@ -622,31 +735,10 @@
   .task-row.task-declined .task-check{opacity:.5; text-decoration:line-through;}
   .task-row.task-declined .task-note{opacity:.6;}
 
-  /* --- Phase 4: the More action sheet (every utility action, one place) --- */
-  /* Aug 2026 grouping pass: the flat eight-row list of bare labels made the
-     traveler read and rank every line each time. Now three labelled clusters,
-     each row an icon plus a label plus one muted line of what it does. The
-     group label borrows the uppercase-muted idiom the archive and intel
-     disclosures already use, so nothing new has to be learned to read it. */
-  .sheet-group{margin-top:14px;}
-  .modal h3 + .sheet-group{margin-top:6px;}
-  .sheet-grouplabel{font-size:.72rem; font-weight:800; letter-spacing:.6px;
-    text-transform:uppercase; color:var(--text-3); padding:0 4px 2px;}
-  /* The destructive cluster is pushed clear of the rest and fenced off with a
-     rule of its own: Remove city must never sit one careless thumb-width
-     below a row someone actually meant to tap. */
-  .sheet-group-last{margin-top:20px; border-top:1px solid var(--border); padding-top:10px;}
-  .sheet-list{display:flex; flex-direction:column;}
-  .sheet-row{font:inherit; color:var(--text); background:none;
-    border:none; border-bottom:1px solid var(--border-light); text-align:left; padding:10px 4px;
-    cursor:pointer; min-height:52px; display:flex; align-items:center; gap:12px;}
-  .sheet-row:last-child{border-bottom:none;}
-  .sheet-row:hover .sheet-label{color:var(--accent-hover);}
-  .sheet-ic{flex:0 0 22px; font-size:1.05rem; line-height:1.2; text-align:center;}
-  .sheet-txt{display:flex; flex-direction:column; gap:1px; min-width:0;}
-  .sheet-label{font-size:.95rem; font-weight:700;}
-  .sheet-desc{font-size:.78rem; font-weight:400; color:var(--text-3); line-height:1.35;}
-  .sheet-row.danger .sheet-label{color:var(--accent-hover); font-weight:800;}
+  /* The More action sheet (.sheet-*) moved to src/header.css on 2026-09-01,
+     alongside the section nav and for the same reason: the trip surface grew
+     the same grouped menu, does not load this stylesheet, and a second copy of
+     these rules is a second menu waiting to look different. */
   /* Enrich's three passes borrow the same group label, with room above so
      each pass reads as its own block. */
   .enrich-h{margin-top:18px; padding-left:0;}
@@ -744,8 +836,10 @@
      CityOps.onStateChange every time: see the appshell script below. The
      header must not grow to fit these; they overlay the existing chrome. */
   #hdr{position:relative;}
-  #hdr h1{cursor:pointer; display:inline-flex; align-items:center; gap:2px;}
-  .hdr-chev{font-size:.85rem; opacity:.85;}
+  /* The h1-as-a-control rules (cursor, inline-flex, the chevron) moved to
+     src/header.css on 2026-09-01, with their values unchanged. The trip
+     surface's h1 became the same kind of control that day, and a shared
+     control declared once per surface is how the red band drifted twice. */
   /* Profile, sync and + Add city are app-level controls (not per-city ones):
      Profile holds ONE interest profile and ONE Claude key for every city, so
      it lives in the header rather than inside the city dropdown, which would
@@ -7333,24 +7427,35 @@ var CityOps = (function () {
   // the things that send the trip somewhere else second, and the two that own
   // the city record itself last, where the destructive one is furthest from a
   // thumb reaching for Enrich.
+  // `last: true` marks the cluster that gets fenced off above (a rule and extra
+  // space), which is where the destructive row lives. It used to be decided in
+  // the renderer by comparing the group id to the literal 'city', which only
+  // worked because there was one surface with one set of clusters. The trip
+  // surface has its own three, and its destructive row is Reset everything.
   var MORE_GROUPS = [
     { id: 'work', label: 'Add and update' },
     { id: 'share', label: 'Share and export' },
-    { id: 'city', label: 'This city' }
+    { id: 'city', label: 'This city', last: true }
   ];
 
-  // Pure: turns a flat row list into [{id, label, rows}], each group's rows
-  // sorted by their own `order` and empty groups dropped (a standalone guide
-  // has no app rows at all, so its `city` group never renders). A row whose
-  // group is not one of the three is NOT dropped: it joins the first group at
-  // the end, because a row that silently vanishes from a menu is a worse bug
-  // than a row in the wrong cluster.
-  function moreSheetGroups(rows) {
+  // Pure: turns a flat row list into [{id, label, last, rows}], each group's
+  // rows sorted by their own `order` and empty groups dropped (a standalone
+  // guide has no app rows at all, so its `city` group never renders). A row
+  // whose group is not one of the clusters is NOT dropped: it joins the first
+  // group at the end, because a row that silently vanishes from a menu is a
+  // worse bug than a row in the wrong cluster.
+  //
+  // `groups` is a parameter rather than a closed-over constant since 2026-09-01:
+  // the trip surface clusters its own actions (everyday / share and export /
+  // this device or account) and reuses this exact function to do it, so the two
+  // menus share their grouping rules instead of each having their own.
+  function moreSheetGroups(rows, groups) {
     var list = Array.isArray(rows) ? rows : [];
+    var defs = (Array.isArray(groups) && groups.length) ? groups : MORE_GROUPS;
     var known = {};
-    MORE_GROUPS.forEach(function (g) { known[g.id] = 1; });
+    defs.forEach(function (g) { known[g.id] = 1; });
     var out = [];
-    MORE_GROUPS.forEach(function (g, gi) {
+    defs.forEach(function (g, gi) {
       var inG = list.filter(function (r) {
         return r && (r.group === g.id || (gi === 0 && !known[r.group]));
       }).map(function (r, i) {
@@ -7358,10 +7463,58 @@ var CityOps = (function () {
       });
       inG.sort(function (a, b) { return (a.order - b.order) || (a.i - b.i); });
       if (inG.length) {
-        out.push({ id: g.id, label: g.label, rows: inG.map(function (x) { return x.r; }) });
+        out.push({ id: g.id, label: g.label, last: !!g.last,
+          rows: inG.map(function (x) { return x.r; }) });
       }
     });
     return out;
+  }
+
+  // The sheet's DOM, built into a container the caller owns. BOTH surfaces call
+  // this: the guide side's openMoreSheet below, and the trip side's own two
+  // sheets (its More menu and its stop switcher). Before this the trip surface
+  // had no grouped menu at all, and building one would have meant a second
+  // hand-written copy of these five elements and eight class names. The styling
+  // moved to src/header.css for the same reason, so the markup and the rules
+  // that dress it are now one source each.
+  //
+  // Every row is icon + label + one muted line saying what it does, because a
+  // flat list of bare labels makes the reader rank them from scratch every
+  // time. A row is a <button> unless it carries an `href`, in which case it is
+  // an <a>: a door to another page should be middle-clickable and should show
+  // its target in the status bar, and faking that with a button never does.
+  // `onDone` fires after any row is activated, which is how the caller closes
+  // itself without every row having to remember to.
+  function renderSheetInto(box, rows, groups, onDone) {
+    moreSheetGroups(rows, groups).forEach(function (g) {
+      var group = el('div', 'sheet-group' + (g.last ? ' sheet-group-last' : ''));
+      group.appendChild(el('div', 'sheet-grouplabel', g.label));
+      var list = el('div', 'sheet-list');
+      // The cluster label is a plain div, so name the list with it too: a
+      // screen reader otherwise hears eight buttons with no grouping at all.
+      list.setAttribute('role', 'group');
+      list.setAttribute('aria-label', g.label);
+      g.rows.forEach(function (r) {
+        var b = el(r.href ? 'a' : 'button', 'sheet-row' + (r.cls ? ' ' + r.cls : ''));
+        if (r.href) { b.href = r.href; } else { b.type = 'button'; }
+        if (r.title) b.title = r.title;
+        var ic = el('span', 'sheet-ic', r.icon || '·');
+        ic.setAttribute('aria-hidden', 'true');
+        b.appendChild(ic);
+        var txt = el('span', 'sheet-txt');
+        txt.appendChild(el('span', 'sheet-label', r.label));
+        if (r.desc) txt.appendChild(el('span', 'sheet-desc', r.desc));
+        b.appendChild(txt);
+        b.onclick = function () {
+          if (onDone) onDone();
+          if (r.onClick) r.onClick();
+        };
+        list.appendChild(b);
+      });
+      group.appendChild(list);
+      box.appendChild(group);
+    });
+    return box;
   }
 
   // App-only rows (Enrich, Edit city, Export guide, Remove city) are supplied
@@ -7372,9 +7525,8 @@ var CityOps = (function () {
   // same clusters they would in the app rather than drifting into a second
   // layout.
   //
-  // Every row is icon + label + one muted line saying what it does, because
-  // the old flat eight-row list of bare labels made the traveler read and
-  // rank them from scratch every time.
+  // The rows are this function's business; the DOM they turn into is
+  // renderSheetInto's, shared with the trip surface's two sheets.
   function openMoreSheet() {
     var host = document.getElementById('modal');
     host.innerHTML = '';
@@ -7408,30 +7560,7 @@ var CityOps = (function () {
     if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.moreActions) {
       rows = rows.concat(window.CityOpsApp.moreActions());
     }
-    moreSheetGroups(rows).forEach(function (g) {
-      var group = el('div', 'sheet-group' + (g.id === 'city' ? ' sheet-group-last' : ''));
-      group.appendChild(el('div', 'sheet-grouplabel', g.label));
-      var list = el('div', 'sheet-list');
-      // The cluster label is a plain div, so name the list with it too: a
-      // screen reader otherwise hears eight buttons with no grouping at all.
-      list.setAttribute('role', 'group');
-      list.setAttribute('aria-label', g.label);
-      g.rows.forEach(function (r) {
-        var b = el('button', 'sheet-row' + (r.cls ? ' ' + r.cls : ''));
-        b.type = 'button';
-        var ic = el('span', 'sheet-ic', r.icon || '·');
-        ic.setAttribute('aria-hidden', 'true');
-        b.appendChild(ic);
-        var txt = el('span', 'sheet-txt');
-        txt.appendChild(el('span', 'sheet-label', r.label));
-        if (r.desc) txt.appendChild(el('span', 'sheet-desc', r.desc));
-        b.appendChild(txt);
-        b.onclick = function () { wrap.remove(); r.onClick(); };
-        list.appendChild(b);
-      });
-      group.appendChild(list);
-      box.appendChild(group);
-    });
+    renderSheetInto(box, rows, MORE_GROUPS, function () { wrap.remove(); });
     wrap.appendChild(box);
     wrap.onclick = function (e) { if (e.target === wrap) wrap.remove(); };
     host.appendChild(wrap);
@@ -7712,8 +7841,11 @@ var CityOps = (function () {
     // Plan-tab per-item day moves: the picker's own pure model.
     dayMoveOptions: dayMoveOptions,
     // The More sheet's clustering, pure so the grouping and the within-group
-    // order are testable without a DOM.
+    // order are testable without a DOM. renderSheetInto is the DOM half, shared
+    // with the trip surface so its More menu and its stop switcher cannot drift
+    // from this one into a second-looking menu.
     MORE_GROUPS: MORE_GROUPS, moreSheetGroups: moreSheetGroups,
+    renderSheetInto: renderSheetInto,
     // Add a place by hand: the delta builder only. The write itself still
     // goes through mergeDelta, which is exported right above.
     newPlaceDelta: newPlaceDelta,
@@ -7788,17 +7920,40 @@ CityOps.init();
      contents back on that column, so the h1 starts exactly where the first
      card starts at every width. The trip surface's .hero does the same with
      the same numbers. */
-  .wrap>header{margin:0 calc(50% - 50vw) 20px; border-radius:0;
+  /* :not(.apphdr) is load bearing, not tidiness. These four rules predate the
+     shared header and now describe ONLY the standalone exported guide, whose
+     header is a bare <header id="hdr"> with no shared band to inherit.
+     Unscoped, `.wrap>header` (0,1,1) outranked the shared `.apphdr` (0,1,0)
+     and quietly won the padding argument on the app surface: at <=430px the
+     narrow tier below set `padding:20px var(--bleed-pad) 16px` as a shorthand,
+     so the city band carried 20px of top padding where the trip band, styled
+     by header.css alone, carried 0. Two headers, same fragment, different
+     heights on the one screen Rob reads them on. Scoped, header.css is the
+     only thing that styles the band on either surface. */
+  .wrap>header:not(.apphdr){margin:0 calc(50% - 50vw) 20px; border-radius:0;
     padding-left:var(--bleed-pad); padding-right:var(--bleed-pad);}
-  header h1{font-size:1.55rem; letter-spacing:.2px;}
-  header .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
+  header:not(.apphdr) h1{font-size:1.55rem; letter-spacing:.2px;}
+  header:not(.apphdr) .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
 
 /* ==========================================================================
-   THE SHARED HEADER
+   THE SHARED CHROME
    One source, assembled into both stylesheets by tools/assemble.js at the
    /*CITYOPS_HEADER_CSS* / marker. Written against tokens BOTH surfaces already
-   declare under the same names (--accent, --accent-hover, --gutter,
-   --content-max, --bleed-pad), so it needs nothing that is not already there.
+   declare under the same names (--accent, --accent-hover, --bg, --bg-card,
+   --text, --text-3, --border, --border-light, --gutter, --content-max,
+   --bleed-pad), so it needs nothing that is not already there.
+
+   It started as the red band alone. It now carries every piece of navigation
+   chrome the two surfaces have in common, because each time a piece stayed
+   per-surface it drifted: the band drifted twice before it moved here, and the
+   narrow-phone padding was still drifting afterwards (see .wrap>header in
+   cityops.css). Three vocabularies live here now:
+     1. the band itself (.apphdr and everything in it)
+     2. the sticky "jump to section" chip row (.secnav)
+     3. the grouped action sheet (.sheet-*)
+   The last two used to be city-only, in cityops.css, which the trip surface
+   does not load. Giving the trip surface navigation meant either copying them
+   (a third drift waiting to happen) or moving them here. They are here.
 
    The band is full bleed: the negative side margins pull it past the content
    column's max-width, and --bleed-pad puts its CONTENTS back on that column,
@@ -7866,6 +8021,30 @@ CityOps.init();
 .apphdr-mid h1{font-size:1.55rem; letter-spacing:.2px; line-height:1.15;}
 .apphdr-mid .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
 
+/* The h1 is a CONTROL on both surfaces, not a caption: the guide side opens
+   the city switcher from it, the trip side opens the stop switcher. Both
+   therefore want the same cursor, the same chevron and the same alignment of
+   the two. These four declarations lived in app-shell.html, which is to say on
+   one of the two surfaces that now uses them; the trip h1 became a control on
+   2026-09-01 and would otherwise have needed a second copy. Values are the
+   guide surface's own, unchanged, so nothing moved there.
+   inline-flex keeps the chevron on the title's line rather than letting it
+   wrap alone under a long city name. */
+.apphdr-mid h1[role="button"]{cursor:pointer; display:inline-flex; align-items:center; gap:2px;}
+.apphdr-mid h1[role="button"]:focus-visible{outline:2px solid #fff; outline-offset:3px;}
+.hdr-chev{font-size:.85rem; opacity:.85;}
+
+/* The chip row under the title. Both surfaces put facts and doors here, so
+   the row is shared even though what goes in it is not. Lived in the trip
+   stylesheet until 2026-09-01, which meant the one rule that makes a hidden
+   chip actually hide was per-surface too. */
+.hdr-facts{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; align-items:center;}
+.hdr-chip .chip-sub{opacity:.72;}
+/* display:inline-flex on .hdr-chip beats the hidden attribute, and a chip with
+   nothing in it still takes a chip's worth of width. Anything that hides
+   itself when it has nothing to say needs this to actually go. */
+.hdr-chip[hidden]{display:none;}
+
 /* "Last touched" is a FACT, not a door, and it was wearing a pill that cost
    more width than the words (owner ask 2026-08-27: "that takes a lot of room.
    let's make that smaller, just text, no pill"). Plain muted text now: no
@@ -7875,6 +8054,71 @@ CityOps.init();
   white-space:nowrap; align-self:center;
 }
 
+/* ==========================================================================
+   THE STICKY SECTION NAV
+   One chip per section of the page, pinned under the band. The guide side has
+   had this since Phase 3 (scoped to whichever tab is open); the trip side got
+   it on 2026-09-01, when its nine stacked sections turned out to have no
+   navigation at all and Settings was only reachable by scrolling to the
+   bottom and knowing it was there.
+
+   ONE ROW, ALWAYS. flex-wrap defaults to nowrap and overflow-x:auto carries
+   the overflow sideways, which is the same contract the header highlights row
+   (.hl) keeps and for the same reason: a jump bar that grows a second line is
+   not a bar any more, it is a menu that moves the page under your thumb. The
+   scrollbar is hidden wherever an engine allows it; the chips stay tappable.
+
+   `top` reads --tabbar-h so the guide side stacks this UNDER its own sticky
+   tab bar rather than underneath it (both were pinned to 0 and #tabbar's
+   z-index won, so this one simply vanished). The trip surface has no tab bar
+   and never sets that property, so the fallback pins it to the top of the
+   viewport. One rule, two correct answers, no per-surface override.
+   ========================================================================== */
+.secnav{position:sticky; top:var(--tabbar-h, 0px); z-index:20; display:flex; gap:8px;
+  overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;
+  background:var(--bg); padding:8px 0 10px; margin:0 0 6px;}
+.secnav::-webkit-scrollbar{display:none;}
+.secnav[hidden]{display:none;}
+.secnav-chip{flex:0 0 auto; font:inherit; font-size:.78rem; font-weight:700; color:var(--accent-hover);
+  background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
+  padding:5px 13px; cursor:pointer; white-space:nowrap;}
+.secnav-chip:hover{border-color:var(--accent);}
+.secnav-chip:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+
+/* ==========================================================================
+   THE GROUPED ACTION SHEET
+   Every utility action on a surface, in labelled clusters, one icon plus one
+   muted line of what it does per row. Built by CityOps.renderSheetInto so the
+   two surfaces cannot drift into two different-looking menus; styled here so
+   they cannot drift into two different-looking rows either.
+
+   The grouping pass this came from (Aug 2026, owner ask: "better layout our
+   nav to be better ux, more clear without having to study each line item.
+   prioritize functions that are more likely to be used, group related items")
+   replaced a flat list of bare labels that made the reader rank every line
+   from scratch each time.
+   ========================================================================== */
+.sheet-group{margin-top:14px;}
+.modal h3 + .sheet-group{margin-top:6px;}
+.sheet-grouplabel{font-size:.72rem; font-weight:800; letter-spacing:.6px;
+  text-transform:uppercase; color:var(--text-3); padding:0 4px 2px;}
+/* The destructive cluster is pushed clear of the rest and fenced off with a
+   rule of its own: Remove city, and Reset everything on the other surface,
+   must never sit one careless thumb-width below a row someone meant to tap. */
+.sheet-group-last{margin-top:20px; border-top:1px solid var(--border); padding-top:10px;}
+.sheet-list{display:flex; flex-direction:column;}
+.sheet-row{font:inherit; color:var(--text); background:none;
+  border:none; border-bottom:1px solid var(--border-light); text-align:left; padding:10px 4px;
+  cursor:pointer; min-height:52px; display:flex; align-items:center; gap:12px;
+  width:100%; text-decoration:none;}
+.sheet-row:last-child{border-bottom:none;}
+.sheet-row:hover .sheet-label{color:var(--accent-hover);}
+.sheet-ic{flex:0 0 22px; font-size:1.05rem; line-height:1.2; text-align:center;}
+.sheet-txt{display:flex; flex-direction:column; gap:1px; min-width:0;}
+.sheet-label{font-size:.95rem; font-weight:700;}
+.sheet-desc{font-size:.78rem; font-weight:400; color:var(--text-3); line-height:1.35;}
+.sheet-row.danger .sheet-label{color:var(--accent-hover); font-weight:800;}
+
 @media (max-width: 430px){
   .apphdr{margin:0 calc(50% - 50vw) 16px; padding:0 var(--bleed-pad) 16px;}
   .apphdr-bar{padding:8px 0 10px; margin-bottom:12px; gap:8px;}
@@ -7882,6 +8126,9 @@ CityOps.init();
   .hdr-chip{font-size:.74rem; padding:5px 10px;}
   .apphdr-mid h1{font-size:1.35rem;}
   .hdr-meta{font-size:.68rem;}
+  .hdr-facts{gap:6px; margin-top:10px;}
+  .secnav{gap:6px;}
+  .secnav-chip{padding:4px 10px; font-size:.74rem;}
 }
 
 /* A door gets a thumb on a touch screen. The width test is here as well as the
@@ -7889,9 +8136,16 @@ CityOps.init();
    Rob's phone is 390px, so width is the reliable signal of the two. */
 @media (hover: none), (pointer: coarse){
   .surfsw .surf, .hdr-chip{min-height:44px;}
+  .secnav-chip{min-height:40px;}
 }
 @media (max-width: 430px){
   .surfsw .surf, .hdr-chip{min-height:44px;}
+  .secnav-chip{min-height:40px;}
+}
+
+/* Controls do not belong on paper, on either surface. */
+@media print{
+  .secnav{display:none !important;}
 }
 
   .facts{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;}
@@ -8223,20 +8477,13 @@ CityOps.init();
     .card.just-moved, .daycard.just-moved{animation:none; box-shadow:0 0 0 3px var(--accent);}
   }
 
-  /* --- Phase 3: section header counts + sticky section nav --- */
-  /* top is the rendered #tabbar height (Phase 4), kept in sync by
-     updateTabbarHeightVar() in the engine so the two sticky bars stack
-     instead of overlapping; 0px is the safe fallback before that JS runs (or
-     on a shell that predates the tab bar). z-index stays below #tabbar's 26
-     so #tabbar is always the one on top if a scroll ever puts them in the
-     same few pixels. */
-  #secnav{position:sticky; top:var(--tabbar-h, 0px); z-index:20; display:flex; gap:8px; overflow-x:auto;
-    -webkit-overflow-scrolling:touch; background:var(--bg); padding:8px 0 10px; margin:0 0 6px;}
-  #secnav[hidden]{display:none;}
-  .secnav-chip{flex:0 0 auto; font:inherit; font-size:.78rem; font-weight:700; color:var(--accent-hover);
-    background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
-    padding:5px 13px; cursor:pointer; white-space:nowrap;}
-  .secnav-chip:hover{border-color:var(--accent);}
+  /* The sticky section nav (.secnav / .secnav-chip) moved to src/header.css on
+     2026-09-01: the trip surface needed the same chip row and does not load
+     this stylesheet, so the choice was to copy it or to share it. Its `top`
+     still reads --tabbar-h, which updateTabbarHeightVar() in the engine keeps
+     in sync with the rendered tab bar so the two sticky bars stack instead of
+     overlapping. That property is set on THIS surface only; the trip surface
+     has no tab bar and falls back to 0px. */
 
   /* --- Phase 3: Today / Guide / Calendar segmented control --- */
   .viewseg{display:flex; border:1.5px solid var(--border-light); border-radius:20px; overflow:hidden;}
@@ -8256,9 +8503,9 @@ CityOps.init();
        Only the VERTICAL rhythm tightens here, which is what the density pass
        this tier came from was actually about. */
     .wrap{padding:0 var(--gutter) 48px;}
-    .wrap>header{margin:0 calc(50% - 50vw) 16px; border-radius:0;
+    .wrap>header:not(.apphdr){margin:0 calc(50% - 50vw) 16px; border-radius:0;
       padding:20px var(--bleed-pad) 16px;}
-    header h1{font-size:1.35rem;}
+    header:not(.apphdr) h1{font-size:1.35rem;}
     .facts{gap:6px; margin-top:10px;}
     .chip{padding:4px 9px; font-size:.75rem;}
     .hl{gap:5px; margin-top:10px;}
@@ -8277,12 +8524,10 @@ CityOps.init();
     .ctl-row{gap:4px;}
     .ctl{padding:4px 9px;}
     .planday-today{padding:26px 8px 10px; margin:0 0 18px;}
-    #secnav{gap:6px;}
-    .secnav-chip{padding:4px 10px; font-size:.74rem;}
     .viewtab{padding:5px 10px; font-size:.75rem;}
   }
   @media print{
-    .toolbar, .ctl-row, .plangrip, #notice, #secnav, #tabbar{display:none !important;}
+    .toolbar, .ctl-row, .plangrip, #notice, #tabbar{display:none !important;}
     /* The pin chips are shortcuts to cards the printed page already carries
        in full, so they print as noise; the sunset is a fact nothing else on
        the page states, so it stays. Same reasoning for the section + and the
@@ -8363,31 +8608,10 @@ CityOps.init();
   .task-row.task-declined .task-check{opacity:.5; text-decoration:line-through;}
   .task-row.task-declined .task-note{opacity:.6;}
 
-  /* --- Phase 4: the More action sheet (every utility action, one place) --- */
-  /* Aug 2026 grouping pass: the flat eight-row list of bare labels made the
-     traveler read and rank every line each time. Now three labelled clusters,
-     each row an icon plus a label plus one muted line of what it does. The
-     group label borrows the uppercase-muted idiom the archive and intel
-     disclosures already use, so nothing new has to be learned to read it. */
-  .sheet-group{margin-top:14px;}
-  .modal h3 + .sheet-group{margin-top:6px;}
-  .sheet-grouplabel{font-size:.72rem; font-weight:800; letter-spacing:.6px;
-    text-transform:uppercase; color:var(--text-3); padding:0 4px 2px;}
-  /* The destructive cluster is pushed clear of the rest and fenced off with a
-     rule of its own: Remove city must never sit one careless thumb-width
-     below a row someone actually meant to tap. */
-  .sheet-group-last{margin-top:20px; border-top:1px solid var(--border); padding-top:10px;}
-  .sheet-list{display:flex; flex-direction:column;}
-  .sheet-row{font:inherit; color:var(--text); background:none;
-    border:none; border-bottom:1px solid var(--border-light); text-align:left; padding:10px 4px;
-    cursor:pointer; min-height:52px; display:flex; align-items:center; gap:12px;}
-  .sheet-row:last-child{border-bottom:none;}
-  .sheet-row:hover .sheet-label{color:var(--accent-hover);}
-  .sheet-ic{flex:0 0 22px; font-size:1.05rem; line-height:1.2; text-align:center;}
-  .sheet-txt{display:flex; flex-direction:column; gap:1px; min-width:0;}
-  .sheet-label{font-size:.95rem; font-weight:700;}
-  .sheet-desc{font-size:.78rem; font-weight:400; color:var(--text-3); line-height:1.35;}
-  .sheet-row.danger .sheet-label{color:var(--accent-hover); font-weight:800;}
+  /* The More action sheet (.sheet-*) moved to src/header.css on 2026-09-01,
+     alongside the section nav and for the same reason: the trip surface grew
+     the same grouped menu, does not load this stylesheet, and a second copy of
+     these rules is a second menu waiting to look different. */
   /* Enrich's three passes borrow the same group label, with room above so
      each pass reads as its own block. */
   .enrich-h{margin-top:18px; padding-left:0;}
@@ -14877,24 +15101,35 @@ var CityOps = (function () {
   // the things that send the trip somewhere else second, and the two that own
   // the city record itself last, where the destructive one is furthest from a
   // thumb reaching for Enrich.
+  // `last: true` marks the cluster that gets fenced off above (a rule and extra
+  // space), which is where the destructive row lives. It used to be decided in
+  // the renderer by comparing the group id to the literal 'city', which only
+  // worked because there was one surface with one set of clusters. The trip
+  // surface has its own three, and its destructive row is Reset everything.
   var MORE_GROUPS = [
     { id: 'work', label: 'Add and update' },
     { id: 'share', label: 'Share and export' },
-    { id: 'city', label: 'This city' }
+    { id: 'city', label: 'This city', last: true }
   ];
 
-  // Pure: turns a flat row list into [{id, label, rows}], each group's rows
-  // sorted by their own `order` and empty groups dropped (a standalone guide
-  // has no app rows at all, so its `city` group never renders). A row whose
-  // group is not one of the three is NOT dropped: it joins the first group at
-  // the end, because a row that silently vanishes from a menu is a worse bug
-  // than a row in the wrong cluster.
-  function moreSheetGroups(rows) {
+  // Pure: turns a flat row list into [{id, label, last, rows}], each group's
+  // rows sorted by their own `order` and empty groups dropped (a standalone
+  // guide has no app rows at all, so its `city` group never renders). A row
+  // whose group is not one of the clusters is NOT dropped: it joins the first
+  // group at the end, because a row that silently vanishes from a menu is a
+  // worse bug than a row in the wrong cluster.
+  //
+  // `groups` is a parameter rather than a closed-over constant since 2026-09-01:
+  // the trip surface clusters its own actions (everyday / share and export /
+  // this device or account) and reuses this exact function to do it, so the two
+  // menus share their grouping rules instead of each having their own.
+  function moreSheetGroups(rows, groups) {
     var list = Array.isArray(rows) ? rows : [];
+    var defs = (Array.isArray(groups) && groups.length) ? groups : MORE_GROUPS;
     var known = {};
-    MORE_GROUPS.forEach(function (g) { known[g.id] = 1; });
+    defs.forEach(function (g) { known[g.id] = 1; });
     var out = [];
-    MORE_GROUPS.forEach(function (g, gi) {
+    defs.forEach(function (g, gi) {
       var inG = list.filter(function (r) {
         return r && (r.group === g.id || (gi === 0 && !known[r.group]));
       }).map(function (r, i) {
@@ -14902,10 +15137,58 @@ var CityOps = (function () {
       });
       inG.sort(function (a, b) { return (a.order - b.order) || (a.i - b.i); });
       if (inG.length) {
-        out.push({ id: g.id, label: g.label, rows: inG.map(function (x) { return x.r; }) });
+        out.push({ id: g.id, label: g.label, last: !!g.last,
+          rows: inG.map(function (x) { return x.r; }) });
       }
     });
     return out;
+  }
+
+  // The sheet's DOM, built into a container the caller owns. BOTH surfaces call
+  // this: the guide side's openMoreSheet below, and the trip side's own two
+  // sheets (its More menu and its stop switcher). Before this the trip surface
+  // had no grouped menu at all, and building one would have meant a second
+  // hand-written copy of these five elements and eight class names. The styling
+  // moved to src/header.css for the same reason, so the markup and the rules
+  // that dress it are now one source each.
+  //
+  // Every row is icon + label + one muted line saying what it does, because a
+  // flat list of bare labels makes the reader rank them from scratch every
+  // time. A row is a <button> unless it carries an `href`, in which case it is
+  // an <a>: a door to another page should be middle-clickable and should show
+  // its target in the status bar, and faking that with a button never does.
+  // `onDone` fires after any row is activated, which is how the caller closes
+  // itself without every row having to remember to.
+  function renderSheetInto(box, rows, groups, onDone) {
+    moreSheetGroups(rows, groups).forEach(function (g) {
+      var group = el('div', 'sheet-group' + (g.last ? ' sheet-group-last' : ''));
+      group.appendChild(el('div', 'sheet-grouplabel', g.label));
+      var list = el('div', 'sheet-list');
+      // The cluster label is a plain div, so name the list with it too: a
+      // screen reader otherwise hears eight buttons with no grouping at all.
+      list.setAttribute('role', 'group');
+      list.setAttribute('aria-label', g.label);
+      g.rows.forEach(function (r) {
+        var b = el(r.href ? 'a' : 'button', 'sheet-row' + (r.cls ? ' ' + r.cls : ''));
+        if (r.href) { b.href = r.href; } else { b.type = 'button'; }
+        if (r.title) b.title = r.title;
+        var ic = el('span', 'sheet-ic', r.icon || '·');
+        ic.setAttribute('aria-hidden', 'true');
+        b.appendChild(ic);
+        var txt = el('span', 'sheet-txt');
+        txt.appendChild(el('span', 'sheet-label', r.label));
+        if (r.desc) txt.appendChild(el('span', 'sheet-desc', r.desc));
+        b.appendChild(txt);
+        b.onclick = function () {
+          if (onDone) onDone();
+          if (r.onClick) r.onClick();
+        };
+        list.appendChild(b);
+      });
+      group.appendChild(list);
+      box.appendChild(group);
+    });
+    return box;
   }
 
   // App-only rows (Enrich, Edit city, Export guide, Remove city) are supplied
@@ -14916,9 +15199,8 @@ var CityOps = (function () {
   // same clusters they would in the app rather than drifting into a second
   // layout.
   //
-  // Every row is icon + label + one muted line saying what it does, because
-  // the old flat eight-row list of bare labels made the traveler read and
-  // rank them from scratch every time.
+  // The rows are this function's business; the DOM they turn into is
+  // renderSheetInto's, shared with the trip surface's two sheets.
   function openMoreSheet() {
     var host = document.getElementById('modal');
     host.innerHTML = '';
@@ -14952,30 +15234,7 @@ var CityOps = (function () {
     if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.moreActions) {
       rows = rows.concat(window.CityOpsApp.moreActions());
     }
-    moreSheetGroups(rows).forEach(function (g) {
-      var group = el('div', 'sheet-group' + (g.id === 'city' ? ' sheet-group-last' : ''));
-      group.appendChild(el('div', 'sheet-grouplabel', g.label));
-      var list = el('div', 'sheet-list');
-      // The cluster label is a plain div, so name the list with it too: a
-      // screen reader otherwise hears eight buttons with no grouping at all.
-      list.setAttribute('role', 'group');
-      list.setAttribute('aria-label', g.label);
-      g.rows.forEach(function (r) {
-        var b = el('button', 'sheet-row' + (r.cls ? ' ' + r.cls : ''));
-        b.type = 'button';
-        var ic = el('span', 'sheet-ic', r.icon || '·');
-        ic.setAttribute('aria-hidden', 'true');
-        b.appendChild(ic);
-        var txt = el('span', 'sheet-txt');
-        txt.appendChild(el('span', 'sheet-label', r.label));
-        if (r.desc) txt.appendChild(el('span', 'sheet-desc', r.desc));
-        b.appendChild(txt);
-        b.onclick = function () { wrap.remove(); r.onClick(); };
-        list.appendChild(b);
-      });
-      group.appendChild(list);
-      box.appendChild(group);
-    });
+    renderSheetInto(box, rows, MORE_GROUPS, function () { wrap.remove(); });
     wrap.appendChild(box);
     wrap.onclick = function (e) { if (e.target === wrap) wrap.remove(); };
     host.appendChild(wrap);
@@ -15256,8 +15515,11 @@ var CityOps = (function () {
     // Plan-tab per-item day moves: the picker's own pure model.
     dayMoveOptions: dayMoveOptions,
     // The More sheet's clustering, pure so the grouping and the within-group
-    // order are testable without a DOM.
+    // order are testable without a DOM. renderSheetInto is the DOM half, shared
+    // with the trip surface so its More menu and its stop switcher cannot drift
+    // from this one into a second-looking menu.
     MORE_GROUPS: MORE_GROUPS, moreSheetGroups: moreSheetGroups,
+    renderSheetInto: renderSheetInto,
     // Add a place by hand: the delta builder only. The write itself still
     // goes through mergeDelta, which is exported right above.
     newPlaceDelta: newPlaceDelta,

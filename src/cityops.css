@@ -40,10 +40,20 @@
      contents back on that column, so the h1 starts exactly where the first
      card starts at every width. The trip surface's .hero does the same with
      the same numbers. */
-  .wrap>header{margin:0 calc(50% - 50vw) 20px; border-radius:0;
+  /* :not(.apphdr) is load bearing, not tidiness. These four rules predate the
+     shared header and now describe ONLY the standalone exported guide, whose
+     header is a bare <header id="hdr"> with no shared band to inherit.
+     Unscoped, `.wrap>header` (0,1,1) outranked the shared `.apphdr` (0,1,0)
+     and quietly won the padding argument on the app surface: at <=430px the
+     narrow tier below set `padding:20px var(--bleed-pad) 16px` as a shorthand,
+     so the city band carried 20px of top padding where the trip band, styled
+     by header.css alone, carried 0. Two headers, same fragment, different
+     heights on the one screen Rob reads them on. Scoped, header.css is the
+     only thing that styles the band on either surface. */
+  .wrap>header:not(.apphdr){margin:0 calc(50% - 50vw) 20px; border-radius:0;
     padding-left:var(--bleed-pad); padding-right:var(--bleed-pad);}
-  header h1{font-size:1.55rem; letter-spacing:.2px;}
-  header .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
+  header:not(.apphdr) h1{font-size:1.55rem; letter-spacing:.2px;}
+  header:not(.apphdr) .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
 
 /*CITYOPS_HEADER_CSS*/
 
@@ -376,20 +386,13 @@
     .card.just-moved, .daycard.just-moved{animation:none; box-shadow:0 0 0 3px var(--accent);}
   }
 
-  /* --- Phase 3: section header counts + sticky section nav --- */
-  /* top is the rendered #tabbar height (Phase 4), kept in sync by
-     updateTabbarHeightVar() in the engine so the two sticky bars stack
-     instead of overlapping; 0px is the safe fallback before that JS runs (or
-     on a shell that predates the tab bar). z-index stays below #tabbar's 26
-     so #tabbar is always the one on top if a scroll ever puts them in the
-     same few pixels. */
-  #secnav{position:sticky; top:var(--tabbar-h, 0px); z-index:20; display:flex; gap:8px; overflow-x:auto;
-    -webkit-overflow-scrolling:touch; background:var(--bg); padding:8px 0 10px; margin:0 0 6px;}
-  #secnav[hidden]{display:none;}
-  .secnav-chip{flex:0 0 auto; font:inherit; font-size:.78rem; font-weight:700; color:var(--accent-hover);
-    background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
-    padding:5px 13px; cursor:pointer; white-space:nowrap;}
-  .secnav-chip:hover{border-color:var(--accent);}
+  /* The sticky section nav (.secnav / .secnav-chip) moved to src/header.css on
+     2026-09-01: the trip surface needed the same chip row and does not load
+     this stylesheet, so the choice was to copy it or to share it. Its `top`
+     still reads --tabbar-h, which updateTabbarHeightVar() in the engine keeps
+     in sync with the rendered tab bar so the two sticky bars stack instead of
+     overlapping. That property is set on THIS surface only; the trip surface
+     has no tab bar and falls back to 0px. */
 
   /* --- Phase 3: Today / Guide / Calendar segmented control --- */
   .viewseg{display:flex; border:1.5px solid var(--border-light); border-radius:20px; overflow:hidden;}
@@ -409,9 +412,9 @@
        Only the VERTICAL rhythm tightens here, which is what the density pass
        this tier came from was actually about. */
     .wrap{padding:0 var(--gutter) 48px;}
-    .wrap>header{margin:0 calc(50% - 50vw) 16px; border-radius:0;
+    .wrap>header:not(.apphdr){margin:0 calc(50% - 50vw) 16px; border-radius:0;
       padding:20px var(--bleed-pad) 16px;}
-    header h1{font-size:1.35rem;}
+    header:not(.apphdr) h1{font-size:1.35rem;}
     .facts{gap:6px; margin-top:10px;}
     .chip{padding:4px 9px; font-size:.75rem;}
     .hl{gap:5px; margin-top:10px;}
@@ -430,12 +433,10 @@
     .ctl-row{gap:4px;}
     .ctl{padding:4px 9px;}
     .planday-today{padding:26px 8px 10px; margin:0 0 18px;}
-    #secnav{gap:6px;}
-    .secnav-chip{padding:4px 10px; font-size:.74rem;}
     .viewtab{padding:5px 10px; font-size:.75rem;}
   }
   @media print{
-    .toolbar, .ctl-row, .plangrip, #notice, #secnav, #tabbar{display:none !important;}
+    .toolbar, .ctl-row, .plangrip, #notice, #tabbar{display:none !important;}
     /* The pin chips are shortcuts to cards the printed page already carries
        in full, so they print as noise; the sunset is a fact nothing else on
        the page states, so it stays. Same reasoning for the section + and the
@@ -516,31 +517,10 @@
   .task-row.task-declined .task-check{opacity:.5; text-decoration:line-through;}
   .task-row.task-declined .task-note{opacity:.6;}
 
-  /* --- Phase 4: the More action sheet (every utility action, one place) --- */
-  /* Aug 2026 grouping pass: the flat eight-row list of bare labels made the
-     traveler read and rank every line each time. Now three labelled clusters,
-     each row an icon plus a label plus one muted line of what it does. The
-     group label borrows the uppercase-muted idiom the archive and intel
-     disclosures already use, so nothing new has to be learned to read it. */
-  .sheet-group{margin-top:14px;}
-  .modal h3 + .sheet-group{margin-top:6px;}
-  .sheet-grouplabel{font-size:.72rem; font-weight:800; letter-spacing:.6px;
-    text-transform:uppercase; color:var(--text-3); padding:0 4px 2px;}
-  /* The destructive cluster is pushed clear of the rest and fenced off with a
-     rule of its own: Remove city must never sit one careless thumb-width
-     below a row someone actually meant to tap. */
-  .sheet-group-last{margin-top:20px; border-top:1px solid var(--border); padding-top:10px;}
-  .sheet-list{display:flex; flex-direction:column;}
-  .sheet-row{font:inherit; color:var(--text); background:none;
-    border:none; border-bottom:1px solid var(--border-light); text-align:left; padding:10px 4px;
-    cursor:pointer; min-height:52px; display:flex; align-items:center; gap:12px;}
-  .sheet-row:last-child{border-bottom:none;}
-  .sheet-row:hover .sheet-label{color:var(--accent-hover);}
-  .sheet-ic{flex:0 0 22px; font-size:1.05rem; line-height:1.2; text-align:center;}
-  .sheet-txt{display:flex; flex-direction:column; gap:1px; min-width:0;}
-  .sheet-label{font-size:.95rem; font-weight:700;}
-  .sheet-desc{font-size:.78rem; font-weight:400; color:var(--text-3); line-height:1.35;}
-  .sheet-row.danger .sheet-label{color:var(--accent-hover); font-weight:800;}
+  /* The More action sheet (.sheet-*) moved to src/header.css on 2026-09-01,
+     alongside the section nav and for the same reason: the trip surface grew
+     the same grouped menu, does not load this stylesheet, and a second copy of
+     these rules is a second menu waiting to look different. */
   /* Enrich's three passes borrow the same group label, with room above so
      each pass reads as its own block. */
   .enrich-h{margin-top:18px; padding-left:0;}

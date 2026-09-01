@@ -1,9 +1,22 @@
 /* ==========================================================================
-   THE SHARED HEADER
+   THE SHARED CHROME
    One source, assembled into both stylesheets by tools/assemble.js at the
    /*CITYOPS_HEADER_CSS* / marker. Written against tokens BOTH surfaces already
-   declare under the same names (--accent, --accent-hover, --gutter,
-   --content-max, --bleed-pad), so it needs nothing that is not already there.
+   declare under the same names (--accent, --accent-hover, --bg, --bg-card,
+   --text, --text-3, --border, --border-light, --gutter, --content-max,
+   --bleed-pad), so it needs nothing that is not already there.
+
+   It started as the red band alone. It now carries every piece of navigation
+   chrome the two surfaces have in common, because each time a piece stayed
+   per-surface it drifted: the band drifted twice before it moved here, and the
+   narrow-phone padding was still drifting afterwards (see .wrap>header in
+   cityops.css). Three vocabularies live here now:
+     1. the band itself (.apphdr and everything in it)
+     2. the sticky "jump to section" chip row (.secnav)
+     3. the grouped action sheet (.sheet-*)
+   The last two used to be city-only, in cityops.css, which the trip surface
+   does not load. Giving the trip surface navigation meant either copying them
+   (a third drift waiting to happen) or moving them here. They are here.
 
    The band is full bleed: the negative side margins pull it past the content
    column's max-width, and --bleed-pad puts its CONTENTS back on that column,
@@ -71,6 +84,30 @@
 .apphdr-mid h1{font-size:1.55rem; letter-spacing:.2px; line-height:1.15;}
 .apphdr-mid .sub{opacity:.9; font-size:.95rem; margin-top:4px;}
 
+/* The h1 is a CONTROL on both surfaces, not a caption: the guide side opens
+   the city switcher from it, the trip side opens the stop switcher. Both
+   therefore want the same cursor, the same chevron and the same alignment of
+   the two. These four declarations lived in app-shell.html, which is to say on
+   one of the two surfaces that now uses them; the trip h1 became a control on
+   2026-09-01 and would otherwise have needed a second copy. Values are the
+   guide surface's own, unchanged, so nothing moved there.
+   inline-flex keeps the chevron on the title's line rather than letting it
+   wrap alone under a long city name. */
+.apphdr-mid h1[role="button"]{cursor:pointer; display:inline-flex; align-items:center; gap:2px;}
+.apphdr-mid h1[role="button"]:focus-visible{outline:2px solid #fff; outline-offset:3px;}
+.hdr-chev{font-size:.85rem; opacity:.85;}
+
+/* The chip row under the title. Both surfaces put facts and doors here, so
+   the row is shared even though what goes in it is not. Lived in the trip
+   stylesheet until 2026-09-01, which meant the one rule that makes a hidden
+   chip actually hide was per-surface too. */
+.hdr-facts{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; align-items:center;}
+.hdr-chip .chip-sub{opacity:.72;}
+/* display:inline-flex on .hdr-chip beats the hidden attribute, and a chip with
+   nothing in it still takes a chip's worth of width. Anything that hides
+   itself when it has nothing to say needs this to actually go. */
+.hdr-chip[hidden]{display:none;}
+
 /* "Last touched" is a FACT, not a door, and it was wearing a pill that cost
    more width than the words (owner ask 2026-08-27: "that takes a lot of room.
    let's make that smaller, just text, no pill"). Plain muted text now: no
@@ -80,6 +117,71 @@
   white-space:nowrap; align-self:center;
 }
 
+/* ==========================================================================
+   THE STICKY SECTION NAV
+   One chip per section of the page, pinned under the band. The guide side has
+   had this since Phase 3 (scoped to whichever tab is open); the trip side got
+   it on 2026-09-01, when its nine stacked sections turned out to have no
+   navigation at all and Settings was only reachable by scrolling to the
+   bottom and knowing it was there.
+
+   ONE ROW, ALWAYS. flex-wrap defaults to nowrap and overflow-x:auto carries
+   the overflow sideways, which is the same contract the header highlights row
+   (.hl) keeps and for the same reason: a jump bar that grows a second line is
+   not a bar any more, it is a menu that moves the page under your thumb. The
+   scrollbar is hidden wherever an engine allows it; the chips stay tappable.
+
+   `top` reads --tabbar-h so the guide side stacks this UNDER its own sticky
+   tab bar rather than underneath it (both were pinned to 0 and #tabbar's
+   z-index won, so this one simply vanished). The trip surface has no tab bar
+   and never sets that property, so the fallback pins it to the top of the
+   viewport. One rule, two correct answers, no per-surface override.
+   ========================================================================== */
+.secnav{position:sticky; top:var(--tabbar-h, 0px); z-index:20; display:flex; gap:8px;
+  overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;
+  background:var(--bg); padding:8px 0 10px; margin:0 0 6px;}
+.secnav::-webkit-scrollbar{display:none;}
+.secnav[hidden]{display:none;}
+.secnav-chip{flex:0 0 auto; font:inherit; font-size:.78rem; font-weight:700; color:var(--accent-hover);
+  background:#fff; border:1.5px solid var(--border-light); border-radius:20px;
+  padding:5px 13px; cursor:pointer; white-space:nowrap;}
+.secnav-chip:hover{border-color:var(--accent);}
+.secnav-chip:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+
+/* ==========================================================================
+   THE GROUPED ACTION SHEET
+   Every utility action on a surface, in labelled clusters, one icon plus one
+   muted line of what it does per row. Built by CityOps.renderSheetInto so the
+   two surfaces cannot drift into two different-looking menus; styled here so
+   they cannot drift into two different-looking rows either.
+
+   The grouping pass this came from (Aug 2026, owner ask: "better layout our
+   nav to be better ux, more clear without having to study each line item.
+   prioritize functions that are more likely to be used, group related items")
+   replaced a flat list of bare labels that made the reader rank every line
+   from scratch each time.
+   ========================================================================== */
+.sheet-group{margin-top:14px;}
+.modal h3 + .sheet-group{margin-top:6px;}
+.sheet-grouplabel{font-size:.72rem; font-weight:800; letter-spacing:.6px;
+  text-transform:uppercase; color:var(--text-3); padding:0 4px 2px;}
+/* The destructive cluster is pushed clear of the rest and fenced off with a
+   rule of its own: Remove city, and Reset everything on the other surface,
+   must never sit one careless thumb-width below a row someone meant to tap. */
+.sheet-group-last{margin-top:20px; border-top:1px solid var(--border); padding-top:10px;}
+.sheet-list{display:flex; flex-direction:column;}
+.sheet-row{font:inherit; color:var(--text); background:none;
+  border:none; border-bottom:1px solid var(--border-light); text-align:left; padding:10px 4px;
+  cursor:pointer; min-height:52px; display:flex; align-items:center; gap:12px;
+  width:100%; text-decoration:none;}
+.sheet-row:last-child{border-bottom:none;}
+.sheet-row:hover .sheet-label{color:var(--accent-hover);}
+.sheet-ic{flex:0 0 22px; font-size:1.05rem; line-height:1.2; text-align:center;}
+.sheet-txt{display:flex; flex-direction:column; gap:1px; min-width:0;}
+.sheet-label{font-size:.95rem; font-weight:700;}
+.sheet-desc{font-size:.78rem; font-weight:400; color:var(--text-3); line-height:1.35;}
+.sheet-row.danger .sheet-label{color:var(--accent-hover); font-weight:800;}
+
 @media (max-width: 430px){
   .apphdr{margin:0 calc(50% - 50vw) 16px; padding:0 var(--bleed-pad) 16px;}
   .apphdr-bar{padding:8px 0 10px; margin-bottom:12px; gap:8px;}
@@ -87,6 +189,9 @@
   .hdr-chip{font-size:.74rem; padding:5px 10px;}
   .apphdr-mid h1{font-size:1.35rem;}
   .hdr-meta{font-size:.68rem;}
+  .hdr-facts{gap:6px; margin-top:10px;}
+  .secnav{gap:6px;}
+  .secnav-chip{padding:4px 10px; font-size:.74rem;}
 }
 
 /* A door gets a thumb on a touch screen. The width test is here as well as the
@@ -94,7 +199,14 @@
    Rob's phone is 390px, so width is the reliable signal of the two. */
 @media (hover: none), (pointer: coarse){
   .surfsw .surf, .hdr-chip{min-height:44px;}
+  .secnav-chip{min-height:40px;}
 }
 @media (max-width: 430px){
   .surfsw .surf, .hdr-chip{min-height:44px;}
+  .secnav-chip{min-height:40px;}
+}
+
+/* Controls do not belong on paper, on either surface. */
+@media print{
+  .secnav{display:none !important;}
 }

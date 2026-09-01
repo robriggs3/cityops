@@ -15,8 +15,10 @@
      CityOps.onStateChange every time: see the appshell script below. The
      header must not grow to fit these; they overlay the existing chrome. */
   #hdr{position:relative;}
-  #hdr h1{cursor:pointer; display:inline-flex; align-items:center; gap:2px;}
-  .hdr-chev{font-size:.85rem; opacity:.85;}
+  /* The h1-as-a-control rules (cursor, inline-flex, the chevron) moved to
+     src/header.css on 2026-09-01, with their values unchanged. The trip
+     surface's h1 became the same kind of control that day, and a shared
+     control declared once per surface is how the red band drifted twice. */
   /* Profile, sync and + Add city are app-level controls (not per-city ones):
      Profile holds ONE interest profile and ONE Claude key for every city, so
      it lives in the header rather than inside the city dropdown, which would

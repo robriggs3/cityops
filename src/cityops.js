@@ -6380,24 +6380,35 @@ var CityOps = (function () {
   // the things that send the trip somewhere else second, and the two that own
   // the city record itself last, where the destructive one is furthest from a
   // thumb reaching for Enrich.
+  // `last: true` marks the cluster that gets fenced off above (a rule and extra
+  // space), which is where the destructive row lives. It used to be decided in
+  // the renderer by comparing the group id to the literal 'city', which only
+  // worked because there was one surface with one set of clusters. The trip
+  // surface has its own three, and its destructive row is Reset everything.
   var MORE_GROUPS = [
     { id: 'work', label: 'Add and update' },
     { id: 'share', label: 'Share and export' },
-    { id: 'city', label: 'This city' }
+    { id: 'city', label: 'This city', last: true }
   ];
 
-  // Pure: turns a flat row list into [{id, label, rows}], each group's rows
-  // sorted by their own `order` and empty groups dropped (a standalone guide
-  // has no app rows at all, so its `city` group never renders). A row whose
-  // group is not one of the three is NOT dropped: it joins the first group at
-  // the end, because a row that silently vanishes from a menu is a worse bug
-  // than a row in the wrong cluster.
-  function moreSheetGroups(rows) {
+  // Pure: turns a flat row list into [{id, label, last, rows}], each group's
+  // rows sorted by their own `order` and empty groups dropped (a standalone
+  // guide has no app rows at all, so its `city` group never renders). A row
+  // whose group is not one of the clusters is NOT dropped: it joins the first
+  // group at the end, because a row that silently vanishes from a menu is a
+  // worse bug than a row in the wrong cluster.
+  //
+  // `groups` is a parameter rather than a closed-over constant since 2026-09-01:
+  // the trip surface clusters its own actions (everyday / share and export /
+  // this device or account) and reuses this exact function to do it, so the two
+  // menus share their grouping rules instead of each having their own.
+  function moreSheetGroups(rows, groups) {
     var list = Array.isArray(rows) ? rows : [];
+    var defs = (Array.isArray(groups) && groups.length) ? groups : MORE_GROUPS;
     var known = {};
-    MORE_GROUPS.forEach(function (g) { known[g.id] = 1; });
+    defs.forEach(function (g) { known[g.id] = 1; });
     var out = [];
-    MORE_GROUPS.forEach(function (g, gi) {
+    defs.forEach(function (g, gi) {
       var inG = list.filter(function (r) {
         return r && (r.group === g.id || (gi === 0 && !known[r.group]));
       }).map(function (r, i) {
@@ -6405,10 +6416,58 @@ var CityOps = (function () {
       });
       inG.sort(function (a, b) { return (a.order - b.order) || (a.i - b.i); });
       if (inG.length) {
-        out.push({ id: g.id, label: g.label, rows: inG.map(function (x) { return x.r; }) });
+        out.push({ id: g.id, label: g.label, last: !!g.last,
+          rows: inG.map(function (x) { return x.r; }) });
       }
     });
     return out;
+  }
+
+  // The sheet's DOM, built into a container the caller owns. BOTH surfaces call
+  // this: the guide side's openMoreSheet below, and the trip side's own two
+  // sheets (its More menu and its stop switcher). Before this the trip surface
+  // had no grouped menu at all, and building one would have meant a second
+  // hand-written copy of these five elements and eight class names. The styling
+  // moved to src/header.css for the same reason, so the markup and the rules
+  // that dress it are now one source each.
+  //
+  // Every row is icon + label + one muted line saying what it does, because a
+  // flat list of bare labels makes the reader rank them from scratch every
+  // time. A row is a <button> unless it carries an `href`, in which case it is
+  // an <a>: a door to another page should be middle-clickable and should show
+  // its target in the status bar, and faking that with a button never does.
+  // `onDone` fires after any row is activated, which is how the caller closes
+  // itself without every row having to remember to.
+  function renderSheetInto(box, rows, groups, onDone) {
+    moreSheetGroups(rows, groups).forEach(function (g) {
+      var group = el('div', 'sheet-group' + (g.last ? ' sheet-group-last' : ''));
+      group.appendChild(el('div', 'sheet-grouplabel', g.label));
+      var list = el('div', 'sheet-list');
+      // The cluster label is a plain div, so name the list with it too: a
+      // screen reader otherwise hears eight buttons with no grouping at all.
+      list.setAttribute('role', 'group');
+      list.setAttribute('aria-label', g.label);
+      g.rows.forEach(function (r) {
+        var b = el(r.href ? 'a' : 'button', 'sheet-row' + (r.cls ? ' ' + r.cls : ''));
+        if (r.href) { b.href = r.href; } else { b.type = 'button'; }
+        if (r.title) b.title = r.title;
+        var ic = el('span', 'sheet-ic', r.icon || '·');
+        ic.setAttribute('aria-hidden', 'true');
+        b.appendChild(ic);
+        var txt = el('span', 'sheet-txt');
+        txt.appendChild(el('span', 'sheet-label', r.label));
+        if (r.desc) txt.appendChild(el('span', 'sheet-desc', r.desc));
+        b.appendChild(txt);
+        b.onclick = function () {
+          if (onDone) onDone();
+          if (r.onClick) r.onClick();
+        };
+        list.appendChild(b);
+      });
+      group.appendChild(list);
+      box.appendChild(group);
+    });
+    return box;
   }
 
   // App-only rows (Enrich, Edit city, Export guide, Remove city) are supplied
@@ -6419,9 +6478,8 @@ var CityOps = (function () {
   // same clusters they would in the app rather than drifting into a second
   // layout.
   //
-  // Every row is icon + label + one muted line saying what it does, because
-  // the old flat eight-row list of bare labels made the traveler read and
-  // rank them from scratch every time.
+  // The rows are this function's business; the DOM they turn into is
+  // renderSheetInto's, shared with the trip surface's two sheets.
   function openMoreSheet() {
     var host = document.getElementById('modal');
     host.innerHTML = '';
@@ -6455,30 +6513,7 @@ var CityOps = (function () {
     if (typeof window !== 'undefined' && window && window.CityOpsApp && window.CityOpsApp.moreActions) {
       rows = rows.concat(window.CityOpsApp.moreActions());
     }
-    moreSheetGroups(rows).forEach(function (g) {
-      var group = el('div', 'sheet-group' + (g.id === 'city' ? ' sheet-group-last' : ''));
-      group.appendChild(el('div', 'sheet-grouplabel', g.label));
-      var list = el('div', 'sheet-list');
-      // The cluster label is a plain div, so name the list with it too: a
-      // screen reader otherwise hears eight buttons with no grouping at all.
-      list.setAttribute('role', 'group');
-      list.setAttribute('aria-label', g.label);
-      g.rows.forEach(function (r) {
-        var b = el('button', 'sheet-row' + (r.cls ? ' ' + r.cls : ''));
-        b.type = 'button';
-        var ic = el('span', 'sheet-ic', r.icon || '·');
-        ic.setAttribute('aria-hidden', 'true');
-        b.appendChild(ic);
-        var txt = el('span', 'sheet-txt');
-        txt.appendChild(el('span', 'sheet-label', r.label));
-        if (r.desc) txt.appendChild(el('span', 'sheet-desc', r.desc));
-        b.appendChild(txt);
-        b.onclick = function () { wrap.remove(); r.onClick(); };
-        list.appendChild(b);
-      });
-      group.appendChild(list);
-      box.appendChild(group);
-    });
+    renderSheetInto(box, rows, MORE_GROUPS, function () { wrap.remove(); });
     wrap.appendChild(box);
     wrap.onclick = function (e) { if (e.target === wrap) wrap.remove(); };
     host.appendChild(wrap);
@@ -6759,8 +6794,11 @@ var CityOps = (function () {
     // Plan-tab per-item day moves: the picker's own pure model.
     dayMoveOptions: dayMoveOptions,
     // The More sheet's clustering, pure so the grouping and the within-group
-    // order are testable without a DOM.
+    // order are testable without a DOM. renderSheetInto is the DOM half, shared
+    // with the trip surface so its More menu and its stop switcher cannot drift
+    // from this one into a second-looking menu.
     MORE_GROUPS: MORE_GROUPS, moreSheetGroups: moreSheetGroups,
+    renderSheetInto: renderSheetInto,
     // Add a place by hand: the delta builder only. The write itself still
     // goes through mergeDelta, which is exported right above.
     newPlaceDelta: newPlaceDelta,
