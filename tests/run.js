@@ -6792,7 +6792,10 @@ test('no gate or summary copy carries pressure, scarcity or an em-dash', () => {
     ent(null, { accountCreated: entAgo(60 * ENT_DAY) })
   ];
   const banned = [
-    ['—', 'an em-dash, which this repo does not ship'],
+    // Built from its code point rather than written out. This file BANS the
+    // character, and a test that spells it is the prose trap this repo has
+    // now hit three times: do not name the thing in the thing that forbids it.
+    [String.fromCharCode(8212), 'an em-dash, which this repo does not ship'],
     ['Hurry', 'urgency'],
     ['hurry', 'urgency'],
     ['Only ', 'scarcity'],
