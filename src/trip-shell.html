@@ -1694,46 +1694,20 @@
 
       <div class="setting-card">
         <h3>Share a link</h3>
-        <div class="muted" style="margin-bottom:10px">One link, no account at the other end. Publishing takes a <strong>snapshot</strong> of your plan right now and puts it at a private web address only someone with the link can open. It does not follow your plan: publish again when things change.</div>
+        <div class="muted" style="margin-bottom:10px">Links to your plan, no account at the other end. Each one is its own audience: give family a link that names where you are staying and work a link that does not. Publishing takes a <strong>snapshot</strong> of your plan right now and puts it at a private web address only someone with that link can open. It does not follow your plan: publish again when things change.</div>
 
         <div style="margin-bottom:14px">
           <label style="font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-3);display:block;margin-bottom:4px">Your name (shown on the share page, and in the link)</label>
           <input class="text-input" id="traveler-name-input" placeholder="e.g. Rob" style="max-width:280px" oninput="updateTravelerName(this.value)">
         </div>
 
-        <div style="margin-bottom:14px;padding:12px 14px;background:var(--bg-softer);border:1px solid var(--border-light);border-radius:8px">
-          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-3);margin-bottom:8px">What goes in the snapshot</div>
-          <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.5;margin-bottom:6px;cursor:pointer">
-            <input type="radio" name="share-scope" value="trip" onchange="setShareScope('trip')" style="margin-top:3px">
-            <span><strong>Your trip only.</strong> Stops, dates, stays and travel legs.</span>
-          </label>
-          <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.5;cursor:pointer">
-            <input type="radio" name="share-scope" value="guides" onchange="setShareScope('guides')" style="margin-top:3px">
-            <span><strong>Your trip plus city guides.</strong> Adds the guides you tick below, read-only.</span>
-          </label>
-          <div id="share-guide-picker" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border-light)">
-            <div id="share-guide-list" style="display:flex;flex-direction:column;gap:5px;max-height:210px;overflow:auto"></div>
-            <div class="muted" style="font-size:11px;margin-top:8px;line-height:1.5">Guides go in the same read-only form the app uses for Share view: places, verdicts and star ratings. Never your own notes, costs or accommodation addresses.</div>
-          </div>
-          <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border-light)">
-            <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.5;cursor:pointer;min-height:32px">
-              <input type="checkbox" id="share-hide-lodging" onchange="setShareHideLodging(this.checked)" style="margin-top:3px">
-              <span><strong>Hide where I am staying.</strong> The share keeps each city and its dates, and drops the property name, the neighbourhood, the booking link and whether it is booked. Use this for a share going to work contacts.</span>
-            </label>
-          </div>
-        </div>
+        <!-- One block per link. Built in script from state.shares, because the
+             number of them is a fact about the account, not about this file. -->
+        <div id="share-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px"></div>
 
         <div class="setting-actions">
-          <button class="btn" id="share-publish-btn" onclick="publishShare()">🔗 Publish share</button>
-          <button class="btn-secondary" id="share-copy-btn" onclick="copyShareLink()" style="display:none">📋 Copy link</button>
-          <button class="btn-secondary" id="share-rotate-btn" onclick="rotateShareLink()" style="display:none" title="Kill the link you already sent and issue a new one. The new link picks up whatever name is in the box above; Update share never changes the link.">🔁 New link</button>
-          <button class="btn-secondary danger" id="share-unpublish-btn" onclick="unpublishShare()" style="display:none">Stop sharing</button>
-          <button class="btn-secondary green" onclick="generateFamilyShare()">📍 Download HTML</button>
-        </div>
-
-        <div id="share-link-row" style="display:none;margin-top:12px;padding:10px 12px;background:var(--bg-card);border:1px solid var(--border-light);border-radius:6px">
-          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-3);margin-bottom:5px">Your share link</div>
-          <a id="share-link" href="#" target="_blank" rel="noopener noreferrer" style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent);word-break:break-all"></a>
+          <button class="btn" id="share-new-btn" onclick="addShareLink()">+ New share link</button>
+          <button class="btn-secondary green" id="share-download-btn" onclick="generateFamilyShare()">📍 Download HTML</button>
         </div>
 
         <div id="publish-freshness" style="margin-top:10px;font-size:12px;font-family:'JetBrains Mono',monospace;letter-spacing:0.02em;line-height:1.5"></div>
@@ -2256,13 +2230,20 @@ function defaultState() {
     // account rather than a secret, and it rides the trip blob so every device
     // shows the same link and the same Copy/New link/Stop sharing controls.
     // The snapshot itself never lives here; it lives in the shares row.
+    // The share links, one entry per link, each with its own audience:
+    // {id, token, label, scope, guideIds, hideLodging, updated}. A family link
+    // that names the flat and a work link that hides it live here side by side,
+    // and nothing one does touches another.
+    shares: [],
+    // The single-share fields this list replaced. They are still WRITTEN, and
+    // that is the whole one-release migration: a phone that has not picked up
+    // this build yet reads shareToken and keeps showing the same working link
+    // and the same Copy control. loadState folds them into `shares` on the way
+    // in; saveState mirrors the first published entry back out. They go in the
+    // release after this one.
     shareToken: '',
     shareScope: 'trip',     // 'trip' or 'guides'
-    shareGuideIds: [],      // which guides the picker has ticked
-    // "Hide where I am staying". Rides this blob for the same reason the guide
-    // picker does: it is a fact about the share, it syncs to every device, and
-    // an Update publish from the laptop must not silently re-expose lodging the
-    // phone hid. Read by buildShareSnapshot and enforced in the engine.
+    shareGuideIds: [],      // which guides the first link has ticked
     shareHideLodging: false,
     lastPublishedAt: '',
     lastExportedAt: ''  // ISO string of most recent successful JSON export. Drives "stale backup" nudge.
@@ -2306,6 +2287,16 @@ function loadState() {
     // or push it. _credsMigrated tells the boot sequence to write the cleaned
     // blob straight back, so the stripped copy is what sits on disk from here on.
     _credsMigrated = stripCredentialsFromBlob(merged);
+    // One share became many. A blob from the previous build carries shareToken
+    // and no list; this folds it into entry one with the token untouched, so
+    // the link already sent to family keeps opening the same page. A blob that
+    // already carries a list is read as it stands, empty list included.
+    //
+    // PARSED, not merged, and that is the whole correctness of it: defaultState
+    // carries `shares: []`, so a merged blob claims to have an empty list even
+    // when the stored one never had a list at all, and the migration would read
+    // that as "the user deleted their links" and drop a live token.
+    merged.shares = CityOps.shareKit.migrate(parsed);
     return merged;
   } catch(e) {
     console.error('Load failed', e);
@@ -2316,8 +2307,20 @@ function loadState() {
 let _credsMigrated = false;
 let state = loadState();
 
+// The legacy single-share fields, kept truthful on every save so a device on
+// the previous build still shows a working link. One release only; see
+// defaultState.
+function mirrorLegacyShareFields() {
+  const legacy = CityOps.shareKit.legacyFields(state.shares);
+  state.shareToken = legacy.shareToken;
+  state.shareScope = legacy.shareScope;
+  state.shareGuideIds = legacy.shareGuideIds;
+  state.shareHideLodging = legacy.shareHideLodging;
+}
+
 function saveState() {
   state.lastSession = new Date().toISOString();
+  mirrorLegacyShareFields();
   const payload = JSON.stringify(state);
   try {
     localStorage.setItem(STORAGE_KEY, payload);
@@ -5167,15 +5170,89 @@ function updateTravelerName(v) {
 const SHARE_FALLBACK_ORIGIN = 'https://app.nomadding.com';
 const SHARE_ORIGIN = CityOps.shareKit.publicOrigin(location.origin, SHARE_FALLBACK_ORIGIN);
 
-let _shareBusy = false;
+let _shareBusy = '';        // the id of the row mid-write, or '' when idle
 let _guideRows = null;      // [{city_id, data}] once read, for the picker and the publish
+let _guideRowsFailed = false; // that read failed; do not re-fire it from a render
 let _sharesTableMissing = false;
+let _shareOpen = '';        // the id of the row whose settings are expanded
+let _shareLimitHit = false; // a publish was refused by the old one-per-user rule
 
-function shareStatus(msg, kind) {
+// Messages live in state, not only in the DOM.
+//
+// Every write ends by rebuilding the list, which destroys the element the
+// message was just written into. Held here and re-applied by the renderer, a
+// "✓ Published. Send this link:" survives the redraw that follows it instead of
+// flashing out of existence.
+let _shareMsg = Object.create(null);   // row id -> {html, kind}
+let _shareCardMsg = null;              // {html, kind, note} for the card line
+
+function shareMsgColor(kind) {
+  return kind === 'error' ? 'var(--accent)' : kind === 'ok' ? 'var(--green)' : 'var(--text-3)';
+}
+
+// `note` marks the sign-in prompt, which the renderer owns and may clear.
+// Anything else is a message about something the user just did, and only
+// another such message replaces it.
+function shareStatus(msg, kind, note) {
+  _shareCardMsg = msg ? { html: msg, kind: kind || '', note: !!note } : null;
+  applyShareStatus();
+}
+
+function applyShareStatus() {
   const el = document.getElementById('family-share-status');
   if (!el) return;
-  el.innerHTML = msg;
-  el.style.color = kind === 'error' ? 'var(--accent)' : kind === 'ok' ? 'var(--green)' : 'var(--text-3)';
+  el.innerHTML = _shareCardMsg ? _shareCardMsg.html : '';
+  el.style.color = shareMsgColor(_shareCardMsg && _shareCardMsg.kind);
+}
+
+// Per-row status. Every message about one link belongs next to that link:
+// a card-level line cannot say which of five links it is talking about.
+function shareRowStatus(id, msg, kind) {
+  if (msg) _shareMsg[id] = { html: msg, kind: kind || '' };
+  else delete _shareMsg[id];
+  applyShareRowStatus(id);
+}
+
+function applyShareRowStatus(id) {
+  const el = document.getElementById('share-status-' + id);
+  if (!el) return;
+  const m = _shareMsg[id];
+  el.innerHTML = m ? m.html : '';
+  el.style.color = shareMsgColor(m && m.kind);
+}
+
+// A row's id. Not a secret and never in a URL: it only names an entry inside
+// this device's blob so a control knows which link it belongs to.
+function newShareId() {
+  const c = window.crypto || window.msCrypto;
+  if (c && typeof c.getRandomValues === 'function') {
+    const b = c.getRandomValues(new Uint8Array(4));
+    let s = '';
+    for (let i = 0; i < b.length; i++) s += (b[i] < 16 ? '0' : '') + b[i].toString(16);
+    return 'r' + s;
+  }
+  return 'r' + Date.now().toString(16);
+}
+
+function shareRows() {
+  return Array.isArray(state.shares) ? state.shares : [];
+}
+
+function shareRow(id) {
+  const rows = shareRows();
+  for (let i = 0; i < rows.length; i++) if (rows[i].id === id) return rows[i];
+  return null;
+}
+
+// Writes one row and leaves every other row byte-identical. This is the whole
+// isolation promise in one function: a patch is applied to the entry whose id
+// matches and to nothing else, and the list is re-normalized by the engine so
+// a bad value cannot survive a write.
+function updateShareRow(id, patch, redraw) {
+  const next = shareRows().map(e => (e.id === id ? Object.assign({}, e, patch) : e));
+  state.shares = CityOps.shareKit.list(next);
+  saveState();
+  if (redraw !== false) renderShareBlock();
 }
 
 function shareLinkFor(token) {
@@ -5202,26 +5279,73 @@ function newShareToken() {
     state.travelerName || '');
 }
 
-function setShareHideLodging(on) {
-  state.shareHideLodging = !!on;
-  saveState();
-  renderShareBlock();
+// Each of these writes ONE row. They take the row id first for exactly that
+// reason: there is no longer any such thing as "the" share setting.
+// Changing what a link contains makes the last "✓ Published" untrue, so the
+// row's message goes with the change rather than sitting there describing a
+// snapshot these settings no longer match.
+function setShareHideLodging(id, on) {
+  shareRowStatus(id, '', '');
+  updateShareRow(id, { hideLodging: !!on });
 }
 
-function setShareScope(scope) {
-  state.shareScope = (scope === 'guides') ? 'guides' : 'trip';
-  saveState();
-  renderShareBlock();
-  if (state.shareScope === 'guides') refreshGuideRows().then(() => renderShareBlock());
+function setShareScope(id, scope) {
+  shareRowStatus(id, '', '');
+  updateShareRow(id, { scope: (scope === 'guides') ? 'guides' : 'trip' });
+  if (scope === 'guides') { _guideRowsFailed = false; refreshGuideRows().then(() => renderShareBlock()); }
 }
 
-function toggleShareGuide(cityId, on) {
-  const list = Array.isArray(state.shareGuideIds) ? state.shareGuideIds.slice() : [];
+// The label is typed, so this saves without redrawing: rebuilding the list on
+// every keystroke would take the caret out of the box being typed into.
+function setShareLabel(id, label) {
+  updateShareRow(id, { label: String(label || '').slice(0, CityOps.shareKit.LABEL_CAP) }, false);
+}
+
+function toggleShareGuide(id, cityId, on) {
+  const row = shareRow(id);
+  if (!row) return;
+  const list = (row.guideIds || []).slice();
   const at = list.indexOf(cityId);
   if (on && at === -1) list.push(cityId);
   if (!on && at !== -1) list.splice(at, 1);
-  state.shareGuideIds = list;
+  updateShareRow(id, { guideIds: list }, false);
+  renderShareRowSummary(id);
+}
+
+// Open one row's settings, closing whichever was open. One at a time keeps the
+// card readable on a phone, where five expanded rows would be a scroll.
+function toggleShareRowOpen(id) {
+  _shareOpen = (_shareOpen === id) ? '' : id;
+  renderShareBlock();
+  const row = shareRow(id);
+  if (_shareOpen && row && row.scope === 'guides') refreshGuideRows().then(() => renderShareBlock());
+}
+
+// A new link starts as a DRAFT: a row with settings and no token, so nothing
+// is published and no link exists until the user has said what goes in it and
+// pressed Publish.
+function addShareLink() {
+  const rows = shareRows();
+  const blocked = CityOps.shareKit.addBlocked(rows);
+  if (blocked) { shareStatus(escapeHTML(blocked), 'error'); return; }
+  const id = newShareId();
+  state.shares = CityOps.shareKit.list(rows.concat([{
+    id: id,
+    token: '',
+    label: CityOps.shareKit.suggest(rows),
+    // A new link starts with lodging HIDDEN when there is already a link that
+    // shows it. The second link somebody makes is the one for people who are
+    // not family, and the safer default is the one that cannot leak an address
+    // by accident. It is a starting point, not a lock: the checkbox is right
+    // there and the confirm says which way it is set before anything ships.
+    scope: 'trip',
+    guideIds: [],
+    hideLodging: rows.some(e => !e.hideLodging)
+  }]));
+  _shareOpen = id;
   saveState();
+  renderShareBlock();
+  shareRowStatus(id, 'Say what this link is for and what goes in it, then press Publish.', '');
 }
 
 // The guide rows, read once per session. The picker needs their names and the
@@ -5237,68 +5361,311 @@ function refreshGuideRows() {
       _guideRows = rows;
       return rows;
     })
-    .catch(e => { syncWarn('city guide read failed (the share picker will be empty)', e); return null; });
+    .catch(e => {
+      // Remembered, because the picker redraws itself when the read has not
+      // landed. Without this flag a persistently failing read is a render that
+      // refires the fetch that fails that refires the render: a request storm
+      // for as long as the card is open.
+      _guideRowsFailed = true;
+      syncWarn('city guide read failed (the share picker will be empty)', e);
+      return null;
+    });
 }
 
-// The whole Share block, redrawn from state. Every control's presence and
-// label follows the state it is in: there is never a live button that cannot
-// work, and never a dead end with no way forward.
+// What one row says about itself in one line: what is in it, whether the bed
+// is in it, and how old the snapshot behind the link is. This is the line that
+// lets five links be told apart at a glance.
+function shareRowSummary(row) {
+  const bits = [];
+  const guides = (row.scope === 'guides') ? (row.guideIds || []).length : 0;
+  bits.push(guides ? ('Trip + ' + guides + ' guide' + (guides === 1 ? '' : 's')) : 'Trip only');
+  bits.push(row.hideLodging ? 'Lodging hidden' : 'Lodging shown');
+  if (!row.token) {
+    bits.push('not published yet');
+  } else if (row.updated) {
+    const days = Math.floor((Date.now() - new Date(row.updated).getTime()) / 86400000);
+    bits.push('published ' + (days <= 0 ? 'today' : days === 1 ? 'yesterday' : days + ' days ago'));
+  }
+  return bits.join(' · ');
+}
+
+function renderShareRowSummary(id) {
+  const row = shareRow(id);
+  const el = document.getElementById('share-summary-' + id);
+  if (row && el) el.textContent = shareRowSummary(row);
+}
+
+// One icon control. Wordless by default per house rules: the icon carries the
+// action, the tooltip and the aria-label carry the words, and the label always
+// names WHICH link it acts on so five identical icon rows stay unambiguous.
+function shareIconBtn(icon, label, onClick, disabled) {
+  const b = document.createElement('button');
+  b.className = 'btn-secondary';
+  b.textContent = icon;
+  b.title = label;
+  b.setAttribute('aria-label', label);
+  b.style.cssText = 'min-width:36px;min-height:36px;padding:6px 9px;line-height:1';
+  b.disabled = !!disabled;
+  b.onclick = onClick;
+  return b;
+}
+
+// The whole Share block, redrawn from state: one card per link. Every control's
+// presence and label follows the state it is in, so there is never a live
+// button that cannot work and never a dead end with no way forward.
 function renderShareBlock() {
-  const scope = (state.shareScope === 'guides') ? 'guides' : 'trip';
-  const radio = document.querySelector('input[name="share-scope"][value="' + scope + '"]');
-  if (radio) radio.checked = true;
-
-  const picker = document.getElementById('share-guide-picker');
-  if (picker) picker.style.display = scope === 'guides' ? 'block' : 'none';
-  if (picker && scope === 'guides') renderShareGuideList();
-
-  const hide = document.getElementById('share-hide-lodging');
-  if (hide) hide.checked = !!state.shareHideLodging;
-
-  const token = state.shareToken || '';
-  const live = !!token;
+  const host = document.getElementById('share-list');
+  if (!host) return;
+  const rows = shareRows();
   const signedIn = syncOn() && syncSignedIn();
+  host.innerHTML = '';
 
-  const pub = document.getElementById('share-publish-btn');
-  if (pub) {
-    pub.textContent = live ? '🔗 Update share' : '🔗 Publish share';
-    pub.disabled = !signedIn || _shareBusy;
-    pub.title = signedIn
-      ? (live ? 'Replace the snapshot behind your existing link' : 'Create the link and put a snapshot behind it')
-      : 'Sign in to sync first: a share lives in your account, so the link keeps working when this browser does not.';
+  if (!rows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'muted';
+    empty.style.cssText = 'font-size:13px;line-height:1.5;padding:12px 14px;background:var(--bg-softer);border:1px solid var(--border-light);border-radius:8px';
+    empty.textContent = signedIn
+      ? 'No share links yet. Make one, choose what goes in it, and send it to whoever should see your plan.'
+      : 'No share links yet. Sign in to sync (the chip at the top) to make one: a link lives in your account, so it keeps working from any device.';
+    host.appendChild(empty);
   }
-  ['share-copy-btn', 'share-rotate-btn', 'share-unpublish-btn'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) { el.style.display = live ? '' : 'none'; el.disabled = _shareBusy; }
-  });
-  const row = document.getElementById('share-link-row');
-  const link = document.getElementById('share-link');
-  if (row) row.style.display = live ? 'block' : 'none';
-  if (link && live) { link.href = shareLinkFor(token); link.textContent = shareLinkFor(token); }
 
-  if (!signedIn) {
-    shareStatus('Sign in to sync (the chip at the top) to publish a share. A share lives in your account so the link keeps working from any device.', '');
+  rows.forEach(row => renderShareRow(host, row, signedIn));
+
+  const add = document.getElementById('share-new-btn');
+  if (add) {
+    // The cap is the only thing that switches this control off, because it is
+    // the only refusal the app can be certain of before trying. A database that
+    // has not had its migration run is a setup step, not a limit: it is said in
+    // the title and in the row's own status, and the button stays live so the
+    // retry that fixes it is one press away.
+    const blocked = CityOps.shareKit.addBlocked(rows);
+    add.disabled = !!blocked || !!_shareBusy;
+    add.title = blocked
+      || (_sharesTableMissing ? 'The shares table has not been created in the database yet: run the shares SQL block, then publish.' : '')
+      || (_shareLimitHit ? 'A second link needs the one-time multiple-links update run on the database first. Make the link, press Publish, and it will work once that has been run.' : '')
+      || 'Make another link with its own settings, for a different audience';
   }
+  const dl = document.getElementById('share-download-btn');
+  if (dl) {
+    const first = rows[0];
+    dl.title = first
+      ? ('Download a file that carries the plan, using the settings of your first link (' +
+         (first.label || 'unnamed') + ': ' + shareRowSummary(first).split(' · ').slice(0, 2).join(', ') + ')')
+      : 'Download a file that carries the plan: your trip only, lodging shown';
+  }
+
+  if (!signedIn && rows.length) {
+    shareStatus('Sign in to sync (the chip at the top) to publish. A share lives in your account so the link keeps working from any device.', '', true);
+  } else if (signedIn && _shareCardMsg && _shareCardMsg.note) {
+    // Only the sign-in prompt is the renderer's to withdraw. A message about
+    // something the user just did stays until another one replaces it.
+    shareStatus('', '');
+  }
+  // Re-apply what the DOM just lost. The rebuild above created fresh, empty
+  // status elements; these put the standing messages back into them.
+  applyShareStatus();
+  rows.forEach(r => applyShareRowStatus(r.id));
   renderPublishFreshness();
 }
 
-function renderShareGuideList() {
-  const host = document.getElementById('share-guide-list');
+function renderShareRow(host, row, signedIn) {
+  const open = _shareOpen === row.id;
+  const busy = _shareBusy === row.id;
+  const live = !!row.token;
+
+  const card = document.createElement('div');
+  card.className = 'share-row';
+  card.setAttribute('data-share-id', row.id);
+  card.style.cssText = 'padding:12px 14px;background:var(--bg-softer);border:1px solid var(--border-light);border-radius:8px';
+
+  const head = document.createElement('div');
+  head.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap';
+  const name = document.createElement('input');
+  name.className = 'text-input';
+  name.id = 'share-label-' + row.id;
+  name.value = row.label || '';
+  name.placeholder = 'What is this link for?';
+  name.maxLength = CityOps.shareKit.LABEL_CAP;
+  name.setAttribute('aria-label', 'Name for this share link');
+  name.style.cssText = 'flex:1 1 140px;min-width:120px;font-weight:600';
+  name.oninput = () => { setShareLabel(row.id, name.value); renderShareRowSummary(row.id); };
+  head.appendChild(name);
+
+  const acts = document.createElement('div');
+  acts.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap';
+  if (live) {
+    acts.appendChild(shareIconBtn('📋', 'Copy the ' + (row.label || 'unnamed') + ' link', () => copyShareLink(row.id), busy));
+  }
+  acts.appendChild(shareIconBtn(open ? '▴' : '⚙',
+    (open ? 'Hide' : 'Show') + ' what goes in the ' + (row.label || 'unnamed') + ' link',
+    () => toggleShareRowOpen(row.id), busy));
+  if (live) {
+    acts.appendChild(shareIconBtn('🔁',
+      'Replace the ' + (row.label || 'unnamed') + ' link with a new one. The link already sent stops working; your other links are untouched.',
+      () => rotateShareLink(row.id), busy));
+  }
+  // Destructive, so it keeps its word. House rule: icons carry the ordinary
+  // actions, a delete says "Delete".
+  const del = document.createElement('button');
+  del.className = 'btn-secondary danger';
+  del.textContent = 'Delete';
+  del.disabled = busy;
+  del.title = live
+    ? 'Delete the ' + (row.label || 'unnamed') + ' link and the snapshot behind it. Your other links keep working.'
+    : 'Remove this unpublished link';
+  del.style.cssText = 'min-height:36px';
+  del.onclick = () => deleteShareLink(row.id);
+  acts.appendChild(del);
+  head.appendChild(acts);
+  card.appendChild(head);
+
+  const sum = document.createElement('div');
+  sum.className = 'muted';
+  sum.id = 'share-summary-' + row.id;
+  sum.style.cssText = 'font-size:12px;margin-top:6px';
+  sum.textContent = shareRowSummary(row);
+  card.appendChild(sum);
+
+  if (live) {
+    const linkWrap = document.createElement('div');
+    linkWrap.style.cssText = 'margin-top:8px;padding:8px 10px;background:var(--bg-card);border:1px solid var(--border-light);border-radius:6px';
+    const a = document.createElement('a');
+    a.href = shareLinkFor(row.token);
+    a.textContent = shareLinkFor(row.token);
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.style.cssText = "font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent);word-break:break-all";
+    linkWrap.appendChild(a);
+    card.appendChild(linkWrap);
+  }
+
+  if (open) card.appendChild(renderShareRowSettings(row, signedIn, busy, live));
+
+  const st = document.createElement('div');
+  st.className = 'muted';
+  st.id = 'share-status-' + row.id;
+  st.style.cssText = 'margin-top:8px;font-size:12px;line-height:1.5;min-height:0';
+  card.appendChild(st);
+
+  host.appendChild(card);
+  // Now that the card is in the document, its guide checkboxes can be found
+  // and filled. See the note in renderShareRowSettings.
+  if (open && row.scope === 'guides') renderShareGuideList(row.id);
+}
+
+// The expanded half: what goes in THIS link, and the button that publishes it.
+function renderShareRowSettings(row, signedIn, busy, live) {
+  const box = document.createElement('div');
+  box.style.cssText = 'margin-top:10px;padding-top:10px;border-top:1px solid var(--border-light)';
+
+  const cap = document.createElement('div');
+  cap.style.cssText = "font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-3);margin-bottom:8px";
+  cap.textContent = 'What goes in this link';
+  box.appendChild(cap);
+
+  [['trip', 'Your trip only.', ' Stops, dates, stays and travel legs.'],
+   ['guides', 'Your trip plus city guides.', ' Adds the guides you tick below, read-only.']
+  ].forEach(opt => {
+    const lab = document.createElement('label');
+    lab.style.cssText = 'display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.5;margin-bottom:6px;cursor:pointer;min-height:32px';
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'share-scope-' + row.id;
+    radio.value = opt[0];
+    radio.checked = (row.scope === opt[0]);
+    radio.style.marginTop = '3px';
+    radio.onchange = () => setShareScope(row.id, opt[0]);
+    const span = document.createElement('span');
+    const strong = document.createElement('strong');
+    strong.textContent = opt[1];
+    span.appendChild(strong);
+    span.appendChild(document.createTextNode(opt[2]));
+    lab.appendChild(radio);
+    lab.appendChild(span);
+    box.appendChild(lab);
+  });
+
+  if (row.scope === 'guides') {
+    const picker = document.createElement('div');
+    picker.style.cssText = 'margin-top:6px;padding-top:10px;border-top:1px solid var(--border-light)';
+    const list = document.createElement('div');
+    list.id = 'share-guide-list-' + row.id;
+    list.style.cssText = 'display:flex;flex-direction:column;gap:5px;max-height:210px;overflow:auto';
+    picker.appendChild(list);
+    const note = document.createElement('div');
+    note.className = 'muted';
+    note.style.cssText = 'font-size:11px;margin-top:8px;line-height:1.5';
+    note.textContent = 'Guides go in the same read-only form the app uses for Share view: places, verdicts and star ratings. Never your own notes, costs or accommodation addresses.';
+    picker.appendChild(note);
+    box.appendChild(picker);
+    // The list is filled by the CALLER, once this card is in the document.
+    // Filling it here would look up an element that has not been appended yet
+    // and quietly render nothing.
+  }
+
+  const hideWrap = document.createElement('div');
+  hideWrap.style.cssText = 'margin-top:10px;padding-top:10px;border-top:1px solid var(--border-light)';
+  const hideLab = document.createElement('label');
+  hideLab.style.cssText = 'display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.5;cursor:pointer;min-height:32px';
+  const hideBox = document.createElement('input');
+  hideBox.type = 'checkbox';
+  hideBox.id = 'share-hide-lodging-' + row.id;
+  hideBox.checked = !!row.hideLodging;
+  hideBox.style.marginTop = '3px';
+  hideBox.onchange = () => setShareHideLodging(row.id, hideBox.checked);
+  const hideText = document.createElement('span');
+  const hideStrong = document.createElement('strong');
+  hideStrong.textContent = 'Hide where I am staying.';
+  hideText.appendChild(hideStrong);
+  hideText.appendChild(document.createTextNode(
+    ' This link keeps each city and its dates, and drops the property name, the neighbourhood, the booking link and whether it is booked. Use it for a link going to work contacts.'));
+  hideLab.appendChild(hideBox);
+  hideLab.appendChild(hideText);
+  hideWrap.appendChild(hideLab);
+  box.appendChild(hideWrap);
+
+  const acts = document.createElement('div');
+  acts.style.cssText = 'display:flex;gap:8px;margin-top:12px;flex-wrap:wrap';
+  const pub = document.createElement('button');
+  pub.className = 'btn';
+  pub.id = 'share-publish-' + row.id;
+  pub.textContent = busy ? '…' : (live ? '🔗 Update this link' : '🔗 Publish');
+  pub.disabled = !signedIn || busy;
+  pub.title = signedIn
+    ? (live ? 'Replace the snapshot behind this link. The link itself does not change, and your other links are untouched.'
+            : 'Create this link and put a snapshot behind it')
+    : 'Sign in to sync first: a share lives in your account, so the link keeps working when this browser does not.';
+  pub.onclick = () => publishShare(row.id);
+  acts.appendChild(pub);
+  box.appendChild(acts);
+  return box;
+}
+
+function renderShareGuideList(id) {
+  const host = document.getElementById('share-guide-list-' + id);
   if (!host) return;
+  const row = shareRow(id);
+  if (!row) return;
   if (!syncOn() || !syncSignedIn()) {
     host.innerHTML = '<div class="muted" style="font-size:12px">Sign in to sync to see your city guides.</div>';
     return;
   }
   if (!_guideRows) {
+    if (_guideRowsFailed) {
+      host.innerHTML = '<div class="muted" style="font-size:12px">Could not read your city guides just now. ' +
+        'Switch this link back to "Your trip only" and try again, or reload the page.</div>';
+      return;
+    }
     host.innerHTML = '<div class="muted" style="font-size:12px">Reading your city guides…</div>';
-    refreshGuideRows().then(() => renderShareGuideList());
+    refreshGuideRows().then(() => renderShareGuideList(id));
     return;
   }
   if (!_guideRows.length) {
     host.innerHTML = '<div class="muted" style="font-size:12px">No city guides in your account yet. Make one from a stop card, then come back.</div>';
     return;
   }
-  const picked = Array.isArray(state.shareGuideIds) ? state.shareGuideIds : [];
+  const picked = row.guideIds || [];
   host.innerHTML = '';
   _guideRows.slice().sort((a, b) => String(a.city_id).localeCompare(String(b.city_id))).forEach(r => {
     const city = (r.data && r.data.city) || {};
@@ -5308,7 +5675,7 @@ function renderShareGuideList() {
     const box = document.createElement('input');
     box.type = 'checkbox';
     box.checked = picked.indexOf(r.city_id) !== -1;
-    box.onchange = () => toggleShareGuide(r.city_id, box.checked);
+    box.onchange = () => toggleShareGuide(id, r.city_id, box.checked);
     const text = document.createElement('span');
     text.textContent = (city.name || r.city_id) + (city.country ? ' · ' + city.country : '') + (dates ? ' · ' + dates : '');
     label.appendChild(box);
@@ -5317,165 +5684,269 @@ function renderShareGuideList() {
   });
 }
 
-// The snapshot, built by the engine from what this device holds. `guides` is
-// passed as the raw rows; shareKit picks out the ticked ones and strips them.
-function buildShareSnapshot() {
+// The snapshot for ONE link, built by the engine from what this device holds
+// and from that link's own settings. `guides` is passed as the raw rows;
+// shareKit picks out the ticked ones and strips them.
+//
+// `row` is a share entry, or nothing for the standalone download, which then
+// falls back to the first link's settings (and to trip-only when there are no
+// links at all). Two links with different settings therefore produce two
+// genuinely different snapshots out of one state, which is the point.
+function buildShareSnapshot(row) {
+  const r = row || shareRows()[0] || { scope: 'trip', guideIds: [], hideLodging: false };
+  const wantsGuides = (r.scope === 'guides');
   return CityOps.shareKit.build({
     travelerName: state.travelerName || '',
     generatedAt: new Date().toISOString(),
     cities: state.cities || [],
     transitions: state.transitions || [],
-    hideLodging: !!state.shareHideLodging,
+    hideLodging: !!r.hideLodging,
     guideIds: loadGuideIds() || [],
-    guides: (state.shareScope === 'guides') ? (_guideRows || []) : [],
-    includeGuides: (state.shareScope === 'guides') ? (state.shareGuideIds || []) : []
+    guides: wantsGuides ? (_guideRows || []) : [],
+    includeGuides: wantsGuides ? (r.guideIds || []) : []
   });
 }
 
-// One row per user (the table has unique(user_id)), so publish and rotate are
-// the same upsert with a different token. user_id is never sent: it defaults to
-// auth.uid() and RLS refuses anything else.
-function writeShareRow(token, snapshot) {
-  return syncApi('/rest/v1/shares?on_conflict=user_id', {
+// A NEW link: a plain INSERT, never an upsert.
+//
+// That is deliberate. An upsert keyed on user_id would merge a second link
+// into the row the first one lives in and silently move the first link's
+// token, which is exactly the cross-talk this feature exists to end. An
+// insert either adds a row or is refused, and a refusal is information: it is
+// how the app finds out the one-link-per-account constraint is still in place.
+// See shareKit.writeFailure.
+//
+// user_id is never sent: it defaults to auth.uid() and RLS refuses anything
+// else. label is not sent either, on purpose: it lives in the synced blob, so
+// publishing works whether or not the column exists yet.
+function insertShareRow(token, snapshot) {
+  return syncApi('/rest/v1/shares?select=token', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Prefer': 'resolution=merge-duplicates,return=minimal'
-    },
+    headers: { 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
     body: JSON.stringify([{ token: token, data: snapshot, updated_at: new Date().toISOString() }])
   });
 }
 
-// The shares table is created by a one-time SQL block Rob runs in the Supabase
-// SQL editor, exactly like the sync tables before it. Until then PostgREST
-// answers 404 and this says which thing is missing rather than "publish
-// failed": the difference between a setup step and a fault is the whole
-// difference between a user who acts and a user who files a bug.
-function noteSharesTable(e) {
-  const msg = (e && e.message) || '';
-  if (msg.indexOf('404') === -1) return false;
-  _sharesTableMissing = true;
-  shareStatus('Sharing is not switched on for this account yet: the <strong>shares</strong> table has not been created. ' +
-    'Run the shares SQL block in the Supabase SQL editor, then publish again. Everything else in the app is unaffected.', 'error');
-  return true;
+// An EXISTING link: a PATCH matched on that link's own token, so the write can
+// reach exactly one row and no other link can be disturbed by it. `newToken`
+// is passed only by rotate, and swapping the token in place is what kills the
+// old link the instant the write lands.
+//
+// return=representation with a one-column select is how we find out whether a
+// row was actually there: a PATCH that matches nothing answers like a success,
+// and the row may have been deleted from another device.
+function patchShareRow(token, snapshot, newToken) {
+  const body = { data: snapshot, updated_at: new Date().toISOString() };
+  if (newToken) body.token = newToken;
+  return syncApi('/rest/v1/shares?select=token&token=eq.' + encodeURIComponent(token), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+    body: JSON.stringify(body)
+  });
 }
 
-function withShareBusy(p) {
-  _shareBusy = true;
+// What a refused write MEANS, said in words the reader can act on. Two of the
+// three cases are setup steps rather than faults, and the difference between a
+// setup step and a fault is the difference between a user who acts and a user
+// who files a bug.
+//
+// The one-link case does NOT disable anything. The app cannot know when the
+// migration has been run, and a control switched off on the strength of one
+// failure would strand the user the moment they fixed it. Pressing Publish
+// again IS the recovery path, so the button stays live and the reason stays on
+// screen until it works.
+function noteShareFailure(id, e, verb) {
+  const kind = CityOps.shareKit.writeFailure(e && e.status, e && e.body);
+  if (kind === 'no-table') {
+    _sharesTableMissing = true;
+    shareRowStatus(id, 'Sharing is not switched on for this account yet: the <strong>shares</strong> table has not been created. ' +
+      'Run the shares SQL block in the Supabase SQL editor, then try again. Everything else in the app is unaffected.', 'error');
+    return true;
+  }
+  if (kind === 'one-share-limit') {
+    _shareLimitHit = true;
+    shareRowStatus(id, 'This account still allows only <strong>one</strong> share link: the database has not had the ' +
+      'multiple-links update run yet. Nothing was changed, and the link you already have is untouched and still working. ' +
+      'Run the shares migration in the Supabase SQL editor, then press Publish again.', 'error');
+    return true;
+  }
+  console.error('Share ' + verb + ' failed:', e);
+  return false;
+}
+
+function withShareBusy(id, p) {
+  _shareBusy = id;
   renderShareBlock();
   return p.then(
-    v => { _shareBusy = false; renderShareBlock(); return v; },
-    e => { _shareBusy = false; renderShareBlock(); throw e; }
+    v => { _shareBusy = ''; renderShareBlock(); return v; },
+    e => { _shareBusy = ''; renderShareBlock(); throw e; }
   );
 }
 
-function publishShare() {
+// The count of OTHER links, for the confirm. Publishing one link must never
+// leave a doubt about what happened to the others, so the confirm says so.
+function otherShareCount(id) {
+  return shareRows().filter(e => e.id !== id && e.token).length;
+}
+
+function publishShare(id) {
+  const row = shareRow(id);
+  if (!row) return Promise.resolve(false);
   if (!syncOn() || !syncSignedIn()) {
-    shareStatus('Sign in to sync first. A share lives in your account, not in this browser.', 'error');
+    shareRowStatus(id, 'Sign in to sync first. A share lives in your account, not in this browser.', 'error');
     return Promise.resolve(false);
   }
   let snapshot, token;
   try {
-    snapshot = buildShareSnapshot();
-    token = state.shareToken || newShareToken();
+    snapshot = buildShareSnapshot(row);
+    token = row.token || newShareToken();
   } catch (e) {
-    shareStatus(escapeHTML(e.message), 'error');
+    shareRowStatus(id, escapeHTML(e.message), 'error');
     return Promise.resolve(false);
   }
   const stops = snapshot.cities.length;
   const legs = snapshot.transitions.length;
   const guides = snapshot.guides.length;
-  const first = !state.shareToken;
-  const confirmMsg = 'Publishing a snapshot:\n\n  • ' + stops + ' stop' + (stops === 1 ? '' : 's') +
+  const first = !row.token;
+  const named = row.label || 'this link';
+  const others = otherShareCount(id);
+  const confirmMsg = 'Publishing "' + named + '":\n\n  • ' + stops + ' stop' + (stops === 1 ? '' : 's') +
     '\n  • ' + legs + ' travel leg' + (legs === 1 ? '' : 's') +
     (guides ? '\n  • ' + guides + ' city guide' + (guides === 1 ? '' : 's') : '') +
-    (state.shareHideLodging
+    (row.hideLodging
       ? '\n  • where you are staying is HIDDEN: cities and dates only'
       : '\n  • where you are staying is SHOWN: property names and booking links') +
-    '\n\nAnyone with the link can read this, with no account.' +
-    (first ? '\n\nThis creates the link.' : '\n\nThis replaces what your existing link shows.') +
+    '\n\nAnyone with this link can read this, with no account.' +
+    (first ? '\n\nThis creates the link.' : '\n\nThis replaces what the "' + named + '" link shows.') +
+    (others ? '\n\nYour other ' + others + ' link' + (others === 1 ? '' : 's') + ' and what ' +
+      (others === 1 ? 'it shows are' : 'they show are') + ' not affected.' : '') +
     '\n\nContinue?';
-  if (!confirm(confirmMsg)) { shareStatus('Publish cancelled.', ''); return Promise.resolve(false); }
+  if (!confirm(confirmMsg)) { shareRowStatus(id, 'Publish cancelled.', ''); return Promise.resolve(false); }
 
-  shareStatus('Publishing a snapshot of ' + stops + ' stops…', '');
-  return withShareBusy(writeShareRow(token, snapshot).then(() => {
-    state.shareToken = token;
-    state.lastPublishedAt = new Date().toISOString();
+  shareRowStatus(id, 'Publishing a snapshot of ' + stops + ' stops…', '');
+  const write = first ? insertShareRow(token, snapshot) : patchShareRow(row.token, snapshot);
+  return withShareBusy(id, write.then(rows => {
+    if (!first && Array.isArray(rows) && !rows.length) {
+      // The row is gone: deleted from another device between then and now.
+      // Say so and offer the one action that works, rather than reporting a
+      // success over a link that opens nothing.
+      updateShareRow(id, { token: '', updated: '' });
+      shareRowStatus(id, 'That link had already been deleted from another device, so there was nothing to update. ' +
+        'Press Publish to make it again as a new link.', 'error');
+      return false;
+    }
+    const now = new Date().toISOString();
+    updateShareRow(id, { token: token, updated: now });
+    state.lastPublishedAt = now;
     saveState();
     const url = shareLinkFor(token);
-    shareStatus('✓ Published. Send this link: <a href="' + escapeHTML(url) + '" target="_blank" rel="noopener" ' +
+    shareRowStatus(id, '✓ Published. Send this link: <a href="' + escapeHTML(url) + '" target="_blank" rel="noopener" ' +
       'style="color:var(--accent);font-family:\'JetBrains Mono\',monospace;font-size:12px">' + escapeHTML(url) + '</a>', 'ok');
-    toast('✓ Share published. Link ready to send.', 'ok');
+    toast('✓ "' + named + '" published. Link ready to send.', 'ok');
     return true;
   }).catch(e => {
-    if (!noteSharesTable(e)) {
-      console.error('Publish failed:', e);
-      shareStatus('Publish failed: ' + escapeHTML(e.message) + '. Your plan is untouched; try again.', 'error');
+    if (!noteShareFailure(id, e, 'publish')) {
+      shareRowStatus(id, 'Publish failed: ' + escapeHTML(e.message) + '. Your plan is untouched; try again.', 'error');
     }
     return false;
   }));
 }
 
-// Rotate: a NEW token on the same row. The old link stops resolving the moment
-// this write lands, because get_share matches the token exactly and there is
-// only ever one row per user. This is the revocation, and it is instant.
-function rotateShareLink() {
-  if (!state.shareToken) return Promise.resolve(false);
-  if (armConfirm('rotateShare', 'Click "New link" again to confirm. The link you already sent will stop working immediately.')) return Promise.resolve(false);
+// Rotate: a NEW token on THAT row, and on no other. The old link stops
+// resolving the moment the write lands, because get_share matches the token
+// exactly. This is the revocation, it is instant, and it is confined to one
+// link: the others keep the tokens they were sent with.
+function rotateShareLink(id) {
+  const row = shareRow(id);
+  if (!row || !row.token) return Promise.resolve(false);
+  const named = row.label || 'this link';
+  if (armConfirm('rotateShare:' + id, 'Click again to confirm. The "' + named +
+    '" link you already sent will stop working immediately. Your other links are not affected.')) return Promise.resolve(false);
   let token, snapshot;
   try {
     token = newShareToken();
-    snapshot = buildShareSnapshot();
+    snapshot = buildShareSnapshot(row);
   } catch (e) {
-    shareStatus(escapeHTML(e.message), 'error');
+    shareRowStatus(id, escapeHTML(e.message), 'error');
     return Promise.resolve(false);
   }
-  shareStatus('Making a new link…', '');
-  return withShareBusy(writeShareRow(token, snapshot).then(() => {
-    state.shareToken = token;
-    state.lastPublishedAt = new Date().toISOString();
+  shareRowStatus(id, 'Making a new link…', '');
+  return withShareBusy(id, patchShareRow(row.token, snapshot, token).then(rows => {
+    if (Array.isArray(rows) && !rows.length) {
+      updateShareRow(id, { token: '', updated: '' });
+      shareRowStatus(id, 'That link had already been deleted from another device, so there was nothing to replace. ' +
+        'Press Publish to make it again.', 'error');
+      return false;
+    }
+    const now = new Date().toISOString();
+    updateShareRow(id, { token: token, updated: now });
+    state.lastPublishedAt = now;
     saveState();
     const url = shareLinkFor(token);
-    shareStatus('✓ New link made and the old one is dead. Send this one: <a href="' + escapeHTML(url) + '" target="_blank" rel="noopener" ' +
+    shareRowStatus(id, '✓ New link made and the old one is dead. Send this one: <a href="' + escapeHTML(url) + '" target="_blank" rel="noopener" ' +
       'style="color:var(--accent);font-family:\'JetBrains Mono\',monospace;font-size:12px">' + escapeHTML(url) + '</a>', 'ok');
-    toast('✓ New share link. The old one no longer works.', 'ok');
+    toast('✓ New "' + named + '" link. The old one no longer works.', 'ok');
     return true;
   }).catch(e => {
-    if (!noteSharesTable(e)) shareStatus('Could not make a new link: ' + escapeHTML(e.message) + '. The old link is still live.', 'error');
+    if (!noteShareFailure(id, e, 'rotate')) {
+      shareRowStatus(id, 'Could not make a new link: ' + escapeHTML(e.message) + '. The old link is still live.', 'error');
+    }
     return false;
   }));
 }
 
-function unpublishShare() {
-  if (!state.shareToken) return Promise.resolve(false);
-  if (armConfirm('unpublishShare', 'Click "Stop sharing" again to confirm. The link you already sent will stop working and the snapshot is deleted.')) return Promise.resolve(false);
-  const token = state.shareToken;
-  shareStatus('Taking the share down…', '');
-  return withShareBusy(syncApi('/rest/v1/shares?token=eq.' + encodeURIComponent(token), {
+// Delete: this row's database row by its own token, then this row. A draft has
+// no token and nothing to delete, so it just goes.
+function deleteShareLink(id) {
+  const row = shareRow(id);
+  if (!row) return Promise.resolve(false);
+  const named = row.label || 'this link';
+  const drop = () => {
+    state.shares = CityOps.shareKit.list(shareRows().filter(e => e.id !== id));
+    if (_shareOpen === id) _shareOpen = '';
+    delete _shareMsg[id];
+    saveState();
+    renderShareBlock();
+  };
+  if (!row.token) {
+    if (armConfirm('deleteShare:' + id, 'Click Delete again to confirm. "' + named +
+      '" was never published, so nothing is taken down.')) return Promise.resolve(false);
+    drop();
+    shareStatus('✓ Removed "' + escapeHTML(named) + '". It was never published.', 'ok');
+    return Promise.resolve(true);
+  }
+  if (armConfirm('deleteShare:' + id, 'Click Delete again to confirm. The "' + named +
+    '" link will stop working and its snapshot is deleted. Your other links keep working.')) return Promise.resolve(false);
+  shareRowStatus(id, 'Taking this link down…', '');
+  return withShareBusy(id, syncApi('/rest/v1/shares?token=eq.' + encodeURIComponent(row.token), {
     method: 'DELETE',
     headers: { 'Prefer': 'return=minimal' }
   }).then(() => {
-    state.shareToken = '';
-    state.lastPublishedAt = '';
-    saveState();
-    shareStatus('✓ Sharing is off. The link no longer opens anything.', 'ok');
-    toast('✓ Sharing stopped.', 'ok');
+    drop();
+    shareStatus('✓ "' + escapeHTML(named) + '" is deleted. That link no longer opens anything.', 'ok');
+    toast('✓ "' + named + '" deleted.', 'ok');
     return true;
   }).catch(e => {
-    if (!noteSharesTable(e)) shareStatus('Could not stop sharing: ' + escapeHTML(e.message) + '. The link is still live; try again.', 'error');
+    if (!noteShareFailure(id, e, 'delete')) {
+      shareRowStatus(id, 'Could not delete: ' + escapeHTML(e.message) + '. The link is still live; try again.', 'error');
+    }
     return false;
   }));
 }
 
-function copyShareLink() {
-  const url = shareLinkFor(state.shareToken);
+function copyShareLink(id) {
+  const row = shareRow(id);
+  const url = row ? shareLinkFor(row.token) : '';
   if (!url) return;
-  const done = () => { shareStatus('✓ Link copied. Paste it wherever the reader will look for it.', 'ok'); toast('Link copied.', 'ok'); };
+  const done = () => {
+    shareRowStatus(id, '✓ Link copied. Paste it wherever the reader will look for it.', 'ok');
+    toast('Link copied.', 'ok');
+  };
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(url).then(done, () => shareStatus('Could not copy. Select the link above and copy it by hand.', 'error'));
+    navigator.clipboard.writeText(url).then(done, () => shareRowStatus(id, 'Could not copy. Select the link above and copy it by hand.', 'error'));
     return;
   }
-  shareStatus('Copy is not available in this browser. Select the link above and copy it by hand.', 'error');
+  shareRowStatus(id, 'Copy is not available in this browser. Select the link above and copy it by hand.', 'error');
 }
 
 // ==================== THE STANDALONE DOWNLOAD ====================
@@ -5609,9 +6080,17 @@ function renderBackupFreshness() {
 function renderPublishFreshness() {
   const el = document.getElementById('publish-freshness');
   if (!el) return;
-  const pub = state.lastPublishedAt ? new Date(state.lastPublishedAt) : null;
-  if (!pub) {
-    el.innerHTML = '<span style="color:var(--text-3)">Not published yet — family can\'t see your plan until you publish.</span>';
+  // The newest publish across every link. Each link also carries its own age
+  // on its own summary line; this is the card-level "is any of it stale".
+  let newest = '';
+  (Array.isArray(state.shares) ? state.shares : []).forEach(e => {
+    if (e && e.token && e.updated && e.updated > newest) newest = e.updated;
+  });
+  if (!newest) newest = state.lastPublishedAt || '';
+  const live = (Array.isArray(state.shares) ? state.shares : []).filter(e => e && e.token).length;
+  const pub = newest ? new Date(newest) : null;
+  if (!pub || !live) {
+    el.innerHTML = '<span style="color:var(--text-3)">Nothing published yet: nobody can see your plan until you publish a link.</span>';
     return;
   }
   const days = Math.floor((Date.now() - pub.getTime()) / 86400000);
@@ -5621,12 +6100,14 @@ function renderPublishFreshness() {
   let color = 'var(--green)', icon = '✓', msg;
   if (days >= 14) { color = 'var(--accent)'; icon = '⚠'; }
   else if (days >= 3 || editedSince) { color = 'var(--amber)'; icon = '●'; }
+  const many = live > 1;
   if (editedSince && days >= 1) {
-    msg = 'Plan changed since you last published (' + human + ', ' + ageText + '). Re-publish so family sees the current itinerary.';
+    msg = 'Plan changed since you last published (' + human + ', ' + ageText + '). Publish again so your ' +
+      (many ? 'links show' : 'link shows') + ' the current plan.';
   } else if (days >= 3) {
-    msg = 'Family share last published ' + human + ' (' + ageText + ').';
+    msg = (many ? 'Newest link' : 'Your link') + ' published ' + human + ' (' + ageText + ').';
   } else {
-    msg = 'Family share is current — published ' + ageText + '.';
+    msg = (many ? 'Your links are current: newest published ' : 'Your link is current: published ') + ageText + '.';
   }
   el.innerHTML = '<span style="color:' + color + '">' + icon + ' ' + msg + '</span>';
 }
@@ -9083,7 +9564,18 @@ function syncApi(path, opts, retried) {
           // give up for this round. Never a retry loop.
           return ensureSyncToken(true).then(t2 => (t2 ? syncApi(path, opts, true) : null));
         }
-        if (!r.ok) throw new Error('http ' + r.status);
+        if (!r.ok) {
+          // The MESSAGE is unchanged on purpose: several callers already read
+          // it for '404'. What is added is the status and the body, because
+          // PostgREST says WHICH constraint refused a write only in the body,
+          // and "publish failed" is not something a user can act on.
+          return r.text().catch(() => '').then(t => {
+            const err = new Error('http ' + r.status);
+            err.status = r.status;
+            err.body = t || '';
+            throw err;
+          });
+        }
         if (r.status === 204) return null;
         const ct = (r.headers && r.headers.get) ? (r.headers.get('content-type') || '') : '';
         return ct.indexOf('json') === -1 ? null : r.json();

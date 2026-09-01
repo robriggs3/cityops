@@ -3024,7 +3024,7 @@ test('the published share is built from a fixed field list, in the engine', () =
   const fs = require('fs');
   const path = require('path');
   const trip = fs.readFileSync(path.join(__dirname, '..', 'trip', 'index.html'), 'utf8');
-  const fn = trip.match(/function buildShareSnapshot\(\) \{[\s\S]*?\n\}/);
+  const fn = trip.match(/function buildShareSnapshot\(row\) \{[\s\S]*?\n\}/);
   assert.ok(fn, 'buildShareSnapshot missing from the built trip page');
   assert.equal(fn[0].indexOf('apiKey'), -1);
   assert.equal(fn[0].indexOf('credGet'), -1);
@@ -3034,15 +3034,18 @@ test('the published share is built from a fixed field list, in the engine', () =
   // Both the download and the publish go through that one builder. Two
   // builders would be two field lists, and the second would drift.
   assert.ok(/return buildFamilyShareHTML\(buildShareSnapshot\(\)\)/.test(trip));
-  assert.ok(/writeShareRow\(token, snapshot\)/.test(trip));
+  assert.ok(/insertShareRow\(token, snapshot\) : patchShareRow\(row\.token, snapshot\)/.test(trip));
   // "Hide where I am staying" is passed to the ENGINE, which is where the
   // exclusion happens. A share page that filtered at render time would already
-  // have shipped the address.
-  assert.ok(/hideLodging: !!state\.shareHideLodging/.test(fn[0]),
-    'the lodging option must reach the engine builder');
+  // have shipped the address. It comes off the ROW now, so two links can
+  // disagree about it.
+  assert.ok(/hideLodging: !!r\.hideLodging/.test(fn[0]),
+    'the lodging option must reach the engine builder, per link');
+  assert.ok(/const r = row \|\| shareRows\(\)\[0\]/.test(fn[0]),
+    'the builder must take the link whose snapshot it is building');
 });
 
-test('the lodging option rides the synced trip blob, like the guide picker', () => {
+test('the lodging option rides the synced trip blob, per link', () => {
   // It has to persist where the picker persists, or an Update publish from
   // another device silently re-exposes the lodging this one hid.
   const fs = require('fs');
@@ -3050,16 +3053,26 @@ test('the lodging option rides the synced trip blob, like the guide picker', () 
   const trip = fs.readFileSync(path.join(__dirname, '..', 'trip', 'index.html'), 'utf8');
   const def = trip.match(/function defaultState\(\) \{[\s\S]*?\n\}/);
   assert.ok(def, 'defaultState missing from the built trip page');
-  assert.ok(/shareGuideIds: \[\],/.test(def[0]), 'the picker no longer lives in the trip blob');
-  assert.ok(/shareHideLodging: false,/.test(def[0]),
-    'shareHideLodging must default to false in the same blob the picker uses');
+  assert.ok(/\n    shares: \[\],/.test(def[0]), 'the share list must live in the trip blob');
+  // The single-share fields stay for one release, so a device on the previous
+  // build keeps reading a working link out of the same blob.
+  assert.ok(/shareGuideIds: \[\],/.test(def[0]) && /shareHideLodging: false,/.test(def[0]) &&
+    /shareToken: '',/.test(def[0]),
+    'the legacy single-share fields must survive one release for older devices');
+  assert.ok(/function mirrorLegacyShareFields\(\)/.test(trip) &&
+    /mirrorLegacyShareFields\(\);/.test(trip),
+    'every save must keep the legacy fields truthful');
   // Off by default, so nobody's existing family share loses the flat name on
-  // the next publish without being asked.
-  assert.ok(/function setShareHideLodging\(on\) \{\s*state\.shareHideLodging = !!on;\s*saveState\(\);/.test(trip),
-    'the toggle must write through saveState, which is what syncs it');
-  // The control exists, is a checkbox, and redraws from state.
-  assert.ok(/id="share-hide-lodging"[^>]*onchange="setShareHideLodging\(this\.checked\)"/.test(trip));
-  assert.ok(/hide\.checked = !!state\.shareHideLodging;/.test(trip));
+  // the next publish without being asked, and it writes through saveState,
+  // which is what syncs it. Per row, so two links can disagree.
+  assert.ok(/function setShareHideLodging\(id, on\) \{[\s\S]{0,120}?updateShareRow\(id, \{ hideLodging: !!on \}\);/.test(trip),
+    'the toggle must write one row through updateShareRow');
+  assert.ok(/function updateShareRow\(id, patch, redraw\) \{[\s\S]*?saveState\(\);/.test(trip),
+    'a row write must go through saveState, which is what syncs it');
+  // The control exists, is a checkbox, and redraws from the row it belongs to.
+  assert.ok(/hideBox\.id = 'share-hide-lodging-' \+ row\.id;/.test(trip));
+  assert.ok(/hideBox\.checked = !!row\.hideLodging;/.test(trip));
+  assert.ok(/setShareHideLodging\(row\.id, hideBox\.checked\)/.test(trip));
   // And the confirm names which way it is set, so Publish is never a surprise.
   assert.ok(/where you are staying is HIDDEN/.test(trip));
   assert.ok(/where you are staying is SHOWN/.test(trip));
@@ -3220,13 +3233,15 @@ test('an already-issued token keeps working, and only Rotate replaces it', () =>
   // Publish REUSES the token it already has and only makes one when there is
   // none. This is what stops an Update publish from quietly breaking a link
   // that is already in somebody's inbox.
-  assert.ok(/token = state\.shareToken \|\| newShareToken\(\);/.test(trip),
-    'publish must reuse an existing token, never mint a new one on update');
+  assert.ok(/token = row\.token \|\| newShareToken\(\);/.test(trip),
+    'publish must reuse the row\'s existing token, never mint a new one on update');
   // Rotate is the ONE door that issues a new token, and it is confirmed twice.
-  const rot = trip.match(/function rotateShareLink\(\) \{[\s\S]*?\n\}/);
+  // Its arm key carries the row id, so confirming a rotate on one link cannot
+  // arm a rotate on another.
+  const rot = trip.match(/function rotateShareLink\(id\) \{[\s\S]*?\n\}/);
   assert.ok(rot, 'rotateShareLink missing from the built trip page');
   assert.ok(/token = newShareToken\(\);/.test(rot[0]), 'rotate must mint a new token');
-  assert.ok(/armConfirm\('rotateShare'/.test(rot[0]), 'rotate must be confirmed');
+  assert.ok(/armConfirm\('rotateShare:' \+ id/.test(rot[0]), 'rotate must be confirmed per row');
   // And the new token is the readable kind: the display name rides in front.
   assert.ok(/CityOps\.shareKit\.token\(\s*[\s\S]*?state\.travelerName \|\| ''\)/.test(trip),
     'newShareToken must pass the display name as the readable half');
@@ -3890,12 +3905,300 @@ test('the service worker precaches the share shell and nothing token-shaped', ()
   // v12: readable share tokens and the hide-lodging option. The share SHELL is
   // precached, so a phone on v11 would keep rendering hidden stays with the old
   // stay row until it happened to refetch.
-  assert.ok(/var CACHE = 'cityops-app-v12';/.test(sw));
+  // v13: many share links per account. A phone still on v12 shows the old
+  // one-link card, and the first save it makes mirrors only the first link
+  // back out, so the bump is what stops the two builds disagreeing for a day.
+  assert.ok(/var CACHE = 'cityops-app-v13';/.test(sw));
   // GET only, so the rpc POST that carries the token is never cached, and a
   // rotated share cannot keep answering out of a stale cache.
   assert.ok(/if \(e\.request\.method !== 'GET'\) return;/.test(sw));
 });
 
+// ---- many links, one account ----
+//
+// One share used to be a singular, so rotating the family link killed the work
+// link with it. These pin the list, the migration into it, and the promise that
+// nothing one link does can reach another.
+
+const FAMILY_TOKEN = 'family-' + 'a'.repeat(32);
+const WORK_TOKEN = 'work-' + 'b'.repeat(32);
+
+// The shell's per-row write, expressed exactly as trip-shell.html expresses it.
+// A test below asserts the shipped file still says this.
+function applyRowPatch(list, id, patch) {
+  return C.shareKit.list(list.map(e => (e.id === id ? Object.assign({}, e, patch) : e)));
+}
+
+test('a single share migrates into entry one with its token untouched', () => {
+  // The blob a device on the previous build wrote: no list, one token. That
+  // token is a link somebody is already holding, so it has to survive exactly.
+  const old = {
+    shareToken: FAMILY_TOKEN,
+    shareScope: 'guides',
+    shareGuideIds: ['batumi-2026-08-08', 'tirana-2026-08-22'],
+    shareHideLodging: false,
+    lastPublishedAt: '2026-08-30T10:00:00.000Z'
+  };
+  const list = C.shareKit.migrate(old);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].token, FAMILY_TOKEN, 'the live token must survive the migration byte for byte');
+  assert.equal(list[0].scope, 'guides');
+  assert.deepEqual(list[0].guideIds, ['batumi-2026-08-08', 'tirana-2026-08-22']);
+  assert.equal(list[0].hideLodging, false);
+  assert.equal(list[0].updated, '2026-08-30T10:00:00.000Z');
+  assert.equal(list[0].label, 'Family', 'the first link is named for who it was for');
+  assert.ok(list[0].id, 'every row needs an id for its controls to name it');
+  // Deterministic, so the same blob on two devices produces the same row id
+  // rather than two rows fighting over one token.
+  assert.deepEqual(C.shareKit.migrate(old), list);
+});
+
+test('the migration handles a blob with no share fields at all', () => {
+  // A device that never shared. Not an error, not a phantom row: no links.
+  assert.deepEqual(C.shareKit.migrate({}), []);
+  assert.deepEqual(C.shareKit.migrate(null), []);
+  assert.deepEqual(C.shareKit.migrate({ cities: [], transitions: [] }), []);
+  // A token too broken to name a row is not a link, so it does not become one.
+  assert.deepEqual(C.shareKit.migrate({ shareToken: 'not a token' }), []);
+  assert.deepEqual(C.shareKit.migrate({ shareToken: '' }), []);
+});
+
+test('the migration reads the STORED blob, not one already carrying the default', () => {
+  // The trap, found in the browser and pinned here so it stays found.
+  // defaultState() carries `shares: []`, so Object.assign(default, stored)
+  // hands the migration an empty list for a blob that never had one. Read that
+  // way, a device with a live single share loses it: an empty list means the
+  // user deleted their links, and there is nothing left to fold.
+  const stored = { shareToken: FAMILY_TOKEN, shareScope: 'trip' };
+  assert.deepEqual(C.shareKit.migrate(Object.assign({ shares: [] }, stored)), [],
+    'this is the trap: a defaulted list reads as a deliberate empty one');
+  assert.equal(C.shareKit.migrate(stored)[0].token, FAMILY_TOKEN);
+  // So loadState migrates the parsed blob, and the built page says so.
+  const trip = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '..', 'trip', 'index.html'), 'utf8');
+  assert.ok(/merged\.shares = CityOps\.shareKit\.migrate\(parsed\);/.test(trip),
+    'loadState must migrate the stored blob, never the defaulted merge');
+});
+
+test('a blob that already carries a list is read as it stands, empty included', () => {
+  const list = C.shareKit.migrate({
+    shares: [{ id: 'r1', token: FAMILY_TOKEN, label: 'Family', hideLodging: false },
+             { id: 'r2', token: WORK_TOKEN, label: 'Work', hideLodging: true }],
+    // Stale legacy fields alongside it must not win, or a rotate would undo.
+    shareToken: 'stale-' + 'c'.repeat(32)
+  });
+  assert.equal(list.length, 2);
+  assert.equal(list[0].token, FAMILY_TOKEN);
+  assert.equal(list[1].token, WORK_TOKEN);
+  // An EMPTY list means the user deleted their links. Resurrecting one from
+  // the legacy fields would bring back a link they took down on purpose.
+  assert.deepEqual(C.shareKit.migrate({ shares: [], shareToken: FAMILY_TOKEN }), []);
+});
+
+test('the legacy fields mirror the first published link back out', () => {
+  // The other direction of the migration, and the whole reason it is safe to
+  // ship: a phone still on the previous build reads shareToken and keeps
+  // showing a link that works.
+  const list = C.shareKit.migrate({
+    shares: [{ id: 'r1', token: FAMILY_TOKEN, label: 'Family', scope: 'guides',
+               guideIds: ['batumi-2026-08-08'], hideLodging: false },
+             { id: 'r2', token: WORK_TOKEN, label: 'Work', hideLodging: true }]
+  });
+  const legacy = C.shareKit.legacyFields(list);
+  assert.equal(legacy.shareToken, FAMILY_TOKEN);
+  assert.equal(legacy.shareScope, 'guides');
+  assert.deepEqual(legacy.shareGuideIds, ['batumi-2026-08-08']);
+  assert.equal(legacy.shareHideLodging, false);
+  // Round trip: mirrored out and folded back in, the live token is the same.
+  assert.equal(C.shareKit.migrate(legacy)[0].token, FAMILY_TOKEN);
+  // A DRAFT is skipped. An old device reading a blank token would decide the
+  // share had been taken down and hide Copy over a link that is still live.
+  const drafted = C.shareKit.list([{ id: 'd1', token: '', label: 'New' },
+                                   { id: 'r1', token: FAMILY_TOKEN, label: 'Family' }]);
+  assert.equal(C.shareKit.legacyFields(drafted).shareToken, FAMILY_TOKEN);
+  // No links at all says so plainly rather than leaving a dead token behind.
+  assert.deepEqual(C.shareKit.legacyFields([]),
+    { shareToken: '', shareScope: 'trip', shareGuideIds: [], shareHideLodging: false });
+});
+
+test('a rotate touches one link and leaves the others byte-identical', () => {
+  const list = C.shareKit.list([
+    { id: 'r1', token: FAMILY_TOKEN, label: 'Family', hideLodging: false, updated: '2026-08-30T10:00:00.000Z' },
+    { id: 'r2', token: WORK_TOKEN, label: 'Work', scope: 'guides', guideIds: ['g1'], hideLodging: true, updated: '2026-08-29T10:00:00.000Z' }
+  ]);
+  const rotated = 'family-' + 'd'.repeat(32);
+  const after = applyRowPatch(list, 'r1', { token: rotated, updated: '2026-09-01T00:00:00.000Z' });
+  assert.equal(after[0].token, rotated, 'the rotated link gets the new token');
+  assert.deepEqual(after[1], list[1], 'the other link must come through untouched');
+  assert.equal(after.length, 2);
+  // And a delete removes exactly one.
+  const deleted = C.shareKit.list(after.filter(e => e.id !== 'r1'));
+  assert.equal(deleted.length, 1);
+  assert.deepEqual(deleted[0], list[1]);
+});
+
+test('two links pointing at one row are impossible', () => {
+  // Two rows on one token would let a rotate on one silently move the other's
+  // link, which is the exact cross-talk this feature exists to end.
+  const list = C.shareKit.list([
+    { id: 'r1', token: FAMILY_TOKEN, label: 'Family' },
+    { id: 'r2', token: FAMILY_TOKEN, label: 'Copy of family' }
+  ]);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].label, 'Family');
+  // Drafts have no token and never collide with each other.
+  assert.equal(C.shareKit.list([{ label: 'A' }, { label: 'B' }]).length, 2);
+  // Nor do two rows ever answer to one id, or every control would be ambiguous.
+  const dupIds = C.shareKit.list([{ id: 'x', label: 'A' }, { id: 'x', label: 'B' }]);
+  assert.equal(dupIds.length, 2);
+  assert.notEqual(dupIds[0].id, dupIds[1].id);
+});
+
+test('five links is the cap, and the refusal is a sentence, not a silence', () => {
+  assert.equal(C.shareKit.LIST_CAP, 5);
+  const five = [];
+  for (let i = 0; i < 5; i++) five.push({ id: 'r' + i, label: 'Link ' + i });
+  assert.equal(C.shareKit.list(five).length, 5);
+  // A sixth is dropped rather than accepted and then lost on the next read.
+  assert.equal(C.shareKit.list(five.concat([{ id: 'r5', label: 'Six' }])).length, 5);
+  // Below the cap there is nothing to say.
+  assert.equal(C.shareKit.addBlocked(C.shareKit.list(five.slice(0, 4))), '');
+  // At it, the reason names the limit and the way out. A disabled control with
+  // no explanation is the dead end house rules forbid.
+  const why = C.shareKit.addBlocked(C.shareKit.list(five));
+  assert.ok(/5 share links/.test(why), 'the reason must name the limit');
+  assert.ok(/Delete one/.test(why), 'the reason must name the way out');
+});
+
+test('a new link is offered a name, and never one already taken', () => {
+  assert.equal(C.shareKit.suggest([]), 'Family');
+  assert.equal(C.shareKit.suggest([{ label: 'Family' }]), 'Work');
+  // Case-insensitive: somebody who typed "family" is not offered it again.
+  assert.equal(C.shareKit.suggest([{ label: 'family' }, { label: 'WORK' }]), 'Friends');
+  assert.equal(C.shareKit.suggest(
+    C.shareKit.SUGGESTIONS.map(l => ({ label: l }))), 'Link 6');
+});
+
+test('two links with different settings make two different snapshots', () => {
+  // The point of the whole feature, proved on ONE source state: family sees
+  // the flat, work does not, and both are built from the same trip.
+  const family = { id: 'r1', token: FAMILY_TOKEN, label: 'Family', scope: 'trip', guideIds: [], hideLodging: false };
+  const work = { id: 'r2', token: WORK_TOKEN, label: 'Work', scope: 'guides', guideIds: [SHARE_GUIDE_ROW.city_id], hideLodging: true };
+  const forRow = row => C.shareKit.build({
+    travelerName: SHARE_STATE.travelerName,
+    generatedAt: '2026-09-01T00:00:00.000Z',
+    cities: SHARE_STATE.cities,
+    transitions: SHARE_STATE.transitions,
+    hideLodging: row.hideLodging,
+    guides: (row.scope === 'guides') ? [SHARE_GUIDE_ROW] : [],
+    includeGuides: (row.scope === 'guides') ? row.guideIds : []
+  });
+  const famSnap = forRow(family);
+  const workSnap = forRow(work);
+  assert.notDeepEqual(famSnap, workSnap, 'two audiences must not get the same page');
+
+  // Family: the property is named, with its neighbourhood and booking link.
+  const famStay = famSnap.cities[0].accommodations[0];
+  assert.equal(famStay.name, 'Sea View Flat');
+  assert.equal(famStay.neighborhood, 'Old Town');
+  assert.equal(famStay.link, 'https://booking.example/x');
+  assert.equal(famStay.hidden, undefined);
+  assert.equal(famSnap.guides.length, 0, 'family asked for the trip only');
+
+  // Work: the city and the dates survive so the route is legible, and the
+  // property, the neighbourhood, the link and the status are all gone.
+  const workStay = workSnap.cities[0].accommodations[0];
+  assert.equal(workStay.hidden, true);
+  assert.equal(workStay.city, 'Batumi');
+  assert.equal(workStay.checkIn, '2026-08-08');
+  assert.equal(workStay.name, undefined);
+  assert.equal(workStay.neighborhood, undefined);
+  assert.equal(workStay.link, undefined);
+  assert.equal(workStay.status, undefined);
+  assert.equal(workSnap.guides.length, 1, 'work asked for a guide as well');
+
+  // Neither leaks, whichever way the options are set.
+  assert.deepEqual(C.shareKit.leaks(famSnap), []);
+  assert.deepEqual(C.shareKit.leaks(workSnap), []);
+  // Serialized, the hidden one carries no trace of the address anywhere in the
+  // payload. A reader who opens the payload rather than the page has to find
+  // nothing: a render-time filter would already have shipped it.
+  const workJson = JSON.stringify(workSnap);
+  assert.equal(workJson.indexOf('Sea View Flat'), -1,
+    'the flat is named nowhere, the guide\'s own accommodation field included');
+  assert.equal(workJson.indexOf('booking.example'), -1);
+  assert.equal(workJson.indexOf('12 Ninoshvili St'), -1);
+  // The neighbourhood, checked against the trip half. The guide half may say
+  // "Old Town" in a place's own when-hint, which is a public fact about a
+  // restaurant and not a statement about where the traveler sleeps.
+  assert.equal(JSON.stringify(workSnap.cities).indexOf('Old Town'), -1);
+  // And the family one does carry it, so this test can tell the two apart.
+  assert.ok(JSON.stringify(famSnap).indexOf('Sea View Flat') !== -1);
+});
+
+test('a refused share write says which setup step is missing', () => {
+  // The shapes PostgREST returns. A status alone cannot tell a setup step from
+  // a fault, and "publish failed" is not something a user can act on.
+  const dup = JSON.stringify({
+    code: '23505',
+    details: 'Key (user_id)=(3b1e0f5a-0000-4000-8000-000000000000) already exists.',
+    hint: null,
+    message: 'duplicate key value violates unique constraint "shares_user_id_key"'
+  });
+  assert.equal(C.shareKit.writeFailure(409, dup), 'one-share-limit');
+  // The constraint's real name is whatever the original create table produced,
+  // so it is never matched on: the code and the named column are enough.
+  assert.equal(C.shareKit.writeFailure(409, dup.replace('shares_user_id_key', 'shares_owner_uniq')),
+    'one-share-limit');
+  // A table that does not exist at all is a different sentence.
+  assert.equal(C.shareKit.writeFailure(404,
+    JSON.stringify({ code: 'PGRST205', message: "Could not find the table 'public.shares'" })), 'no-table');
+  // Anything else is a fault and is reported as one, never as a setup step.
+  assert.equal(C.shareKit.writeFailure(500, 'upstream exploded'), 'other');
+  assert.equal(C.shareKit.writeFailure(401, JSON.stringify({ message: 'JWT expired' })), 'other');
+  assert.equal(C.shareKit.writeFailure(403, JSON.stringify({ code: '42501', message: 'permission denied' })), 'other');
+  assert.equal(C.shareKit.writeFailure(0, ''), 'other');
+  assert.equal(C.shareKit.writeFailure(undefined, undefined), 'other');
+});
+
+test('the built trip page writes one link at a time, matched on its own token', () => {
+  const trip = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '..', 'trip', 'index.html'), 'utf8');
+  // A new link is an INSERT, never an upsert. An upsert keyed on user_id would
+  // merge the second link into the first one's row and move its token.
+  assert.ok(/function insertShareRow\(token, snapshot\) \{[\s\S]*?method: 'POST'/.test(trip));
+  // (The itinerary and profile tables are still one row per user and still
+  // upsert that way. It is SHARES that stopped being a singular.)
+  assert.equal(trip.indexOf('/rest/v1/shares?on_conflict'), -1,
+    'an upsert on the shares table would let one link overwrite another');
+  // Every other write is matched on the row's OWN token, so it can reach
+  // exactly one row and no other link can be disturbed by it.
+  assert.ok(/PATCH[\s\S]{0,400}token=eq\.' \+ encodeURIComponent\(token\)/.test(trip) ||
+    /'\/rest\/v1\/shares\?select=token&token=eq\.' \+ encodeURIComponent\(token\)/.test(trip),
+    'the update must be matched on the row token');
+  assert.ok(/'\/rest\/v1\/shares\?token=eq\.' \+ encodeURIComponent\(row\.token\)/.test(trip),
+    'the delete must be matched on the row token');
+  // The per-row write is the one expression this file tests above.
+  assert.ok(/shareRows\(\)\.map\(e => \(e\.id === id \? Object\.assign\(\{\}, e, patch\) : e\)\)/.test(trip),
+    'a row write must patch the matching id and copy every other row through');
+  // The label lives in the synced blob and is deliberately not sent, so a
+  // publish works whether or not the new column exists yet.
+  assert.ok(/JSON\.stringify\(\[\{ token: token, data: snapshot, updated_at: new Date\(\)\.toISOString\(\) \}\]\)/.test(trip),
+    'the insert body must carry only token, data and updated_at');
+  // Deleting is destructive, so it keeps its word and its confirm, per row.
+  assert.ok(/del\.textContent = 'Delete';/.test(trip), 'a delete keeps a text label');
+  assert.ok(/armConfirm\('deleteShare:' \+ id/.test(trip), 'a delete is confirmed per row');
+  // At the cap the control goes quiet WITH a reason attached.
+  assert.ok(/add\.disabled = !!blocked \|\| !!_shareBusy;/.test(trip));
+  assert.ok(/add\.title = blocked/.test(trip), 'the disabled control must say why');
+  // And the confirm tells the user the other links are not in the blast radius.
+  assert.ok(/Your other ' \+ others \+ ' link/.test(trip));
+  // The guide checkboxes are filled AFTER the card is in the document. Filled
+  // while it is still detached, the lookup finds nothing and the picker renders
+  // empty, which reads as "you have no city guides". Found in the browser.
+  assert.ok(/host\.appendChild\(card\);\s*\n[\s\S]{0,200}?if \(open && row\.scope === 'guides'\) renderShareGuideList\(row\.id\);/.test(trip),
+    'the guide picker must be filled after its card is appended');
+});
 
 // ---- clean URLs: /trip/ is the address, /trip.html is a stub ----
 // The trip surface moved from /trip.html to the directory /trip/. Two things

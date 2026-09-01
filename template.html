@@ -4218,6 +4218,210 @@ var CityOps = (function () {
     };
   }
 
+  // ---- many links, one account ----
+  //
+  // A share used to be a singular: one token per person, so rotating the link
+  // family holds also killed the link a colleague was sent. It is a LIST now,
+  // and every entry carries its own audience: its own label, its own scope, its
+  // own guide picks, its own "hide where I am staying". A family link that
+  // names the flat and a work link that does not can be alive at the same time.
+  //
+  // The list rides the trip blob, which is what makes it sync. The label in
+  // particular lives HERE and not in the database row: the table gained a label
+  // column in the same migration that lifted the one-per-user constraint, but
+  // the app deliberately never writes it, so publishing works identically
+  // whether or not that column exists yet. See shareWriteFailure below for the
+  // one thing that genuinely does need the migration.
+  var SHARE_LIST_CAP = 5;
+  var SHARE_LABEL_CAP = 32;
+  // Suggestions, in order, for what a new link is for. Rob's two are the first
+  // two on purpose: family sees the bed, work does not.
+  var SHARE_LABEL_SUGGESTIONS = ['Family', 'Work', 'Friends', 'Guests', 'Spare'];
+
+  function shareLabel(v) {
+    return trimStr(v).slice(0, SHARE_LABEL_CAP);
+  }
+
+  // A row id names that row's controls and its DOM nodes, and nothing else. It
+  // is never a secret and never goes in a URL. Restricted to characters that
+  // are safe in an element id and as an object key, so a blob arriving from
+  // anywhere cannot reach past the row it labels.
+  function shareIdOf(v) {
+    return trimStr(v).toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40);
+  }
+
+  // One row of the list, normalized. A row with no token is a DRAFT: it has
+  // been created in the UI and given settings, but nothing has been published
+  // yet, so no link exists. That is a real state and it is kept, because the
+  // alternative is a New-share-link button that publishes before the user has
+  // said what the link should contain.
+  //
+  // A token that does not survive shareTokenValue is dropped rather than
+  // carried: a malformed one names no row the RPC could ever find, so keeping
+  // it would show a link that opens nothing.
+  function shareEntry(raw, fallbackId) {
+    var r = (raw && typeof raw === 'object') ? raw : {};
+    var seen = Object.create(null);
+    var guideIds = (Array.isArray(r.guideIds) ? r.guideIds : []).filter(function (id) {
+      if (typeof id !== 'string' || !id || seen[id]) return false;
+      seen[id] = 1;
+      return true;
+    }).slice(0, SHARE_GUIDE_CAP);
+    return {
+      id: shareIdOf(r.id) || shareIdOf(fallbackId),
+      token: shareTokenValue(r.token),
+      label: shareLabel(r.label),
+      scope: (r.scope === 'guides') ? 'guides' : 'trip',
+      guideIds: guideIds,
+      hideLodging: !!r.hideLodging,
+      updated: shareText(r.updated)
+    };
+  }
+
+  // The whole list, normalized, deduped by token and capped.
+  //
+  // Deduping by token matters because two rows pointing at one database row
+  // would let a rotate on one silently change the other's link, which is the
+  // exact cross-talk this feature exists to end. Drafts (no token) never
+  // collide with each other.
+  //
+  // `idFor(entry, index)` supplies an id to a row that arrived without one.
+  // The default is derived from the token so it is stable across devices and
+  // deterministic in a test; the shell passes a random one for rows it creates.
+  function shareList(raw, idFor) {
+    var make = (typeof idFor === 'function') ? idFor : function (e, i) {
+      return e.token ? 's-' + e.token.slice(-8) : 'draft-' + (i + 1);
+    };
+    var out = [];
+    var seen = Object.create(null);
+    var ids = Object.create(null);
+    (Array.isArray(raw) ? raw : []).forEach(function (r, i) {
+      if (out.length >= SHARE_LIST_CAP) return;
+      var e = shareEntry(r, '');
+      if (e.token) {
+        if (seen[e.token]) return;
+        seen[e.token] = 1;
+      }
+      if (!e.id) e.id = shareIdOf(make(e, i));
+      // Two rows answering to one id would make every per-row control ambiguous.
+      if (!e.id || ids[e.id]) e.id = 'share-' + (i + 1) + '-' + out.length;
+      ids[e.id] = 1;
+      out.push(e);
+    });
+    return out;
+  }
+
+  // Folds a trip blob into the list, whichever shape it is in.
+  //
+  // A blob written by this build carries `shares` and that is the answer, even
+  // when it is empty: an empty list means the user deleted their links, and
+  // resurrecting one from the legacy fields would bring back a link they took
+  // down. Only a blob with NO list at all is read the old way, and then the
+  // single share it describes becomes entry one with its token preserved
+  // exactly, because that token is a link somebody is already holding.
+  //
+  // A blob with neither (a device that never shared) yields an empty list.
+  function migrateShares(blob, idFor) {
+    var b = (blob && typeof blob === 'object') ? blob : {};
+    if (Array.isArray(b.shares)) return shareList(b.shares, idFor);
+    var token = shareTokenValue(b.shareToken);
+    if (!token) return [];
+    return shareList([{
+      token: token,
+      label: shareLabel(b.shareLabel) || SHARE_LABEL_SUGGESTIONS[0],
+      scope: b.shareScope,
+      guideIds: b.shareGuideIds,
+      hideLodging: b.shareHideLodging,
+      updated: b.lastPublishedAt
+    }], idFor);
+  }
+
+  // The reverse fold: what the legacy fields must say so a device still running
+  // the previous build keeps working for one release.
+  //
+  // It mirrors the first PUBLISHED row, not simply the first row, because a
+  // draft has no token and an old device reading a blank one would decide the
+  // share had been taken down and hide its Copy control over a link that is
+  // still live.
+  function shareLegacyFields(list) {
+    var first = null;
+    (Array.isArray(list) ? list : []).forEach(function (e) {
+      if (!first && e && e.token) first = e;
+    });
+    if (!first) {
+      return { shareToken: '', shareScope: 'trip', shareGuideIds: [], shareHideLodging: false };
+    }
+    return {
+      shareToken: first.token,
+      shareScope: (first.scope === 'guides') ? 'guides' : 'trip',
+      shareGuideIds: (first.guideIds || []).slice(),
+      shareHideLodging: !!first.hideLodging
+    };
+  }
+
+  // The name to put in a new row's box: the first suggestion not already taken,
+  // then a numbered fallback. Case-insensitive, so a second "family" is not
+  // offered to somebody who already has "Family".
+  function shareLabelSuggestion(list) {
+    var taken = Object.create(null);
+    (Array.isArray(list) ? list : []).forEach(function (e) {
+      if (e && e.label) taken[e.label.toLowerCase()] = 1;
+    });
+    for (var i = 0; i < SHARE_LABEL_SUGGESTIONS.length; i++) {
+      if (!taken[SHARE_LABEL_SUGGESTIONS[i].toLowerCase()]) return SHARE_LABEL_SUGGESTIONS[i];
+    }
+    var n = (Array.isArray(list) ? list.length : 0) + 1;
+    while (taken[('link ' + n).toLowerCase()]) n++;
+    return 'Link ' + n;
+  }
+
+  // Why another link cannot be made, or '' when it can. A reason, not a
+  // boolean, because the button that goes quiet has to be able to say why:
+  // a disabled control with no explanation is the dead end house rules forbid.
+  function shareAddBlocked(list) {
+    var n = (Array.isArray(list) ? list : []).length;
+    if (n >= SHARE_LIST_CAP) {
+      return 'You have ' + SHARE_LIST_CAP + ' share links, which is the limit. ' +
+        'Delete one you no longer send to make room for another.';
+    }
+    return '';
+  }
+
+  // What a failed share write MEANS, from the status and the body PostgREST
+  // sent. Same shape of decision as refreshFailure above: the status alone
+  // cannot tell a setup step from a fault, and only the body says which.
+  //
+  //   'no-table'         the shares table has not been created at all.
+  //   'one-share-limit'  the table still carries unique(user_id) from before
+  //                      multiple links existed, so the INSERT of a second row
+  //                      hit it. The migration has not been run yet.
+  //   'other'            anything else; the caller shows the raw failure.
+  //
+  // The one-share shape, as PostgREST returns a 23505 (checked against the
+  // documented error mapping; the body is passed through from Postgres):
+  //   409 {"code":"23505","details":"Key (user_id)=(...) already exists.",
+  //        "hint":null,
+  //        "message":"duplicate key value violates unique constraint \"shares_user_id_key\""}
+  // The constraint's real name is whatever the original create table produced,
+  // so it is not matched on: the code, the standard message text, and the fact
+  // that user_id is the column named in the details are what identify it. The
+  // token half cannot be the colliding one, since it is 128 fresh random bits.
+  var SHARE_DUP_CODE_RE = /"code"\s*:\s*"?23505"?/;
+  var SHARE_DUP_TEXT_RE = /duplicate key value violates unique constraint/i;
+  var SHARE_DUP_USER_RE = /user_id/i;
+
+  function shareWriteFailure(status, bodyText) {
+    var s = Number(status);
+    var b = String(bodyText === null || bodyText === undefined ? '' : bodyText);
+    if (s === 404 || /PGRST205/.test(b)) return 'no-table';
+    var dup = SHARE_DUP_CODE_RE.test(b) || SHARE_DUP_TEXT_RE.test(b);
+    if (!dup) return 'other';
+    // Named the user_id column: unambiguous. Or a 409 duplicate on an insert
+    // carrying a fresh token, which by elimination is the same constraint.
+    if (SHARE_DUP_USER_RE.test(b) || s === 409) return 'one-share-limit';
+    return 'other';
+  }
+
   // A last line of defence, not the mechanism. The mechanism is that the
   // builders above copy a fixed field list and nothing else. This is what the
   // test asserts on, and what a future field addition trips over.
@@ -6973,7 +7177,14 @@ var CityOps = (function () {
       tokenFromUrl: shareTokenFromUrl, url: shareUrl,
       publicOrigin: publicOrigin,
       build: buildShareSnapshot, stop: shareStop, stay: shareStay, leg: shareLeg, guide: shareGuide,
-      FORBIDDEN: SHARE_FORBIDDEN, leaks: shareLeaks
+      FORBIDDEN: SHARE_FORBIDDEN, leaks: shareLeaks,
+      // Many links per account, each with its own audience. All pure: the list
+      // lives in the trip blob, the shell owns the rows and the network.
+      LIST_CAP: SHARE_LIST_CAP, LABEL_CAP: SHARE_LABEL_CAP,
+      SUGGESTIONS: SHARE_LABEL_SUGGESTIONS,
+      entry: shareEntry, list: shareList, migrate: migrateShares,
+      legacyFields: shareLegacyFields, suggest: shareLabelSuggestion,
+      addBlocked: shareAddBlocked, writeFailure: shareWriteFailure
     },
     safeHref: safeHref,
     onStateChange: null, liveState: liveState,
