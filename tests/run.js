@@ -3324,6 +3324,177 @@ test('the share page is public-safe: one door, no engine, no worker', () => {
   assert.ok(/const CITYOPS_BASE = 'https:\/\/cityops\.robriggs\.com';/.test(page));
 });
 
+// ---- the read-only contract ----
+// Owner ask 2026-09-01: a share link may let people read the plan and open and
+// close a guide, and nothing else. The page enforces that structurally rather
+// than by hiding controls in CSS, and these are the guards on that.
+
+function sharePageBytes() {
+  const fs = require('fs');
+  const path = require('path');
+  return fs.readFileSync(path.join(__dirname, '..', 'share', 'index.html'), 'utf8');
+}
+
+// The page's whole script, run in Node against a stub DOM, so the render
+// helpers can be called for real instead of pattern-matched. Same idea as
+// tests/harness.js does for the engine: boot() runs, finds no snapshot and no
+// token, draws the "missing code" state into the stubs, and stops there.
+function loadSharePage() {
+  const html = sharePageBytes();
+  const blocks = html.match(/<script>\n([\s\S]*?)\n<\/script>/g) || [];
+  assert.equal(blocks.length, 1, 'the share page should carry exactly one inline script block');
+  const body = blocks[0].replace(/^<script>\n/, '').replace(/\n<\/script>$/, '');
+  const node = () => ({
+    textContent: '', innerHTML: '', hidden: false, href: '', open: false,
+    style: {}, setAttribute() {}, getAttribute() { return null; },
+    querySelector() { return null; }, scrollIntoView() {}, focus() {}
+  });
+  const doc = {
+    getElementById: node, querySelector: node, querySelectorAll: () => [],
+    addEventListener() {}, title: ''
+  };
+  const fn = new Function('document', 'window', 'location', 'fetch', 'L',
+    body + '\nreturn { READ_ONLY: READ_ONLY, deepFreeze: deepFreeze,' +
+    ' cityGuideLink: cityGuideLink, guideCardHTML: guideCardHTML,' +
+    ' guideItemHTML: guideItemHTML, citySlug: citySlug,' +
+    ' setGuideIds: function (v) { GUIDE_IDS = v; } };');
+  return fn(doc, {}, { hash: '', search: '' }, undefined, undefined);
+}
+
+test('the share page ships no control that could change the plan', () => {
+  const page = sharePageBytes();
+  // Reordering, by pointer, by touch and by keyboard. None of the machinery
+  // that makes a card movable may exist here in any spelling.
+  ['draggable', 'dragstart', 'dragover', 'dragend', 'dropEffect', 'ondrop',
+   'pointerdown', 'pointermove', 'touchstart', 'touchmove', 'grip', 'dragrow',
+   'planlist', 'seclist'].forEach(sym => {
+    assert.equal(page.indexOf(sym), -1, 'the share page carries drag machinery: ' + sym);
+  });
+  // Anything that edits: a field to type in, a box to tick, a control row, a
+  // day picker, a status change, a rename, a pin, an add.
+  ['<input', '<textarea', '<select', '<form', 'contenteditable', 'ctl-row',
+   'dayMoveOptions', 'setDay(', 'setStatus(', 'setTitle(', 'togglePin',
+   'newPlaceDelta', 'mergeDelta', 'openMoreSheet'].forEach(sym => {
+    assert.equal(page.indexOf(sym), -1, 'the share page carries an editing path: ' + sym);
+  });
+  // The read-only flag is declared, so the contract is stated in the file the
+  // page ships as, not only in a plan document.
+  assert.ok(/const READ_ONLY = true;/.test(page), 'the read-only declaration is gone');
+  // Exactly two controls a reader can press, and both are navigation: the map
+  // reset that is in the static markup, and the jump to a guide card that is
+  // already on this page, which the renderer builds. Any third button is a
+  // control this page has no business having, so this counts them.
+  const buttons = (page.match(/<button[^>]*class="[^"]*"/g) || [])
+    .map(b => (b.match(/class="([^"]*)"/) || [])[1]);
+  assert.deepEqual(buttons, ['map-reset-btn', 'guide-link jump'],
+    'a button this page should not have: ' + buttons.join(' / '));
+});
+
+test('the browser itself refuses this page any way to write', () => {
+  const page = sharePageBytes();
+  const m = page.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/);
+  assert.ok(m, 'the share page lost its Content-Security-Policy');
+  const csp = m[1];
+  // No form may ever be submitted, and no <base> may redirect a relative URL.
+  assert.ok(/form-action 'none'/.test(csp));
+  assert.ok(/base-uri 'none'/.test(csp));
+  // The ONE origin this page may talk to. Not a wildcard, not the whole web:
+  // if a future edit adds a write call to anywhere else, the browser blocks it
+  // before the request leaves, which is enforcement rather than good intentions.
+  assert.ok(/connect-src https:\/\/ggscdbbvqmqiyguiccrf\.supabase\.co;/.test(csp), csp);
+  assert.ok(/default-src 'none';/.test(csp), csp);
+  // And in the bytes: one fetch, one verb, and the verb is the read RPC's POST.
+  assert.equal((page.match(/fetch\(/g) || []).length, 1, 'the share page makes more than one call');
+  const verbs = page.match(/method: '[A-Z]+'/g) || [];
+  assert.deepEqual(verbs, ["method: 'POST'"], 'the share page uses a write verb: ' + verbs.join(', '));
+  ['PATCH', 'DELETE', 'PUT', 'XMLHttpRequest', 'sendBeacon', 'navigator.send']
+    .forEach(sym => assert.equal(page.indexOf(sym), -1, 'the share page can write: ' + sym));
+});
+
+test('a stop\'s guide door stays on this page and never opens the editor', () => {
+  const page = sharePageBytes();
+  // The bug Rob hit on his first real share: this pill linked to
+  // cityops.robriggs.com/#city=<id>, which on his own signed-in browser opened
+  // his guide in the EDITOR, drag handles and all. A share page may not have a
+  // door into the editor at all. Matched on the code, not on any occurrence of
+  // the string: the file explains this history in prose, and prose is allowed
+  // to name the thing it is explaining.
+  assert.equal(page.indexOf("'/#city='"), -1, 'the editor door is back');
+  assert.ok(!/CITYOPS_BASE \+ ['"]\/#city=/.test(page), 'the editor door is back');
+  assert.ok(!/href=[^>]*#city=/.test(page), 'the editor door is back');
+  // The jump target, and the reason the jump is a button: writing the fragment
+  // would overwrite this page's own share token.
+  assert.ok(/data-guide-id="/.test(page));
+  assert.ok(/function jumpToGuide\(id\)/.test(page));
+  assert.equal(page.indexOf('location.hash ='), -1, 'something writes the fragment the token lives in');
+});
+
+test('the guide door only appears for a guide that is on this page', () => {
+  const S = loadSharePage();
+  assert.equal(S.READ_ONLY, true);
+  const stop = { name: 'Batumi', country: 'GE', checkIn: '2026-08-08', checkOut: '2026-08-15' };
+  // Trip-only snapshot: no guide is embedded, so no guide is promised. The
+  // planner door is offered instead, and it carries nothing of the traveler's.
+  S.setGuideIds([]);
+  const none = S.cityGuideLink(stop);
+  assert.ok(none.indexOf('Plan this city') !== -1, none);
+  assert.ok(none.indexOf('<button') === -1, none);
+  // Guides included: the door is an in-page jump, not a link off this page.
+  S.setGuideIds(['batumi-2026-08-08']);
+  const jump = S.cityGuideLink(stop);
+  assert.ok(/^<button type="button" class="guide-link jump" data-guide="batumi-2026-08-08"/.test(jump), jump);
+  assert.equal(jump.indexOf('href'), -1, jump);
+  assert.equal(jump.indexOf('target='), -1, jump);
+  // A guide dated a day off the check-in is still that city's guide.
+  S.setGuideIds(['batumi-2026-08-09']);
+  assert.ok(S.cityGuideLink(stop).indexOf('data-guide="batumi-2026-08-09"') !== -1);
+  // A different city's guide is not.
+  S.setGuideIds(['tirana-2026-08-08']);
+  assert.ok(S.cityGuideLink(stop).indexOf('Plan this city') !== -1);
+  // A nameless stop gets no door at all rather than a broken one.
+  assert.equal(S.cityGuideLink({ name: '' }), '');
+});
+
+test('a guide renders as an open-and-close card and nothing more', () => {
+  const S = loadSharePage();
+  const html = S.guideCardHTML({
+    id: 'batumi-2026-08-08', name: 'Batumi', country: 'GE',
+    from: '2026-08-08', to: '2026-08-15',
+    sections: [{ id: 'dinner', label: 'Eat & Drink', icon: '🍽' }],
+    items: [{ id: 'i1', section: 'dinner', name: 'Sulico', stars: 4.6, when: 'Evening',
+      price: '~$20', note: 'Book ahead.', verdicts: [{ label: 'Food', text: 'Very good.' }],
+      links: [{ kind: 'map', label: 'Map', href: 'https://maps.example/1' }] }]
+  });
+  // Expand and collapse, natively, with no script and no stored state.
+  assert.ok(/^<details class="guide-card" data-guide-id="batumi-2026-08-08"><summary>/.test(html), html);
+  assert.ok(html.indexOf('</details>') !== -1);
+  // The place, its verdict and its link survive.
+  assert.ok(html.indexOf('Sulico') !== -1);
+  assert.ok(html.indexOf('Very good.') !== -1);
+  assert.ok(html.indexOf('https://maps.example/1') !== -1);
+  // Nothing that could change it does.
+  ['<button', '<input', 'draggable', 'onclick', 'contenteditable', 'ctl-row', 'grip']
+    .forEach(sym => assert.equal(html.indexOf(sym), -1, 'a guide card rendered ' + sym));
+});
+
+test('the snapshot is frozen, so nothing on this page can rewrite the plan', () => {
+  const S = loadSharePage();
+  const snap = { cities: [{ name: 'Batumi', accommodations: [{ name: 'Flat' }] }] };
+  S.deepFreeze(snap);
+  assert.ok(Object.isFrozen(snap));
+  assert.ok(Object.isFrozen(snap.cities));
+  assert.ok(Object.isFrozen(snap.cities[0]));
+  assert.ok(Object.isFrozen(snap.cities[0].accommodations[0]));
+  // A hostile poke from the console changes nothing, in either direction.
+  try { snap.cities[0].name = 'Somewhere else'; } catch (e) { /* strict-mode callers throw */ }
+  try { snap.cities.push({ name: 'Injected' }); } catch (e) { /* ditto */ }
+  assert.equal(snap.cities[0].name, 'Batumi');
+  assert.equal(snap.cities.length, 1);
+  // Null and primitives are handled rather than thrown on.
+  assert.equal(S.deepFreeze(null), null);
+  assert.equal(S.deepFreeze(7), 7);
+});
+
 test('the share page fails soft on a dead token and on a missing function', () => {
   const fs = require('fs');
   const path = require('path');
@@ -3422,7 +3593,7 @@ test('the service worker precaches the share shell and nothing token-shaped', ()
   const sw = fs.readFileSync(path.join(__dirname, '..', 'sw.js'), 'utf8');
   assert.ok(/var SHELL = \['\/', '\/index\.html', '\/trip\/', '\/share\/'\];/.test(sw));
   // Bumped, or a phone serves the previous build once after every release.
-  assert.ok(/var CACHE = 'cityops-app-v9';/.test(sw));
+  assert.ok(/var CACHE = 'cityops-app-v10';/.test(sw));
   // GET only, so the rpc POST that carries the token is never cached, and a
   // rotated share cannot keep answering out of a stale cache.
   assert.ok(/if \(e\.request\.method !== 'GET'\) return;/.test(sw));

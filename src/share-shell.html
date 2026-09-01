@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src https://fonts.gstatic.com; img-src data: https://cdnjs.cloudflare.com https://*.tile.openstreetmap.org; connect-src https://ggscdbbvqmqiyguiccrf.supabase.co; form-action 'none'; base-uri 'none'">
 <title>Travel plan</title>
 <link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%23c72027'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -92,6 +93,14 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); c
 .guide-link:hover { background: var(--accent-soft); }
 .guide-link.plan-link { border-style: dashed; border-color: var(--border); color: var(--text-3); }
 .guide-link.plan-link:hover { border-color: var(--accent); color: var(--accent-strong); background: #fff; }
+/* The in-page jump to an embedded guide. A button rather than an anchor on
+   purpose: this page's own token lives in the URL fragment, so an href="#..."
+   would overwrite it and a reload would then land on "this link is missing its
+   code". A button scrolls without touching the address bar, and is reachable by
+   keyboard and by a screen reader exactly as a link would be. */
+button.guide-link { font: inherit; font-family: 'JetBrains Mono', monospace; font-size: 9px; cursor: pointer;
+  line-height: 1.6; -webkit-appearance: none; appearance: none; }
+.guide-card[data-jumped] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-sm); }
 .current-banner .dates .guide-link { margin-left: 10px; }
 .map-wrap { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow-sm); margin-bottom: 8px; }
 #map { height: 420px; z-index: 1; }
@@ -267,6 +276,55 @@ var SUPA = {
   anon: 'sb_publishable_j3oRAQ-3889fkN26FtaE7g_jMyx1Lda'
 };
 
+// ---- THE READ-ONLY CONTRACT ----
+//
+// Owner ask, 2026-09-01: "the public share view should NOT give viewers the
+// ability to interact with my plan. disable drag & drop. allow viewers to
+// expand/collapse, but not reorder, change days, etc."
+//
+// This page is a viewer, never an editor. The rule it keeps is stronger than
+// "no edit buttons": it renders no control that writes, holds no function that
+// writes, and has no reachable path to one. Enforcement is structural, in four
+// layers, none of them CSS (a display:none control is still there for a
+// keyboard, a screen reader and anyone who opens devtools):
+//
+//   1. Nothing is rendered. Every builder below emits text, links and one
+//      <details>. There is no drag handle, no drag listener, no day picker, no
+//      status control, no rename, no pin, no add-place, no tick box, no field.
+//   2. Nothing is loaded. The editor engine (cityops.js), which is where every
+//      one of those controls lives, does not ship on this page at all.
+//   3. Nothing can be written. The Content-Security-Policy in the head sets
+//      form-action 'none' and confines connect-src to the one Supabase origin,
+//      so the browser itself refuses any request this page did not declare.
+//      The single call this page makes is rpc/get_share, which is a read.
+//   4. Nothing can be changed in place. The snapshot is deep-frozen the moment
+//      it arrives, so a console poke cannot rewrite what is on screen either.
+//
+// What a viewer MAY do: open and close a guide card, pan and zoom the map, and
+// follow a link. Those are navigation, and they change nothing.
+//
+// Collapse state is deliberately NOT remembered between visits. A stranger's
+// browser is not a place to leave anything, which is the same reason this page
+// carries no browser storage and no worker of its own. tests/run.js asserts the
+// absence by searching the shipped bytes, so do not name those APIs even in a
+// note: the test cannot tell a comment from a call, and it is right not to.
+//
+// READ_ONLY is a declaration, not a switch. There is no editing mode to turn
+// on, and adding one would mean undoing all four layers above rather than
+// flipping this. It exists so the contract is stated in the file that ships,
+// and tests/run.js pins it so it cannot be quietly dropped.
+const READ_ONLY = true;
+
+// The snapshot is what the traveler published: a record, not a document. Freeze
+// it so that even inside this page nothing can edit the plan by accident, and
+// so a hostile console session finds nothing to write to.
+function deepFreeze(v) {
+  if (!v || typeof v !== 'object' || Object.isFrozen(v)) return v;
+  Object.freeze(v);
+  Object.keys(v).forEach(function (k) { deepFreeze(v[k]); });
+  return v;
+}
+
 var DATA = null;
 const TODAY = new Date().toISOString().slice(0,10);
 var TRAVELER = 'They';
@@ -284,10 +342,34 @@ function escapeHTML(s) {
 // ---- the two-app seam ----
 // plan-ahead owns getting between cities; cityops owns what to do once you are in
 // one. Every stop therefore offers exactly one door, and which one is a FACT
-// baked in at publish time, not a guess made here: DATA.guideIds is the list of
-// guides the traveller actually has. A stop on that list links straight to its
-// guide; a stop that is not gets "Plan this city", which opens cityops. This page
-// never calls an account, so family see the same thing the traveller does.
+// baked in at publish time, not a guess made here.
+//
+// That door used to be an outbound link into the cityops EDITOR, addressed to
+// the guide by its id, whenever DATA.guideIds said the traveler owned a guide
+// for the stop. (The exact spelling is not written here on purpose: a test
+// searches the shipped bytes for it, and it cannot tell a note from a link.)
+// It was wrong twice over, and the owner hit both on his first real share
+// (2026-09-01):
+//
+//   - For him, signed in on his own browser, it opened his own guide in the
+//     EDITOR, with drag handles, day pickers and status controls. From the seat
+//     of someone reading a share, this page had just handed out an editable
+//     plan. That is the bug he reported.
+//   - For everyone else it opened an empty planner, because a guide lives in
+//     its owner's account and row-level security gives a stranger none of it.
+//     The pill promised a guide and delivered a blank app.
+//
+// So the guide door now points INWARD. A stop whose guide the traveler ticked
+// into this snapshot jumps to that guide's card further down this same page,
+// read-only, no new tab, no editor, nothing that could ever write. A stop with
+// no guide in the snapshot gets "Plan this city", which opens cityops with
+// nothing of the traveler's in it: an honest door to the product, not a promise
+// of a guide that is not here.
+//
+// GUIDE_IDS is therefore the ids of the guides EMBEDDED here, not the ids of
+// every guide the traveler owns. Snapshots published before this change still
+// carry the old guideIds list; it is simply no longer read, which is why an
+// already-published link stops offering the editor without being republished.
 //
 // Slug MUST match cityops' own slug() exactly or a deep link lands on nothing:
 // lowercase, every non-alphanumeric run becomes one hyphen, trim hyphens.
@@ -346,12 +428,41 @@ function cityGuideLink(city) {
   if (!city || !city.name) return '';
   const id = guideIdFor(city.name, city.checkIn);
   if (id) {
-    return '<a class="guide-link" href="' + escapeHTML(CITYOPS_BASE + '/#city=' + encodeURIComponent(id)) +
-      '" target="_blank" rel="noopener noreferrer" title="What to eat, see and do here">City guide ↗</a>';
+    return '<button type="button" class="guide-link jump" data-guide="' + escapeHTML(id) +
+      '" title="Read this city\'s guide, further down this page">City guide &#8595;</button>';
   }
   return '<a class="guide-link plan-link" href="' + escapeHTML(cityPlanLink(city)) +
     '" target="_blank" rel="noopener noreferrer" title="No guide for this stop yet. Opens cityops.">Plan this city ↗</a>';
 }
+
+// The jump itself: open the card if the reader had it closed, put it on screen,
+// and leave the keyboard on its summary so the next Enter closes it again.
+// Delegated, because the cards and the pills are both drawn from strings.
+//
+// It deliberately never writes location.hash. This page's own share token lives
+// in the fragment, and an href="#guide-..." would overwrite it: the page would
+// look fine until the reader hit reload, which would then land on "this link is
+// missing its code" with no way back except finding the original message.
+function jumpToGuide(id) {
+  var cards = document.querySelectorAll('details.guide-card');
+  for (var i = 0; i < cards.length; i++) cards[i].removeAttribute('data-jumped');
+  for (var i = 0; i < cards.length; i++) {
+    if (cards[i].getAttribute('data-guide-id') !== id) continue;
+    cards[i].open = true;
+    cards[i].setAttribute('data-jumped', '1');
+    cards[i].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    var sum = cards[i].querySelector('summary');
+    if (sum && sum.focus) sum.focus({ preventScroll: true });
+    return true;
+  }
+  return false;
+}
+
+document.addEventListener('click', function (e) {
+  var btn = (e.target && e.target.closest) ? e.target.closest('button.guide-link.jump') : null;
+  if (!btn) return;
+  jumpToGuide(btn.getAttribute('data-guide') || '');
+});
 
 // Status -> marker color (mirrors itinerary pill colors). Past trumps status (gray). Current trumps everything (red).
 function colorFor(city, isCurrent) {
@@ -637,7 +748,8 @@ function guideCardHTML(g) {
   if (!body) body = '<div class="empty">Nothing in this guide yet.</div>';
   var dates = (g.from || g.to) ? (fmtDate(g.from) + ' → ' + fmtDate(g.to)) : '';
   var count = (g.items || []).length;
-  return '<details class="guide-card"><summary><span class="g-name">' + escapeHTML(g.name) +
+  return '<details class="guide-card" data-guide-id="' + escapeHTML(g.id) +
+    '"><summary><span class="g-name">' + escapeHTML(g.name) +
     '<span class="country">' + escapeHTML(g.country) + '</span></span>' +
     '<span class="g-meta">' + (dates ? escapeHTML(dates) + ' · ' : '') + count + ' place' + (count === 1 ? '' : 's') + ' · tap to open</span>' +
     '</summary><div class="g-body">' + body + '</div></details>';
@@ -720,7 +832,12 @@ function fetchShare(token) {
 }
 
 function start() {
-  GUIDE_IDS = Array.isArray(DATA.guideIds) ? DATA.guideIds : [];
+  deepFreeze(DATA);
+  // The guides that are actually ON this page, which is the only list a stop's
+  // guide door may be drawn from. DATA.guideIds (every guide the traveler owns)
+  // is not read any more: see the two-app seam note above.
+  GUIDE_IDS = (Array.isArray(DATA.guides) ? DATA.guides : [])
+    .map(function (g) { return (g && g.id) || ''; }).filter(Boolean);
   TRAVELER = (DATA.travelerName && DATA.travelerName.trim()) || 'They';
   document.title = TRAVELER + ' · Travel plan';
   var initial = (TRAVELER.charAt(0) || 'R').toUpperCase();
