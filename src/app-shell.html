@@ -3646,10 +3646,11 @@
   // never carry it, so it decorates #foot here rather than in the engine.
   function decorateFoot() {
     var foot = document.getElementById('foot');
-    if (!foot || foot.querySelector('.foot-wheres')) return;
+    if (!foot || foot.querySelector('.foot-sample')) return;
     // Two links, two different things: Trip is the other half of THIS app
-    // (same origin, same sign-in), and wheres is the read-only page the family
-    // watches. Naming both here keeps the footer honest about which is which.
+    // (same origin, same sign-in), and the sample plan is a frozen read-only
+    // share page anyone can open. Naming both here keeps the footer honest
+    // about which is which.
     foot.appendChild(document.createTextNode(' · '));
     // Sentence case, like every other label on this line (owner: "don't use
     // all caps", and a lone lowercase "trip" beside "Feedback and
@@ -3658,9 +3659,15 @@
     t.href = '/trip/';
     t.title = 'Your trip: stops, stays and travel legs';
     foot.appendChild(t);
-    foot.appendChild(document.createTextNode(' · Family: '));
-    var a = el('a', 'foot-wheres', 'wheres.robriggs.com');
-    a.href = 'https://wheres.robriggs.com';
+    // This used to name the owner's own family itinerary page. That was fine
+    // while he was the only user and wrong the moment strangers could sign up:
+    // every account would have been shown one person's private travel link.
+    // Removed 2026-09-01, replaced by the public sample plan, which is what a
+    // reader actually wants from this slot: a look at what a shared plan is.
+    foot.appendChild(document.createTextNode(' · '));
+    var a = el('a', 'foot-sample', 'Sample plan');
+    a.href = 'https://nomadding.com/demo/';
+    a.title = 'A read-only example plan, no account needed';
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
     foot.appendChild(a);

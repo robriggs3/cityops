@@ -3381,9 +3381,13 @@ var CityOps = (function () {
   //                 opens the guide half on whatever city it was last showing.
   //
   // The order is deliberate: the stop you are STANDING IN first, then the
-  // ones ahead of you in date order. With Rob's data on 2026-08-27 (in Tirana
-  // until the 29th, Tirana's guide removed, Ksamil ahead) that lands on
-  // Ksamil, which is the guide he would actually want open.
+  // ones ahead of you in date order. The case that fixed the order: a traveler
+  // standing in a city whose own guide has been removed, with the next stop
+  // starting in two days. The door lands on the NEXT stop's guide, which is
+  // the one they would actually want open, rather than on nothing.
+  // (The worked example here used to name the owner's real city and dates on a
+  // real day. It was the shipped bytes of a public app saying where one person
+  // was sleeping that week; generalised 2026-09-01.)
   function resolveGuideDoor(stops, index, todayIsoStr) {
     var today = todayIsoStr || todayIso();
     var named = (Array.isArray(stops) ? stops : []).filter(function (c) {

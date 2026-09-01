@@ -3527,9 +3527,13 @@ var CityOps = (function () {
   //                 opens the guide half on whatever city it was last showing.
   //
   // The order is deliberate: the stop you are STANDING IN first, then the
-  // ones ahead of you in date order. With Rob's data on 2026-08-27 (in Tirana
-  // until the 29th, Tirana's guide removed, Ksamil ahead) that lands on
-  // Ksamil, which is the guide he would actually want open.
+  // ones ahead of you in date order. The case that fixed the order: a traveler
+  // standing in a city whose own guide has been removed, with the next stop
+  // starting in two days. The door lands on the NEXT stop's guide, which is
+  // the one they would actually want open, rather than on nothing.
+  // (The worked example here used to name the owner's real city and dates on a
+  // real day. It was the shipped bytes of a public app saying where one person
+  // was sleeping that week; generalised 2026-09-01.)
   function resolveGuideDoor(stops, index, todayIsoStr) {
     var today = todayIsoStr || todayIso();
     var named = (Array.isArray(stops) ? stops : []).filter(function (c) {
@@ -11067,9 +11071,13 @@ var CityOps = (function () {
   //                 opens the guide half on whatever city it was last showing.
   //
   // The order is deliberate: the stop you are STANDING IN first, then the
-  // ones ahead of you in date order. With Rob's data on 2026-08-27 (in Tirana
-  // until the 29th, Tirana's guide removed, Ksamil ahead) that lands on
-  // Ksamil, which is the guide he would actually want open.
+  // ones ahead of you in date order. The case that fixed the order: a traveler
+  // standing in a city whose own guide has been removed, with the next stop
+  // starting in two days. The door lands on the NEXT stop's guide, which is
+  // the one they would actually want open, rather than on nothing.
+  // (The worked example here used to name the owner's real city and dates on a
+  // real day. It was the shipped bytes of a public app saying where one person
+  // was sleeping that week; generalised 2026-09-01.)
   function resolveGuideDoor(stops, index, todayIsoStr) {
     var today = todayIsoStr || todayIso();
     var named = (Array.isArray(stops) ? stops : []).filter(function (c) {
@@ -19419,10 +19427,11 @@ only judges it. `ratings` may be omitted when you could not verify the place;
   // never carry it, so it decorates #foot here rather than in the engine.
   function decorateFoot() {
     var foot = document.getElementById('foot');
-    if (!foot || foot.querySelector('.foot-wheres')) return;
+    if (!foot || foot.querySelector('.foot-sample')) return;
     // Two links, two different things: Trip is the other half of THIS app
-    // (same origin, same sign-in), and wheres is the read-only page the family
-    // watches. Naming both here keeps the footer honest about which is which.
+    // (same origin, same sign-in), and the sample plan is a frozen read-only
+    // share page anyone can open. Naming both here keeps the footer honest
+    // about which is which.
     foot.appendChild(document.createTextNode(' · '));
     // Sentence case, like every other label on this line (owner: "don't use
     // all caps", and a lone lowercase "trip" beside "Feedback and
@@ -19431,9 +19440,15 @@ only judges it. `ratings` may be omitted when you could not verify the place;
     t.href = '/trip/';
     t.title = 'Your trip: stops, stays and travel legs';
     foot.appendChild(t);
-    foot.appendChild(document.createTextNode(' · Family: '));
-    var a = el('a', 'foot-wheres', 'wheres.robriggs.com');
-    a.href = 'https://wheres.robriggs.com';
+    // This used to name the owner's own family itinerary page. That was fine
+    // while he was the only user and wrong the moment strangers could sign up:
+    // every account would have been shown one person's private travel link.
+    // Removed 2026-09-01, replaced by the public sample plan, which is what a
+    // reader actually wants from this slot: a look at what a shared plan is.
+    foot.appendChild(document.createTextNode(' · '));
+    var a = el('a', 'foot-sample', 'Sample plan');
+    a.href = 'https://nomadding.com/demo/';
+    a.title = 'A read-only example plan, no account needed';
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
     foot.appendChild(a);

@@ -3924,7 +3924,10 @@ test('the service worker precaches the share shell and nothing token-shaped', ()
   // is low by one day per stop, on the screen Rob makes visa decisions from.
   // The share SHELL is precached too, so v13 would also keep rendering
   // published verdicts with no Must/Good/Skip on them.
-  assert.ok(/var CACHE = 'cityops-app-v14';/.test(sw));
+  // v15: the owner's personal itinerary link came out of both footers. Without
+  // the bump a phone keeps serving the build that still has it, which is the
+  // one build nobody should be handed once sign-ups are open.
+  assert.ok(/var CACHE = 'cityops-app-v15';/.test(sw));
   // GET only, so the rpc POST that carries the token is never cached, and a
   // rotated share cannot keep answering out of a stale cache.
   assert.ok(/if \(e\.request\.method !== 'GET'\) return;/.test(sw));
@@ -6372,6 +6375,54 @@ test('the AI copy says which path can actually search the web', () => {
   // The Enrich modal closed with a promise that three working buttons above it
   // had already kept.
   assert.equal(app.indexOf('In-app research is planned for a future version'), -1);
+});
+
+// ---- no owner's personal address ships to strangers ----
+//
+// Until 2026-09-01 both footers linked wheres.robriggs.com, the owner's own
+// family itinerary page, and the trip footer carried a personal-site byline.
+// That was harmless while he was the only account and wrong the moment public
+// sign-ups open: every stranger would have been handed one person's private
+// travel link on every screen.
+//
+// This asserts on the SHIPPED bytes rather than on src/, because shipped is
+// what a browser downloads: the engine is inlined into four of these files, so
+// a personal link reintroduced anywhere upstream lands here. sw.js and the
+// trip.html redirect stub are in the list because they are served too.
+//
+// robriggs3 (the GitHub account) is deliberately NOT caught: the repo, the
+// issue tracker and the star link are the public project, not a private page.
+// The needle is the personal DOMAIN, so github.com/robriggs3/... passes and
+// anything at robriggs.com fails.
+test('no shipped surface links the owner personal pages', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const root = path.join(__dirname, '..');
+  const surfaces = [
+    'index.html', 'trip/index.html', 'share/index.html',
+    'template.html', 'example.html', 'sw.js', 'trip.html'
+  ];
+  // Each needle with the reason it is banned, so a failure says what to do.
+  const banned = [
+    ['robriggs.com', 'the personal domain (wheres, cityops or the byline)'],
+    ['robs-travel-itinerary', 'the retired family-page filename']
+  ];
+  surfaces.forEach(function (rel) {
+    const text = fs.readFileSync(path.join(root, rel), 'utf8');
+    banned.forEach(function (pair) {
+      assert.equal(text.indexOf(pair[0]), -1,
+        rel + ' ships "' + pair[0] + '": ' + pair[1] +
+        '. Strangers see this. Remove it from src/ and re-run tools/assemble.js.');
+    });
+  });
+  // And the replacement is actually there, in both footers, or the sweep would
+  // pass just as well on a footer with a hole in it.
+  const app = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const trip = fs.readFileSync(path.join(root, 'trip', 'index.html'), 'utf8');
+  assert.ok(app.indexOf('https://nomadding.com/demo/') !== -1,
+    'the city app footer lost its sample-plan link');
+  assert.ok(trip.indexOf('https://nomadding.com/demo/') !== -1,
+    'the trip footer lost its sample-plan link');
 });
 
 // The async tests above resolve on a microtask, so the summary has to wait
