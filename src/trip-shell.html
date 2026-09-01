@@ -5135,7 +5135,7 @@ function updateTravelerName(v) {
 //
 // One Publish concept and one door. Publishing writes a SNAPSHOT of the chosen
 // data into public.shares under an unguessable token, and the link is
-// cityops.robriggs.com/share/#<token>. Family need no account, no app and no
+// <the app's host>/share/#<token>. Family need no account, no app and no
 // sign-in. Rotating writes a new token onto the same row, which kills the old
 // link the instant it lands. Unpublishing deletes the row.
 //
@@ -5143,10 +5143,18 @@ function updateTravelerName(v) {
 // CityOps.shareKit, where it is pure and unit tested. This file is transport,
 // storage and UI, exactly as with sync.
 
-// The link family will hold. Deliberately a constant rather than
-// location.origin: Rob may publish from a preview host or a local copy one day,
-// and a link that only resolves on his machine is worse than no link at all.
-const SHARE_ORIGIN = 'https://cityops.robriggs.com';
+// The link family will hold. Derived from where the app is actually being
+// served, so the host lives in DNS and in CNAME rather than in this file, and
+// the next time the app moves every new link follows it for free.
+//
+// The old reasoning is not discarded, it is enforced one level down:
+// shareKit.publicOrigin refuses anything family could not open (http, file://,
+// localhost, 127.0.0.1) and hands back the constant below instead. Publishing
+// from a preview host or a local copy therefore still produces the canonical
+// link, never one that only resolves on Rob's machine. That rule is pure and
+// unit tested in the engine rather than trusted here.
+const SHARE_FALLBACK_ORIGIN = 'https://app.nomadding.com';
+const SHARE_ORIGIN = CityOps.shareKit.publicOrigin(location.origin, SHARE_FALLBACK_ORIGIN);
 
 let _shareBusy = false;
 let _guideRows = null;      // [{city_id, data}] once read, for the picker and the publish

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://cityops.robriggs.com/schema/cityops.schema.json",
+  "$id": "https://app.nomadding.com/schema/cityops.schema.json",
   "title": "CityOps city guide (schema v1)",
   "description": "The interchange contract for CityOps city data: standalone guides, the app, exports, sync rows, and AI-generated payloads all read and write this shape. NOTE ON AUTHORITY: the runtime validator (src/cityops.js: validate/validateItem/validateIntel) is the enforcement boundary and is deliberately a permissive subset of this document. Enforced at runtime: root/schema/city.name/city.dates presence, sections id+label, item id uniqueness and section references, status enum, item day format, and the full intel and rating rules. Documented here but tolerated at runtime (advisory): links[].kind and hours.class enums, city.dates format, place_id/verified presence, and all optional field shapes. One rule points the other way: item id uniqueness across the items array is enforced at runtime but is not expressible in JSON Schema.",
   "type": "object",

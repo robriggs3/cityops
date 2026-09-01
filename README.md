@@ -13,8 +13,8 @@ plans reorder, options die ("full tonight"), backups get promoted, and
 half the value is discovered on the ground. CityOps owns the layer between
 AI research and the actual week: a guide with a working memory.
 
-**Live app:** [cityops.robriggs.com](https://cityops.robriggs.com) ·
-**Example guide:** [example.html](https://cityops.robriggs.com/example.html) ·
+**Live app:** [app.nomadding.com](https://app.nomadding.com) ·
+**Example guide:** [example.html](https://app.nomadding.com/example.html) ·
 **Deep dive:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 This public repo ships the app plus one bundled example city. The real
@@ -71,7 +71,7 @@ code.
    offline once loaded, phone-friendly.
 
 Or skip the file entirely: open the
-[app](https://cityops.robriggs.com), tap the city name, **+ Add city**,
+[app](https://app.nomadding.com), tap the city name, **+ Add city**,
 and either paste generated JSON or start a blank city from a name and
 dates. **Build my prompt** assembles step 2 for you, with your saved
 interest profile included.

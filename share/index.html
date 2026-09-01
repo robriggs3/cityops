@@ -215,7 +215,7 @@ null
   <div class="mark" id="state-mark">·</div>
   <h1 id="state-title"></h1>
   <p id="state-body"></p>
-  <a class="go" id="state-go" href="https://cityops.robriggs.com" target="_blank" rel="noopener noreferrer">Open CityOps &#8599;</a>
+  <a class="go" id="state-go" href="https://app.nomadding.com" target="_blank" rel="noopener noreferrer">Open CityOps &#8599;</a>
 </div>
 
 <div class="doc" id="doc" hidden>
@@ -224,7 +224,7 @@ null
     <div class="sub" id="cover-meta">Loading…</div>
     <div class="facts">
       <span class="chip gen-date" id="gen-date"></span>
-      <a class="chip door" href="https://cityops.robriggs.com" target="_blank" rel="noopener noreferrer">City guides &#8599;</a>
+      <a class="chip door" id="guides-door" href="https://app.nomadding.com" target="_blank" rel="noopener noreferrer">City guides &#8599;</a>
     </div>
   </header>
 
@@ -381,7 +381,25 @@ function escapeHTML(s) {
 // file is also downloaded and opened over file://, where a root-absolute "/"
 // means the disk root. One absolute origin is the only spelling that is right
 // in both lives.
-const CITYOPS_BASE = 'https://cityops.robriggs.com';
+//
+// Which absolute origin is now DERIVED, so the app moving host (it did, on
+// 2026-09-01) does not leave dead doors on a share page that was published
+// before the move. Served over http(s) the doors
+// point back at whatever host served this page, which is by definition the
+// host the app is on. The constant is the fallback for the file:// life, where
+// there is no origin to derive from and a relative door is a dead door.
+//
+// The engine has the same rule as a pure, unit-tested function
+// (shareKit.publicOrigin). This page cannot call it: it deliberately ships
+// without the engine, because it is a read-only page for people with no
+// account and 280KB of editor would have nothing to do here. Hence the small
+// inline twin. It is deliberately LOOSER than the engine's: publicOrigin
+// guards a link that gets SENT to other people, while this one only points
+// doors on a page you are already looking at, so a local dev copy correctly
+// keeps its doors local.
+const CITYOPS_FALLBACK = 'https://app.nomadding.com';
+const CITYOPS_BASE = /^https?:\/\/[^\/?#]+$/.test(String((location && location.origin) || ''))
+  ? location.origin : CITYOPS_FALLBACK;
 var GUIDE_IDS = [];
 
 function citySlug(name) {
@@ -854,7 +872,20 @@ function start() {
   renderGuides();
 }
 
+// The two doors that are written in the HTML rather than built by render().
+// Their href attributes carry the canonical host so a reader with no JS still
+// gets a real address; this moves them onto the derived one, which is the same
+// host in the served life and the right answer in every other life. Done once,
+// at boot, before either can be shown.
+function pointStaticDoors() {
+  ['state-go', 'guides-door'].forEach(function (id) {
+    var a = document.getElementById(id);
+    if (a) a.href = CITYOPS_BASE;
+  });
+}
+
 function boot() {
+  pointStaticDoors();
   var embedded = readEmbedded();
   if (embedded) { DATA = embedded; start(); return; }
 

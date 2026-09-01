@@ -5184,6 +5184,34 @@ var CityOps = (function () {
     return trimStr(origin).replace(/\/+$/, '') + '/share/#' + trimStr(token);
   }
 
+  // The origin a share link may be built on, or the fallback.
+  //
+  // A share link is read by FAMILY, on their phone, days after it was sent. So
+  // the only origin worth putting in one is an origin that resolves for
+  // somebody who is not us: https, and not a loopback name. http, file://,
+  // localhost and 127.0.0.1 all fall back, because a link that only opens on
+  // the machine that made it is worse than no link at all. That was the whole
+  // argument for hardcoding this, and it is preserved here rather than lost.
+  //
+  // What deriving buys, and it is not hypothetical: the app moved host once
+  // already (2026-09-01) and every link built before the move died with it,
+  // because the host was a constant in a shipped file. Derived, the next move
+  // costs nothing and no already-published token has to be rotated to follow
+  // it. The retired address is deliberately not written out anywhere here: a
+  // test asserts no shipped byte still names it.
+  //
+  // Takes the origin as an argument rather than reading location itself so it
+  // stays pure and testable; the caller passes location.origin.
+  function publicOrigin(origin, fallback) {
+    var o = trimStr(origin);
+    var m = o.match(/^https:\/\/(\[[^\]]+\]|[^:\/?#]+)(?::\d+)?$/);
+    if (!m) return fallback;
+    var host = m[1].toLowerCase();
+    if (host === 'localhost' || /\.localhost$/.test(host) ||
+        host === '127.0.0.1' || host === '[::1]') return fallback;
+    return o;
+  }
+
   // One stop on the trip, as family sees it.
   //
   // What is DROPPED here is the point of the function. Cost, the nightly rate,
@@ -8079,6 +8107,7 @@ var CityOps = (function () {
     shareKit: {
       SCHEMA: SHARE_SCHEMA, TOKEN_BYTES: SHARE_TOKEN_BYTES, GUIDE_CAP: SHARE_GUIDE_CAP,
       token: shareToken, tokenFromUrl: shareTokenFromUrl, url: shareUrl,
+      publicOrigin: publicOrigin,
       build: buildShareSnapshot, stop: shareStop, leg: shareLeg, guide: shareGuide,
       FORBIDDEN: SHARE_FORBIDDEN, leaks: shareLeaks
     },
@@ -8375,7 +8404,7 @@ __SHARE_DATA__
   <div class="mark" id="state-mark">·</div>
   <h1 id="state-title"></h1>
   <p id="state-body"></p>
-  <a class="go" id="state-go" href="https://cityops.robriggs.com" target="_blank" rel="noopener noreferrer">Open CityOps &#8599;</a>
+  <a class="go" id="state-go" href="https://app.nomadding.com" target="_blank" rel="noopener noreferrer">Open CityOps &#8599;</a>
 </div>
 
 <div class="doc" id="doc" hidden>
@@ -8384,7 +8413,7 @@ __SHARE_DATA__
     <div class="sub" id="cover-meta">Loading…</div>
     <div class="facts">
       <span class="chip gen-date" id="gen-date"></span>
-      <a class="chip door" href="https://cityops.robriggs.com" target="_blank" rel="noopener noreferrer">City guides &#8599;</a>
+      <a class="chip door" id="guides-door" href="https://app.nomadding.com" target="_blank" rel="noopener noreferrer">City guides &#8599;</a>
     </div>
   </header>
 
@@ -8541,7 +8570,25 @@ function escapeHTML(s) {
 // file is also downloaded and opened over file://, where a root-absolute "/"
 // means the disk root. One absolute origin is the only spelling that is right
 // in both lives.
-const CITYOPS_BASE = 'https://cityops.robriggs.com';
+//
+// Which absolute origin is now DERIVED, so the app moving host (it did, on
+// 2026-09-01) does not leave dead doors on a share page that was published
+// before the move. Served over http(s) the doors
+// point back at whatever host served this page, which is by definition the
+// host the app is on. The constant is the fallback for the file:// life, where
+// there is no origin to derive from and a relative door is a dead door.
+//
+// The engine has the same rule as a pure, unit-tested function
+// (shareKit.publicOrigin). This page cannot call it: it deliberately ships
+// without the engine, because it is a read-only page for people with no
+// account and 280KB of editor would have nothing to do here. Hence the small
+// inline twin. It is deliberately LOOSER than the engine's: publicOrigin
+// guards a link that gets SENT to other people, while this one only points
+// doors on a page you are already looking at, so a local dev copy correctly
+// keeps its doors local.
+const CITYOPS_FALLBACK = 'https://app.nomadding.com';
+const CITYOPS_BASE = /^https?:\/\/[^\/?#]+$/.test(String((location && location.origin) || ''))
+  ? location.origin : CITYOPS_FALLBACK;
 var GUIDE_IDS = [];
 
 function citySlug(name) {
@@ -9014,7 +9061,20 @@ function start() {
   renderGuides();
 }
 
+// The two doors that are written in the HTML rather than built by render().
+// Their href attributes carry the canonical host so a reader with no JS still
+// gets a real address; this moves them onto the derived one, which is the same
+// host in the served life and the right answer in every other life. Done once,
+// at boot, before either can be shown.
+function pointStaticDoors() {
+  ['state-go', 'guides-door'].forEach(function (id) {
+    var a = document.getElementById(id);
+    if (a) a.href = CITYOPS_BASE;
+  });
+}
+
 function boot() {
+  pointStaticDoors();
   var embedded = readEmbedded();
   if (embedded) { DATA = embedded; start(); return; }
 
@@ -12286,7 +12346,7 @@ function updateTravelerName(v) {
 //
 // One Publish concept and one door. Publishing writes a SNAPSHOT of the chosen
 // data into public.shares under an unguessable token, and the link is
-// cityops.robriggs.com/share/#<token>. Family need no account, no app and no
+// <the app's host>/share/#<token>. Family need no account, no app and no
 // sign-in. Rotating writes a new token onto the same row, which kills the old
 // link the instant it lands. Unpublishing deletes the row.
 //
@@ -12294,10 +12354,18 @@ function updateTravelerName(v) {
 // CityOps.shareKit, where it is pure and unit tested. This file is transport,
 // storage and UI, exactly as with sync.
 
-// The link family will hold. Deliberately a constant rather than
-// location.origin: Rob may publish from a preview host or a local copy one day,
-// and a link that only resolves on his machine is worse than no link at all.
-const SHARE_ORIGIN = 'https://cityops.robriggs.com';
+// The link family will hold. Derived from where the app is actually being
+// served, so the host lives in DNS and in CNAME rather than in this file, and
+// the next time the app moves every new link follows it for free.
+//
+// The old reasoning is not discarded, it is enforced one level down:
+// shareKit.publicOrigin refuses anything family could not open (http, file://,
+// localhost, 127.0.0.1) and hands back the constant below instead. Publishing
+// from a preview host or a local copy therefore still produces the canonical
+// link, never one that only resolves on Rob's machine. That rule is pure and
+// unit tested in the engine rather than trusted here.
+const SHARE_FALLBACK_ORIGIN = 'https://app.nomadding.com';
+const SHARE_ORIGIN = CityOps.shareKit.publicOrigin(location.origin, SHARE_FALLBACK_ORIGIN);
 
 let _shareBusy = false;
 let _guideRows = null;      // [{city_id, data}] once read, for the picker and the publish

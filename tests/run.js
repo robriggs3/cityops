@@ -3049,7 +3049,7 @@ test('the built trip page is the engine plus the shell, and nothing else', () =>
   // Root-absolute and EMPTY, not '.': every use appends '/', and from /trip/ a
   // '.' base would resolve the guide doors back onto this same page.
   assert.ok(/const CITYOPS_BASE = '';/.test(trip));
-  assert.equal(trip.indexOf('https://cityops.robriggs.com/#city='), -1);
+  assert.equal(trip.indexOf('https://app.nomadding.com/#city='), -1);
 });
 
 // ---------------------------------------------------------------------------
@@ -3072,11 +3072,11 @@ test('a share token is 32 hex characters, and refuses a weak source', () => {
 });
 
 test('the share URL is the fragment form, so the token never leaves the browser', () => {
-  const url = C.shareKit.url('https://cityops.robriggs.com', 'a'.repeat(32));
-  assert.equal(url, 'https://cityops.robriggs.com/share/#' + 'a'.repeat(32));
+  const url = C.shareKit.url('https://app.nomadding.com', 'a'.repeat(32));
+  assert.equal(url, 'https://app.nomadding.com/share/#' + 'a'.repeat(32));
   // A trailing slash on the origin must not double up.
-  assert.equal(C.shareKit.url('https://cityops.robriggs.com/', 'b'.repeat(32)),
-    'https://cityops.robriggs.com/share/#' + 'b'.repeat(32));
+  assert.equal(C.shareKit.url('https://app.nomadding.com/', 'b'.repeat(32)),
+    'https://app.nomadding.com/share/#' + 'b'.repeat(32));
 });
 
 // The fixture table both parsers have to agree on. The engine owns the rule and
@@ -3321,7 +3321,14 @@ test('the share page is public-safe: one door, no engine, no worker', () => {
   assert.ok(/<meta name="robots" content="noindex, nofollow">/.test(page));
   // Absolute doors, per the Phase A lesson: this page sits at /share/, and a
   // relative base would resolve every guide link one level down into nothing.
-  assert.ok(/const CITYOPS_BASE = 'https:\/\/cityops\.robriggs\.com';/.test(page));
+  // The base is derived from the serving origin now (2026-09-01, so a host move
+  // cannot leave dead doors on an already-published share), but the FALLBACK it
+  // lands on when there is no origin to derive from, which is the downloaded
+  // file:// life, still has to be absolute or that lesson is undone.
+  assert.ok(/const CITYOPS_FALLBACK = 'https:\/\/[a-z0-9.-]+';/.test(page),
+    'the share page fallback base must be an absolute origin');
+  assert.equal(page.indexOf("const CITYOPS_BASE = '"), -1,
+    'the share page base must be derived, not a literal');
 });
 
 // ---- the read-only contract ----
@@ -3593,7 +3600,9 @@ test('the service worker precaches the share shell and nothing token-shaped', ()
   const sw = fs.readFileSync(path.join(__dirname, '..', 'sw.js'), 'utf8');
   assert.ok(/var SHELL = \['\/', '\/index\.html', '\/trip\/', '\/share\/'\];/.test(sw));
   // Bumped, or a phone serves the previous build once after every release.
-  assert.ok(/var CACHE = 'cityops-app-v10';/.test(sw));
+  // v11: the 2026-09-01 host move. A new origin gets a clean cache anyway, but
+  // the laptop and phone that follow the app across still need the bump.
+  assert.ok(/var CACHE = 'cityops-app-v11';/.test(sw));
   // GET only, so the rpc POST that carries the token is never cached, and a
   // rotated share cannot keep answering out of a stale cache.
   assert.ok(/if \(e\.request\.method !== 'GET'\) return;/.test(sw));
@@ -5318,6 +5327,113 @@ test('an explicit #city= hash always beats the calendar pick', () => {
   assert.equal(C.appStore.resolveStartCity(store, null, 'nowhere'), 'batumi');
 });
 
+
+// ==================== HOST INDEPENDENCE ====================
+// Added with the 2026-09-01 move from cityops.robriggs.com to app.nomadding.com.
+//
+// That move cost a sweep of eleven files and it broke a share link that had
+// already been sent, because the app's own hostname was written into shipped
+// bytes in four places. These tests exist so the NEXT move is a DNS change and
+// a one-line CNAME, and so a hardcoded host cannot creep back in unnoticed.
+
+// The pure rule, on its own. This is what stops a share link being built on an
+// address only the machine that made it can open.
+test('publicOrigin keeps a real https origin', () => {
+  const FB = 'https://app.nomadding.com';
+  assert.equal(C.shareKit.publicOrigin('https://app.nomadding.com', FB), 'https://app.nomadding.com');
+  assert.equal(C.shareKit.publicOrigin('https://preview.example.dev', FB), 'https://preview.example.dev');
+  // A port is part of a perfectly real public origin.
+  assert.equal(C.shareKit.publicOrigin('https://example.com:8443', FB), 'https://example.com:8443');
+});
+
+test('publicOrigin falls back to anything family could not open', () => {
+  const FB = 'https://app.nomadding.com';
+  // No TLS: a link family taps is a link over the open internet.
+  assert.equal(C.shareKit.publicOrigin('http://app.nomadding.com', FB), FB);
+  // The local lives: dev server, loopback, and a downloaded file.
+  assert.equal(C.shareKit.publicOrigin('http://localhost:8080', FB), FB);
+  assert.equal(C.shareKit.publicOrigin('https://localhost:8443', FB), FB);
+  assert.equal(C.shareKit.publicOrigin('https://app.localhost', FB), FB);
+  assert.equal(C.shareKit.publicOrigin('https://127.0.0.1:4000', FB), FB);
+  assert.equal(C.shareKit.publicOrigin('https://[::1]:4000', FB), FB);
+  assert.equal(C.shareKit.publicOrigin('file://', FB), FB);
+  // "null" is the literal string a browser hands back for a file:// origin.
+  assert.equal(C.shareKit.publicOrigin('null', FB), FB);
+  assert.equal(C.shareKit.publicOrigin('', FB), FB);
+  assert.equal(C.shareKit.publicOrigin(undefined, FB), FB);
+  // An origin is a scheme and a host, nothing more. Anything carrying a path,
+  // a query or a fragment is not one and is not trusted to be one.
+  assert.equal(C.shareKit.publicOrigin('https://app.nomadding.com/trip/', FB), FB);
+  assert.equal(C.shareKit.publicOrigin('https://app.nomadding.com?x=1', FB), FB);
+});
+
+test('publicOrigin composes into a share URL family can open', () => {
+  const FB = 'https://app.nomadding.com';
+  const tok = 'a'.repeat(32);
+  assert.equal(C.shareKit.url(C.shareKit.publicOrigin('https://app.nomadding.com', FB), tok),
+    'https://app.nomadding.com/share/#' + tok);
+  // Published from a laptop dev copy, the link is still the canonical one.
+  assert.equal(C.shareKit.url(C.shareKit.publicOrigin('http://localhost:8899', FB), tok),
+    'https://app.nomadding.com/share/#' + tok);
+});
+
+// The bytes that actually ship. Reading the built files rather than src/ is the
+// point: the drift guard proves built matches src, and these prove the built
+// output carries no retired address.
+const hostFs = require('node:fs');
+const hostPath = require('node:path');
+const hostRoot = hostPath.join(__dirname, '..');
+function shipped(rel) {
+  return hostFs.readFileSync(hostPath.join(hostRoot, rel), 'utf8');
+}
+const SHIPPED_SURFACES = [
+  'index.html', 'trip/index.html', 'share/index.html', 'example.html',
+  'template.html', 'trip.html', 'sw.js', 'CNAME', 'README.md',
+  'schema/cityops.schema.json'
+];
+
+test('no shipped surface names the retired host', () => {
+  const RETIRED = 'cityops' + '.robriggs.com';  // split so this line is not itself a hit
+  SHIPPED_SURFACES.forEach(function (rel) {
+    assert.equal(shipped(rel).indexOf(RETIRED), -1,
+      rel + ' still names ' + RETIRED + '; the app moved on 2026-09-01');
+  });
+});
+
+test('the share link family holds is derived from the served origin', () => {
+  const trip = shipped('trip/index.html');
+  // The assignment itself, not just the absence of the old host: a future edit
+  // that pins SHARE_ORIGIN back to a literal has to fail here.
+  assert.ok(/const SHARE_ORIGIN = CityOps\.shareKit\.publicOrigin\(location\.origin,/.test(trip),
+    'trip surface no longer derives SHARE_ORIGIN from location.origin');
+  // And the builder still goes through it, so deriving it is not decorative.
+  assert.ok(/CityOps\.shareKit\.url\(SHARE_ORIGIN, token\)/.test(trip),
+    'trip surface no longer builds the share link from SHARE_ORIGIN');
+});
+
+test('the share page points its doors at the host that served it', () => {
+  const share = shipped('share/index.html');
+  assert.ok(/const CITYOPS_BASE = \/\^https\?/.test(share),
+    'share page no longer derives CITYOPS_BASE from location.origin');
+  // The fallback is allowed to be a literal, and is the only one allowed.
+  const hits = share.match(/https:\/\/app\.nomadding\.com/g) || [];
+  assert.ok(hits.length <= 3,
+    'share page carries ' + hits.length + ' hardcoded app hosts; expected the ' +
+    'fallback constant plus the two no-JS door hrefs');
+});
+
+test('the service worker precaches paths, never hosts', () => {
+  const sw = shipped('sw.js');
+  const shell = sw.match(/var SHELL = \[([^\]]*)\]/);
+  assert.ok(shell, 'sw.js no longer declares a SHELL list');
+  // Root-absolute paths only. An absolute URL in here would pin the cache to
+  // one hostname and quietly stop precaching the day the app moves.
+  shell[1].split(',').map(function (s) { return s.trim().replace(/^'|'$/g, ''); })
+    .filter(Boolean).forEach(function (p) {
+      assert.ok(p.charAt(0) === '/' && p.indexOf('//') === -1,
+        'sw.js precaches ' + p + ', which is not a root-absolute path');
+    });
+});
 
 // The async tests above resolve on a microtask, so the summary has to wait
 // for them or it reports before they have run and the exit code lies.

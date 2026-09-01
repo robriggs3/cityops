@@ -3924,6 +3924,34 @@ var CityOps = (function () {
     return trimStr(origin).replace(/\/+$/, '') + '/share/#' + trimStr(token);
   }
 
+  // The origin a share link may be built on, or the fallback.
+  //
+  // A share link is read by FAMILY, on their phone, days after it was sent. So
+  // the only origin worth putting in one is an origin that resolves for
+  // somebody who is not us: https, and not a loopback name. http, file://,
+  // localhost and 127.0.0.1 all fall back, because a link that only opens on
+  // the machine that made it is worse than no link at all. That was the whole
+  // argument for hardcoding this, and it is preserved here rather than lost.
+  //
+  // What deriving buys, and it is not hypothetical: the app moved host once
+  // already (2026-09-01) and every link built before the move died with it,
+  // because the host was a constant in a shipped file. Derived, the next move
+  // costs nothing and no already-published token has to be rotated to follow
+  // it. The retired address is deliberately not written out anywhere here: a
+  // test asserts no shipped byte still names it.
+  //
+  // Takes the origin as an argument rather than reading location itself so it
+  // stays pure and testable; the caller passes location.origin.
+  function publicOrigin(origin, fallback) {
+    var o = trimStr(origin);
+    var m = o.match(/^https:\/\/(\[[^\]]+\]|[^:\/?#]+)(?::\d+)?$/);
+    if (!m) return fallback;
+    var host = m[1].toLowerCase();
+    if (host === 'localhost' || /\.localhost$/.test(host) ||
+        host === '127.0.0.1' || host === '[::1]') return fallback;
+    return o;
+  }
+
   // One stop on the trip, as family sees it.
   //
   // What is DROPPED here is the point of the function. Cost, the nightly rate,
@@ -6819,6 +6847,7 @@ var CityOps = (function () {
     shareKit: {
       SCHEMA: SHARE_SCHEMA, TOKEN_BYTES: SHARE_TOKEN_BYTES, GUIDE_CAP: SHARE_GUIDE_CAP,
       token: shareToken, tokenFromUrl: shareTokenFromUrl, url: shareUrl,
+      publicOrigin: publicOrigin,
       build: buildShareSnapshot, stop: shareStop, leg: shareLeg, guide: shareGuide,
       FORBIDDEN: SHARE_FORBIDDEN, leaks: shareLeaks
     },
