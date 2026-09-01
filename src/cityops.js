@@ -3070,6 +3070,288 @@ var CityOps = (function () {
     return !!src.github;
   }
 
+  // ---- presence days: the compliance counters ----
+  //
+  // Rob makes visa and tax decisions on these two numbers, so the arithmetic
+  // lives here, pure and unit tested, instead of inside a renderer where it sat
+  // wrong for months. Three things were wrong on 2026-09-01 and are fixed here.
+  //
+  // 1. A BORDER COUNTS DAYS, NOT NIGHTS. Any part of a day inside the territory
+  //    is a whole day to an immigration officer and to the IRS, so the arrival
+  //    day and the departure day BOTH count. Presence for a stay is every date
+  //    from checkIn through checkOut INCLUSIVE. The old code counted nights
+  //    ([checkIn, checkOut - 1]), which under-reported every stop by one day.
+  //    That is the wrong direction to be wrong in on a 90/180 limit: it told
+  //    the traveler he had room he did not have.
+  //
+  // 2. OVERLAPPING STAYS ARE ONE DAY, NOT TWO. Two stops that share a date are
+  //    one day of presence. The old code summed each stay's overlap separately,
+  //    so an itinerary with a one-day handover between two cities in the same
+  //    zone counted that day twice. Presence is collected into a SET of dates
+  //    and then counted, never summed per stay.
+  //
+  // 3. MEMBERSHIP WAS EXACT STRING EQUALITY. Country arrives from a free-text
+  //    field and from imported JSON, so " France", "france" and "Czechia" each
+  //    scored zero Schengen days in silence. The 29-name array stays the
+  //    authority; only the MATCH is normalized.
+
+  var SCHENGEN_MEMBERS = [
+    'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Czech Republic', 'Denmark', 'Estonia', 'Finland',
+    'France', 'Germany', 'Greece', 'Hungary', 'Iceland', 'Italy', 'Latvia', 'Liechtenstein',
+    'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Norway', 'Poland', 'Portugal', 'Romania',
+    'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'Switzerland'
+  ];
+
+  // Same country, other name. Only entries that are genuinely the SAME state go
+  // here: an alias that is merely close is a near miss (below), which the app
+  // reports rather than silently resolves.
+  var COUNTRY_ALIASES = {
+    'czechia': 'czech republic',
+    'holland': 'netherlands',
+    'slovak republic': 'slovakia',
+    'hellas': 'greece',
+    'deutschland': 'germany',
+    'espana': 'spain',
+    'italia': 'italy',
+    'osterreich': 'austria',
+    'suomi': 'finland',
+    'sverige': 'sweden',
+    'norge': 'norway',
+    'danmark': 'denmark',
+    'polska': 'poland',
+    'magyarorszag': 'hungary',
+    'schweiz': 'switzerland',
+    'suisse': 'switzerland',
+    'svizzera': 'switzerland',
+    'nederland': 'netherlands',
+    'eesti': 'estonia',
+    'latvija': 'latvia',
+    'lietuva': 'lithuania',
+    'island': 'iceland',
+    'hrvatska': 'croatia'
+  };
+
+  // Case, padding, punctuation and accents are noise on a country name. A
+  // leading "the" is too: "The Netherlands" is Netherlands.
+  function normCountry(name) {
+    var s = String(name == null ? '' : name);
+    if (s.normalize) s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    s = s.toLowerCase().replace(/[^a-z]+/g, ' ').replace(/\s+/g, ' ').replace(/^ | $/g, '');
+    if (s.indexOf('the ') === 0) s = s.slice(4);
+    return COUNTRY_ALIASES[s] || s;
+  }
+
+  var SCHENGEN_NORM = (function () {
+    var m = {};
+    for (var i = 0; i < SCHENGEN_MEMBERS.length; i++) m[normCountry(SCHENGEN_MEMBERS[i])] = SCHENGEN_MEMBERS[i];
+    return m;
+  })();
+
+  function schengenMember(country) {
+    return Object.prototype.hasOwnProperty.call(SCHENGEN_NORM, normCountry(country));
+  }
+
+  var US_NORM = { 'united states': 1, 'united states of america': 1, 'usa': 1, 'us': 1, 'u s a': 1, 'u s': 1, 'america': 1 };
+
+  function usMember(country) {
+    return Object.prototype.hasOwnProperty.call(US_NORM, normCountry(country));
+  }
+
+  // Every other country the app's own picker offers. These are real places that
+  // are definitively NOT in the Schengen area, so they must never be reported
+  // as a typo of one. Without this list the two most consequential pairs on the
+  // list, Ireland/Iceland and Australia/Austria, both raise a false alarm, and a
+  // counter that cries wolf on ordinary destinations is one the traveler learns
+  // to scroll past.
+  var KNOWN_NON_MEMBERS = [
+    'Albania', 'Argentina', 'Armenia', 'Australia', 'Bahamas', 'Bali',
+    'Bolivia', 'Bosnia and Herzegovina', 'Brazil', 'Cambodia', 'Canada',
+    'Cape Verde', 'Chile', 'China', 'Colombia', 'Costa Rica', 'Cyprus',
+    'Dominican Republic', 'Ecuador', 'Egypt', 'El Salvador', 'Georgia',
+    'Ghana', 'Guatemala', 'Honduras', 'India', 'Indonesia', 'Ireland',
+    'Israel', 'Jamaica', 'Japan', 'Jordan', 'Kenya', 'Laos', 'Lebanon',
+    'Malaysia', 'Mauritius', 'Mexico', 'Moldova', 'Monaco', 'Mongolia',
+    'Montenegro', 'Morocco', 'Mozambique', 'Myanmar', 'Nepal', 'New Zealand',
+    'Nicaragua', 'Nigeria', 'North Macedonia', 'Pakistan', 'Panama',
+    'Paraguay', 'Peru', 'Philippines', 'Qatar', 'Russia', 'Rwanda',
+    'Saudi Arabia', 'Senegal', 'Serbia', 'Seychelles', 'Singapore',
+    'South Africa', 'South Korea', 'Sri Lanka', 'Taiwan', 'Tanzania',
+    'Thailand', 'Turkey', 'Türkiye', 'UAE', 'Uganda', 'Ukraine',
+    'United Kingdom', 'United States', 'Uruguay', 'Vatican City',
+    'Venezuela', 'Vietnam'
+  ];
+
+  var NON_MEMBER_NORM = (function () {
+    var m = {};
+    for (var i = 0; i < KNOWN_NON_MEMBERS.length; i++) m[normCountry(KNOWN_NON_MEMBERS[i])] = 1;
+    for (var k in US_NORM) if (Object.prototype.hasOwnProperty.call(US_NORM, k)) m[k] = 1;
+    return m;
+  })();
+
+  function editDistance(a, b) {
+    var prev = [], cur = [], i, j;
+    for (j = 0; j <= b.length; j++) prev[j] = j;
+    for (i = 1; i <= a.length; i++) {
+      cur[0] = i;
+      for (j = 1; j <= b.length; j++) {
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1));
+      }
+      for (j = 0; j <= b.length; j++) prev[j] = cur[j];
+    }
+    return prev[b.length];
+  }
+
+  // The dangerous name is the one that is NOT a member and is one small typo
+  // away from one: "Portgual" contributes zero Schengen days in silence and the
+  // counter reads compliant when it is not. Return the member it probably meant
+  // so the UI can name it, or null. Deliberately narrow: short names and a
+  // distance over 2 are not reported, because a false alarm on every ordinary
+  // non-member country would train the traveler to ignore the line.
+  function schengenNearMiss(country) {
+    var n = normCountry(country);
+    if (!n || n.length < 5) return null;
+    if (Object.prototype.hasOwnProperty.call(SCHENGEN_NORM, n)) return null;
+    if (Object.prototype.hasOwnProperty.call(NON_MEMBER_NORM, n)) return null;
+    var best = null, bestD = 3;
+    for (var k in SCHENGEN_NORM) {
+      if (!Object.prototype.hasOwnProperty.call(SCHENGEN_NORM, k)) continue;
+      if (Math.abs(k.length - n.length) > 2) continue;
+      var d = editDistance(n, k);
+      if (d < bestD) { bestD = d; best = SCHENGEN_NORM[k]; }
+    }
+    return best;
+  }
+
+  // Every country name in the itinerary that is a near miss, once each, with
+  // the member it probably meant. This is what the UI reports.
+  function schengenSuspects(stays) {
+    var seen = {}, out = [];
+    (stays || []).forEach(function (s) {
+      var raw = s && s.country;
+      if (!raw || seen[raw]) return;
+      seen[raw] = 1;
+      var guess = schengenNearMiss(raw);
+      if (guess) out.push({ name: String(raw), meant: guess });
+    });
+    return out;
+  }
+
+  // A stay is countable when it has both ends and has not been eliminated.
+  function countableStay(s) {
+    return !!(s && s.status !== 'eliminated' && s.checkIn && s.checkOut && s.checkIn <= s.checkOut);
+  }
+
+  // The set of ISO dates on which `stays` put the traveler inside the window
+  // [fromISO, toISO], both inclusive, counting checkOut as a day present.
+  // `pred` selects which stays count. The return is a plain object used as a
+  // set, which is how the rest of this file spells "no duplicates" without a
+  // Set dependency. `tag` (optional) is called per counted date so a caller can
+  // attribute the day to a state or a country without walking the dates twice;
+  // the FIRST stay to claim a date owns it, which is what makes an overlap one
+  // day rather than two.
+  function presenceDates(stays, pred, fromISO, toISO, tag) {
+    var seen = {};
+    (stays || []).forEach(function (s) {
+      if (!countableStay(s) || !pred(s)) return;
+      var start = s.checkIn > fromISO ? s.checkIn : fromISO;
+      var end = s.checkOut < toISO ? s.checkOut : toISO;   // checkOut counts
+      if (end < start) return;
+      var d = start;
+      // Guard: a corrupt row with a wild checkOut must not spin forever.
+      for (var n = 0; d <= end && n < 4000; n++) {
+        if (!Object.prototype.hasOwnProperty.call(seen, d)) {
+          seen[d] = 1;
+          if (tag) tag(d, s);
+        }
+        d = addDaysIso(d, 1);
+      }
+    });
+    return seen;
+  }
+
+  function countKeys(o) {
+    var n = 0;
+    for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) n++;
+    return n;
+  }
+
+  // Schengen 90/180 at a reference date: days of presence in the 180-day window
+  // ending on refISO, that day included. 180 days means refISO minus 179.
+  var SCHENGEN_WINDOW_DAYS = 180;
+  var SCHENGEN_LIMIT = 90;
+
+  function schengenUsedAt(stays, refISO) {
+    if (!refISO) return 0;
+    var from = addDaysIso(refISO, -(SCHENGEN_WINDOW_DAYS - 1));
+    return countKeys(presenceDates(stays, function (s) { return schengenMember(s.country); }, from, refISO));
+  }
+
+  // The worst point ahead. Every stay's LAST day is a candidate peak, because
+  // the count only ever rises while you are inside the zone; checking the last
+  // day of each stay finds the maximum without walking every date in the plan.
+  function schengenPeak(stays) {
+    var members = (stays || []).filter(function (s) { return countableStay(s) && schengenMember(s.country); });
+    var peak = { days: 0, date: null };
+    members.forEach(function (s) {
+      var d = schengenUsedAt(stays, s.checkOut);
+      if (d > peak.days) peak = { days: d, date: s.checkOut };
+    });
+    return peak;
+  }
+
+  // FEIE physical presence: US DAYS in a true rolling 12 months, which is
+  // todayISO minus 364 through todayISO, both included, so the window is
+  // exactly 365 days long. This used to be whatever the MAP FILTER happened to
+  // be set to, which meant the number moved when the traveler changed a view.
+  // It does not any more: a rolling window is a fact about the calendar, not a
+  // view of the itinerary, so this counter ignores the filter entirely.
+  var US_WINDOW_DAYS = 365;
+  var FEIE_US_DAY_LIMIT = 35;
+  var NO_STATE_LABEL = 'State not set';
+
+  function usDaysRolling(stays, todayISO) {
+    if (!todayISO) return { total: 0, byState: {} };
+    var from = addDaysIso(todayISO, -(US_WINDOW_DAYS - 1));
+    var byState = {};
+    // A US stop with no state chosen used to be SKIPPED, so those days simply
+    // vanished from a number the traveler files taxes against. They are counted
+    // now and attributed to a named bucket, so the gap is visible rather than
+    // silent.
+    var seen = presenceDates(stays, function (s) { return usMember(s.country); }, from, todayISO, function (d, s) {
+      var key = (s.state && String(s.state).replace(/^\s+|\s+$/g, '')) || NO_STATE_LABEL;
+      byState[key] = (byState[key] || 0) + 1;
+    });
+    return { total: countKeys(seen), byState: byState };
+  }
+
+  // Days by country, over whatever window the caller passes. This one IS a view
+  // of the itinerary rather than a legal fact, so the map filter still scopes
+  // it; the caller supplies the range.
+  function countryDays(stays, fromISO, toISO) {
+    var byCountry = {};
+    presenceDates(stays, function () { return true; }, fromISO, toISO, function (d, s) {
+      var key = String(s.country || '').replace(/^\s+|\s+$/g, '') || 'Unknown';
+      byCountry[key] = (byCountry[key] || 0) + 1;
+    });
+    return byCountry;
+  }
+
+  // Budget variance against a monthly target, as three real branches. The old
+  // code had two that were exact complements ("over by more than 5%" and "at or
+  // under 5% over"), so the amber middle could never fire and anything from
+  // dead-on to 5% OVER target printed "Under target", by a negative amount.
+  var BUDGET_BAND = 0.05;
+
+  function budgetVariance(avgPerMonth, target) {
+    if (!(target > 0)) return null;
+    var delta = avgPerMonth - target;
+    var band = target * BUDGET_BAND;
+    var pct = delta / target * 100;
+    if (delta > band) return { kind: 'over', delta: delta, pct: pct };
+    if (delta < -band) return { kind: 'under', delta: delta, pct: pct };
+    return { kind: 'on', delta: delta, pct: pct };
+  }
+
   // ---- the public share ----
   //
   // Replaces the GitHub-PAT publish. A share is one row in public.shares keyed
@@ -3385,8 +3667,18 @@ var CityOps = (function () {
       if (typeof stars === 'number' && isFinite(stars)) o.stars = stars;
       var verdicts = it && it.intel && it.intel.verdicts;
       if (Array.isArray(verdicts) && verdicts.length) {
+        // A verdict carries `tier` (must|good|skip), which is the whole point of
+        // it: Must / Good / Skip is the judgement, the text is the reason. This
+        // used to copy `v.label`, a field no verdict has ever had, so every
+        // published share rendered the reason with no verdict attached to it.
+        // Carry the tier, and fall back to the middle tier rather than dropping
+        // a verdict whose tier a hand-edited guide left off.
         o.verdicts = verdicts.map(function (v) {
-          return { label: shareText(v && v.label), text: shareText(v && v.text) };
+          var t = v && v.tier;
+          return {
+            tier: (t === 'must' || t === 'skip' || t === 'good') ? t : 'good',
+            text: shareText(v && v.text)
+          };
         });
       }
       return o;
@@ -6402,6 +6694,23 @@ var CityOps = (function () {
       entry: shareEntry, list: shareList, migrate: migrateShares,
       legacyFields: shareLegacyFields, suggest: shareLabelSuggestion,
       addBlocked: shareAddBlocked, writeFailure: shareWriteFailure
+    },
+    // The compliance counters. Rob makes visa and tax decisions on these, so
+    // the math is pure and tested here and the trip surface is transport, the
+    // same split shareKit uses. presenceDates is the one rule underneath all of
+    // them: a day inside the territory is a whole day, and a date is counted
+    // once no matter how many stays claim it.
+    dayKit: {
+      SCHENGEN_MEMBERS: SCHENGEN_MEMBERS, SCHENGEN_LIMIT: SCHENGEN_LIMIT,
+      SCHENGEN_WINDOW_DAYS: SCHENGEN_WINDOW_DAYS,
+      US_WINDOW_DAYS: US_WINDOW_DAYS, FEIE_US_DAY_LIMIT: FEIE_US_DAY_LIMIT,
+      NO_STATE_LABEL: NO_STATE_LABEL, BUDGET_BAND: BUDGET_BAND,
+      normCountry: normCountry, isSchengen: schengenMember, isUS: usMember,
+      nearMiss: schengenNearMiss, suspects: schengenSuspects,
+      presenceDates: presenceDates, countDates: countKeys,
+      schengenUsedAt: schengenUsedAt, schengenPeak: schengenPeak,
+      usDaysRolling: usDaysRolling, countryDays: countryDays,
+      budgetVariance: budgetVariance
     },
     safeHref: safeHref,
     onStateChange: null, liveState: liveState,

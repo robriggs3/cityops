@@ -22,9 +22,9 @@ city guides it was built around (and field-tested on) are personal travel
 data and live out-of-repo by design, in a private deployment of the same
 code.
 
-| Planner | Review-verified intel | Calendar view |
-|---|---|---|
-| ![Planner at phone width: day cards with lifecycle controls](docs/media/planner.png) | ![A restaurant card with must/good/skip dish verdicts and tips](docs/media/intel.png) | ![All sections merged into one chronological day view](docs/media/calendar.png) |
+| Planner | Review-verified intel |
+|---|---|
+| ![Planner at phone width: day cards with lifecycle controls](docs/media/planner.png) | ![A restaurant card with must/good/skip dish verdicts and tips](docs/media/intel.png) |
 
 ## What it does
 
@@ -36,8 +36,8 @@ code.
 - **A lifecycle, not a list.** Every place is `plan`, `backup`, `done`, or
   `archived`, with one-tap moves and undos. Days are chronological slots;
   drag a day's content elsewhere and the dates stay put while the plan
-  reorders. Rename items, collapse sections, flip to a merged calendar
-  view; everything persists.
+  reorders. Rename items, collapse sections, collapse whole days once they
+  are done; everything persists.
 - **AI-native, at zero marginal cost.** The app assembles complete
   research prompts (city, dates, your interest profile, an output
   contract) for your own Claude/ChatGPT session, then merges the returned
@@ -134,7 +134,7 @@ The short version of [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md):
   documentation and machine-readable source, sliced by landmark into
   generated prompts; the merge path is validation-gated and
   prototype-safe.
-- 357 tests on Node built-ins; the harness tests the exact bytes that
+- 390 tests on Node built-ins; the harness tests the exact bytes that
   ship. Every feature landed through a written spec, plan, and
   independent review (committed under `docs/superpowers/`), a workflow
   run with AI agents doing implementation and adversarial review under

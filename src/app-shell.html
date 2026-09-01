@@ -1548,8 +1548,18 @@
     row.appendChild(cancel);
     m.box.appendChild(row);
 
-    m.box.appendChild(el('p', 'diff', 'This builds a prompt for your own AI (Claude, ChatGPT). ' +
-      'In-app research is planned for a future version.'));
+    // 4a: the one difference between the two transports that the traveler
+    // cannot see and needs to know. No in-app call declares a web-search tool,
+    // so Run with Claude answers out of the model's own training data, while a
+    // chat session he pastes into can actually go and look the place up. The
+    // prompts ask for current hours, prices and ratings either way.
+    //
+    // The sentence that used to close this modal, "In-app research is planned
+    // for a future version", stopped being true when Run with Claude shipped;
+    // it sat directly beneath three working ones. Removed 2026-09-01.
+    m.box.appendChild(el('p', 'diff', 'Run with Claude answers from the model\'s own knowledge: ' +
+      'it has no web access, so hours, prices and ratings are recalled, not checked. ' +
+      'Copy prompt into Claude.ai or ChatGPT if you want it to search the web first.'));
   }
 
   // ---- Ask Claude about ONE place ----
@@ -2100,10 +2110,14 @@
       // to 90 places across eight sections, each with hours, prices and a
       // map link), so this is minutes, not seconds; a progress line that says
       // "Starting..." and then sits there is how a working run gets killed.
-      genMsg.textContent = 'Claude is researching ' + cityName + '... this usually takes 2 to 4 minutes.';
+      // "Researching" is the honest word for what this is only up to a point:
+      // the call declares no web-search tool, so Claude is writing the guide
+      // out of what it already knows, not looking the city up. Say so here
+      // rather than let a 3-minute progress bar imply otherwise.
+      genMsg.textContent = 'Claude is writing ' + cityName + ' from its own knowledge, with no web access... this usually takes 2 to 4 minutes.';
       genAbort = (typeof AbortController !== 'undefined') ? new AbortController() : null;
       callClaudeStream(prompt, key, function (p) {
-        genMsg.textContent = 'Claude is researching ' + cityName + '... ' +
+        genMsg.textContent = 'Claude is writing ' + cityName + ' from its own knowledge... ' +
           (p.kind === 'thinking' ? 'thinking, ' : 'writing the guide, ') +
           p.totalChars + ' characters so far.';
       }, genAbort ? genAbort.signal : null).then(function (text) {

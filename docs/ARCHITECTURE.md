@@ -2,7 +2,7 @@
 
 A tour of the engineering decisions, written for someone evaluating the
 codebase. The whole system is ~2,000 lines of dependency-free ES5-style
-JavaScript plus 1,800 lines of app shell, with 107 unit tests that run on
+JavaScript plus 1,800 lines of app shell, with 390 unit tests that run on
 Node built-ins alone. There is no build step, no framework, no npm
 install, and no bundler, on purpose. This document explains why, and what
 that constraint bought.
@@ -147,7 +147,7 @@ and rendering are unchanged.
 
 ## 6. Verification culture
 
-- 107 tests on Node built-ins; the harness extracts the engine script
+- 390 tests on Node built-ins; the harness extracts the engine script
   from the assembled template and evaluates it with stubbed DOM globals,
   so pure logic is tested in the exact bytes that ship.
 - Every feature landed through a written spec, a written plan, an

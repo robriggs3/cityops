@@ -161,6 +161,11 @@ footer .stamp { display: inline-block; padding: 6px 14px; border: 1px solid var(
 .gitem .gi-note { font-size: 13px; color: var(--text-2); margin-top: 3px; line-height: 1.55; }
 .gitem .gi-verdict { font-size: 12px; color: var(--text-2); margin-top: 4px; padding-left: 10px; border-left: 2px solid var(--border); line-height: 1.5; }
 .gitem .gi-verdict b { color: var(--text); font-weight: 500; }
+/* Must / Good / Skip. The word carries the judgement, so it reads before the
+   reason does; colour is a reinforcement, never the only signal. */
+.gitem .gi-tier { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
+.gitem .gi-tier-must { color: var(--accent-strong); }
+.gitem .gi-tier-skip { color: var(--text-3); }
 .gitem .gi-links { margin-top: 5px; display: flex; gap: 10px; flex-wrap: wrap; }
 .gitem .gi-links a { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent-strong); text-decoration: none; min-height: 30px; display: inline-flex; align-items: center; }
 .gitem .gi-links a:hover { text-decoration: underline; }
@@ -240,7 +245,6 @@ null
 
   <footer>
     <div class="stamp">Eyes only · Shared by link</div>
-    <div id="footer-meta"></div>
     <div class="snapnote">This page is a snapshot taken when the traveler pressed Publish. It is not live: plans made since then are not on it until they publish again.</div>
   </footer>
 </div>
@@ -609,7 +613,10 @@ function render() {
     var stale = ageDays >= 21 ? ' · may be out of date' : '';
     document.getElementById('gen-date').textContent = 'Updated ' + human + ' · ' + ageText + stale;
   })();
-  document.getElementById('footer-meta').textContent = 'Auto-updating · Last refresh on visit';
+  // The footer used to print "Auto-updating · Last refresh on visit" directly
+  // above the note explaining that this page is a snapshot. Both cannot be
+  // true, and the snapshot one is. The false line is gone; #gen-date above
+  // already says how old the snapshot is.
 
   const cs = document.getElementById('current-section');
   if (current) {
@@ -749,9 +756,16 @@ function guideItemHTML(it) {
   top += '</div>';
   var body = '';
   if (it.note) body += '<div class="gi-note">' + escapeHTML(it.note) + '</div>';
+  // Must / Good / Skip, the same three words and the same bold-tag-then-reason
+  // shape the app's own Share view uses. This read `v.label` until 2026-09-01,
+  // a field no verdict has ever carried, so every published share showed the
+  // reason with the judgement missing.
   (it.verdicts || []).forEach(function (v) {
     if (!v || !v.text) return;
-    body += '<div class="gi-verdict">' + (v.label ? '<b>' + escapeHTML(v.label) + '</b> ' : '') + escapeHTML(v.text) + '</div>';
+    var tier = (v.tier === 'must' || v.tier === 'skip') ? v.tier : 'good';
+    var word = tier === 'must' ? 'Must' : (tier === 'skip' ? 'Skip' : 'Good');
+    body += '<div class="gi-verdict"><b class="gi-tier gi-tier-' + tier + '">' + word + '</b> ' +
+      escapeHTML(v.text) + '</div>';
   });
   var links = (it.links || []).filter(function (l) { return l && l.href; });
   if (links.length) {

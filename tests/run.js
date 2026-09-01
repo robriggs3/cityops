@@ -3381,7 +3381,10 @@ const SHARE_GUIDE_ROW = {
               { kind: 'web', label: 'Bad', href: 'javascript:alert(1)' }],
       place_id: 'ChIJsecret', verified: '2026-08-01',
       rating: { stars: 4.8, count: 442, source: 'Google', checked: '2026-08-01' },
-      intel: { verdicts: [{ label: 'Best for', text: 'a long dinner' }],
+      // A verdict is a TIER plus its reason. There is no `label` field and
+      // never was; the second entry here has no tier at all, which is what a
+      // hand-edited guide looks like, and must not vanish from a share.
+      intel: { verdicts: [{ tier: 'must', text: 'a long dinner' }, { text: 'the set lunch' }],
                tips: ['Ask for the corner table, Rob'],
                source: 'Claude, 2026-08-01', details: 'internal reasoning' }
     }]
@@ -3554,7 +3557,15 @@ test('a guide only ships when it was ticked, and ships in Share-view form', () =
   assert.equal(JSON.stringify(it).indexOf('442'), -1);
   assert.equal(JSON.stringify(it).indexOf('Google'), -1);
   // Share view: verdicts only, no tips and no reasoning.
-  assert.deepEqual(it.verdicts, [{ label: 'Best for', text: 'a long dinner' }]);
+  // The TIER is the verdict. It used to be dropped here (the builder copied a
+  // `label` no verdict has), so every published share rendered the reason with
+  // no Must/Good/Skip attached to it. A tier-less verdict falls back to good
+  // rather than being dropped.
+  assert.deepEqual(it.verdicts, [
+    { tier: 'must', text: 'a long dinner' },
+    { tier: 'good', text: 'the set lunch' }
+  ]);
+  assert.equal(it.verdicts[0].label, undefined, 'the dead label field came back');
   assert.equal(it.tips, undefined);
   assert.equal(JSON.stringify(it).indexOf('corner table'), -1);
   assert.equal(JSON.stringify(it).indexOf('internal reasoning'), -1);
@@ -3908,7 +3919,12 @@ test('the service worker precaches the share shell and nothing token-shaped', ()
   // v13: many share links per account. A phone still on v12 shows the old
   // one-link card, and the first save it makes mirrors only the first link
   // back out, so the bump is what stops the two builds disagreeing for a day.
-  assert.ok(/var CACHE = 'cityops-app-v13';/.test(sw));
+  // v14: the compliance counters count DAYS, not nights. This is the bump that
+  // matters most so far: a phone still serving v13 shows a Schengen number that
+  // is low by one day per stop, on the screen Rob makes visa decisions from.
+  // The share SHELL is precached too, so v13 would also keep rendering
+  // published verdicts with no Must/Good/Skip on them.
+  assert.ok(/var CACHE = 'cityops-app-v14';/.test(sw));
   // GET only, so the rpc POST that carries the token is never cached, and a
   // rotated share cannot keep answering out of a stale cache.
   assert.ok(/if \(e\.request\.method !== 'GET'\) return;/.test(sw));
@@ -6024,6 +6040,336 @@ test('the service worker precaches paths, never hosts', () => {
       assert.ok(p.charAt(0) === '/' && p.indexOf('//') === -1,
         'sw.js precaches ' + p + ', which is not a root-absolute path');
     });
+});
+
+// ---- the compliance counters ----
+//
+// These are the numbers Rob makes visa and tax decisions on, and all three of
+// the corrections below moved them in the direction that had been telling him
+// he had more room than he had. Each test names the wrong answer the old code
+// gave, so a regression reads as a regression and not as a puzzle.
+
+const DK = C.dayKit;
+
+test('Schengen counts DAYS, so arrival and departure day both count', () => {
+  // One stop, Mar 1 to Mar 10. Ten calendar dates are touched: the 1st through
+  // the 10th. The old code counted nights, [checkIn, checkOut - 1], and said 9.
+  const one = [{ country: 'France', checkIn: '2026-03-01', checkOut: '2026-03-10' }];
+  assert.equal(DK.schengenUsedAt(one, '2026-03-10'), 10);
+  // A same-day in and out is one day of presence, not zero. This is the case
+  // the nights model got worst: a day trip into the zone counted as nothing.
+  assert.equal(DK.schengenUsedAt(
+    [{ country: 'France', checkIn: '2026-03-01', checkOut: '2026-03-01' }], '2026-03-01'), 1);
+  // Back to back stops, where the departure date of one IS the arrival date of
+  // the next, are the ordinary shape of a European leg. Mar 1 to Mar 20 is 20
+  // dates however it is split, and the handover day is ONE day.
+  const legs = [
+    { country: 'Portugal', checkIn: '2026-03-01', checkOut: '2026-03-10' },
+    { country: 'Spain', checkIn: '2026-03-10', checkOut: '2026-03-20' }
+  ];
+  assert.equal(DK.schengenUsedAt(legs, '2026-03-20'), 20);
+});
+
+test('overlapping stays are one day of presence, never two', () => {
+  // Two stays booked over the same week, which is what an itinerary looks like
+  // while the traveler is still deciding. The old code summed each stay's
+  // overlap separately and double counted every shared date.
+  const overlapping = [
+    { country: 'Italy', checkIn: '2026-04-01', checkOut: '2026-04-10' },
+    { country: 'Italy', checkIn: '2026-04-05', checkOut: '2026-04-15' }
+  ];
+  // Apr 1 through Apr 15 is 15 dates. Summed per stay it would be 10 + 11 = 21.
+  assert.equal(DK.schengenUsedAt(overlapping, '2026-04-15'), 15);
+  // Different countries in the same zone, same overlap: still one day each.
+  const twoCountries = [
+    { country: 'Italy', checkIn: '2026-04-01', checkOut: '2026-04-10' },
+    { country: 'Austria', checkIn: '2026-04-08', checkOut: '2026-04-12' }
+  ];
+  assert.equal(DK.schengenUsedAt(twoCountries, '2026-04-12'), 12);
+  // One stay fully inside another contributes nothing extra at all.
+  const nested = [
+    { country: 'Italy', checkIn: '2026-04-01', checkOut: '2026-04-30' },
+    { country: 'Italy', checkIn: '2026-04-10', checkOut: '2026-04-12' }
+  ];
+  assert.equal(DK.schengenUsedAt(nested, '2026-04-30'), 30);
+});
+
+test('the Schengen window is exactly 180 days, reference date included', () => {
+  const stay = [{ country: 'Germany', checkIn: '2026-01-01', checkOut: '2026-01-01' }];
+  // The window ending on refISO reaches back 179 days, so day 180 is the last
+  // one that still counts and day 181 has fallen out.
+  assert.equal(DK.SCHENGEN_WINDOW_DAYS, 180);
+  assert.equal(DK.schengenUsedAt(stay, '2026-06-29'), 1);   // day 180
+  assert.equal(DK.schengenUsedAt(stay, '2026-06-30'), 0);   // day 181
+  // An eliminated stop is not presence, and a stop missing an end has no
+  // dates to count.
+  assert.equal(DK.schengenUsedAt(
+    [{ country: 'Germany', checkIn: '2026-01-01', checkOut: '2026-01-10', status: 'eliminated' }],
+    '2026-01-10'), 0);
+  assert.equal(DK.schengenUsedAt([{ country: 'Germany', checkIn: '2026-01-01' }], '2026-01-10'), 0);
+});
+
+test('the Schengen peak is the worst point ahead, not the count today', () => {
+  const plan = [
+    { country: 'France', checkIn: '2026-03-01', checkOut: '2026-03-20' },
+    { country: 'Spain', checkIn: '2026-05-01', checkOut: '2026-05-20' }
+  ];
+  const peak = DK.schengenPeak(plan);
+  // Both stops sit inside one 180-day window, so the peak is the sum, on the
+  // last day of the later stop.
+  assert.equal(peak.days, 40);
+  assert.equal(peak.date, '2026-05-20');
+  assert.deepEqual(DK.schengenPeak([]), { days: 0, date: null });
+});
+
+test('Schengen membership tolerates case, padding and the usual alternate names', () => {
+  // The country field is free text and also arrives from imported JSON, so
+  // exact string equality was scoring real Schengen stays as zero in silence.
+  ['France', '  france  ', 'FRANCE', 'France\n'].forEach(function (n) {
+    assert.ok(DK.isSchengen(n), JSON.stringify(n) + ' should be Schengen');
+  });
+  assert.ok(DK.isSchengen('Czechia'), 'Czechia is the Czech Republic');
+  assert.ok(DK.isSchengen('The Netherlands'));
+  assert.ok(DK.isSchengen('Holland'));
+  assert.ok(DK.isSchengen('Schweiz'));
+  // The 29-name array is still the authority and still has 29 names in it.
+  assert.equal(DK.SCHENGEN_MEMBERS.length, 29);
+  // Non-members stay non-members. Ireland and Cyprus are the two that get
+  // assumed into the zone most often and are in neither.
+  ['Ireland', 'Cyprus', 'United Kingdom', 'Georgia', 'Turkey', 'Australia']
+    .forEach(function (n) { assert.ok(!DK.isSchengen(n), n + ' is not Schengen'); });
+});
+
+test('a country name one typo from a member is reported, and real countries are not', () => {
+  // The dangerous name is the one that contributes ZERO Schengen days in
+  // silence: the counter then reads compliant when it is not.
+  assert.equal(DK.nearMiss('Portgual'), 'Portugal');
+  assert.equal(DK.nearMiss('Belguim'), 'Belgium');
+  assert.equal(DK.nearMiss('Netherland'), 'Netherlands');
+  // Ireland/Iceland and Australia/Austria are the two pairs that would make
+  // this feature cry wolf on ordinary destinations. Neither may fire.
+  assert.equal(DK.nearMiss('Ireland'), null);
+  assert.equal(DK.nearMiss('Australia'), null);
+  assert.equal(DK.nearMiss('Georgia'), null);
+  assert.equal(DK.nearMiss('Thailand'), null);
+  // A member is not a near miss of itself.
+  assert.equal(DK.nearMiss('France'), null);
+  assert.equal(DK.nearMiss('  spain '), null);
+  // The itinerary-level report names each bad country once, with the member it
+  // probably meant, and says nothing at all when the data is clean.
+  assert.deepEqual(DK.suspects([
+    { country: 'Portgual', checkIn: '2026-07-20', checkOut: '2026-08-02' },
+    { country: 'Portgual', checkIn: '2026-09-01', checkOut: '2026-09-05' },
+    { country: 'Greece', checkIn: '2026-07-01', checkOut: '2026-07-20' }
+  ]), [{ name: 'Portgual', meant: 'Portugal' }]);
+  assert.deepEqual(DK.suspects([{ country: 'Greece', checkIn: '2026-07-01', checkOut: '2026-07-20' }]), []);
+});
+
+test('US days are a true rolling 12 months, 365 days ending today', () => {
+  assert.equal(DK.US_WINDOW_DAYS, 365);
+  assert.equal(DK.FEIE_US_DAY_LIMIT, 35);
+  const stay = [{ country: 'United States', state: 'TX', checkIn: '2025-09-02', checkOut: '2025-09-02' }];
+  // The window is todayISO minus 364 through todayISO inclusive, which is
+  // exactly 365 dates. On 2026-09-01 the oldest date still inside it is
+  // 2025-09-02; one day earlier has fallen out.
+  assert.equal(DK.usDaysRolling(stay, '2026-09-01').total, 1);
+  assert.equal(DK.usDaysRolling(stay, '2026-09-02').total, 0);
+  // And the window really is 365 long, not 364 or 366: a stay spanning the
+  // whole of it counts every date in it and nothing outside.
+  const wide = [{ country: 'United States', state: 'TX', checkIn: '2020-01-01', checkOut: '2030-01-01' }];
+  assert.equal(DK.usDaysRolling(wide, '2026-09-01').total, 365);
+  // A stop entirely in the future is not presence yet. This is the correction
+  // that mattered most: the old counter summed the whole itinerary, so a trip
+  // booked for next month already counted against this year's 35.
+  const future = [{ country: 'United States', state: 'TN', checkIn: '2026-09-20', checkOut: '2026-09-27' }];
+  assert.equal(DK.usDaysRolling(future, '2026-09-01').total, 0);
+});
+
+test('a US stop with no state is counted, and says so', () => {
+  // It used to be skipped outright, so those days vanished from a number the
+  // traveler files taxes against. They are counted now and attributed to a
+  // named bucket, so the gap is visible instead of silent.
+  const stops = [
+    { country: 'United States', state: 'FL', checkIn: '2026-08-01', checkOut: '2026-08-05' },
+    { country: 'United States', state: '', checkIn: '2026-08-10', checkOut: '2026-08-14' },
+    { country: 'USA', checkIn: '2026-08-20', checkOut: '2026-08-22' }
+  ];
+  const out = DK.usDaysRolling(stops, '2026-09-01');
+  assert.equal(out.total, 5 + 5 + 3);
+  assert.equal(out.byState.FL, 5);
+  assert.equal(out.byState[DK.NO_STATE_LABEL], 8);
+  assert.equal(DK.NO_STATE_LABEL, 'State not set');
+  // Whitespace in a state is not a third state.
+  const padded = [{ country: 'United States', state: ' FL ', checkIn: '2026-08-01', checkOut: '2026-08-02' }];
+  assert.equal(DK.usDaysRolling(padded, '2026-09-01').byState.FL, 2);
+  // The US is the US however it is spelled.
+  ['United States', 'USA', 'US', 'united states of america'].forEach(function (n) {
+    assert.ok(DK.isUS(n), n + ' should be the US');
+  });
+  assert.ok(!DK.isUS('Georgia'), 'the country Georgia is not the US');
+});
+
+test('the budget variance has three branches and the middle one can fire', () => {
+  // The old pair of conditions were exact complements ("more than 5% over" and
+  // "at or under 5% over"), so the amber middle was unreachable and everything
+  // from dead-on to 5% OVER target printed "Under target by" a NEGATIVE amount.
+  assert.equal(DK.BUDGET_BAND, 0.05);
+  assert.equal(DK.budgetVariance(3200, 3000).kind, 'over');
+  assert.equal(DK.budgetVariance(2800, 3000).kind, 'under');
+  // The band itself, and both of its edges, are "on target". These four are
+  // the cases that used to read "Under target by $0/mo" or worse.
+  [3000, 3001, 3100, 3150, 2850, 2999].forEach(function (avg) {
+    assert.equal(DK.budgetVariance(avg, 3000).kind, 'on', 'avg ' + avg);
+  });
+  // Just outside the band on each side flips, so the branches partition.
+  assert.equal(DK.budgetVariance(3150.01, 3000).kind, 'over');
+  assert.equal(DK.budgetVariance(2849.99, 3000).kind, 'under');
+  // A positive delta must never be described with a negative "under" amount.
+  const on = DK.budgetVariance(3100, 3000);
+  assert.ok(on.delta > 0 && on.kind === 'on');
+  // No target means no variance line at all, not a divide by zero.
+  assert.equal(DK.budgetVariance(3000, 0), null);
+  assert.equal(DK.budgetVariance(3000, null), null);
+});
+
+test('days by country counts days, dedupes, and scopes to the range it is given', () => {
+  const stops = [
+    { country: 'Portugal', checkIn: '2026-03-01', checkOut: '2026-03-10' },
+    { country: 'Spain', checkIn: '2026-03-10', checkOut: '2026-03-20' }
+  ];
+  // The handover date is claimed by the first stay that reaches it, so the two
+  // countries add up to the 20 real dates rather than 21.
+  const all = DK.countryDays(stops, '1900-01-01', '2099-12-31');
+  assert.equal(all.Portugal + all.Spain, 20);
+  assert.equal(all.Portugal, 10);
+  // Unlike the two compliance counters, this one IS a view and the caller's
+  // range really does scope it.
+  const march = DK.countryDays(stops, '2026-03-05', '2026-03-12');
+  assert.equal(march.Portugal, 6);   // the 5th through the 10th
+  assert.equal(march.Spain, 2);      // the 11th and the 12th
+});
+
+test('a corrupt stay cannot hang the counters', () => {
+  // A checkOut before its checkIn is not presence, and a wild one must not
+  // spin the date walk forever.
+  assert.equal(DK.schengenUsedAt(
+    [{ country: 'France', checkIn: '2026-03-10', checkOut: '2026-03-01' }], '2026-03-20'), 0);
+  const wild = [{ country: 'France', checkIn: '2026-01-01', checkOut: '2999-01-01' }];
+  assert.equal(DK.schengenUsedAt(wild, '2026-06-01'), 152);
+  assert.deepEqual(DK.schengenUsedAt([], '2026-06-01'), 0);
+  assert.deepEqual(DK.usDaysRolling([], '2026-06-01'), { total: 0, byState: {} });
+  assert.equal(DK.schengenUsedAt([{ country: 'France', checkIn: '2026-01-01', checkOut: '2026-01-05' }], ''), 0);
+});
+
+test('the trip surface reads the counters from the engine, not its own copy', () => {
+  // The arithmetic moved into CityOps.dayKit so it could be tested at all. If
+  // the trip shell grows a second implementation, these numbers drift apart in
+  // exactly the way that is impossible to notice from the UI.
+  const fs = require('fs');
+  const path = require('path');
+  const trip = fs.readFileSync(path.join(__dirname, '..', 'src', 'trip-shell.html'), 'utf8');
+  assert.ok(trip.indexOf('CityOps.dayKit.schengenUsedAt') !== -1);
+  assert.ok(trip.indexOf('CityOps.dayKit.usDaysRolling') !== -1);
+  assert.ok(trip.indexOf('CityOps.dayKit.budgetVariance') !== -1);
+  // The nights-based presence model, and the label that described it, are gone.
+  assert.equal(trip.indexOf('lastNightDate'), -1, 'the nights model came back');
+  assert.equal(trip.indexOf('planned nights total'), -1);
+  // The two compliance counters are NOT scoped by the map filter. The filtered
+  // label belongs to the cost and country sections only, so it must appear
+  // exactly twice.
+  assert.equal(trip.split('${filterLabel}').length - 1, 2,
+    'a compliance counter picked up the map filter label');
+});
+
+test('the trip surface leaves no control that cannot succeed', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const trip = fs.readFileSync(path.join(__dirname, '..', 'src', 'trip-shell.html'), 'utf8');
+  // The AI modal read #modal-response, which is not in the markup, so every
+  // "Assess with AI" button threw before the modal could open.
+  assert.ok(trip.indexOf('id="modal-result"') !== -1);
+  // Pin the CODE, not the prose: the comments explaining each fix quote the old
+  // identifier by name, so a bare substring search would match the explanation.
+  assert.equal(trip.indexOf("getElementById('modal-response"), -1, 'the wrong modal id came back');
+  assert.ok(trip.indexOf("getElementById('modal-result')") !== -1);
+  assert.ok(trip.indexOf("getElementById('modal-result-content')") !== -1);
+  // applyAIResponse() was called by a button and defined nowhere.
+  assert.equal(trip.indexOf('applyAIResponse()"'), -1, 'a call to an undefined function came back');
+  assert.equal(trip.indexOf('id="modal-paste-back"'), -1, 'the dead paste-back box came back');
+  // The Collapse all bar hung off `.wrap > header.hero`, a class this surface
+  // has never had, so the bar was never built.
+  assert.equal(trip.indexOf("'.wrap > header.hero'"), -1, 'the dead header selector came back');
+  assert.ok(trip.indexOf(".querySelector('.wrap > header.apphdr')") !== -1);
+  // Deleting a stay or an idea now arms the same way deleting a stop does.
+  ['deleteCity:', 'removeAccom:', 'removeIdea:'].forEach(function (key) {
+    assert.ok(trip.indexOf("armConfirm('" + key) !== -1, key + ' lost its confirmation');
+  });
+  // A beacon that reports nothing still costs a third-party request per load.
+  assert.equal(trip.indexOf('cloudflareinsights.com/beacon'), -1);
+  assert.equal(trip.indexOf('"token": "YOUR_TOKEN_HERE"'), -1);
+});
+
+test('a published share carries the verdict tier, and the page renders it', () => {
+  // The snapshot builder copied `v.label`, a field no verdict has, so every
+  // share Rob has sent showed the reason with no Must/Good/Skip on it.
+  const row = {
+    city_id: 'c1',
+    data: {
+      schema: 1,
+      city: { name: 'Batumi', dates: { from: '2026-08-08', to: '2026-08-15' } },
+      sections: [{ id: 's', label: 'Dinner' }],
+      items: [{
+        id: 'i1', section: 's', name: 'Brasserie',
+        intel: { verdicts: [
+          { tier: 'must', text: 'the khachapuri' },
+          { tier: 'skip', text: 'the terrace in August' },
+          { tier: 'good', text: 'a long dinner' },
+          { text: 'no tier at all' }
+        ] }
+      }]
+    }
+  };
+  const snap = C.shareKit.build({
+    generatedAt: '2026-09-01T00:00:00.000Z', cities: [], transitions: [],
+    guides: [row], includeGuides: ['c1']
+  });
+  const verdicts = snap.guides[0].items[0].verdicts;
+  assert.deepEqual(verdicts.map(function (v) { return v.tier; }),
+    ['must', 'skip', 'good', 'good']);
+  assert.deepEqual(verdicts[0], { tier: 'must', text: 'the khachapuri' });
+  verdicts.forEach(function (v) {
+    assert.equal(v.label, undefined, 'the dead label field came back');
+  });
+  // And the share page turns the tier into the same three words the app uses.
+  const fs = require('fs');
+  const path = require('path');
+  const page = fs.readFileSync(path.join(__dirname, '..', 'share', 'index.html'), 'utf8');
+  assert.ok(page.indexOf("tier === 'must' ? 'Must'") !== -1);
+  assert.equal(page.indexOf('escapeHTML(v.label)'), -1, 'the share page still reads the dead field');
+  // The footer claimed to auto-update directly above the note saying it is a
+  // snapshot. Both cannot be true and the snapshot one is.
+  assert.equal(page.indexOf("'Auto-updating"), -1, 'the false auto-update line came back');
+  assert.equal(page.indexOf('id="footer-meta"'), -1, 'the element it wrote into came back');
+  assert.ok(page.indexOf('This page is a snapshot taken when the traveler pressed Publish') !== -1);
+});
+
+test('the AI copy says which path can actually search the web', () => {
+  // No in-app call declares a web-search tool, so Run with Claude answers from
+  // the model's own knowledge while the copy-to-chat path can go and look. The
+  // prompts ask for current hours, prices and ratings either way, so the
+  // difference has to be on screen.
+  const fs = require('fs');
+  const path = require('path');
+  const root = path.join(__dirname, '..');
+  const app = fs.readFileSync(path.join(root, 'src', 'app-shell.html'), 'utf8');
+  const trip = fs.readFileSync(path.join(root, 'src', 'trip-shell.html'), 'utf8');
+  assert.equal(app.indexOf('tools:'), -1, 'an in-app call grew a tool declaration; update this copy');
+  assert.ok(app.indexOf("no web access") !== -1);
+  assert.ok(app.indexOf('search the web') !== -1);
+  assert.ok(trip.indexOf('no web access') !== -1);
+  // The Enrich modal closed with a promise that three working buttons above it
+  // had already kept.
+  assert.equal(app.indexOf('In-app research is planned for a future version'), -1);
 });
 
 // The async tests above resolve on a microtask, so the summary has to wait

@@ -1890,15 +1890,21 @@
       <a class="btn-secondary" id="modal-open-claude" href="https://claude.ai/new" target="_blank" rel="noopener noreferrer">↗ Open Claude.ai</a>
       <button class="btn" id="modal-api-btn" onclick="runAPI()" style="display:none">⚡ Run via API</button>
     </div>
+    <!-- The honest difference between the two transports. Neither path here
+         declares a web-search tool, so "Run via API" answers from the model's
+         own training data, while a chat session you paste into can go and look.
+         The prompt asks for current facts either way, so the traveler needs to
+         know which one he is getting. -->
+    <div class="muted" style="margin-top:8px;font-size:11px;line-height:1.5">Run via API answers from the model's own knowledge, with no web access. Copy prompt into Claude.ai or ChatGPT if you want it to search the web for the listing.</div>
 
-    <div id="modal-pasteback-section" style="margin-top:20px">
-      <hr class="divider" style="margin:0 0 14px">
-      <div class="muted" style="margin-bottom:6px;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;font-family:'JetBrains Mono',monospace">AI response (paste below if using copy mode)</div>
-      <textarea class="modal-textarea" id="modal-paste-back" placeholder='Paste the JSON response from Claude here, then click Apply.'></textarea>
-      <div class="modal-actions">
-        <button class="btn green" onclick="applyAIResponse()">✓ Apply response</button>
-      </div>
-    </div>
+    <!-- The paste-back block that used to sit here is gone (2026-09-01). Its
+         Apply button called applyAIResponse(), a function that has never
+         existed in this file, so the only thing it could do was throw. It was
+         never wired to anything either: this modal has exactly one caller,
+         openAccomAssessment, whose prompt asks for a fit score, pros, concerns
+         and questions to ask the host. That is prose for a person to read, not
+         JSON with anywhere to be applied. The Result panel below is where an
+         answer lands. -->
 
     <div id="modal-result" style="margin-top:16px;display:none">
       <hr class="divider" style="margin:0 0 14px">
@@ -1997,20 +2003,13 @@
 <div class="saved" id="saved">SAVED</div>
 <div class="toast" id="toast"></div>
 
-<!--
-  Cloudflare Web Analytics — privacy-friendly, cookieless usage stats.
-  Setup:
-    1. Sign up at https://www.cloudflare.com/web-analytics/ (free)
-    2. Add your site (e.g., robriggs3.github.io/plan-ahead/)
-    3. Copy the beacon token from your Cloudflare dashboard
-    4. Replace YOUR_TOKEN_HERE below with that token
-    5. Commit + push
-  Does nothing until you swap the token. It logs page loads and referrer only,
-  never trip content. (This note used to measure itself against a data-locality
-  promise in the footer; that promise was removed on 2026-08-26, because the
-  app could not keep it.)
--->
-<script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "YOUR_TOKEN_HERE"}'></script>
+<!-- The Cloudflare Web Analytics beacon that sat here is gone (2026-09-01).
+     It shipped a literal "YOUR_TOKEN_HERE" placeholder, so for its whole life
+     it reported nothing while still fetching a third-party script from
+     static.cloudflareinsights.com on every load of this page. A tag that costs
+     a request and a third party on every visit and returns no measurement is
+     not analytics. If usage stats are wanted later, add it back WITH a real
+     token, on both surfaces, in one deliberate change. -->
 
 <!-- The cityops engine, inlined by tools/assemble.js exactly as it is into
      index.html. The trip surface uses none of its rendering: what it wants is
@@ -5093,6 +5092,288 @@ var CityOps = (function () {
     return !!src.github;
   }
 
+  // ---- presence days: the compliance counters ----
+  //
+  // Rob makes visa and tax decisions on these two numbers, so the arithmetic
+  // lives here, pure and unit tested, instead of inside a renderer where it sat
+  // wrong for months. Three things were wrong on 2026-09-01 and are fixed here.
+  //
+  // 1. A BORDER COUNTS DAYS, NOT NIGHTS. Any part of a day inside the territory
+  //    is a whole day to an immigration officer and to the IRS, so the arrival
+  //    day and the departure day BOTH count. Presence for a stay is every date
+  //    from checkIn through checkOut INCLUSIVE. The old code counted nights
+  //    ([checkIn, checkOut - 1]), which under-reported every stop by one day.
+  //    That is the wrong direction to be wrong in on a 90/180 limit: it told
+  //    the traveler he had room he did not have.
+  //
+  // 2. OVERLAPPING STAYS ARE ONE DAY, NOT TWO. Two stops that share a date are
+  //    one day of presence. The old code summed each stay's overlap separately,
+  //    so an itinerary with a one-day handover between two cities in the same
+  //    zone counted that day twice. Presence is collected into a SET of dates
+  //    and then counted, never summed per stay.
+  //
+  // 3. MEMBERSHIP WAS EXACT STRING EQUALITY. Country arrives from a free-text
+  //    field and from imported JSON, so " France", "france" and "Czechia" each
+  //    scored zero Schengen days in silence. The 29-name array stays the
+  //    authority; only the MATCH is normalized.
+
+  var SCHENGEN_MEMBERS = [
+    'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Czech Republic', 'Denmark', 'Estonia', 'Finland',
+    'France', 'Germany', 'Greece', 'Hungary', 'Iceland', 'Italy', 'Latvia', 'Liechtenstein',
+    'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Norway', 'Poland', 'Portugal', 'Romania',
+    'Slovakia', 'Slovenia', 'Spain', 'Sweden', 'Switzerland'
+  ];
+
+  // Same country, other name. Only entries that are genuinely the SAME state go
+  // here: an alias that is merely close is a near miss (below), which the app
+  // reports rather than silently resolves.
+  var COUNTRY_ALIASES = {
+    'czechia': 'czech republic',
+    'holland': 'netherlands',
+    'slovak republic': 'slovakia',
+    'hellas': 'greece',
+    'deutschland': 'germany',
+    'espana': 'spain',
+    'italia': 'italy',
+    'osterreich': 'austria',
+    'suomi': 'finland',
+    'sverige': 'sweden',
+    'norge': 'norway',
+    'danmark': 'denmark',
+    'polska': 'poland',
+    'magyarorszag': 'hungary',
+    'schweiz': 'switzerland',
+    'suisse': 'switzerland',
+    'svizzera': 'switzerland',
+    'nederland': 'netherlands',
+    'eesti': 'estonia',
+    'latvija': 'latvia',
+    'lietuva': 'lithuania',
+    'island': 'iceland',
+    'hrvatska': 'croatia'
+  };
+
+  // Case, padding, punctuation and accents are noise on a country name. A
+  // leading "the" is too: "The Netherlands" is Netherlands.
+  function normCountry(name) {
+    var s = String(name == null ? '' : name);
+    if (s.normalize) s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    s = s.toLowerCase().replace(/[^a-z]+/g, ' ').replace(/\s+/g, ' ').replace(/^ | $/g, '');
+    if (s.indexOf('the ') === 0) s = s.slice(4);
+    return COUNTRY_ALIASES[s] || s;
+  }
+
+  var SCHENGEN_NORM = (function () {
+    var m = {};
+    for (var i = 0; i < SCHENGEN_MEMBERS.length; i++) m[normCountry(SCHENGEN_MEMBERS[i])] = SCHENGEN_MEMBERS[i];
+    return m;
+  })();
+
+  function schengenMember(country) {
+    return Object.prototype.hasOwnProperty.call(SCHENGEN_NORM, normCountry(country));
+  }
+
+  var US_NORM = { 'united states': 1, 'united states of america': 1, 'usa': 1, 'us': 1, 'u s a': 1, 'u s': 1, 'america': 1 };
+
+  function usMember(country) {
+    return Object.prototype.hasOwnProperty.call(US_NORM, normCountry(country));
+  }
+
+  // Every other country the app's own picker offers. These are real places that
+  // are definitively NOT in the Schengen area, so they must never be reported
+  // as a typo of one. Without this list the two most consequential pairs on the
+  // list, Ireland/Iceland and Australia/Austria, both raise a false alarm, and a
+  // counter that cries wolf on ordinary destinations is one the traveler learns
+  // to scroll past.
+  var KNOWN_NON_MEMBERS = [
+    'Albania', 'Argentina', 'Armenia', 'Australia', 'Bahamas', 'Bali',
+    'Bolivia', 'Bosnia and Herzegovina', 'Brazil', 'Cambodia', 'Canada',
+    'Cape Verde', 'Chile', 'China', 'Colombia', 'Costa Rica', 'Cyprus',
+    'Dominican Republic', 'Ecuador', 'Egypt', 'El Salvador', 'Georgia',
+    'Ghana', 'Guatemala', 'Honduras', 'India', 'Indonesia', 'Ireland',
+    'Israel', 'Jamaica', 'Japan', 'Jordan', 'Kenya', 'Laos', 'Lebanon',
+    'Malaysia', 'Mauritius', 'Mexico', 'Moldova', 'Monaco', 'Mongolia',
+    'Montenegro', 'Morocco', 'Mozambique', 'Myanmar', 'Nepal', 'New Zealand',
+    'Nicaragua', 'Nigeria', 'North Macedonia', 'Pakistan', 'Panama',
+    'Paraguay', 'Peru', 'Philippines', 'Qatar', 'Russia', 'Rwanda',
+    'Saudi Arabia', 'Senegal', 'Serbia', 'Seychelles', 'Singapore',
+    'South Africa', 'South Korea', 'Sri Lanka', 'Taiwan', 'Tanzania',
+    'Thailand', 'Turkey', 'Türkiye', 'UAE', 'Uganda', 'Ukraine',
+    'United Kingdom', 'United States', 'Uruguay', 'Vatican City',
+    'Venezuela', 'Vietnam'
+  ];
+
+  var NON_MEMBER_NORM = (function () {
+    var m = {};
+    for (var i = 0; i < KNOWN_NON_MEMBERS.length; i++) m[normCountry(KNOWN_NON_MEMBERS[i])] = 1;
+    for (var k in US_NORM) if (Object.prototype.hasOwnProperty.call(US_NORM, k)) m[k] = 1;
+    return m;
+  })();
+
+  function editDistance(a, b) {
+    var prev = [], cur = [], i, j;
+    for (j = 0; j <= b.length; j++) prev[j] = j;
+    for (i = 1; i <= a.length; i++) {
+      cur[0] = i;
+      for (j = 1; j <= b.length; j++) {
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1));
+      }
+      for (j = 0; j <= b.length; j++) prev[j] = cur[j];
+    }
+    return prev[b.length];
+  }
+
+  // The dangerous name is the one that is NOT a member and is one small typo
+  // away from one: "Portgual" contributes zero Schengen days in silence and the
+  // counter reads compliant when it is not. Return the member it probably meant
+  // so the UI can name it, or null. Deliberately narrow: short names and a
+  // distance over 2 are not reported, because a false alarm on every ordinary
+  // non-member country would train the traveler to ignore the line.
+  function schengenNearMiss(country) {
+    var n = normCountry(country);
+    if (!n || n.length < 5) return null;
+    if (Object.prototype.hasOwnProperty.call(SCHENGEN_NORM, n)) return null;
+    if (Object.prototype.hasOwnProperty.call(NON_MEMBER_NORM, n)) return null;
+    var best = null, bestD = 3;
+    for (var k in SCHENGEN_NORM) {
+      if (!Object.prototype.hasOwnProperty.call(SCHENGEN_NORM, k)) continue;
+      if (Math.abs(k.length - n.length) > 2) continue;
+      var d = editDistance(n, k);
+      if (d < bestD) { bestD = d; best = SCHENGEN_NORM[k]; }
+    }
+    return best;
+  }
+
+  // Every country name in the itinerary that is a near miss, once each, with
+  // the member it probably meant. This is what the UI reports.
+  function schengenSuspects(stays) {
+    var seen = {}, out = [];
+    (stays || []).forEach(function (s) {
+      var raw = s && s.country;
+      if (!raw || seen[raw]) return;
+      seen[raw] = 1;
+      var guess = schengenNearMiss(raw);
+      if (guess) out.push({ name: String(raw), meant: guess });
+    });
+    return out;
+  }
+
+  // A stay is countable when it has both ends and has not been eliminated.
+  function countableStay(s) {
+    return !!(s && s.status !== 'eliminated' && s.checkIn && s.checkOut && s.checkIn <= s.checkOut);
+  }
+
+  // The set of ISO dates on which `stays` put the traveler inside the window
+  // [fromISO, toISO], both inclusive, counting checkOut as a day present.
+  // `pred` selects which stays count. The return is a plain object used as a
+  // set, which is how the rest of this file spells "no duplicates" without a
+  // Set dependency. `tag` (optional) is called per counted date so a caller can
+  // attribute the day to a state or a country without walking the dates twice;
+  // the FIRST stay to claim a date owns it, which is what makes an overlap one
+  // day rather than two.
+  function presenceDates(stays, pred, fromISO, toISO, tag) {
+    var seen = {};
+    (stays || []).forEach(function (s) {
+      if (!countableStay(s) || !pred(s)) return;
+      var start = s.checkIn > fromISO ? s.checkIn : fromISO;
+      var end = s.checkOut < toISO ? s.checkOut : toISO;   // checkOut counts
+      if (end < start) return;
+      var d = start;
+      // Guard: a corrupt row with a wild checkOut must not spin forever.
+      for (var n = 0; d <= end && n < 4000; n++) {
+        if (!Object.prototype.hasOwnProperty.call(seen, d)) {
+          seen[d] = 1;
+          if (tag) tag(d, s);
+        }
+        d = addDaysIso(d, 1);
+      }
+    });
+    return seen;
+  }
+
+  function countKeys(o) {
+    var n = 0;
+    for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) n++;
+    return n;
+  }
+
+  // Schengen 90/180 at a reference date: days of presence in the 180-day window
+  // ending on refISO, that day included. 180 days means refISO minus 179.
+  var SCHENGEN_WINDOW_DAYS = 180;
+  var SCHENGEN_LIMIT = 90;
+
+  function schengenUsedAt(stays, refISO) {
+    if (!refISO) return 0;
+    var from = addDaysIso(refISO, -(SCHENGEN_WINDOW_DAYS - 1));
+    return countKeys(presenceDates(stays, function (s) { return schengenMember(s.country); }, from, refISO));
+  }
+
+  // The worst point ahead. Every stay's LAST day is a candidate peak, because
+  // the count only ever rises while you are inside the zone; checking the last
+  // day of each stay finds the maximum without walking every date in the plan.
+  function schengenPeak(stays) {
+    var members = (stays || []).filter(function (s) { return countableStay(s) && schengenMember(s.country); });
+    var peak = { days: 0, date: null };
+    members.forEach(function (s) {
+      var d = schengenUsedAt(stays, s.checkOut);
+      if (d > peak.days) peak = { days: d, date: s.checkOut };
+    });
+    return peak;
+  }
+
+  // FEIE physical presence: US DAYS in a true rolling 12 months, which is
+  // todayISO minus 364 through todayISO, both included, so the window is
+  // exactly 365 days long. This used to be whatever the MAP FILTER happened to
+  // be set to, which meant the number moved when the traveler changed a view.
+  // It does not any more: a rolling window is a fact about the calendar, not a
+  // view of the itinerary, so this counter ignores the filter entirely.
+  var US_WINDOW_DAYS = 365;
+  var FEIE_US_DAY_LIMIT = 35;
+  var NO_STATE_LABEL = 'State not set';
+
+  function usDaysRolling(stays, todayISO) {
+    if (!todayISO) return { total: 0, byState: {} };
+    var from = addDaysIso(todayISO, -(US_WINDOW_DAYS - 1));
+    var byState = {};
+    // A US stop with no state chosen used to be SKIPPED, so those days simply
+    // vanished from a number the traveler files taxes against. They are counted
+    // now and attributed to a named bucket, so the gap is visible rather than
+    // silent.
+    var seen = presenceDates(stays, function (s) { return usMember(s.country); }, from, todayISO, function (d, s) {
+      var key = (s.state && String(s.state).replace(/^\s+|\s+$/g, '')) || NO_STATE_LABEL;
+      byState[key] = (byState[key] || 0) + 1;
+    });
+    return { total: countKeys(seen), byState: byState };
+  }
+
+  // Days by country, over whatever window the caller passes. This one IS a view
+  // of the itinerary rather than a legal fact, so the map filter still scopes
+  // it; the caller supplies the range.
+  function countryDays(stays, fromISO, toISO) {
+    var byCountry = {};
+    presenceDates(stays, function () { return true; }, fromISO, toISO, function (d, s) {
+      var key = String(s.country || '').replace(/^\s+|\s+$/g, '') || 'Unknown';
+      byCountry[key] = (byCountry[key] || 0) + 1;
+    });
+    return byCountry;
+  }
+
+  // Budget variance against a monthly target, as three real branches. The old
+  // code had two that were exact complements ("over by more than 5%" and "at or
+  // under 5% over"), so the amber middle could never fire and anything from
+  // dead-on to 5% OVER target printed "Under target", by a negative amount.
+  var BUDGET_BAND = 0.05;
+
+  function budgetVariance(avgPerMonth, target) {
+    if (!(target > 0)) return null;
+    var delta = avgPerMonth - target;
+    var band = target * BUDGET_BAND;
+    var pct = delta / target * 100;
+    if (delta > band) return { kind: 'over', delta: delta, pct: pct };
+    if (delta < -band) return { kind: 'under', delta: delta, pct: pct };
+    return { kind: 'on', delta: delta, pct: pct };
+  }
+
   // ---- the public share ----
   //
   // Replaces the GitHub-PAT publish. A share is one row in public.shares keyed
@@ -5408,8 +5689,18 @@ var CityOps = (function () {
       if (typeof stars === 'number' && isFinite(stars)) o.stars = stars;
       var verdicts = it && it.intel && it.intel.verdicts;
       if (Array.isArray(verdicts) && verdicts.length) {
+        // A verdict carries `tier` (must|good|skip), which is the whole point of
+        // it: Must / Good / Skip is the judgement, the text is the reason. This
+        // used to copy `v.label`, a field no verdict has ever had, so every
+        // published share rendered the reason with no verdict attached to it.
+        // Carry the tier, and fall back to the middle tier rather than dropping
+        // a verdict whose tier a hand-edited guide left off.
         o.verdicts = verdicts.map(function (v) {
-          return { label: shareText(v && v.label), text: shareText(v && v.text) };
+          var t = v && v.tier;
+          return {
+            tier: (t === 'must' || t === 'skip' || t === 'good') ? t : 'good',
+            text: shareText(v && v.text)
+          };
         });
       }
       return o;
@@ -8426,6 +8717,23 @@ var CityOps = (function () {
       legacyFields: shareLegacyFields, suggest: shareLabelSuggestion,
       addBlocked: shareAddBlocked, writeFailure: shareWriteFailure
     },
+    // The compliance counters. Rob makes visa and tax decisions on these, so
+    // the math is pure and tested here and the trip surface is transport, the
+    // same split shareKit uses. presenceDates is the one rule underneath all of
+    // them: a day inside the territory is a whole day, and a date is counted
+    // once no matter how many stays claim it.
+    dayKit: {
+      SCHENGEN_MEMBERS: SCHENGEN_MEMBERS, SCHENGEN_LIMIT: SCHENGEN_LIMIT,
+      SCHENGEN_WINDOW_DAYS: SCHENGEN_WINDOW_DAYS,
+      US_WINDOW_DAYS: US_WINDOW_DAYS, FEIE_US_DAY_LIMIT: FEIE_US_DAY_LIMIT,
+      NO_STATE_LABEL: NO_STATE_LABEL, BUDGET_BAND: BUDGET_BAND,
+      normCountry: normCountry, isSchengen: schengenMember, isUS: usMember,
+      nearMiss: schengenNearMiss, suspects: schengenSuspects,
+      presenceDates: presenceDates, countDates: countKeys,
+      schengenUsedAt: schengenUsedAt, schengenPeak: schengenPeak,
+      usDaysRolling: usDaysRolling, countryDays: countryDays,
+      budgetVariance: budgetVariance
+    },
     safeHref: safeHref,
     onStateChange: null, liveState: liveState,
     emptyState: emptyState, makeStore: makeStore, setStatus: setStatus,
@@ -8665,6 +8973,11 @@ footer .stamp { display: inline-block; padding: 6px 14px; border: 1px solid var(
 .gitem .gi-note { font-size: 13px; color: var(--text-2); margin-top: 3px; line-height: 1.55; }
 .gitem .gi-verdict { font-size: 12px; color: var(--text-2); margin-top: 4px; padding-left: 10px; border-left: 2px solid var(--border); line-height: 1.5; }
 .gitem .gi-verdict b { color: var(--text); font-weight: 500; }
+/* Must / Good / Skip. The word carries the judgement, so it reads before the
+   reason does; colour is a reinforcement, never the only signal. */
+.gitem .gi-tier { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
+.gitem .gi-tier-must { color: var(--accent-strong); }
+.gitem .gi-tier-skip { color: var(--text-3); }
 .gitem .gi-links { margin-top: 5px; display: flex; gap: 10px; flex-wrap: wrap; }
 .gitem .gi-links a { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent-strong); text-decoration: none; min-height: 30px; display: inline-flex; align-items: center; }
 .gitem .gi-links a:hover { text-decoration: underline; }
@@ -8744,7 +9057,6 @@ __SHARE_DATA__
 
   <footer>
     <div class="stamp">Eyes only · Shared by link</div>
-    <div id="footer-meta"></div>
     <div class="snapnote">This page is a snapshot taken when the traveler pressed Publish. It is not live: plans made since then are not on it until they publish again.</div>
   </footer>
 </div>
@@ -9113,7 +9425,10 @@ function render() {
     var stale = ageDays >= 21 ? ' · may be out of date' : '';
     document.getElementById('gen-date').textContent = 'Updated ' + human + ' · ' + ageText + stale;
   })();
-  document.getElementById('footer-meta').textContent = 'Auto-updating · Last refresh on visit';
+  // The footer used to print "Auto-updating · Last refresh on visit" directly
+  // above the note explaining that this page is a snapshot. Both cannot be
+  // true, and the snapshot one is. The false line is gone; #gen-date above
+  // already says how old the snapshot is.
 
   const cs = document.getElementById('current-section');
   if (current) {
@@ -9253,9 +9568,16 @@ function guideItemHTML(it) {
   top += '</div>';
   var body = '';
   if (it.note) body += '<div class="gi-note">' + escapeHTML(it.note) + '</div>';
+  // Must / Good / Skip, the same three words and the same bold-tag-then-reason
+  // shape the app's own Share view uses. This read `v.label` until 2026-09-01,
+  // a field no verdict has ever carried, so every published share showed the
+  // reason with the judgement missing.
   (it.verdicts || []).forEach(function (v) {
     if (!v || !v.text) return;
-    body += '<div class="gi-verdict">' + (v.label ? '<b>' + escapeHTML(v.label) + '</b> ' : '') + escapeHTML(v.text) + '</div>';
+    var tier = (v.tier === 'must' || v.tier === 'skip') ? v.tier : 'good';
+    var word = tier === 'must' ? 'Must' : (tier === 'skip' ? 'Skip' : 'Good');
+    body += '<div class="gi-verdict"><b class="gi-tier gi-tier-' + tier + '">' + word + '</b> ' +
+      escapeHTML(v.text) + '</div>';
   });
   var links = (it.links || []).filter(function (l) { return l && l.href; });
   if (links.length) {
@@ -10138,12 +10460,17 @@ function nightsBetween(checkInStr, checkOutStr) {
   return Math.max(0, Math.round((b - a) / 86400000));
 }
 
+// Membership is CityOps.dayKit's call, not this file's. The 29-name array above
+// is still the authority; what moved is the MATCH, which now tolerates case,
+// padding and the ordinary alternate names ("Czechia", "Holland"), because the
+// country field is free text and exact string equality was silently scoring
+// " france" as zero Schengen days.
 function isSchengen(country) {
-  return SCHENGEN_COUNTRIES.includes(country);
+  return CityOps.dayKit.isSchengen(country);
 }
 
 function isUS(country) {
-  return country === 'United States' || country === 'USA' || country === 'US';
+  return CityOps.dayKit.isUS(country);
 }
 
 function fmtCurrency(amount, currency) {
@@ -10256,49 +10583,18 @@ function uncoveredNights(city) {
   return uncovered;
 }
 
-// Per-country totals
+// Per-country totals over the map filter's range. This one IS a view of the
+// itinerary rather than a legal fact, so the filter still scopes it and the
+// label still says so.
 function countryDayMap(range) {
-  const map = {};
-  state.cities.forEach(c => {
-    if (c.status === 'eliminated') return;
-    if (!c.country || !c.checkIn || !c.checkOut) return;
-    if (range && !cityInRange(c, range)) return;
-    // If range is set, count overlap with range, not full city stay
-    let nights = cityNights(c);
-    if (range) {
-      const cIn = parseDate(c.checkIn);
-      const cOut = parseDate(c.checkOut);
-      const rFrom = parseDate(range.from);
-      const rTo = parseDate(range.to);
-      const overlapStart = cIn > rFrom ? cIn : rFrom;
-      const overlapEnd = cOut < rTo ? cOut : rTo;
-      nights = Math.max(0, Math.round((overlapEnd - overlapStart) / 86400000));
-    }
-    map[c.country] = (map[c.country] || 0) + nights;
-  });
-  return map;
+  return CityOps.dayKit.countryDays(state.cities, (range && range.from) || '1900-01-01', (range && range.to) || '2099-12-31');
 }
 
-// Per-US-state totals
-function stateDayMap(range) {
-  const map = {};
-  state.cities.forEach(c => {
-    if (c.status === 'eliminated') return;
-    if (!isUS(c.country) || !c.state || !c.checkIn || !c.checkOut) return;
-    if (range && !cityInRange(c, range)) return;
-    let nights = cityNights(c);
-    if (range) {
-      const cIn = parseDate(c.checkIn);
-      const cOut = parseDate(c.checkOut);
-      const rFrom = parseDate(range.from);
-      const rTo = parseDate(range.to);
-      const overlapStart = cIn > rFrom ? cIn : rFrom;
-      const overlapEnd = cOut < rTo ? cOut : rTo;
-      nights = Math.max(0, Math.round((overlapEnd - overlapStart) / 86400000));
-    }
-    map[c.state] = (map[c.state] || 0) + nights;
-  });
-  return map;
+// Per-US-state totals in the FEIE rolling 12 months. No range argument any
+// more: this is a compliance number, and it is deliberately not scoped by the
+// map filter (see renderCounters).
+function stateDayMap() {
+  return CityOps.dayKit.usDaysRolling(state.cities, todayISO());
 }
 
 // Human-readable label for the current map filter
@@ -10314,48 +10610,21 @@ function getFilterLabel() {
   return labels[f] || f;
 }
 
-// Schengen rolling 90/180: for any given reference date, how many days in the prior 180 (inclusive) were Schengen?
+// Schengen 90/180 at a reference date. The arithmetic is CityOps.dayKit's, pure
+// and unit tested; this is transport.
+//
+// It changed on 2026-09-01 and the numbers move UP. It used to count NIGHTS
+// (presence as [checkIn, checkOut - 1]) and to sum each stay separately. A
+// border counts DAYS: arrival day and departure day both count, so presence is
+// [checkIn, checkOut] inclusive, and two stays sharing a date are one day of
+// presence, not two. Under-reporting was the wrong direction to be wrong in.
 function schengenDaysUsedAt(refDateStr) {
-  const ref = parseDate(refDateStr);
-  if (!ref) return 0;
-  const winStart = new Date(ref);
-  winStart.setDate(winStart.getDate() - 179);
-  let days = 0;
-  state.cities.forEach(c => {
-    if (c.status === 'eliminated') return;
-    if (!isSchengen(c.country) || !c.checkIn || !c.checkOut) return;
-    const cIn = parseDate(c.checkIn);
-    const cOut = parseDate(c.checkOut);
-    if (!cIn || !cOut) return;
-    // count nights inside the window (each night = the date you spent there)
-    // We treat presence as [checkIn, checkOut - 1 night], because checkOut day you've left.
-    // Schengen counts every calendar day you're physically present, so for nightly
-    // accounting we count overlap days between [checkIn, checkOut-1day] and [winStart, ref].
-    const lastNightDate = new Date(cOut);
-    lastNightDate.setDate(lastNightDate.getDate() - 1);
-    const overlapStart = cIn > winStart ? cIn : winStart;
-    const overlapEnd = lastNightDate < ref ? lastNightDate : ref;
-    if (overlapEnd >= overlapStart) {
-      const overlap = Math.round((overlapEnd - overlapStart) / 86400000) + 1;
-      days += overlap;
-    }
-  });
-  return days;
+  return CityOps.dayKit.schengenUsedAt(state.cities, refDateStr);
 }
 
-// Peak Schengen usage across the planned itinerary (worst point ahead)
+// Peak Schengen usage across the planned itinerary (worst point ahead).
 function peakSchengenAhead() {
-  const cities = state.cities.filter(c => c.status !== 'eliminated' && isSchengen(c.country) && c.checkIn && c.checkOut);
-  if (cities.length === 0) return { days: 0, date: null };
-  let peak = { days: 0, date: null };
-  cities.forEach(c => {
-    const lastNight = new Date(parseDate(c.checkOut));
-    lastNight.setDate(lastNight.getDate() - 1);
-    const dStr = lastNight.toISOString().slice(0,10);
-    const d = schengenDaysUsedAt(dStr);
-    if (d > peak.days) peak = { days: d, date: dStr };
-  });
-  return peak;
+  return CityOps.dayKit.schengenPeak(state.cities);
 }
 
 // ==================== GAP / OVERLAP DETECTION ====================
@@ -10774,32 +11043,55 @@ function renderCounters() {
   // ============== Section content builders ==============
   // Each returns an HTML string for one section inside a grouped card.
 
+  // ---- The two COMPLIANCE counters ----
+  //
+  // Neither one is scoped by the map filter, and that is deliberate. The filter
+  // is a VIEW of the itinerary; these two are statements about legal reality, so
+  // narrowing the map to "Q4 2026" must not make the Schengen count fall or the
+  // FEIE count reset. Cost and Days-by-country below DO follow the filter, and
+  // those are the ones that carry the "(filtered: ...)" label.
+  //
+  // Both count DAYS, not nights: any part of a day inside the territory is a
+  // whole day, so arrival and departure day both count. Overlapping stays share
+  // a date once. See CityOps.dayKit, where the arithmetic lives and is tested.
+
   // ---- Schengen 90/180 ----
   const schNow = schengenDaysUsedAt(todayStr);
   const peak = peakSchengenAhead();
   let schClass = 'ok';
   if (schNow >= 75 || peak.days >= 85) schClass = 'alert';
   else if (schNow >= 60 || peak.days >= 70) schClass = 'warn';
+  // A country name one typo away from a member contributes ZERO Schengen days
+  // in silence, which reads as compliant when it is not. Name it here.
+  const schSuspects = CityOps.dayKit.suspects(state.cities);
+  const schSuspectLine = schSuspects.length
+    ? `<div class="counter-sub" style="margin-top:4px;color:var(--amber);font-weight:500">⚠ Not counted as Schengen: ${schSuspects.map(s => `${escapeHTML(s.name)} (did you mean ${escapeHTML(s.meant)}?)`).join(', ')}</div>`
+    : '';
   const schSection = `
     <div class="counter-section">
       <div class="counter-label">Schengen 90/180 (today)</div>
       <div class="counter-value ${schClass}">${schNow} <span style="font-size:18px;color:var(--text-3)">/ 90</span></div>
-      <div class="counter-sub">${90 - schNow} days remaining today${peak.date ? ` · peak ahead: ${peak.days} on ${fmtDateShort(peak.date)}` : ''}</div>
+      <div class="counter-sub">Days present, arrival and departure day both counted, in the 180 days ending today. ${90 - schNow} left${peak.date ? ` · peak ahead: ${peak.days} on ${fmtDateShort(peak.date)}` : ''}</div>
+      <div class="counter-sub" style="font-size:10px;color:var(--text-3)">Assumes visa-free entry. A visa or residence permit changes this and is not modelled.</div>
+      ${schSuspectLine}
     </div>
   `;
 
   // ---- US days (FEIE) ----
-  const stateMap = stateDayMap(range);
-  const topStates = Object.entries(stateMap).sort((a,b) => b[1] - a[1]).slice(0, 8);
-  const usTotal = Object.values(stateMap).reduce((a,b)=>a+b,0);
+  // A true rolling 12 months: today minus 364 through today, inclusive. It used
+  // to sum every US stop in the map filter's range, which is a different number
+  // with the same label.
+  const us = stateDayMap();
+  const topStates = Object.entries(us.byState).sort((a,b) => b[1] - a[1]).slice(0, 8);
+  const usTotal = us.total;
   let usClass = 'ok';
   if (usTotal > 32) usClass = 'alert';
   else if (usTotal > 25) usClass = 'warn';
   const usSection = `
     <div class="counter-section">
-      <div class="counter-label">US days (rolling, by state)${filterLabel}</div>
+      <div class="counter-label">US days (rolling 12 months, by state)</div>
       <div class="counter-value ${usClass}">${usTotal} <span style="font-size:18px;color:var(--text-3)">/ 35*</span></div>
-      <div class="counter-sub">* FEIE physical presence: max 35 US days per rolling 12 months</div>
+      <div class="counter-sub">Days present in the last 365 days, today included. * FEIE physical presence: max 35 US days per rolling 12 months</div>
       <div class="counter-breakdown">
         ${topStates.map(([k,v]) => `<div class="item"><span class="name">${escapeHTML(k)}</span><span class="num">${v}d</span></div>`).join('')}
       </div>
@@ -10814,7 +11106,7 @@ function renderCounters() {
     <div class="counter-section">
       <div class="counter-label">Days by country${filterLabel}</div>
       <div class="counter-value">${Object.keys(countryMap).length}</div>
-      <div class="counter-sub">${countriesTotal} planned nights total</div>
+      <div class="counter-sub">${countriesTotal} days present in total</div>
       <div class="counter-breakdown">
         ${topCountries.map(([k,v]) => `<div class="item"><span class="name">${escapeHTML(k)}</span><span class="num">${v}d</span></div>`).join('')}
       </div>
@@ -10850,16 +11142,19 @@ function renderCounters() {
   const target = state.budgetMonthlyTarget || 0;
   let varianceLine = '';
   if (target > 0 && spanMonths > 0.5) {
-    const delta = avgPerMonth - target;
-    const pctDelta = target > 0 ? (delta / target * 100) : 0;
-    const isOver = delta > target * 0.05;
-    const onTrack = delta <= target * 0.05;
-    const cls = isOver ? 'alert' : (onTrack ? 'ok' : 'warn');
-    const color = cls === 'alert' ? 'var(--accent)' : (cls === 'ok' ? 'var(--green)' : 'var(--amber)');
-    const icon = isOver ? '⚠' : '✓';
-    const label = isOver
-      ? `Over target by ${fmtCurrency(Math.round(delta),'USD')}/mo (${Math.round(pctDelta)}%)`
-      : `Under target by ${fmtCurrency(Math.round(-delta),'USD')}/mo`;
+    // Three branches, not two. The old pair ("more than 5% over" and "at or
+    // under 5% over") were exact complements, so the amber middle could never
+    // fire and everything from dead-on to 5% OVER target printed "Under target
+    // by" a negative amount. dayKit.budgetVariance is the pure version.
+    const v = CityOps.dayKit.budgetVariance(avgPerMonth, target);
+    const color = v.kind === 'over' ? 'var(--accent)' : (v.kind === 'under' ? 'var(--green)' : 'var(--amber)');
+    const icon = v.kind === 'over' ? '⚠' : (v.kind === 'under' ? '✓' : '≈');
+    const pct = Math.round(v.pct);
+    const label = v.kind === 'over'
+      ? `Over target by ${fmtCurrency(Math.round(v.delta),'USD')}/mo (${pct}%)`
+      : (v.kind === 'under'
+        ? `Under target by ${fmtCurrency(Math.round(-v.delta),'USD')}/mo (${Math.abs(pct)}%)`
+        : `On target, within 5% (${pct > 0 ? '+' : ''}${pct}%)`);
     varianceLine = `<div class="counter-sub" style="font-size:11px;margin-top:2px;color:${color};font-weight:500">${icon} ${label} (target ${fmtCurrency(target,'USD')}/mo)</div>`;
   } else if (target === 0 && spanMonths > 0.5) {
     varianceLine = `<div class="counter-sub" style="font-size:10px;margin-top:2px;color:var(--text-3)">Set a monthly target in Settings to track variance.</div>`;
@@ -11294,8 +11589,18 @@ function renderCityCard(city, hasIssue, hasAlert, isPast) {
   node.className = 'city' + (openCityIds.has(city.id) ? ' open' : '') + (hasAlert ? ' has-alert' : (hasIssue ? ' has-issue' : '')) + (isPast ? ' past' : '');
   const capturedId = city.id;
   node.dataset.cityId = capturedId;
-  // Active (non-past) cards are draggable for manual reorder
-  if (!isPast) {
+  // Active (non-past) cards are draggable for manual reorder, EXCEPT booked
+  // ones. A booked stop is sorted chronologically on every render, on purpose:
+  // it is a commitment with real dates, and showing it out of date order in an
+  // itinerary that also drives the Schengen and FEIE counters would be a lie.
+  // The card was draggable anyway, so a drag wrote sortIndex, toasted "Moved",
+  // and then snapped back on the next repaint. Rather than let the control fail,
+  // the control is gone and the card says why when you reach for it.
+  const isBooked = (city.status || 'tentative') === 'booked';
+  if (!isPast && isBooked) {
+    node.title = 'Booked stays stay in date order. Change the dates to move this one.';
+  }
+  if (!isPast && !isBooked) {
     node.draggable = true;
     node.addEventListener('dragstart', (e) => {
       // Don't drag if user is interacting with form controls or expanded body
@@ -14891,12 +15196,21 @@ function updateAccom(cityId, accId, key, value) {
   repaint();
 }
 
+// A stay carries the cost, the dates and the booking link, so it is at least as
+// destructive to lose as a stop. It deleted on one click until 2026-09-01, while
+// deleting a stop needed two. One destructive idiom on this surface now: click,
+// then click again inside five seconds.
 function removeAccom(cityId, accId) {
   const c = state.cities.find(c => c.id === cityId);
   if (!c || !c.accommodations) return;
+  const acc = (c.accommodations || []).find(a => a.id === accId);
+  if (!acc) return;
+  const what = acc.name || 'this stay';
+  if (armConfirm('removeAccom:' + accId, `Click delete again to remove ${what} from ${c.name}.`)) return;
   c.accommodations = c.accommodations.filter(a => a.id !== accId);
   saveState();
   renderCities();
+  toast('Deleted ' + what + '.', 'ok');
 }
 
 function addSubItem(cityId, key, name) {
@@ -14946,9 +15260,14 @@ function updateIdea(id, key, value) {
 }
 
 function removeIdea(id) {
+  const idea = (state.ideas || []).find(i => i.id === id);
+  if (!idea) return;
+  const what = idea.name || 'this idea';
+  if (armConfirm('removeIdea:' + id, `Click delete again to remove ${what}.`)) return;
   state.ideas = state.ideas.filter(i => i.id !== id);
   saveState();
   renderIdeas();
+  toast('Deleted ' + what + '.', 'ok');
 }
 
 function promoteIdea(id) {
@@ -14988,7 +15307,6 @@ function promoteIdea(id) {
 // ==================== AI PROMPT ====================
 
 let currentPrompt = '';
-let currentAcc = null;
 
 function buildAccomPrompt(city, acc) {
   const nights = nightsBetween(acc.checkIn, acc.checkOut);
@@ -15026,11 +15344,14 @@ function buildAccomPrompt(city, acc) {
 
 function openAccomAssessment(city, acc) {
   currentPrompt = buildAccomPrompt(city, acc);
-  currentAcc = { cityId: city.id, accId: acc.id };
   document.getElementById('modal-title').textContent = 'AI assessment prompt';
   document.getElementById('modal-sub').textContent = `${city.name} · ${acc.name || '(unnamed)'}`;
   document.getElementById('modal-textarea').value = currentPrompt;
-  document.getElementById('modal-response').style.display = 'none';
+  // #modal-result, not #modal-response. This line named an element that is not
+  // in the markup, so it threw before the modal was ever shown and every
+  // "Assess with AI" button on every stay silently did nothing.
+  document.getElementById('modal-result').style.display = 'none';
+  document.getElementById('modal-result-content').textContent = '';
   document.getElementById('modal-api-btn').style.display = state.aiMode === 'api' ? 'inline-block' : 'none';
   document.getElementById('modal-bg').classList.add('show');
 }
@@ -15078,8 +15399,8 @@ async function runAPI() {
     }
     const data = await res.json();
     const text = (data.content || []).map(b => b.text || '').filter(Boolean).join('\n');
-    document.getElementById('modal-response-content').textContent = text || '(empty response)';
-    document.getElementById('modal-response').style.display = 'block';
+    document.getElementById('modal-result-content').textContent = text || '(empty response)';
+    document.getElementById('modal-result').style.display = 'block';
   } catch(err) {
     toast('API call failed: ' + err.message, 'error');
   } finally {
@@ -15453,10 +15774,12 @@ function haversineKm(lat1, lng1, lat2, lng2) {
 function scoreSchengen(city) {
   if (!isSchengen(city.country)) return { score: 100, note: 'Non-Schengen — no impact on 90/180 counter.' };
   if (!city.checkOut) return { score: null, note: 'No checkout date yet.' };
-  const lastNight = new Date(parseDate(city.checkOut));
-  lastNight.setDate(lastNight.getDate() - 1);
-  const dStr = lastNight.toISOString().slice(0,10);
-  const days = schengenDaysUsedAt(dStr);
+  // The last day of presence IS checkOut, because departure day counts. This
+  // used to score at checkOut minus one and to round-trip the date through
+  // toISOString(), which is UTC: east of Greenwich that shifted the reference
+  // day again. Both errors pointed the same way, and this score is what makes
+  // the composite hard-fail a stay that breaks the 90/180 rule.
+  const days = schengenDaysUsedAt(city.checkOut);
   if (days > 90) return { score: 0, note: `⛔ Visa violation: ${days}/90 days at end of stay.` };
   if (days > 85) return { score: 30, note: `⚠️ Critical: ${days}/90 days. Very tight margin.` };
   if (days > 75) return { score: 60, note: `${days}/90 days. Limited Schengen flexibility ahead.` };
@@ -16721,7 +17044,11 @@ function initCollapsibleSections() {
   });
 
   // One control to turn the whole page into an index and back again.
-  const hero = document.querySelector('.wrap > header.hero');
+  // The anchor is the SHARED header (src/header.html), which is
+  // `header.apphdr#hdr` and is the first child of .wrap. This looked for
+  // `header.hero`, a class this surface has never had, so the whole bar was
+  // built into a null check and no one ever saw a Collapse all button.
+  const hero = document.querySelector('.wrap > header.apphdr');
   if (hero && !document.getElementById('sec-allbar')) {
     const bar = document.createElement('div');
     bar.className = 'sec-allbar';
@@ -16744,7 +17071,10 @@ function initCollapsibleSections() {
       .forEach(b => b.addEventListener('click', () => setTimeout(sync, 0)));
     sync();
     bar.appendChild(toggleAll);
-    hero.insertAdjacentElement('afterend', bar);
+    // Under the sync alert host, not above it: a "sync stopped" bar has to stay
+    // flush against the header or it stops reading as an alert.
+    const anchor = document.getElementById('syncalert') || hero;
+    anchor.insertAdjacentElement('afterend', bar);
   }
 }
 
