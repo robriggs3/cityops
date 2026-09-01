@@ -3035,6 +3035,84 @@ test('the published share is built from a fixed field list, in the engine', () =
   // builders would be two field lists, and the second would drift.
   assert.ok(/return buildFamilyShareHTML\(buildShareSnapshot\(\)\)/.test(trip));
   assert.ok(/writeShareRow\(token, snapshot\)/.test(trip));
+  // "Hide where I am staying" is passed to the ENGINE, which is where the
+  // exclusion happens. A share page that filtered at render time would already
+  // have shipped the address.
+  assert.ok(/hideLodging: !!state\.shareHideLodging/.test(fn[0]),
+    'the lodging option must reach the engine builder');
+});
+
+test('the lodging option rides the synced trip blob, like the guide picker', () => {
+  // It has to persist where the picker persists, or an Update publish from
+  // another device silently re-exposes the lodging this one hid.
+  const fs = require('fs');
+  const path = require('path');
+  const trip = fs.readFileSync(path.join(__dirname, '..', 'trip', 'index.html'), 'utf8');
+  const def = trip.match(/function defaultState\(\) \{[\s\S]*?\n\}/);
+  assert.ok(def, 'defaultState missing from the built trip page');
+  assert.ok(/shareGuideIds: \[\],/.test(def[0]), 'the picker no longer lives in the trip blob');
+  assert.ok(/shareHideLodging: false,/.test(def[0]),
+    'shareHideLodging must default to false in the same blob the picker uses');
+  // Off by default, so nobody's existing family share loses the flat name on
+  // the next publish without being asked.
+  assert.ok(/function setShareHideLodging\(on\) \{\s*state\.shareHideLodging = !!on;\s*saveState\(\);/.test(trip),
+    'the toggle must write through saveState, which is what syncs it');
+  // The control exists, is a checkbox, and redraws from state.
+  assert.ok(/id="share-hide-lodging"[^>]*onchange="setShareHideLodging\(this\.checked\)"/.test(trip));
+  assert.ok(/hide\.checked = !!state\.shareHideLodging;/.test(trip));
+  // And the confirm names which way it is set, so Publish is never a surprise.
+  assert.ok(/where you are staying is HIDDEN/.test(trip));
+  assert.ok(/where you are staying is SHOWN/.test(trip));
+});
+
+test('the share page renders a hidden stay with no empty row and no undefined', () => {
+  // The page's stay row, pulled out of the built share/index.html and run
+  // against exactly what the builder emits for a hidden stay.
+  const fs = require('fs');
+  const path = require('path');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'share', 'index.html'), 'utf8');
+  const start = html.indexOf('function buildStayRow(');
+  assert.ok(start !== -1, 'buildStayRow is missing from the built share page');
+  const end = html.indexOf('\n}\n', start);
+  const row = new Function(
+    'escapeHTML, fmtDate, isCurrentAccommodation',
+    html.slice(start, end + 2) + '\nreturn buildStayRow;'
+  )(s => String(s), d => 'D:' + d, () => false);
+
+  const hidden = C.shareKit.stay(
+    { name: 'Villa Kryptonite', city: 'Batumi', neighborhood: 'Old Town',
+      link: 'https://booking.example/x', status: 'booked',
+      checkIn: '2026-08-08', checkOut: '2026-08-15' }, true);
+  const out = row(hidden, false);
+  assert.equal(out.indexOf('Villa Kryptonite'), -1);
+  assert.equal(out.indexOf('Old Town'), -1);
+  assert.equal(out.indexOf('booking.example'), -1);
+  assert.equal(out.indexOf('undefined'), -1, 'a missing field rendered as undefined');
+  assert.ok(out.indexOf('Batumi') !== -1 && out.indexOf('D:2026-08-08') !== -1,
+    'the city and the dates are what make the route legible, and must survive');
+  // No dangling separator and no empty label row.
+  assert.equal(/·\s*<\/div>/.test(out), false, 'a dangling middle dot survived');
+  assert.equal(out.indexOf('<div class="accom-meta"></div>'), -1, 'an empty meta row was drawn');
+  assert.equal(out.indexOf('<div class="accom-name"></div>'), -1, 'an empty name row was drawn');
+
+  // A hidden stay with a date but no city still reads, and vice versa.
+  const dateOnly = row({ hidden: true, city: '', checkIn: '2026-08-08', checkOut: '2026-08-15' }, false);
+  assert.equal(dateOnly.indexOf('undefined'), -1);
+  assert.ok(dateOnly.indexOf('D:2026-08-08') !== -1);
+  assert.equal(/·\s*<\/div>/.test(dateOnly), false);
+  const cityOnly = row({ hidden: true, city: 'Batumi', checkIn: '', checkOut: '' }, false);
+  assert.equal(cityOnly.indexOf('undefined'), -1);
+  assert.equal(/·\s*<\/div>/.test(cityOnly), false);
+
+  // With the option off the row is the full one it has always been.
+  const shown = C.shareKit.stay(
+    { name: 'Sea View Flat', city: 'Batumi', neighborhood: 'Old Town',
+      link: 'https://booking.example/x', status: 'booked',
+      checkIn: '2026-08-08', checkOut: '2026-08-15' }, false);
+  const full = row(shown, false);
+  assert.ok(full.indexOf('Sea View Flat') !== -1);
+  assert.ok(full.indexOf('Old Town') !== -1);
+  assert.ok(full.indexOf('booking.example') !== -1);
 });
 
 test('the built trip page is the engine plus the shell, and nothing else', () => {
@@ -3059,21 +3137,107 @@ test('the built trip page is the engine plus the shell, and nothing else', () =>
 // all of it is testable here; the RPC, the crypto and the UI live in the
 // shells and are verified in the browser.
 
+const SHARE_BYTES = [0, 1, 15, 16, 127, 128, 200, 255, 3, 4, 5, 6, 7, 8, 9, 10];
+const SHARE_HEX = '00010f107f80c8ff030405060708090a';
+
 test('a share token is 32 hex characters, and refuses a weak source', () => {
-  const bytes = [0, 1, 15, 16, 127, 128, 200, 255, 3, 4, 5, 6, 7, 8, 9, 10];
-  const tok = C.shareKit.token(bytes);
-  assert.equal(tok, '00010f107f80c8ff030405060708090a');
+  const tok = C.shareKit.token(SHARE_BYTES);
+  assert.equal(tok, SHARE_HEX);
   assert.equal(tok.length, 32);
   assert.ok(/^[0-9a-f]{32}$/.test(tok));
   // Too few bytes is not "a shorter token", it is a guessable one. Refused.
   assert.throws(() => C.shareKit.token([1, 2, 3]));
   assert.throws(() => C.shareKit.token(null));
   assert.throws(() => C.shareKit.token('not bytes at all'));
+  // And a name never buys its way past that: a weak source is still refused.
+  assert.throws(() => C.shareKit.token([1, 2, 3], 'Rob'));
+});
+
+test('the name half of a share token is cosmetic and slugified', () => {
+  const S = C.shareKit.nameSlug;
+  assert.equal(S('Rob'), 'rob');
+  assert.equal(S('Rob Riggs'), 'rob-riggs');
+  // Accents lose the mark and keep the letter, so a link stays readable.
+  assert.equal(S('José Muñoz'), 'jose-munoz');
+  // A letter with no decomposition (Æ, ø) is not a diacritic and degrades to a
+  // hyphen exactly as slug() has always done. Cosmetic half, so this is fine.
+  assert.equal(S('Ærø Ångström'), 'r-angstrom');
+  // Punctuation collapses to single hyphens and never edges the slug.
+  assert.equal(S("  O'Brien-Smith,  Jr.  "), 'o-brien-smith-jr');
+  assert.equal(S('!!!Rob!!!'), 'rob');
+  assert.equal(S('a___b...c'), 'a-b-c');
+  // Nothing usable in it: no prefix at all, never a bare hyphen.
+  assert.equal(S(''), '');
+  assert.equal(S('   '), '');
+  assert.equal(S('🎉🎉🎉'), '');
+  assert.equal(S('...!!!'), '');
+  assert.equal(S(null), '');
+  assert.equal(S(undefined), '');
+  assert.equal(S(42), '');
+  // Capped, and re-trimmed so a cut landing on a hyphen cannot leave one.
+  const long = S('Bartholomew Fitzwilliam Montgomery III');
+  assert.equal(long, 'bartholomew-fitzwilliam');
+  assert.ok(long.length <= C.shareKit.NAME_CAP);
+  assert.equal(long.charAt(long.length - 1) === '-', false);
+  assert.ok(S('x'.repeat(200)).length <= C.shareKit.NAME_CAP);
+});
+
+test('a readable token spends no entropy on the name half', () => {
+  // The whole point: the hex half is byte-for-byte the same token whether a
+  // name rides in front of it or not. 16 bytes of crypto randomness, 128 bits,
+  // 32 hex characters, unchanged.
+  assert.equal(C.shareKit.token(SHARE_BYTES, 'Rob'), 'rob-' + SHARE_HEX);
+  assert.equal(C.shareKit.token(SHARE_BYTES, 'Rob Riggs'), 'rob-riggs-' + SHARE_HEX);
+  assert.equal(C.shareKit.token(SHARE_BYTES, 'José Muñoz'), 'jose-munoz-' + SHARE_HEX);
+  // A name that slugifies to nothing falls back to the random half ALONE: never
+  // a leading hyphen, never an empty prefix.
+  ['', '   ', '🎉', '!!!', null, undefined].forEach(n => {
+    assert.equal(C.shareKit.token(SHARE_BYTES, n), SHARE_HEX,
+      'a nameless token must be the bare hex, name=' + JSON.stringify(n));
+  });
+  // Every readable token still ends in the full 32 hex characters.
+  ['Rob', 'José Muñoz', 'Bartholomew Fitzwilliam Montgomery III'].forEach(n => {
+    const t = C.shareKit.token(SHARE_BYTES, n);
+    assert.equal(t.slice(-32), SHARE_HEX, 'the entropy half was cut short for ' + n);
+    assert.equal(C.shareKit.TOKEN_BYTES, 16);
+  });
+});
+
+test('an already-issued token keeps working, and only Rotate replaces it', () => {
+  // The lookup is an exact string match on the whole token (the get_share RPC
+  // does `where token = share_token`), so a link sent before readable tokens
+  // existed resolves untouched. Nothing here migrates or invalidates one.
+  const legacy = 'a7f3c2d9' + '0'.repeat(24);
+  assert.equal(legacy.length, 32);
+  assert.equal(C.shareKit.tokenFromUrl('#' + legacy, ''), legacy);
+  assert.equal(C.shareKit.tokenValue(legacy), legacy);
+  assert.equal(C.shareKit.url('https://app.nomadding.com', legacy),
+    'https://app.nomadding.com/share/#' + legacy);
+
+  const fs = require('fs');
+  const path = require('path');
+  const trip = fs.readFileSync(path.join(__dirname, '..', 'trip', 'index.html'), 'utf8');
+  // Publish REUSES the token it already has and only makes one when there is
+  // none. This is what stops an Update publish from quietly breaking a link
+  // that is already in somebody's inbox.
+  assert.ok(/token = state\.shareToken \|\| newShareToken\(\);/.test(trip),
+    'publish must reuse an existing token, never mint a new one on update');
+  // Rotate is the ONE door that issues a new token, and it is confirmed twice.
+  const rot = trip.match(/function rotateShareLink\(\) \{[\s\S]*?\n\}/);
+  assert.ok(rot, 'rotateShareLink missing from the built trip page');
+  assert.ok(/token = newShareToken\(\);/.test(rot[0]), 'rotate must mint a new token');
+  assert.ok(/armConfirm\('rotateShare'/.test(rot[0]), 'rotate must be confirmed');
+  // And the new token is the readable kind: the display name rides in front.
+  assert.ok(/CityOps\.shareKit\.token\(\s*[\s\S]*?state\.travelerName \|\| ''\)/.test(trip),
+    'newShareToken must pass the display name as the readable half');
 });
 
 test('the share URL is the fragment form, so the token never leaves the browser', () => {
   const url = C.shareKit.url('https://app.nomadding.com', 'a'.repeat(32));
   assert.equal(url, 'https://app.nomadding.com/share/#' + 'a'.repeat(32));
+  // A readable token rides the fragment the same way.
+  assert.equal(C.shareKit.url('https://app.nomadding.com', 'rob-' + 'a'.repeat(32)),
+    'https://app.nomadding.com/share/#rob-' + 'a'.repeat(32));
   // A trailing slash on the origin must not double up.
   assert.equal(C.shareKit.url('https://app.nomadding.com/', 'b'.repeat(32)),
     'https://app.nomadding.com/share/#' + 'b'.repeat(32));
@@ -3093,7 +3257,26 @@ const SHARE_URL_CASES = [
   ['#city=batumi-2026-08-08', '', ''],                      // the OTHER fragment
   ['#' + 'a'.repeat(20), '', ''],                           // too short to be one
   ['#' + 'z'.repeat(32), '', ''],                           // not hex
-  ['', '?t=' + 'z'.repeat(32), '']
+  ['', '?t=' + 'z'.repeat(32), ''],
+  // Readable tokens: a slugified name, a hyphen, then the same 32 hex. The
+  // name half is cosmetic, so the parser only has to hand the WHOLE string back
+  // for the exact-match lookup.
+  ['#rob-' + 'a'.repeat(32), '', 'rob-' + 'a'.repeat(32)],
+  ['#ROB-' + 'A'.repeat(32), '', 'rob-' + 'a'.repeat(32)],  // case folded
+  ['#rob-riggs-' + 'b'.repeat(32), '', 'rob-riggs-' + 'b'.repeat(32)],
+  ['#jose-munoz-' + 'c'.repeat(32), '', 'jose-munoz-' + 'c'.repeat(32)],
+  ['#x1-' + 'd'.repeat(32), '', 'x1-' + 'd'.repeat(32)],    // digits are fine in a name
+  ['', '?t=rob-' + 'e'.repeat(32), 'rob-' + 'e'.repeat(32)],
+  ['', '?token=rob-' + 'f'.repeat(32), 'rob-' + 'f'.repeat(32)],
+  // A name half with no entropy behind it is not a token.
+  ['#rob-' + 'z'.repeat(32), '', ''],
+  ['#rob-abc', '', ''],
+  ['#rob', '', ''],
+  // Shapes the generator cannot produce are refused rather than passed through.
+  ['#-rob-' + 'a'.repeat(32), '', ''],                      // leading hyphen
+  ['#rob--' + 'a'.repeat(32), '', ''],                      // doubled hyphen
+  ['#rob-' + 'a'.repeat(32) + '-', '', ''],                 // trailing hyphen
+  ['#' + 'x'.repeat(200) + '-' + 'a'.repeat(32), '', '']    // longer than any token
 ];
 
 test('the share token is read from the fragment first and the query second', () => {
@@ -3108,13 +3291,19 @@ test('the share token is read from the fragment first and the query second', () 
 // carries its own copy of the token parser. This is the drift guard: the page's
 // copy is pulled out of the built share/index.html and run against the same
 // fixtures.
+// The parser is two functions now (tokenValue validates one string, tokenFromUrl
+// picks which string to try), so both come out together: the slice runs from
+// the first to the end of the second, which is also a guard that they stay
+// adjacent and self-contained.
 function loadShareTokenParser() {
   const fs = require('fs');
   const path = require('path');
   const html = fs.readFileSync(path.join(__dirname, '..', 'share', 'index.html'), 'utf8');
-  const start = html.indexOf('function tokenFromUrl(');
-  assert.ok(start !== -1, 'tokenFromUrl is missing from the built share page');
-  const end = html.indexOf('\n}\n', start);
+  const start = html.indexOf('function tokenValue(');
+  assert.ok(start !== -1, 'tokenValue is missing from the built share page');
+  const from = html.indexOf('function tokenFromUrl(', start);
+  assert.ok(from !== -1, 'tokenFromUrl is missing from the built share page');
+  const end = html.indexOf('\n}\n', from);
   assert.ok(end !== -1, 'could not find the end of tokenFromUrl');
   return new Function(html.slice(start, end + 2) + '\nreturn tokenFromUrl;')();
 }
@@ -3216,6 +3405,102 @@ test('the snapshot carries the trip and drops every private field on it', () => 
   assert.equal(leg.paid, undefined);
   // Trip only by default: guides are opt-in, one city at a time.
   assert.deepEqual(snap.guides, []);
+  // And lodging is SHOWN by default: hiding it is an explicit per-share choice,
+  // so nobody's family share silently loses the flat name on the next publish.
+  assert.equal(snap.cities[0].accommodations[0].hidden, undefined);
+});
+
+// ---- "Hide where I am staying" ----
+// The exclusion is in the BUILDER, not in the share page's rendering. What is
+// asserted here is therefore the serialised snapshot: what actually gets
+// written to the shares row and handed to anyone with the link.
+
+test('with lodging hidden, the property never reaches the snapshot at all', () => {
+  const planted = JSON.parse(JSON.stringify(SHARE_STATE));
+  planted.cities[0].accommodations[0].name = 'Villa Kryptonite';
+  planted.cities[0].accommodations[0].neighborhood = 'Rue Secrete';
+  planted.cities[0].accommodations[0].link = 'https://booking.example/villa-kryptonite';
+  const snap = C.shareKit.build(Object.assign(
+    { generatedAt: '2026-08-28T00:00:00.000Z', hideLodging: true }, planted));
+  const text = JSON.stringify(snap);
+  // The whole point: a reader who opens the PAYLOAD finds nothing, because
+  // nothing was ever put in it.
+  assert.equal(text.indexOf('Villa Kryptonite'), -1, 'a hidden property name reached the snapshot');
+  assert.equal(text.indexOf('Rue Secrete'), -1, 'a hidden neighbourhood reached the snapshot');
+  assert.equal(text.indexOf('booking.example'), -1, 'a hidden booking link reached the snapshot');
+  // What survives is the shape of the route: the city and the nights.
+  const stay = snap.cities[0].accommodations[0];
+  assert.deepEqual(stay, {
+    hidden: true, city: 'Batumi', checkIn: '2026-08-08', checkOut: '2026-08-15'
+  });
+  assert.equal(stay.name, undefined);
+  assert.equal(stay.neighborhood, undefined);
+  assert.equal(stay.link, undefined);
+  // Status goes too. "booked" on a nameless stay tells a reader nothing they
+  // can act on, and still leaks whether the traveler has committed to a place.
+  assert.equal(stay.status, undefined);
+  // The stop itself is untouched: this option is about lodging, not the route.
+  assert.equal(snap.cities[0].name, 'Batumi');
+  assert.equal(snap.cities[0].checkIn, '2026-08-08');
+  assert.equal(snap.transitions[0].carrier, 'Wizz');
+});
+
+test('hidden stays dedupe and never draw an empty row', () => {
+  const many = JSON.parse(JSON.stringify(SHARE_STATE));
+  many.cities[0].accommodations = [
+    { name: 'Flat One', city: 'Batumi', neighborhood: 'Old Town', status: 'shortlisted',
+      checkIn: '2026-08-08', checkOut: '2026-08-15' },
+    { name: 'Flat Two', city: 'Batumi', neighborhood: 'Boulevard', status: 'shortlisted',
+      checkIn: '2026-08-08', checkOut: '2026-08-15' },
+    { name: 'Flat Three', city: 'Batumi', neighborhood: 'Port', status: 'booked',
+      checkIn: '2026-08-08', checkOut: '2026-08-15' },
+    { name: 'Later Flat', city: 'Batumi', status: 'booked',
+      checkIn: '2026-08-15', checkOut: '2026-08-20' },
+    // Neither a city nor a date: with lodging hidden there is nothing left to
+    // draw, so it is dropped rather than rendered as a blank row.
+    { name: 'Nowhere Inn', status: 'booked', checkIn: '', checkOut: '' }
+  ];
+  const on = C.shareKit.build(Object.assign(
+    { generatedAt: '2026-08-28T00:00:00.000Z', hideLodging: true }, many));
+  const stays = on.cities[0].accommodations;
+  // Three overlapping options for the same week collapse to one row: it stops
+  // the page counting out loud how many places are still under consideration.
+  assert.equal(stays.length, 2);
+  assert.deepEqual(stays, [
+    { hidden: true, city: 'Batumi', checkIn: '2026-08-08', checkOut: '2026-08-15' },
+    { hidden: true, city: 'Batumi', checkIn: '2026-08-15', checkOut: '2026-08-20' }
+  ]);
+  stays.forEach(s => assert.ok(s.city || s.checkIn || s.checkOut, 'an empty stay row survived'));
+  // With the option OFF nothing collapses: all four real stays ship as before.
+  const off = C.shareKit.build(Object.assign({ generatedAt: '2026-08-28T00:00:00.000Z' }, many));
+  assert.equal(off.cities[0].accommodations.length, 5);
+  assert.equal(off.cities[0].accommodations[0].name, 'Flat One');
+});
+
+test('a city guide never carries city.accommodation, hidden or not', () => {
+  // The trip half decides what lodging is public. The guide half must not be a
+  // second, contradicting source for the same fact, so shareGuide has never
+  // copied city.accommodation. This feature makes that load-bearing, so it is
+  // pinned here in BOTH states of the option.
+  const base = Object.assign({ generatedAt: '2026-08-28T00:00:00.000Z' }, SHARE_STATE);
+  [false, true].forEach(hide => {
+    const snap = C.shareKit.build(Object.assign({}, base, {
+      hideLodging: hide, guides: [SHARE_GUIDE_ROW], includeGuides: ['batumi-2026-08-08']
+    }));
+    const g = snap.guides[0];
+    assert.equal(g.accommodation, undefined, 'hideLodging=' + hide);
+    const text = JSON.stringify(g);
+    assert.equal(text.indexOf('Ninoshvili'), -1, 'a guide lodging address shipped, hideLodging=' + hide);
+    assert.equal(text.indexOf('41.64'), -1, 'guide lodging coordinates shipped, hideLodging=' + hide);
+    // And the key-name sweep now names it, so a future field addition trips.
+    assert.deepEqual(C.shareKit.leaks(snap), [], 'hideLodging=' + hide);
+  });
+  assert.ok(C.shareKit.FORBIDDEN.indexOf('accommodation') !== -1,
+    'the leak sweep must name the city-guide accommodation field');
+  assert.deepEqual(C.shareKit.leaks({ city: { accommodation: { name: 'x' } } }), ['accommodation']);
+  // The plural trip-side field is a legitimate part of a snapshot and must NOT
+  // be swept: the two names differ by one letter and matching is exact.
+  assert.deepEqual(C.shareKit.leaks({ cities: [{ accommodations: [] }] }), []);
 });
 
 test('a guide only ships when it was ticked, and ships in Share-view form', () => {
@@ -3602,7 +3887,10 @@ test('the service worker precaches the share shell and nothing token-shaped', ()
   // Bumped, or a phone serves the previous build once after every release.
   // v11: the 2026-09-01 host move. A new origin gets a clean cache anyway, but
   // the laptop and phone that follow the app across still need the bump.
-  assert.ok(/var CACHE = 'cityops-app-v11';/.test(sw));
+  // v12: readable share tokens and the hide-lodging option. The share SHELL is
+  // precached, so a phone on v11 would keep rendering hidden stays with the old
+  // stay row until it happened to refetch.
+  assert.ok(/var CACHE = 'cityops-app-v12';/.test(sw));
   // GET only, so the rpc POST that carries the token is never cached, and a
   // rotated share cannot keep answering out of a stale cache.
   assert.ok(/if \(e\.request\.method !== 'GET'\) return;/.test(sw));

@@ -3870,6 +3870,7 @@ var CityOps = (function () {
   // page says so in as many words.
   var SHARE_SCHEMA = 1;
   var SHARE_TOKEN_BYTES = 16;    // 32 hex characters
+  var SHARE_NAME_CAP = 24;       // the cosmetic half of a token, at most
   var SHARE_GUIDE_CAP = 40;
   var SHARE_ITEM_CAP = 500;
   var SHARE_TEXT_CAP = 2000;
@@ -3878,11 +3879,43 @@ var CityOps = (function () {
     return (typeof v === 'string') ? v.slice(0, SHARE_TEXT_CAP) : '';
   }
 
-  // 32 lowercase hex characters out of 16 random bytes. `bytes` is whatever
-  // crypto.getRandomValues filled: an array-like of numbers. Anything that is
-  // not a byte source is refused rather than quietly producing a weak token,
-  // because a predictable token is the whole security model gone.
-  function shareToken(bytes) {
+  // The cosmetic half of a share token: the traveler's own display name, made
+  // safe for a URL. Same rules as slug() above (lowercase, every run of
+  // non-alphanumerics collapsed to one hyphen, hyphens trimmed off both ends),
+  // with one addition: accented letters are decomposed first so their base
+  // letter survives. slug() cannot do that, because it names city ids and
+  // changing it would rename every id already stored; a share name half has no
+  // such history and "ana-munoz" reads better in a link than "ana-mu-oz".
+  //
+  // Capped at SHARE_NAME_CAP characters, and trimmed AGAIN after the cap so a
+  // cut that lands mid-hyphen cannot leave a trailing one. Anything that
+  // slugifies to nothing (empty, emoji only, punctuation only) returns '', and
+  // the caller falls back to the random half alone rather than shipping a bare
+  // hyphen or an empty prefix.
+  function shareNameSlug(name) {
+    var s = (typeof name === 'string') ? name : '';
+    if (typeof s.normalize === 'function') {
+      try { s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) { /* keep s */ }
+    }
+    return slug(s).slice(0, SHARE_NAME_CAP).replace(/^-+|-+$/g, '');
+  }
+
+  // A share token: <name-slug>-<32 hex>, or just <32 hex> when there is no
+  // usable name.
+  //
+  // ENTROPY. All of it lives in the hex half and none of it in the name.
+  // SHARE_TOKEN_BYTES = 16 bytes out of crypto.getRandomValues is 128 bits,
+  // rendered as 32 lowercase hex characters. Adding a readable prefix does not
+  // spend one bit of that: the prefix is public information (it is the name
+  // already printed on the share page) and an attacker who knows it still faces
+  // the same 2^128 search. Two shares by the same person differ in the hex half
+  // and only there. Never shorten the hex half to make room for a longer name.
+  //
+  // `bytes` is whatever crypto.getRandomValues filled: an array-like of
+  // numbers. Anything that is not a byte source is refused rather than quietly
+  // producing a weak token, because a predictable token is the whole security
+  // model gone. `name` is optional and never affects that refusal.
+  function shareToken(bytes, name) {
     if (!bytes || typeof bytes === 'string' || typeof bytes.length !== 'number' ||
         bytes.length < SHARE_TOKEN_BYTES) {
       throw new Error('shareToken needs at least ' + SHARE_TOKEN_BYTES + ' random bytes');
@@ -3897,7 +3930,37 @@ var CityOps = (function () {
       var b = bytes[i] & 255;
       out += (b < 16 ? '0' : '') + b.toString(16);
     }
-    return out;
+    var prefix = shareNameSlug(name);
+    return prefix ? prefix + '-' + out : out;
+  }
+
+  // One token string, validated. Shared by both spellings below so the hash and
+  // the query can never disagree about what a token looks like.
+  //
+  // Deliberately NOT one regular expression. The shape is "an optional slug, a
+  // hyphen, then the hex", and the natural regex for that nests a quantifier
+  // inside a quantifier, which backtracks catastrophically on a long
+  // hyphen-only fragment. Splitting on the LAST hyphen is linear and needs no
+  // backtracking at all: the hex half never contains one, so that hyphen is
+  // always the seam.
+  //
+  // Old links keep working untouched. A token issued before this existed is 32
+  // bare hex characters, has no hyphen, and takes the no-prefix path.
+  function shareTokenValue(raw) {
+    var s = trimStr(raw).toLowerCase();
+    if (!s || s.length > SHARE_NAME_CAP + 1 + 64) return '';
+    if (!/^[a-z0-9-]+$/.test(s)) return '';
+    var at = s.lastIndexOf('-');
+    var rand = (at === -1) ? s : s.slice(at + 1);
+    if (!/^[0-9a-f]{32,64}$/.test(rand)) return '';
+    if (at !== -1) {
+      var prefix = s.slice(0, at);
+      // A prefix that is empty, edged with a hyphen, or carrying a doubled one
+      // is not something shareNameSlug can produce, so it is not a token.
+      if (!prefix || prefix.charAt(0) === '-' ||
+          prefix.charAt(prefix.length - 1) === '-' || prefix.indexOf('--') !== -1) return '';
+    }
+    return s;
   }
 
   // The token a share URL carries. Two spellings are accepted because both get
@@ -3906,16 +3969,17 @@ var CityOps = (function () {
   // server, never lands in a Pages access log, and never leaks through a
   // Referer header to a link the reader clicks from the page.
   function shareTokenFromUrl(hash, search) {
-    var h = trimStr(hash).replace(/^#/, '');
-    var m = h.match(/^([0-9a-f]{32,64})$/i);
-    if (m) return m[1].toLowerCase();
+    var h = shareTokenValue(trimStr(hash).replace(/^#/, ''));
+    if (h) return h;
     var q = trimStr(search).replace(/^\?/, '');
     var parts = q.split('&');
     for (var i = 0; i < parts.length; i++) {
       var kv = parts[i].split('=');
       if (kv[0] !== 't' && kv[0] !== 'token') continue;
-      var v = trimStr(decodeURIComponent(kv.slice(1).join('=') || ''));
-      if (/^[0-9a-f]{32,64}$/i.test(v)) return v.toLowerCase();
+      var v = '';
+      try { v = decodeURIComponent(kv.slice(1).join('=') || ''); } catch (e) { v = ''; }
+      var got = shareTokenValue(v);
+      if (got) return got;
     }
     return '';
   }
@@ -3960,7 +4024,68 @@ var CityOps = (function () {
   // that says which nights are still owed for is a page that tells a stranger
   // when the traveler is carrying cash. That decision was made for the family
   // page in batch 3 and it is unchanged here.
-  function shareStop(c) {
+  //
+  // `hideLodging` is the per-share "Hide where I am staying" option. A trip
+  // shared with family may name the flat; a trip shared with a business contact
+  // may not, because the property somebody sleeps in is not a business fact.
+  //
+  // It is enforced HERE, in the builder, and never in the share page's
+  // rendering. The snapshot is what gets written to the shares row and handed
+  // to anyone with the link, so a reader who opens the payload rather than the
+  // page has to find nothing. A render-time filter would still have shipped the
+  // address.
+  //
+  // What a hidden stay keeps is the CITY and the DATES, which is what makes the
+  // route legible: family and colleagues both still see which town, which
+  // nights. What it loses is the name, the neighbourhood, the booking link and
+  // the status.
+  //
+  // Status goes too, and that is a deliberate call rather than an oversight.
+  // "booked" on a nameless stay tells a reader nothing they can act on, while
+  // it still leaks the one bit that matters: whether the traveler has committed
+  // to a place yet, which is exactly the negotiating detail a business contact
+  // should not be reading. Dropping it also collapses the booked-versus-
+  // shortlisted split in the page, which is what lets identical hidden stays
+  // dedupe below.
+  //
+  // Hidden stays are deduped on city plus dates, and one with neither is
+  // dropped outright. Three shortlisted flats for the same week would otherwise
+  // draw three identical anonymous rows, which both looks broken and counts out
+  // loud how many places are still under consideration.
+  function shareStay(a, hideLodging) {
+    if (!hideLodging) {
+      return {
+        name: shareText(a.name),
+        city: shareText(a.city),
+        neighborhood: shareText(a.neighborhood),
+        link: safeHref(a.link) || '',
+        status: shareText(a.status),
+        checkIn: shareText(a.checkIn),
+        checkOut: shareText(a.checkOut)
+      };
+    }
+    return {
+      hidden: true,
+      city: shareText(a.city),
+      checkIn: shareText(a.checkIn),
+      checkOut: shareText(a.checkOut)
+    };
+  }
+
+  function shareStop(c, hideLodging) {
+    var stays = ((c && c.accommodations) || [])
+      .filter(function (a) { return a && (a.status === 'booked' || a.status === 'shortlisted'); })
+      .map(function (a) { return shareStay(a, hideLodging); });
+    if (hideLodging) {
+      var seen = Object.create(null);
+      stays = stays.filter(function (s) {
+        if (!s.city && !s.checkIn && !s.checkOut) return false;
+        var key = s.city + '|' + s.checkIn + '|' + s.checkOut;
+        if (seen[key]) return false;
+        seen[key] = 1;
+        return true;
+      });
+    }
     return {
       id: shareText(c && c.id),
       name: shareText(c && c.name),
@@ -3971,19 +4096,7 @@ var CityOps = (function () {
       checkOut: shareText(c && c.checkOut),
       lat: (c && typeof c.lat === 'number' && isFinite(c.lat)) ? c.lat : undefined,
       lng: (c && typeof c.lng === 'number' && isFinite(c.lng)) ? c.lng : undefined,
-      accommodations: ((c && c.accommodations) || [])
-        .filter(function (a) { return a && (a.status === 'booked' || a.status === 'shortlisted'); })
-        .map(function (a) {
-          return {
-            name: shareText(a.name),
-            city: shareText(a.city),
-            neighborhood: shareText(a.neighborhood),
-            link: safeHref(a.link) || '',
-            status: shareText(a.status),
-            checkIn: shareText(a.checkIn),
-            checkOut: shareText(a.checkOut)
-          };
-        })
+      accommodations: stays
     };
   }
 
@@ -4078,7 +4191,9 @@ var CityOps = (function () {
   // An empty list means "trip only", which is the default.
   function buildShareSnapshot(input) {
     var i = input || {};
-    var stops = (Array.isArray(i.cities) ? i.cities : []).map(shareStop)
+    var hideLodging = !!i.hideLodging;
+    var stops = (Array.isArray(i.cities) ? i.cities : [])
+      .map(function (c) { return shareStop(c, hideLodging); })
       .filter(function (c) { return c.name; });
     var legs = (Array.isArray(i.transitions) ? i.transitions : [])
       .filter(function (t) { return t && (t.toCity || t.departureDate); })
@@ -4106,9 +4221,16 @@ var CityOps = (function () {
   // A last line of defence, not the mechanism. The mechanism is that the
   // builders above copy a fixed field list and nothing else. This is what the
   // test asserts on, and what a future field addition trips over.
+  //
+  // `accommodation` (singular) is the CITY-GUIDE field: the lodging address and
+  // its coordinates on a city row. shareGuide has never copied it, and this
+  // pins that. It is not the trip side's `accommodations` (plural), which is a
+  // legitimate part of a snapshot and which the hideLodging option above is
+  // what strips. The two names differ by one letter and the sweep matches keys
+  // exactly, so they do not collide.
   var SHARE_FORBIDDEN = ['apiKey', 'apikey', 'github', 'githubToken', 'githubUser',
     'githubRepo', 'githubFile', 'token', 'access_token', 'refresh_token',
-    'genmeta', 'paid', 'cost', 'confirmation', 'notes'];
+    'genmeta', 'paid', 'cost', 'confirmation', 'notes', 'accommodation'];
 
   function shareLeaks(snapshot) {
     var found = [];
@@ -6846,9 +6968,11 @@ var CityOps = (function () {
     // allowed to contain. All pure; the shell owns crypto, the RPC and the UI.
     shareKit: {
       SCHEMA: SHARE_SCHEMA, TOKEN_BYTES: SHARE_TOKEN_BYTES, GUIDE_CAP: SHARE_GUIDE_CAP,
-      token: shareToken, tokenFromUrl: shareTokenFromUrl, url: shareUrl,
+      NAME_CAP: SHARE_NAME_CAP,
+      token: shareToken, nameSlug: shareNameSlug, tokenValue: shareTokenValue,
+      tokenFromUrl: shareTokenFromUrl, url: shareUrl,
       publicOrigin: publicOrigin,
-      build: buildShareSnapshot, stop: shareStop, leg: shareLeg, guide: shareGuide,
+      build: buildShareSnapshot, stop: shareStop, stay: shareStay, leg: shareLeg, guide: shareGuide,
       FORBIDDEN: SHARE_FORBIDDEN, leaks: shareLeaks
     },
     safeHref: safeHref,

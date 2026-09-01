@@ -239,7 +239,7 @@ null
   <div id="guides-section"></div>
 
   <footer>
-    <div class="stamp">Eyes only · For family</div>
+    <div class="stamp">Eyes only · Shared by link</div>
     <div id="footer-meta"></div>
     <div class="snapnote">This page is a snapshot taken when the traveler pressed Publish. It is not live: plans made since then are not on it until they publish again.</div>
   </footer>
@@ -505,14 +505,30 @@ function renderAccoms(accoms, isCurrentCity) {
 }
 
 // Single stay row (extracted so stays and travel legs can be interleaved chronologically).
+//
+// A stay marked `hidden` came out of a snapshot published with "Hide where I am
+// staying" on. The name, the neighbourhood, the booking link and the status are
+// not missing from this page: they were never written into the snapshot at all,
+// so there is nothing here to reveal. What is left is the city and the nights,
+// and the row says exactly that rather than drawing an empty name line. The
+// builder also drops any hidden stay with neither a city nor a date, so this
+// row always has something in it.
 function buildStayRow(a, isCurrentCity) {
   const isCurrentAccom = isCurrentCity && isCurrentAccommodation(a);
   const cls = 'accom-item' + (isCurrentAccom ? ' current' : '');
-  const linkBit = a.link ? ' · <a href="' + escapeHTML(a.link) + '" target="_blank" rel="noopener">view booking</a>' : '';
-  const cityBit = (a.city && a.city.trim()) ? escapeHTML(a.city.trim()) + ' · ' : '';
-  const nbhdBit = a.neighborhood ? escapeHTML(a.neighborhood) + ' · ' : '';
-  const datesBit = a.checkIn && a.checkOut ? fmtDate(a.checkIn) + ' → ' + fmtDate(a.checkOut) : '';
-  return '<div class="' + cls + '"><div class="accom-name">' + escapeHTML(a.name) + '</div><div class="accom-meta">' + cityBit + nbhdBit + datesBit + linkBit + '</div></div>';
+  const datesBit = a.checkIn && a.checkOut ? fmtDate(a.checkIn) + ' → ' + fmtDate(a.checkOut)
+    : (a.checkIn ? 'from ' + fmtDate(a.checkIn) : (a.checkOut ? 'until ' + fmtDate(a.checkOut) : ''));
+  // Joined rather than concatenated with trailing separators, so a stay missing
+  // any one piece cannot leave a dangling middle dot. That matters most for a
+  // hidden stay, which is city and dates and nothing else by design.
+  const parts = [];
+  if (a.city && a.city.trim()) parts.push(escapeHTML(a.city.trim()));
+  if (!a.hidden && a.neighborhood) parts.push(escapeHTML(a.neighborhood));
+  if (datesBit) parts.push(datesBit);
+  if (!a.hidden && a.link) parts.push('<a href="' + escapeHTML(a.link) + '" target="_blank" rel="noopener">view booking</a>');
+  const nameBit = escapeHTML((!a.hidden && a.name) ? a.name : 'Stay');
+  const metaBit = parts.length ? '<div class="accom-meta">' + parts.join(' · ') + '</div>' : '';
+  return '<div class="' + cls + '"><div class="accom-name">' + nameBit + '</div>' + metaBit + '</div>';
 }
 
 // Sort a mixed list of stays + legs into one chronological timeline — IDENTICAL logic to the
@@ -804,10 +820,35 @@ function showState(title, body, mark, showDoor) {
 //
 // This mirrors CityOps.shareKit.tokenFromUrl exactly, and tests/run.js pins
 // the two against the same fixture table so they cannot drift.
+// A token is <name-slug>-<32 hex> or, on a link issued before readable tokens
+// existed, 32 bare hex characters. Both resolve: the lookup is an exact string
+// match on the whole thing, so nothing already sent out has to change.
+//
+// Split on the LAST hyphen rather than matching one regular expression: the
+// hex half never contains a hyphen, so that seam is unambiguous, and the
+// obvious regex for an optional slug prefix nests a quantifier inside a
+// quantifier and backtracks catastrophically on a long hyphen-only fragment.
+function tokenValue(raw) {
+  var s = String(raw == null ? '' : raw).replace(/^\s+|\s+$/g, '').toLowerCase();
+  // 89 is shareKit.NAME_CAP (24) plus the seam plus the longest hex half (64).
+  // This page ships without the engine, so the number is written out; the
+  // fixture table in tests/run.js runs both copies and catches a drift.
+  if (!s || s.length > 89) return '';
+  if (!/^[a-z0-9-]+$/.test(s)) return '';
+  var at = s.lastIndexOf('-');
+  var rand = (at === -1) ? s : s.slice(at + 1);
+  if (!/^[0-9a-f]{32,64}$/.test(rand)) return '';
+  if (at !== -1) {
+    var prefix = s.slice(0, at);
+    if (!prefix || prefix.charAt(0) === '-' ||
+        prefix.charAt(prefix.length - 1) === '-' || prefix.indexOf('--') !== -1) return '';
+  }
+  return s;
+}
+
 function tokenFromUrl(hash, search) {
-  var h = String(hash || '').replace(/^\s+|\s+$/g, '').replace(/^#/, '');
-  var m = h.match(/^([0-9a-f]{32,64})$/i);
-  if (m) return m[1].toLowerCase();
+  var h = tokenValue(String(hash || '').replace(/^\s+|\s+$/g, '').replace(/^#/, ''));
+  if (h) return h;
   var q = String(search || '').replace(/^\s+|\s+$/g, '').replace(/^\?/, '');
   var parts = q.split('&');
   for (var i = 0; i < parts.length; i++) {
@@ -815,8 +856,8 @@ function tokenFromUrl(hash, search) {
     if (kv[0] !== 't' && kv[0] !== 'token') continue;
     var v = '';
     try { v = decodeURIComponent(kv.slice(1).join('=') || ''); } catch (e) { v = ''; }
-    v = v.replace(/^\s+|\s+$/g, '');
-    if (/^[0-9a-f]{32,64}$/i.test(v)) return v.toLowerCase();
+    var got = tokenValue(v);
+    if (got) return got;
   }
   return '';
 }

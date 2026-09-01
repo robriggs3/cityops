@@ -1693,11 +1693,11 @@
       </div>
 
       <div class="setting-card">
-        <h3>Share with family</h3>
+        <h3>Share a link</h3>
         <div class="muted" style="margin-bottom:10px">One link, no account at the other end. Publishing takes a <strong>snapshot</strong> of your plan right now and puts it at a private web address only someone with the link can open. It does not follow your plan: publish again when things change.</div>
 
         <div style="margin-bottom:14px">
-          <label style="font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-3);display:block;margin-bottom:4px">Your name (shown on share page)</label>
+          <label style="font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-3);display:block;margin-bottom:4px">Your name (shown on the share page, and in the link)</label>
           <input class="text-input" id="traveler-name-input" placeholder="e.g. Rob" style="max-width:280px" oninput="updateTravelerName(this.value)">
         </div>
 
@@ -1715,12 +1715,18 @@
             <div id="share-guide-list" style="display:flex;flex-direction:column;gap:5px;max-height:210px;overflow:auto"></div>
             <div class="muted" style="font-size:11px;margin-top:8px;line-height:1.5">Guides go in the same read-only form the app uses for Share view: places, verdicts and star ratings. Never your own notes, costs or accommodation addresses.</div>
           </div>
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border-light)">
+            <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.5;cursor:pointer;min-height:32px">
+              <input type="checkbox" id="share-hide-lodging" onchange="setShareHideLodging(this.checked)" style="margin-top:3px">
+              <span><strong>Hide where I am staying.</strong> The share keeps each city and its dates, and drops the property name, the neighbourhood, the booking link and whether it is booked. Use this for a share going to work contacts.</span>
+            </label>
+          </div>
         </div>
 
         <div class="setting-actions">
           <button class="btn" id="share-publish-btn" onclick="publishShare()">🔗 Publish share</button>
           <button class="btn-secondary" id="share-copy-btn" onclick="copyShareLink()" style="display:none">📋 Copy link</button>
-          <button class="btn-secondary" id="share-rotate-btn" onclick="rotateShareLink()" style="display:none">🔁 New link</button>
+          <button class="btn-secondary" id="share-rotate-btn" onclick="rotateShareLink()" style="display:none" title="Kill the link you already sent and issue a new one. The new link picks up whatever name is in the box above; Update share never changes the link.">🔁 New link</button>
           <button class="btn-secondary danger" id="share-unpublish-btn" onclick="unpublishShare()" style="display:none">Stop sharing</button>
           <button class="btn-secondary green" onclick="generateFamilyShare()">📍 Download HTML</button>
         </div>
@@ -2216,7 +2222,7 @@ function stripCredentialsFromBlob(blob) {
   });
   if (dropped.length) {
     console.log('[trip] deleted the retired GitHub publish settings from your trip data (' +
-      dropped.join(', ') + '). Sharing is a link now: Settings, Share with family.');
+      dropped.join(', ') + '). Sharing is a link now: Settings, Share a link.');
   }
   return changed;
 }
@@ -2253,6 +2259,11 @@ function defaultState() {
     shareToken: '',
     shareScope: 'trip',     // 'trip' or 'guides'
     shareGuideIds: [],      // which guides the picker has ticked
+    // "Hide where I am staying". Rides this blob for the same reason the guide
+    // picker does: it is a fact about the share, it syncs to every device, and
+    // an Update publish from the laptop must not silently re-expose lodging the
+    // phone hid. Read by buildShareSnapshot and enforced in the engine.
+    shareHideLodging: false,
     lastPublishedAt: '',
     lastExportedAt: ''  // ISO string of most recent successful JSON export. Drives "stale backup" nudge.
   };
@@ -5175,12 +5186,26 @@ function shareLinkFor(token) {
 // on every browser this app supports; if it somehow is not, publishing refuses
 // rather than falling back to Math.random, because a guessable token is the
 // entire security model gone.
+//
+// The traveler's display name rides along as a readable prefix, so the link
+// reads /share/#rob-a7f3... rather than /share/#a7f3... . That half is
+// cosmetic: every bit of entropy is still in the 32 hex characters after it,
+// and a name that slugifies to nothing just leaves the hex alone. See
+// shareKit.token for the arithmetic.
 function newShareToken() {
   const c = window.crypto || window.msCrypto;
   if (!c || typeof c.getRandomValues !== 'function') {
     throw new Error('This browser has no secure random source, so it cannot make a share link.');
   }
-  return CityOps.shareKit.token(c.getRandomValues(new Uint8Array(CityOps.shareKit.TOKEN_BYTES)));
+  return CityOps.shareKit.token(
+    c.getRandomValues(new Uint8Array(CityOps.shareKit.TOKEN_BYTES)),
+    state.travelerName || '');
+}
+
+function setShareHideLodging(on) {
+  state.shareHideLodging = !!on;
+  saveState();
+  renderShareBlock();
 }
 
 function setShareScope(scope) {
@@ -5226,6 +5251,9 @@ function renderShareBlock() {
   const picker = document.getElementById('share-guide-picker');
   if (picker) picker.style.display = scope === 'guides' ? 'block' : 'none';
   if (picker && scope === 'guides') renderShareGuideList();
+
+  const hide = document.getElementById('share-hide-lodging');
+  if (hide) hide.checked = !!state.shareHideLodging;
 
   const token = state.shareToken || '';
   const live = !!token;
@@ -5297,6 +5325,7 @@ function buildShareSnapshot() {
     generatedAt: new Date().toISOString(),
     cities: state.cities || [],
     transitions: state.transitions || [],
+    hideLodging: !!state.shareHideLodging,
     guideIds: loadGuideIds() || [],
     guides: (state.shareScope === 'guides') ? (_guideRows || []) : [],
     includeGuides: (state.shareScope === 'guides') ? (state.shareGuideIds || []) : []
@@ -5360,6 +5389,9 @@ function publishShare() {
   const confirmMsg = 'Publishing a snapshot:\n\n  • ' + stops + ' stop' + (stops === 1 ? '' : 's') +
     '\n  • ' + legs + ' travel leg' + (legs === 1 ? '' : 's') +
     (guides ? '\n  • ' + guides + ' city guide' + (guides === 1 ? '' : 's') : '') +
+    (state.shareHideLodging
+      ? '\n  • where you are staying is HIDDEN: cities and dates only'
+      : '\n  • where you are staying is SHOWN: property names and booking links') +
     '\n\nAnyone with the link can read this, with no account.' +
     (first ? '\n\nThis creates the link.' : '\n\nThis replaces what your existing link shows.') +
     '\n\nContinue?';
@@ -5371,7 +5403,7 @@ function publishShare() {
     state.lastPublishedAt = new Date().toISOString();
     saveState();
     const url = shareLinkFor(token);
-    shareStatus('✓ Published. Send this link to family: <a href="' + escapeHTML(url) + '" target="_blank" rel="noopener" ' +
+    shareStatus('✓ Published. Send this link: <a href="' + escapeHTML(url) + '" target="_blank" rel="noopener" ' +
       'style="color:var(--accent);font-family:\'JetBrains Mono\',monospace;font-size:12px">' + escapeHTML(url) + '</a>', 'ok');
     toast('✓ Share published. Link ready to send.', 'ok');
     return true;
@@ -5389,7 +5421,7 @@ function publishShare() {
 // only ever one row per user. This is the revocation, and it is instant.
 function rotateShareLink() {
   if (!state.shareToken) return Promise.resolve(false);
-  if (armConfirm('rotateShare', 'Click "New link" again to confirm — the link family already have will stop working immediately.')) return Promise.resolve(false);
+  if (armConfirm('rotateShare', 'Click "New link" again to confirm. The link you already sent will stop working immediately.')) return Promise.resolve(false);
   let token, snapshot;
   try {
     token = newShareToken();
@@ -5416,7 +5448,7 @@ function rotateShareLink() {
 
 function unpublishShare() {
   if (!state.shareToken) return Promise.resolve(false);
-  if (armConfirm('unpublishShare', 'Click "Stop sharing" again to confirm — the link family have will stop working and the snapshot is deleted.')) return Promise.resolve(false);
+  if (armConfirm('unpublishShare', 'Click "Stop sharing" again to confirm. The link you already sent will stop working and the snapshot is deleted.')) return Promise.resolve(false);
   const token = state.shareToken;
   shareStatus('Taking the share down…', '');
   return withShareBusy(syncApi('/rest/v1/shares?token=eq.' + encodeURIComponent(token), {
@@ -5438,7 +5470,7 @@ function unpublishShare() {
 function copyShareLink() {
   const url = shareLinkFor(state.shareToken);
   if (!url) return;
-  const done = () => { shareStatus('✓ Link copied. Paste it wherever family will look for it.', 'ok'); toast('Link copied.', 'ok'); };
+  const done = () => { shareStatus('✓ Link copied. Paste it wherever the reader will look for it.', 'ok'); toast('Link copied.', 'ok'); };
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(url).then(done, () => shareStatus('Could not copy. Select the link above and copy it by hand.', 'error'));
     return;
