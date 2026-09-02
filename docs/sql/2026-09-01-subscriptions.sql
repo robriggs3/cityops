@@ -222,9 +222,12 @@ grant execute on function public.my_entitlement() to authenticated;
 -- ============================================================
 -- STEP 5. Check it before you trust it.
 -- ============================================================
--- Every existing account should come back true here, because step 6 has not run
--- yet and any account older than 14 days is outside the trial window. Run this
--- again after step 6 and every row should be true.
+-- Expect FALSE for any account older than 14 days, and that is correct at this
+-- point: step 6 has not run yet, and with no subscriptions row the helper falls
+-- back to the trial window measured from the account creation date. Do not stop
+-- here. Run step 6 in the same sitting, then run this again and every row should
+-- read true. Between step 3 and step 6 nobody can write, which is why the whole
+-- file is meant to be run in one go.
 select u.email, public.has_active_entitlement(u.id) as entitled
 from auth.users u
 order by u.created_at;
