@@ -4041,7 +4041,7 @@ test('the service worker precaches the share shell and nothing token-shaped', ()
   // v17: the subscription gates. A phone still serving v16 would let a lapsed
   // account tap sync, one-tap AI and Publish with no explanation attached to
   // any of them, and then watch the database refuse all three in silence.
-  assert.ok(/var CACHE = 'cityops-app-v17';/.test(sw));
+  assert.ok(/var CACHE = 'cityops-app-v18';/.test(sw));
   // GET only, so the rpc POST that carries the token is never cached, and a
   // rotated share cannot keep answering out of a stale cache.
   assert.ok(/if \(e\.request\.method !== 'GET'\) return;/.test(sw));
