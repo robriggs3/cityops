@@ -69,9 +69,9 @@ const AI_MAX_PROMPT_CHARS = 200000;
 // a single token is spent.
 const ALLOWED_MODELS: Record<string, number> = {
   // The city guide, on the cities surface. The big one.
-  "claude-opus-4-8": AI_MAX_TOKENS_CEILING,
+  "claude-opus-5": AI_MAX_TOKENS_CEILING,
   // Research, notes, scoring, on the trip surface.
-  "claude-sonnet-4-6": 8000,
+  "claude-sonnet-5": 8000,
   // Geocoding, on the trip surface. A hundred tokens and a country code.
   "claude-haiku-4-5-20251001": 1000,
 };

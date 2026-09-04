@@ -4041,7 +4041,7 @@ test('the service worker precaches the share shell and nothing token-shaped', ()
   // v17: the subscription gates. A phone still serving v16 would let a lapsed
   // account tap sync, one-tap AI and Publish with no explanation attached to
   // any of them, and then watch the database refuse all three in silence.
-  assert.ok(/var CACHE = 'cityops-app-v19';/.test(sw));
+  assert.ok(/var CACHE = 'cityops-app-v20';/.test(sw));
   // GET only, so the rpc POST that carries the token is never cached, and a
   // rotated share cannot keep answering out of a stale cache.
   assert.ok(/if \(e\.request\.method !== 'GET'\) return;/.test(sw));
@@ -7137,7 +7137,7 @@ test('the proxy allowlists exactly the models the two surfaces call', () => {
   const block = src.slice(src.indexOf('const ALLOWED_MODELS'), src.indexOf('const ALLOWED_BODY_KEYS'));
   const models = (block.match(/"claude-[a-z0-9.-]+"/g) || []).map(function (m) { return m.slice(1, -1); });
   models.sort();
-  assert.deepEqual(models, ['claude-haiku-4-5-20251001', 'claude-opus-4-8', 'claude-sonnet-4-6'],
+  assert.deepEqual(models, ['claude-haiku-4-5-20251001', 'claude-opus-5', 'claude-sonnet-5'],
     'the allowlist is what stops a 29 USD account being a relay to anything Anthropic sells');
   // And every model the shipped app actually calls is on it.
   ['index.html', 'trip/index.html'].forEach(function (rel) {

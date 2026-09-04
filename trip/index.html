@@ -13364,7 +13364,7 @@ async function runCityResearch(city) {
   }
   const prompt = buildCityResearchPrompt(city);
   const res = await aiMessages({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-sonnet-5',
     max_tokens: 2500,
     messages: [{ role: 'user', content: prompt }]
   });
@@ -15060,7 +15060,7 @@ async function runNotesAI() {
   setNotesStatus('Sending to Claude…');
   try {
     const res = await aiMessages({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       max_tokens: 8000,
       messages: [{ role: 'user', content: buildNotesPrompt(notes) }]
     });
@@ -16209,7 +16209,7 @@ async function runAPI() {
   btn.disabled = true;
   try {
     const res = await aiMessages({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       max_tokens: 1500,
       messages: [{ role: 'user', content: currentPrompt }]
     });
@@ -16750,7 +16750,7 @@ async function runAICityScore(city) {
   try {
     const prompt = buildCityScorePrompt(city);
     const res = await aiMessages({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       max_tokens: 1500,
       messages: [{ role: 'user', content: prompt }]
     });
@@ -16957,7 +16957,7 @@ async function batchScoreCities(forceRescoreAll) {
 
   try {
     const res = await aiMessages({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       max_tokens: Math.min(8000, 400 + candidates.length * 300),
       messages: [{ role: 'user', content: prompt }]
     });
@@ -17060,7 +17060,7 @@ async function batchScoreAccommodations(cityId, forceRescoreAll) {
 
   try {
     const res = await aiMessages({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       max_tokens: Math.min(4000, 300 + candidates.length * 200),
       messages: [{ role: 'user', content: prompt }]
     });

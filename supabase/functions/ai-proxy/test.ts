@@ -107,7 +107,7 @@ function reset() {
 }
 
 const GOOD_BODY = {
-  model: "claude-opus-4-8",
+  model: "claude-opus-5",
   max_tokens: 32000,
   stream: true,
   thinking: { type: "adaptive" },
@@ -240,11 +240,11 @@ Deno.test("the kill switch message can be set without a deploy", async () => {
 
 Deno.test("only the models this app calls are allowed through", async () => {
   reset();
-  for (const model of ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"]) {
+  for (const model of ["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5-20251001"]) {
     const res = await post({ ...GOOD_BODY, model, max_tokens: 100 });
     assertEquals(res.status, 200, model + " should be allowed");
   }
-  for (const model of ["claude-3-5-sonnet-20241022", "gpt-4o", "", "claude-opus-4-8 "]) {
+  for (const model of ["claude-3-5-sonnet-20241022", "gpt-4o", "", "claude-opus-5 "]) {
     reset();
     const res = await post({ ...GOOD_BODY, model, max_tokens: 100 });
     assertEquals(res.status, 400, JSON.stringify(model) + " should be refused");
