@@ -178,8 +178,47 @@ sees exactly which features want payment; flipping a test subscription in
 Stripe test mode propagates through the webhook to gated writes within a
 minute; Rob's own account is complimentary.
 
+## Phase D: managed AI proxy (built 2026-09-04)
+
+The 29 USD tier's server. `supabase/functions/ai-proxy` holds our Anthropic key,
+checks the entitlement and the tier by calling the Phase C helper, enforces a
+monthly output allowance, a rolling rate limit and a per-call ceiling atomically
+in the database, and streams the reply back to the browser unchanged so the
+existing progress UI never learned anything new. Deployed with verify_jwt ON.
+
+Caps, named in both the function and the SQL: 350,000 output tokens a calendar
+month (about 12 city guides), 5 generation-scale calls an hour and 60 small
+ones, 1 in flight at a time, 32,000 max_tokens per call on the city path. The
+whole call is HELD against the allowance up front and released when it closes,
+because a run whose connection is abandoned never reports what it cost and would
+otherwise be free.
+
+The bring-your-own-key path is unchanged and uncapped: a traveler with a saved
+key still calls api.anthropic.com from their own browser on their own bill, and
+a saved key wins over the plan.
+
+Still not sellable, and the tier flip is deliberately NOT in this batch. Two
+things only Rob can do stand between here and a working 29 USD tier:
+
+1. Run `docs/sql/2026-09-04-ai-usage.sql` in the SQL editor.
+2. Set `ANTHROPIC_API_KEY` in the function secrets.
+
+Then flip three lines: `BILLING_MANAGED_LIVE = false` to `true` in
+`src/app-shell.html` and `src/trip-shell.html`, and `sellable: false` to `true`
+on the managed plan in `src/cityops.js`, plus the two tests that pin them.
+
+Kill switch: the secret `AI_PROXY_DISABLED=1` stops all spend on our key on the
+next call, with no deploy and no code change.
+
 ## Open items ledger
 
+- Rob action (Phase D): run the AI allowance SQL, set ANTHROPIC_API_KEY, then
+  flip the managed tier live.
+- Rob decision (Phase D): whether `AI_PROXY_TIERS` should include
+  `complimentary`. It defaults to `managed` only, which means Rob's own
+  grandfathered account cannot use the proxy until he widens it. Every
+  grandfathered account is complimentary, so widening it hands them all managed
+  AI on our key, capped at 350k output tokens each per month.
 - Rob decision: Phase C pricing, interval, free-tier boundary.
 - Rob decision: eventual product name and domain (robriggs.com subdomains
   and the personal free-tier Supabase org are fine until real customers).

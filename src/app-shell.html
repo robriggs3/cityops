@@ -1323,6 +1323,37 @@
       body.appendChild(head);
       body.appendChild(el('p', 'diff', s.detail));
 
+      // The AI meter, for the tier whose AI runs on OUR key and for nobody
+      // else. A bring-your-own-key subscriber is spending their own money on
+      // their own key, and metering that back at them would be reporting on a
+      // bill we do not send. Plain words first; the token count is second,
+      // because "212,000 tokens" is not something anyone plans a week around.
+      var meter = CityOps.aiProxyKit.meter(aiUsageRow);
+      if (meter.show) {
+        var mh = el('p', 'diff', meter.headline);
+        mh.style.fontWeight = '600';
+        body.appendChild(mh);
+        // Inline styles rather than a class: this is two rectangles used in
+        // one place on each surface, and a shared stylesheet rule would be a
+        // third file to keep in step for no gain. The variables are the ones
+        // both surfaces already define.
+        var bar = el('div', '');
+        bar.style.cssText = 'height:8px;border-radius:6px;overflow:hidden;margin:6px 0;' +
+          'background:var(--bg-softer);border:1px solid var(--border-light);';
+        var fill = el('div', '');
+        fill.style.cssText = 'height:100%;width:' + meter.pct + '%;' +
+          'background:var(--' + (meter.atCap ? 'accent' : 'green') + ');';
+        bar.appendChild(fill);
+        bar.setAttribute('role', 'img');
+        bar.setAttribute('aria-label', meter.headline + '. ' + meter.detail);
+        body.appendChild(bar);
+        body.appendChild(el('p', 'diff', meter.detail));
+        if (meter.atCap) {
+          body.appendChild(el('p', 'diff',
+            CityOps.aiProxyKit.pauseMessage('over_monthly_cap', aiUsageRow)));
+        }
+      }
+
       // Manage billing, only when there is a portal to open AND a customer to
       // open it for. A comp account has neither, and is offered neither.
       if (BILLING.portal && entRow.row && entRow.row.has_customer) {
@@ -1382,7 +1413,12 @@
     draw();
     // The read is cheap and the modal is where a person goes to ask this, so
     // it is refreshed on open rather than trusted from whenever it last ran.
-    fetchEntitlement().then(draw);
+    // The meter follows the plan read, because whether to draw a meter at all
+    // is a question only the tier can answer.
+    fetchEntitlement().then(function () {
+      draw();
+      return fetchAiUsage();
+    }).then(draw);
   }
 
   // Closes the modal that owns `box`. The account buttons live inside the
@@ -1441,7 +1477,11 @@
     m.box.appendChild(el('p', 'section-lead', 'Claude API key'));
     function keyStatusText() {
       var hasKey = !!loadApiKey();
-      if (!hasKey) return 'No key saved yet.';
+      if (!hasKey) {
+        return aiTransportNow() === 'proxy'
+          ? 'No key saved, and your plan does not need one: AI runs on our key.'
+          : 'No key saved yet.';
+      }
       return (session && session.access_token)
         ? 'Key saved and synced to your account.'
         : 'Key saved on this device. Sign in above to carry it to your other devices.';
@@ -1451,6 +1491,15 @@
       'your own account so a cleared browser does not lose it. It never travels with a city, an exported ' +
       'guide or a prompt.'));
     m.box.appendChild(el('p', 'diff', 'One profile and one key for all your cities.'));
+    if (aiTransportNow() === 'proxy') {
+      // Said plainly, because it is a spending decision and it is not obvious:
+      // a saved key WINS. Somebody who types one in is telling us which bill
+      // they want this on, and quietly keeping them on ours would be deciding
+      // it for them in the other direction.
+      m.box.appendChild(el('p', 'diff', 'Your plan runs AI on our key, so you do not need one of ' +
+        'these. If you save one anyway, this device uses yours instead and your included ' +
+        'monthly AI stays untouched. Clear it to go back to ours.'));
+    }
     var keyRow = el('div', 'mrow');
     var keyInp = document.createElement('input');
     keyInp.type = 'password';
@@ -1679,8 +1728,8 @@
     // writes the merged city, and it means a delta from Claude gets the same
     // "review the summary before it lands" moment a pasted delta always got.
     function runWithClaude(kind, btn) {
+      if (!aiOneTapReady()) { msg.textContent = aiNoTransportText(); return; }
       var apiKey = loadApiKey();
-      if (!apiKey) { msg.textContent = 'No Claude API key saved. Add one in Profile first.'; return; }
       var text = build(kind);
       if (text === null) return;
       var origLabel = btn.textContent;
@@ -1731,9 +1780,11 @@
       }
       row.appendChild(copy);
       row.appendChild(dl);
-      // Only offered once a Claude key is saved; the no-key case keeps the
-      // copy/paste path as the only option, exactly as before.
-      if (!disabledReason && loadApiKey()) {
+      // Offered once ONE TAP CAN ACTUALLY RUN, which since the managed tier
+      // shipped means a saved key OR a plan that runs AI on our key. The no-key
+      // free account keeps the copy/paste path as its only option, exactly as
+      // before, and is never shown a button that would refuse it.
+      if (!disabledReason && aiOneTapReady()) {
         var run = el('button', 'ctl to-done', 'Run with Claude');
         run.type = 'button';
         run.onclick = function () { runWithClaude(kind, run); };
@@ -1890,7 +1941,7 @@
     ta.setAttribute('aria-label', 'Delta JSON from your AI');
 
     var row = el('div', 'mrow');
-    if (loadApiKey()) {
+    if (aiOneTapReady()) {
       var run = el('button', 'ctl to-done', 'Ask Claude');
       run.type = 'button';
       run.onclick = function () {
@@ -1936,10 +1987,8 @@
     row.appendChild(dl);
     m.box.appendChild(row);
 
-    if (!loadApiKey()) {
-      m.box.appendChild(el('p', 'diff', 'No Claude API key is saved on this device, so the prompt ' +
-        'goes to your own chat and the answer comes back through the box below. ' +
-        'Save a key in Profile to do it in one tap instead.'));
+    if (!aiOneTapReady()) {
+      m.box.appendChild(el('p', 'diff', aiNoTransportText()));
     }
     m.box.appendChild(el('p', 'diff', 'Paste what your AI returns here. It is a partial payload: ' +
       'a rating and an intel block for this one place.'));
@@ -2014,6 +2063,111 @@
   var CLAUDE_MODEL = 'claude-opus-4-8';
   var CLAUDE_MAX_TOKENS = 32000;
 
+  // ---- which bill this run goes on ----
+  //
+  // Two transports, one prompt, one parser. A traveler with their own key keeps
+  // going straight to api.anthropic.com exactly as they always have, and no cap
+  // of ours touches them: their key, their bill, their business. A managed
+  // subscriber with no key of their own goes through OUR edge function, which
+  // holds our Anthropic key, meters the month and refuses politely when the
+  // allowance is spent. The key on our side never reaches this file, this
+  // origin, or any browser.
+  //
+  // The DECISION is CityOps.aiProxyKit.transport, which is pure and unit
+  // tested. This is the adapter that reads the session and hands back the
+  // request that follows from it.
+  function aiTransportNow() {
+    return CityOps.aiProxyKit.transport({
+      hasKey: !!loadApiKey(),
+      tier: (entRow && entRow.row && entRow.row.tier) || '',
+      entitled: entAllows(),
+      signedIn: entMocked || !!(session && session.access_token)
+    });
+  }
+
+  // True when one tap can actually run. The copy-a-prompt path is always there
+  // either way, and is what the modals offer when this is false.
+  function aiOneTapReady() {
+    return aiTransportNow() !== 'none';
+  }
+
+  // Never a bare refusal, and never a control that cannot succeed: this is the
+  // sentence a modal shows INSTEAD of the one-tap button.
+  function aiNoTransportText() {
+    if (!(session && session.access_token) && !entMocked) {
+      return 'No Claude API key is saved on this device, so the prompt goes to your own chat and ' +
+        'the answer comes back through the box below. Save a key in Profile to do it in one tap.';
+    }
+    if (!entAllows()) return entGateText('ai');
+    return 'Your plan runs AI on your own Anthropic key. Save one in Profile to run this in one ' +
+      'tap, or use the prompt below in your own chat, which is free and always will be.';
+  }
+
+  // Resolves to {url, headers} for the request to make, or {message} to show
+  // instead. The proxy call carries a FRESH access token, because a run that
+  // takes four minutes is exactly the run whose token was about to expire.
+  function aiRequestPlan(apiKey) {
+    var t = aiTransportNow();
+    if (t === 'direct') {
+      return Promise.resolve({
+        url: 'https://api.anthropic.com/v1/messages',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+          'content-type': 'application/json'
+        }
+      });
+    }
+    if (t !== 'proxy') return Promise.resolve({ message: aiNoTransportText() });
+    return ensureToken(false).then(function (tok) {
+      if (!tok) {
+        return { message: 'Your session needs a refresh before AI can run on our key. Sign in ' +
+          'again from Profile, or copy the prompt below into your own chat.' };
+      }
+      return {
+        url: CityOps.aiProxyKit.url(SUPA.url),
+        headers: {
+          'Authorization': 'Bearer ' + tok,
+          'apikey': SUPA.anon,
+          'content-type': 'application/json'
+        }
+      };
+    });
+  }
+
+  // ---- the managed-AI meter ----
+  //
+  // Read once per Profile open, and ONLY shown to somebody whose AI runs on our
+  // key. A bring-your-own-key subscriber is spending their own money and is
+  // shown nothing, because their usage is not ours to report back at them.
+  var aiUsageRow = null;
+  function fetchAiUsage() {
+    // Localhost only, and that is checked inside the kit rather than here. It is
+    // how the meter gets LOOKED at, at both widths, without a paying subscriber
+    // and a month of real spend behind them.
+    var mock = CityOps.aiProxyKit.mock(
+      (typeof location !== 'undefined' && location.href) || '',
+      (typeof location !== 'undefined' && location.hostname) || '');
+    if (mock) { aiUsageRow = mock; return Promise.resolve(aiUsageRow); }
+    if (!syncOn() || !session || !session.access_token) return Promise.resolve(null);
+    return api('/rest/v1/rpc/my_ai_usage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    }).then(function (r) {
+      var row = (Object.prototype.toString.call(r) === '[object Array]') ? r[0] : r;
+      aiUsageRow = (row && typeof row === 'object') ? row : null;
+      return aiUsageRow;
+    }).catch(function (e) {
+      // The meter is information, not a gate. If it cannot be read, the app
+      // says nothing rather than guessing at a number somebody plans around.
+      warn('AI usage read failed', e);
+      aiUsageRow = null;
+      return null;
+    });
+  }
+
   // Resolves to the full assistant text (the `text` content block only; a
   // `thinking` block never contributes to this, since that block is
   // reasoning scratch space, not the fenced JSON the caller parses next).
@@ -2030,30 +2184,38 @@
     // The one-tap path is what a plan buys. The copy-a-prompt path in the
     // same modal is free, is unaffected, and is named in the message.
     if (!entAllows()) return Promise.reject(new Error(entGateText('ai')));
-    return fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      signal: signal || undefined,
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-        'content-type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: CLAUDE_MODEL,
-        max_tokens: CLAUDE_MAX_TOKENS,
-        thinking: { type: 'adaptive' },
-        stream: true,
-        messages: [{ role: 'user', content: prompt }]
-      })
+    return aiRequestPlan(apiKey).then(function (plan) {
+      // Neither transport is available. The modal that called this already
+      // offers the free copy-a-prompt path; this says which one is missing.
+      if (plan.message) throw new Error(plan.message);
+      // ONE body, whichever transport carries it. The proxy forwards this shape
+      // to Anthropic unchanged and streams the reply back byte for byte, which
+      // is why the parser below did not have to learn anything new.
+      return fetch(plan.url, {
+        method: 'POST',
+        signal: signal || undefined,
+        headers: plan.headers,
+        body: JSON.stringify({
+          model: CLAUDE_MODEL,
+          max_tokens: CLAUDE_MAX_TOKENS,
+          thinking: { type: 'adaptive' },
+          stream: true,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
     }).then(function (resp) {
       if (!resp.ok || !resp.body) {
         return resp.text().catch(function () { return ''; }).then(function (bodyText) {
-          var detail = bodyText;
-          try {
-            var j = JSON.parse(bodyText);
-            if (j && j.error && j.error.message) detail = j.error.message;
-          } catch (e) { /* body was not JSON; show it raw, trimmed */ }
+          var j = null;
+          try { j = JSON.parse(bodyText); } catch (e) { /* not JSON; shown raw, trimmed */ }
+          // Our own proxy answers a refusal with a REASON, and a refusal is not
+          // a failure: it is the allowance doing what it was built to do. Said
+          // in the app's own words, naming the free path and the reset date,
+          // never as "Claude API returned 429".
+          if (j && j.error && j.error.reason) {
+            throw new Error(CityOps.aiProxyKit.pauseMessage(j.error.reason, j.error));
+          }
+          var detail = (j && j.error && j.error.message) ? j.error.message : bodyText;
           throw new Error('Claude API returned ' + resp.status +
             (detail ? ': ' + String(detail).slice(0, 300) : ''));
         });
@@ -2273,26 +2435,51 @@
       : 'Build my prompt writes PROMPT.md with this header and your interest profile filled in.'));
 
     // ---- Generate with Claude (Phase 2): the same prompt, called in-app ----
-    var apiKey = loadApiKey();
-    box.appendChild(el('p', 'diff', apiKey
-      ? 'Generate with Claude runs the same prompt against your own Claude API key, right here, and adds the result to your cities when it finishes.'
-      : 'Generate with Claude needs an API key first. Add one in Profile (top of the app): it is stored on ' +
-        'this device, and in your own account while you are signed in.'));
+    // Two transports since the managed tier shipped, and the sentence says
+    // WHOSE key this run goes on, because that is the part that costs money.
+    //
+    // The line, the button and the Open Profile escape hatch are drawn by ONE
+    // function and redrawn together, because the plan read can land after this
+    // modal is already open. Three of them updating separately is how you get
+    // an enabled button sitting under a sentence that says it needs a key.
+    var genLine = el('p', 'diff', '');
+    box.appendChild(genLine);
     var genRow = el('div', 'mrow');
     var genBtn = el('button', 'ctl to-done', 'Generate with Claude');
     genBtn.type = 'button';
-    if (!apiKey) {
-      genBtn.disabled = true;
-      genBtn.title = 'Add a Claude API key in Profile first';
-    }
     genRow.appendChild(genBtn);
-    if (!apiKey) {
-      var goProfile = el('button', 'ctl', 'Open Profile');
-      goProfile.type = 'button';
-      goProfile.onclick = function () { close(); openProfileModal(); };
-      genRow.appendChild(goProfile);
-    }
+    var goProfile = el('button', 'ctl', 'Open Profile');
+    goProfile.type = 'button';
+    goProfile.onclick = function () { close(); openProfileModal(); };
     box.appendChild(genRow);
+
+    function drawGenAffordance() {
+      var oneTap = aiOneTapReady();
+      var onOurKey = aiTransportNow() === 'proxy';
+      // A lapsed account and a keyless one are refused for different reasons,
+      // and telling a lapsed subscriber to "add an API key" would send them off
+      // to solve a problem they do not have.
+      var lapsed = !entAllows();
+      genLine.textContent = onOurKey
+        ? 'Generate with Claude runs the same prompt on our key, right here, and adds the result to your cities when it finishes. Your plan includes about 12 cities of research a month.'
+        : oneTap
+        ? 'Generate with Claude runs the same prompt against your own Claude API key, right here, and adds the result to your cities when it finishes.'
+        : lapsed
+        ? entGateText('ai')
+        : 'Generate with Claude needs an API key first. Add one in Profile (top of the app): it is stored on ' +
+          'this device, and in your own account while you are signed in.';
+      genBtn.disabled = !oneTap;
+      genBtn.title = oneTap ? ''
+        : lapsed ? 'Your plan is what runs this in one tap' : 'Add a Claude API key in Profile first';
+      // The escape hatch belongs with the refusal and nowhere else: offering
+      // "Open Profile" next to a button that already works is noise.
+      if (oneTap) {
+        if (goProfile.parentNode) goProfile.parentNode.removeChild(goProfile);
+      } else if (!goProfile.parentNode) {
+        genRow.appendChild(goProfile);
+      }
+    }
+    drawGenAffordance();
     var genMsg = el('div', 'diff', '');
     box.appendChild(genMsg);
 
@@ -2300,15 +2487,25 @@
     // at a time by construction: genBtn is disabled while a run is live, and
     // Cancel is the only other control in the row.
     var genAbort = null;
+
+    // The plan read can still be in flight when a fast hand opens this modal,
+    // and the button above is disabled until it lands. Re-ask, then let the
+    // button follow the answer: a paying subscriber must never be left looking
+    // at a disabled Generate on the feature they bought.
+    fetchEntitlement().then(function () {
+      if (!genAbort) { setGenerating(false); drawGenAffordance(); }
+    });
+
     function setGenerateRow(extraButtons) {
       genRow.innerHTML = '';
       genRow.appendChild(genBtn);
       (extraButtons || []).forEach(function (b) { genRow.appendChild(b); });
     }
     function setGenerating(on) {
-      genBtn.disabled = on || !loadApiKey();
+      genBtn.disabled = on || !aiOneTapReady();
       genBtn.textContent = on ? 'Researching...' : 'Generate with Claude';
     }
+
     // A run this long needs a way out that is not "close the tab". Aborting
     // the fetch stops the stream; the scaffold city is untouched either way,
     // because nothing is written until a reply has parsed and validated.
@@ -2352,8 +2549,8 @@
         genMsg.textContent = 'Fill city name and dates first.';
         return;
       }
+      if (!aiOneTapReady()) { genMsg.textContent = aiNoTransportText(); return; }
       var key = loadApiKey();
-      if (!key) { genMsg.textContent = 'No Claude API key saved. Add one in Profile first.'; return; }
       var tpl = promptTemplateText();
       if (!tpl) {
         genMsg.textContent = 'This build has no prompt template embedded. Use PROMPT.md from the repo.';
@@ -2666,16 +2863,15 @@
     //                  my prompt runs so the prompt is on the clipboard for
     //                  whichever AI they do use. One line says why.
     if (autoPlan) {
-      if (loadApiKey()) {
+      if (aiOneTapReady()) {
         runGenerate();
       } else {
         // genMsg, not bmsg: Build my prompt writes its own result into bmsg
         // ("Copied. Paste into Claude...") a microtask later, and putting
         // this there would either overwrite that or be overwritten by it.
-        genMsg.textContent = 'No Claude API key is saved, so ' + editCity.city.name +
-          ' cannot be generated in the app. Its prompt has been built for you above: ' +
-          'paste it into Claude or ChatGPT, then paste the JSON back into the box below. ' +
-          'Add a key in Profile to generate here instead.';
+        genMsg.textContent = editCity.city.name + ' cannot be generated in the app on this ' +
+          'account yet. Its prompt has been built for you above: paste it into Claude or ' +
+          'ChatGPT, then paste the JSON back into the box below. ' + aiNoTransportText();
         bprompt.click();
       }
     }
@@ -3836,6 +4032,16 @@
     // The alert outlives a reload, so it has to be drawn at startup, not only
     // at the moment sync breaks.
     renderSyncAlert();
+    // The plan is read at BOOT, not only when Profile is opened, because the
+    // tier is now what decides whether Generate with Claude can run at all. A
+    // managed subscriber who opens Add city before the first pull lands would
+    // otherwise meet a disabled button on the one feature they are paying for,
+    // which is the same dead control as the other direction and worse.
+    //
+    // Above the signed-out return, not below it: signed out this resolves to
+    // null immediately and costs nothing, and it is the only thing that makes
+    // the localhost ?plan= mock land on a cold open.
+    fetchEntitlement();
     if (!session) return;
     if (!syncEmail) fetchUserEmail();
     stateStamp = seedStateStamps();

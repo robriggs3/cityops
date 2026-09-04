@@ -5278,6 +5278,16 @@ var CityOps = (function () {
         return { signed_in: true, entitled: false, account_created: iso(now - 90 * ENT_DAY_MS),
           row: { tier: 'byok', status: 'canceled', current_period_end: iso(now - 30 * ENT_DAY_MS),
             trial_ends_at: null, updated_at: iso(now - 30 * ENT_DAY_MS), has_customer: true } };
+      // The managed tier, which is the only one that ever draws an AI meter.
+      // Its usage row comes from aiProxyKit.mock, keyed off the same fragment.
+      case 'managed':
+        return { signed_in: true, entitled: true, account_created: iso(now - 90 * ENT_DAY_MS),
+          row: { tier: 'managed', status: 'active', current_period_end: iso(now + 12 * ENT_DAY_MS),
+            trial_ends_at: null, updated_at: iso(now), has_customer: true } };
+      case 'managed_capped':
+        return { signed_in: true, entitled: true, account_created: iso(now - 90 * ENT_DAY_MS),
+          row: { tier: 'managed', status: 'active', current_period_end: iso(now + 12 * ENT_DAY_MS),
+            trial_ends_at: null, updated_at: iso(now), has_customer: true } };
       case 'comp':
       case 'complimentary':
         return { signed_in: true, entitled: true, account_created: iso(now - 200 * ENT_DAY_MS),
@@ -5306,6 +5316,172 @@ var CityOps = (function () {
         'Share links you can refresh from here'
       ]
     };
+  }
+
+  // ---- managed AI: which transport, and what the meter says ----
+  //
+  // The 29 USD tier runs AI on OUR Anthropic key, through the ai-proxy edge
+  // function. Nothing here talks to anything: it decides WHICH transport a
+  // given device should use, and says in plain words how much of the month is
+  // left. The proxy enforces every number below on its own, in the database,
+  // under a lock; these copies exist so the app can say what is happening
+  // before a refusal rather than after one.
+  //
+  // The three transports:
+  //   direct  the traveler's OWN key, straight to api.anthropic.com, exactly as
+  //           it has always worked. No cap of ours applies to it, ever. Their
+  //           key, their bill, their business.
+  //   proxy   our key, through the function, metered.
+  //   none    neither is available, so the modal offers the free copy-a-prompt
+  //           path instead and says why. Never a dead end.
+  //
+  // A saved key WINS over the proxy on purpose. Somebody who typed a key in is
+  // telling us which bill they want this on, and quietly moving them onto ours
+  // would be deciding their spend for them in the other direction.
+  var AI_MONTHLY_OUTPUT_TOKENS = 350000;
+  // What a whole city guide costs in output tokens, near enough to divide by.
+  // It is a unit for the sentence a person reads, not an accounting figure: the
+  // meter's real number is tokens, and it is shown right next to this.
+  var AI_GUIDE_OUTPUT_TOKENS = 29000;
+  var AI_MAX_TOKENS = 32000;
+  var AI_LARGE_CALL_MIN_TOKENS = 8000;
+  var AI_LARGE_CALLS_PER_HOUR = 5;
+  // The tiers whose AI runs on our key. `managed` is the tier that is sold;
+  // `complimentary` is a row only the owner writes, and the proxy decides for
+  // itself whether to honour it (see AI_PROXY_TIERS). The app offering the
+  // transport and the server allowing it are two different questions, and the
+  // server's answer is the one that counts.
+  var AI_MANAGED_TIERS = ['managed', 'complimentary'];
+
+  // ctx: {hasKey, tier, entitled, signedIn}
+  //
+  // `entitled` is asked FIRST and for both transports, because one-tap AI is
+  // what a plan buys whichever key it runs on: that is what the gate copy has
+  // promised since Phase C. Note that the shells' entAllows() fails OPEN when
+  // signed out or before the migration has run, so a free local device with a
+  // key of its own keeps working exactly as it always did.
+  function aiTransport(c) {
+    var o = c || {};
+    if (!o.entitled) return 'none';
+    if (o.hasKey) return 'direct';
+    if (!o.signedIn) return 'none';
+    return AI_MANAGED_TIERS.indexOf(o.tier) === -1 ? 'none' : 'proxy';
+  }
+
+  // The function's URL, derived from the project URL the app already holds, so
+  // there is no fourth place to keep a hostname in step.
+  function aiProxyUrl(supaUrl) {
+    var u = String(supaUrl || '');
+    if (!u) return '';
+    return u.replace(/\/+$/, '').replace('.supabase.co', '.functions.supabase.co') + '/ai-proxy';
+  }
+
+  function aiGuides(tokens) {
+    return Math.round((tokens || 0) / AI_GUIDE_OUTPUT_TOKENS);
+  }
+
+  // usage: what my_ai_usage() returned, or null.
+  // Returns {show, headline, detail, used, cap, pct, atCap}. `show` is false for
+  // everyone whose AI is not on our key, which includes every bring-your-own-key
+  // subscriber: their spend is theirs, and metering it back at them would be
+  // reporting on money we do not touch.
+  function aiMeter(usage) {
+    var u = usage || {};
+    var out = { show: false, headline: '', detail: '', used: 0, cap: AI_MONTHLY_OUTPUT_TOKENS,
+      pct: 0, atCap: false, guidesUsed: 0, guidesCap: 0 };
+    if (!u.signed_in || AI_MANAGED_TIERS.indexOf(u.tier) === -1) return out;
+    var used = typeof u.output_tokens === 'number' ? u.output_tokens : 0;
+    var cap = AI_MONTHLY_OUTPUT_TOKENS;
+    var guidesCap = Math.floor(cap / AI_GUIDE_OUTPUT_TOKENS);
+    var guidesUsed = Math.min(aiGuides(used), guidesCap);
+    out.show = true;
+    out.used = used;
+    out.cap = cap;
+    out.pct = Math.min(100, Math.round((used / cap) * 100));
+    out.atCap = used >= cap;
+    out.guidesUsed = guidesUsed;
+    out.guidesCap = guidesCap;
+    // Plain words first, because "212,480 of 350,000 tokens" is not a sentence
+    // anybody plans a week around. The number is still there, second, for the
+    // person who wants it.
+    out.headline = out.atCap
+      ? 'You have used this month\'s included AI'
+      : 'About ' + guidesUsed + ' of your ' + guidesCap + ' cities of research used this month';
+    // "tokens", not "words". A token is roughly three quarters of a word, and
+    // the friendly-sounding version would be wrong by a quarter to the one
+    // person reading this line because they want the actual number.
+    out.detail = used.toLocaleString ? used.toLocaleString() + ' of ' + cap.toLocaleString() +
+      ' tokens of AI output, and it resets ' + aiResetPhrase(u.resets_at) + '.'
+      : used + ' of ' + cap + ' tokens.';
+    return out;
+  }
+
+  // The meter's own localhost-only mock, the twin of entitlementMock and gated
+  // the same way and for the same reason: the two states worth LOOKING at (a
+  // meter part way through a month, and a meter at the cap) cannot be reached
+  // without a paying subscriber and a month of real spend. On the real origin
+  // it returns null for every input, and that is what the shipped-bytes test
+  // pins. Shape matches my_ai_usage() exactly.
+  function aiUsageMock(href, hostname) {
+    var host = String(hostname || '');
+    if (host !== 'localhost' && host !== '127.0.0.1') return null;
+    var m = /[?&#]plan=([a-z_-]+)/.exec(String(href || ''));
+    if (!m) return null;
+    var resets = new Date(Date.UTC(new Date().getUTCFullYear(),
+      new Date().getUTCMonth() + 1, 1)).toISOString().slice(0, 10);
+    if (m[1] === 'managed') {
+      return { signed_in: true, tier: 'managed', resets_at: resets,
+        output_tokens: 4 * AI_GUIDE_OUTPUT_TOKENS, held_tokens: 0,
+        input_tokens: 51200, calls: 9 };
+    }
+    if (m[1] === 'managed_capped') {
+      return { signed_in: true, tier: 'managed', resets_at: resets,
+        output_tokens: AI_MONTHLY_OUTPUT_TOKENS, held_tokens: 0,
+        input_tokens: 140000, calls: 26 };
+    }
+    return null;
+  }
+
+  function aiResetPhrase(iso) {
+    var ms = entMs(iso);
+    if (ms === null) return 'at the start of next month';
+    return 'on ' + entitlementDate(new Date(ms).toISOString());
+  }
+
+  // What the app says when the proxy refuses. Never an error, never a dead end:
+  // every one of these names the free copy-a-prompt path in the same breath,
+  // because that path is right there in the same modal and always has been.
+  // `reason` is what ai_reserve returned; anything unrecognised falls through to
+  // a sentence that is still true.
+  function aiPauseMessage(reason, info) {
+    var i = info || {};
+    var free = ' Copy the prompt and run it in your own Claude or ChatGPT: that path is free, ' +
+      'it is right here, and the prompt is the same prompt.';
+    switch (reason) {
+      case 'over_monthly_cap':
+        // The server distinguishes "all of it is gone" from "not enough left
+        // for a run this size", and its sentence is the truer one when it is
+        // there. The date and the free path are added either way.
+        return (typeof i.message === 'string' && i.message
+          ? i.message
+          : 'You have used this month\'s included AI.') +
+          ' It comes back ' + aiResetPhrase(i.resets_at) + '.' + free;
+      case 'rate_limited':
+        return 'That is as many AI runs as this plan does in an hour. The next one is available ' +
+          'in a little while.' + free;
+      case 'busy':
+        return 'One AI run at a time. Let the one already going finish, or cancel it, then try ' +
+          'again.' + free;
+      case 'wrong_tier':
+        return 'Your plan runs AI on your own Anthropic key. Add one in Profile, or switch to ' +
+          'the plan that includes AI.' + free;
+      case 'not_entitled':
+        return 'AI on our key needs an active subscription.' + free;
+      case 'paused':
+        return 'AI on our key is paused right now.' + free;
+      default:
+        return 'That AI run could not start.' + free;
+    }
   }
 
   // ---- DOM rendering (browser only) ----
@@ -7963,6 +8139,22 @@ var CityOps = (function () {
       // its call sites, because there is one of these and there would have
       // been two of those.
       mock: entitlementMock
+    },
+    // Managed AI: which transport a device should use, what the meter says, and
+    // what the app says when the allowance runs out. Pure; the shells own the
+    // fetch, the token and the DOM, exactly as they do for entitlementKit.
+    aiProxyKit: {
+      MONTHLY_OUTPUT_TOKENS: AI_MONTHLY_OUTPUT_TOKENS,
+      GUIDE_OUTPUT_TOKENS: AI_GUIDE_OUTPUT_TOKENS,
+      MAX_TOKENS: AI_MAX_TOKENS,
+      LARGE_CALL_MIN_TOKENS: AI_LARGE_CALL_MIN_TOKENS,
+      LARGE_CALLS_PER_HOUR: AI_LARGE_CALLS_PER_HOUR,
+      MANAGED_TIERS: AI_MANAGED_TIERS,
+      transport: aiTransport, url: aiProxyUrl,
+      meter: aiMeter, pauseMessage: aiPauseMessage, guides: aiGuides,
+      // Localhost only, checked inside the function, exactly as entitlementKit
+      // does it and for exactly the same reason.
+      mock: aiUsageMock
     },
     syncKit: {
       EPOCH: EPOCH_ISO, decide: decideSync, plan: planSync, buildRows: buildRows,

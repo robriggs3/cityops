@@ -4041,7 +4041,7 @@ test('the service worker precaches the share shell and nothing token-shaped', ()
   // v17: the subscription gates. A phone still serving v16 would let a lapsed
   // account tap sync, one-tap AI and Publish with no explanation attached to
   // any of them, and then watch the database refuse all three in silence.
-  assert.ok(/var CACHE = 'cityops-app-v18';/.test(sw));
+  assert.ok(/var CACHE = 'cityops-app-v19';/.test(sw));
   // GET only, so the rpc POST that carries the token is never cached, and a
   // rotated share cannot keep answering out of a stale cache.
   assert.ok(/if \(e\.request\.method !== 'GET'\) return;/.test(sw));
@@ -5273,7 +5273,7 @@ test('a place pass reply that names the wrong id changes nothing, and says so', 
 // the same way the transport is. It defaults to true so every existing test
 // below describes the paying case unchanged; passing false is what exercises
 // the gate, and the point of that test is that it never reaches fetch at all.
-function loadCallClaudeStream(fetchImpl, entitled) {
+function loadCallClaudeStream(fetchImpl, entitled, plan) {
   const fs = require('fs');
   const path = require('path');
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
@@ -5283,11 +5283,27 @@ function loadCallClaudeStream(fetchImpl, entitled) {
   assert.ok(end !== -1, 'could not find the end of callClaudeStream');
   const src = html.slice(start, end + 4);
   const fn = new Function('fetch', 'TextDecoder', 'CLAUDE_MODEL', 'CLAUDE_MAX_TOKENS',
-    'entAllows', 'entGateText',
+    'entAllows', 'entGateText', 'aiRequestPlan', 'CityOps',
     src + '\nreturn callClaudeStream;');
   return fn(fetchImpl, TextDecoder, 'claude-test', 1000,
     function () { return entitled !== false; },
-    function () { return 'ONE TAP NEEDS A PLAN, and the paste path is free.'; });
+    function () { return 'ONE TAP NEEDS A PLAN, and the paste path is free.'; },
+    // The transport chooser, injected the same way the transport is. Its own
+    // decision (CityOps.aiProxyKit.transport) is pure and tested on its own
+    // just below; what is injected here is the REQUEST that follows from it,
+    // so these tests can drive either transport through the one parser.
+    plan || function (apiKey) {
+      return Promise.resolve({
+        url: 'https://api.anthropic.com/v1/messages',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+          'content-type': 'application/json'
+        }
+      });
+    },
+    C);
 }
 
 // ---------------------------------------------------------------------------
@@ -6600,6 +6616,7 @@ test('no shipped surface links the owner personal pages', () => {
 const ENT_NOW = '2026-09-01T12:00:00.000Z';
 const ENT_NOW_MS = Date.parse(ENT_NOW);
 const E = C.entitlementKit;
+const AI = C.aiProxyKit;
 function entAgo(ms) { return new Date(ENT_NOW_MS - ms).toISOString(); }
 function entAhead(ms) { return new Date(ENT_NOW_MS + ms).toISOString(); }
 const ENT_DAY = 86400000;
@@ -6825,14 +6842,21 @@ test('no gate or summary copy carries pressure, scarcity or an em-dash', () => {
   });
 });
 
-test('the managed tier is declared but not sellable while its proxy does not exist', () => {
+// The proxy EXISTS now (supabase/functions/ai-proxy, deployed 2026-09-04,
+// verify_jwt on, 22 tests against the real module). What is still missing is
+// two things only the owner can do: run docs/sql/2026-09-04-ai-usage.sql, and
+// set the ANTHROPIC_API_KEY secret. Until both are done, a managed subscriber's
+// every AI call would refuse, so the tier stays unsellable. The flip is three
+// lines and they are named in the build report.
+test('the managed tier stays unsellable until its allowance table and key exist', () => {
   const plans = E.plans();
   const byok = plans.filter(function (p) { return p.tier === 'byok'; })[0];
   const managed = plans.filter(function (p) { return p.tier === 'managed'; })[0];
   assert.ok(byok && byok.sellable, 'the 15 USD tier works today and is sellable');
   assert.ok(managed && !managed.sellable,
-    'the 29 USD tier runs AI on OUR key, and that server does not exist yet. ' +
-    'Selling it would be selling a capability that does not work.');
+    'the 29 USD tier runs AI on OUR key. The proxy is deployed, but until the AI ' +
+    'allowance SQL is run and ANTHROPIC_API_KEY is set, every call it makes would ' +
+    'refuse. Selling that would be selling a capability that does not work.');
 });
 // ---- the localhost-only state mock ----
 //
@@ -6849,6 +6873,35 @@ test('the plan mock answers on localhost and nowhere else', () => {
       h + ' must never be able to mock a plan state');
   });
 });
+test('the AI meter mock answers on localhost and nowhere else', () => {
+  assert.ok(AI.mock('http://localhost:8080/#plan=managed', 'localhost'));
+  assert.ok(AI.mock('http://127.0.0.1:8080/#plan=managed_capped', '127.0.0.1'));
+  ['app.nomadding.com', 'nomadding.com', 'robriggs3.github.io', 'localhost.evil.com',
+   'notlocalhost', ''].forEach(function (h) {
+    assert.equal(AI.mock('https://' + h + '/#plan=managed', h), null,
+      h + ' must never be able to fake a usage row');
+  });
+  // And nothing but the two states it exists for.
+  assert.equal(AI.mock('http://localhost/#plan=lapsed', 'localhost'), null);
+  assert.equal(AI.mock('http://localhost/', 'localhost'), null);
+});
+
+test('the two mocked meter states are the two worth looking at', () => {
+  const part = AI.meter(AI.mock('http://localhost/#plan=managed', 'localhost'));
+  assert.equal(part.show, true);
+  assert.equal(part.atCap, false);
+  assert.equal(part.guidesUsed, 4);
+  const full = AI.meter(AI.mock('http://localhost/#plan=managed_capped', 'localhost'));
+  assert.equal(full.show, true);
+  assert.equal(full.atCap, true);
+  assert.equal(full.pct, 100);
+  // And the plan mock that goes with them really is the managed tier, or the
+  // meter would not draw at all and the state could not be looked at.
+  const ent = E.mock('http://localhost/#plan=managed', 'localhost');
+  assert.equal(ent.row.tier, 'managed');
+  assert.equal(E.evaluate(ent.row, { signedIn: true }).entitled, true);
+});
+
 test('the plan mock covers the five states a stranger can be in', () => {
   const seen = {};
   ['free', 'trial', 'active', 'grace', 'lapsed'].forEach(function (name) {
@@ -6865,6 +6918,7 @@ test('the plan mock covers the five states a stranger can be in', () => {
 });
 test('an unknown or absent plan name mocks nothing', () => {
   assert.equal(E.mock('http://localhost/#plan=platinum', 'localhost'), null);
+  assert.equal(AI.mock('http://localhost/#plan=platinum', 'localhost'), null);
   assert.equal(E.mock('http://localhost/', 'localhost'), null);
   assert.equal(E.mock('', 'localhost'), null);
 });
@@ -6892,6 +6946,270 @@ asyncTest("one-tap AI without an entitlement never reaches the network", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Managed AI: which bill a run goes on, and what the meter says
+// ---------------------------------------------------------------------------
+// The 29 USD tier runs AI on OUR Anthropic key through the ai-proxy edge
+// function. The proxy enforces every number below in the database, under a
+// lock; this kit is the same decision in pure JS so both surfaces can say what
+// is happening before a refusal instead of after one, and so the two surfaces
+// cannot drift into two different answers about one account.
+
+test('a saved key keeps going straight to Anthropic, on the traveler\'s own bill', () => {
+  assert.equal(AI.transport({ hasKey: true, entitled: true, signedIn: true, tier: 'byok' }), 'direct');
+  // Including for the managed tier. Somebody who typed a key in is telling us
+  // which bill they want this on, and quietly moving them onto ours would be
+  // deciding their spend for them in the other direction.
+  assert.equal(AI.transport({ hasKey: true, entitled: true, signedIn: true, tier: 'managed' }), 'direct');
+  // And signed out, on a free local device, exactly as it always worked. The
+  // shells' entAllows() fails open when signed out, which is what this is.
+  assert.equal(AI.transport({ hasKey: true, entitled: true, signedIn: false, tier: '' }), 'direct');
+});
+
+test('the managed tier with no key of its own goes through the proxy', () => {
+  assert.equal(AI.transport({ hasKey: false, entitled: true, signedIn: true, tier: 'managed' }), 'proxy');
+  // Complimentary is the row the owner writes for himself and for anyone he
+  // comps. Whether the SERVER honours it is a separate question, answered by
+  // the AI_PROXY_TIERS secret, and the server's answer is the one that counts.
+  assert.equal(AI.transport({ hasKey: false, entitled: true, signedIn: true, tier: 'complimentary' }), 'proxy');
+});
+
+test('no transport is offered where none can succeed', () => {
+  // The 15 USD tier is bring-your-own-key. Without a key there is nothing to
+  // run, and the copy-a-prompt path is what the modal offers instead.
+  assert.equal(AI.transport({ hasKey: false, entitled: true, signedIn: true, tier: 'byok' }), 'none');
+  // A trial has no row at all, so no tier, so no claim on our key: a trial
+  // gets everything the app can do on the traveler's own key, and our
+  // Anthropic bill is not part of a free trial.
+  assert.equal(AI.transport({ hasKey: false, entitled: true, signedIn: true, tier: '' }), 'none');
+  // Signed out, no key: nothing to run on and nobody to charge.
+  assert.equal(AI.transport({ hasKey: false, entitled: true, signedIn: false, tier: 'managed' }), 'none');
+  // And a lapsed account, WITH a key. One-tap AI is what a plan buys whichever
+  // key it runs on, which is what the gate copy has promised since Phase C.
+  assert.equal(AI.transport({ hasKey: true, entitled: false, signedIn: true, tier: 'managed' }), 'none');
+  assert.equal(AI.transport({ hasKey: false, entitled: false, signedIn: true, tier: 'managed' }), 'none');
+});
+
+test('the proxy URL is derived from the project URL, not kept in a fourth place', () => {
+  assert.equal(AI.url('https://ggscdbbvqmqiyguiccrf.supabase.co'),
+    'https://ggscdbbvqmqiyguiccrf.functions.supabase.co/ai-proxy');
+  assert.equal(AI.url('https://ggscdbbvqmqiyguiccrf.supabase.co/'),
+    'https://ggscdbbvqmqiyguiccrf.functions.supabase.co/ai-proxy');
+  assert.equal(AI.url(''), '');
+});
+
+test('the meter is shown to the tier whose AI runs on our key, and to nobody else', () => {
+  const base = { signed_in: true, output_tokens: 0, resets_at: '2026-10-01' };
+  assert.equal(AI.meter(null).show, false);
+  assert.equal(AI.meter({ signed_in: false }).show, false);
+  // A bring-your-own-key subscriber is spending their own money on their own
+  // key. Metering that back at them would be reporting on a bill we do not
+  // send, and it is not ours to report.
+  assert.equal(AI.meter(Object.assign({}, base, { tier: 'byok' })).show, false);
+  assert.equal(AI.meter(Object.assign({}, base, { tier: null })).show, false);
+  assert.equal(AI.meter(Object.assign({}, base, { tier: 'managed' })).show, true);
+});
+
+test('the meter counts in cities of research first and tokens second', () => {
+  const m = AI.meter({ signed_in: true, tier: 'managed', output_tokens: 4 * AI.GUIDE_OUTPUT_TOKENS,
+    resets_at: '2026-10-01' });
+  assert.equal(m.guidesUsed, 4);
+  assert.equal(m.guidesCap, 12);
+  assert.ok(/about 4 of your 12 cities of research/i.test(m.headline), m.headline);
+  // The number is still there, second, for the person who wants it.
+  assert.ok(/350,000/.test(m.detail), m.detail);
+  assert.ok(/October 1, 2026/.test(m.detail), m.detail);
+  assert.equal(m.atCap, false);
+});
+
+test('the meter says so at the cap, and never reads past 100 per cent', () => {
+  const at = AI.meter({ signed_in: true, tier: 'managed',
+    output_tokens: AI.MONTHLY_OUTPUT_TOKENS, resets_at: '2026-10-01' });
+  assert.equal(at.atCap, true);
+  assert.equal(at.pct, 100);
+  assert.ok(/used this month/i.test(at.headline), at.headline);
+  // One call may overshoot the cap by its own ceiling, because at most one call
+  // is ever in flight. The bar must not then draw at 109 per cent.
+  const over = AI.meter({ signed_in: true, tier: 'managed',
+    output_tokens: AI.MONTHLY_OUTPUT_TOKENS + AI.MAX_TOKENS, resets_at: '2026-10-01' });
+  assert.equal(over.pct, 100);
+  assert.equal(over.guidesUsed, over.guidesCap);
+});
+
+test('every reason the AI can pause names the free path in the same breath', () => {
+  ['over_monthly_cap', 'rate_limited', 'busy', 'wrong_tier', 'not_entitled', 'paused', 'anything']
+    .forEach(function (reason) {
+      const t = AI.pauseMessage(reason, { resets_at: '2026-10-01' });
+      assert.ok(/free/i.test(t), reason + ' does not name the free path: ' + t);
+      assert.ok(t.length > 40, reason + ' is too terse to be an explanation: ' + t);
+      // Same standard the subscription copy is held to: no urgency, no hype,
+      // and nothing that reads as an error the traveler caused.
+      [['!', 'an exclamation point'], ['Error', 'the word Error'], ['failed', 'the word failed'],
+       ['hurry', 'urgency'], ['Only ', 'scarcity']].forEach(function (pair) {
+        assert.equal(t.indexOf(pair[0]), -1, reason + ' carries ' + pair[1] + ': ' + t);
+      });
+    });
+  // The one that has a date says the date.
+  assert.ok(/October 1, 2026/.test(AI.pauseMessage('over_monthly_cap', { resets_at: '2026-10-01' })));
+});
+
+// ---- the transport switch, in the assembled bytes ----
+
+asyncTest('a managed run carries the session token and never an Anthropic key', () => {
+  let seen = null;
+  const call = loadCallClaudeStream(function (url, opts) {
+    seen = { url: url, opts: opts };
+    return Promise.resolve({ ok: true, body: sseBody([
+      { type: 'content_block_delta', delta: { type: 'text_delta', text: 'ok' } }
+    ]) });
+  }, true, function () {
+    return Promise.resolve({
+      url: 'https://project.functions.supabase.co/ai-proxy',
+      headers: { 'Authorization': 'Bearer session-jwt', 'apikey': 'sb_publishable_x',
+        'content-type': 'application/json' }
+    });
+  });
+  return call('THE PROMPT', '', null).then(function (text) {
+    assert.equal(text, 'ok');
+    assert.equal(seen.url, 'https://project.functions.supabase.co/ai-proxy');
+    // The whole point of the tier: no Anthropic key on this request, because
+    // there is no Anthropic key in this browser.
+    assert.equal(seen.opts.headers['x-api-key'], undefined);
+    assert.equal(seen.opts.headers['anthropic-dangerous-direct-browser-access'], undefined);
+    assert.equal(seen.opts.headers['Authorization'], 'Bearer session-jwt');
+    // ONE body, whichever transport carries it, so the proxy stays a pipe.
+    const body = JSON.parse(seen.opts.body);
+    assert.equal(body.messages[0].content, 'THE PROMPT');
+    assert.equal(body.stream, true);
+    assert.equal(body.max_tokens, 1000);
+  });
+});
+
+asyncTest('the allowance running out reads as a pause, not as an API error', () => {
+  const call = loadCallClaudeStream(function () {
+    return Promise.resolve({
+      ok: false, status: 429,
+      text: function () {
+        return Promise.resolve(JSON.stringify({ error: {
+          message: 'You have used this month\'s included AI.',
+          reason: 'over_monthly_cap', resets_at: '2026-10-01'
+        } }));
+      }
+    });
+  }, true, function () {
+    return Promise.resolve({ url: 'https://project.functions.supabase.co/ai-proxy', headers: {} });
+  });
+  return call('p', '', null).then(function () {
+    throw new Error('expected a rejection');
+  }, function (e) {
+    // Not "Claude API returned 429". The app's own words, the reset date, and
+    // the free path that still works.
+    assert.equal(e.message.indexOf('429'), -1, e.message);
+    assert.ok(/October 1, 2026/.test(e.message), e.message);
+    assert.ok(/free/i.test(e.message), e.message);
+  });
+});
+
+asyncTest('a transport-less account is told why, and never reaches the network', () => {
+  let called = 0;
+  const call = loadCallClaudeStream(function () { called++; return Promise.resolve({ ok: true }); },
+    true, function () { return Promise.resolve({ message: 'NO TRANSPORT, and the paste path is free.' }); });
+  return call('p', '', null).then(function () {
+    throw new Error('expected a rejection');
+  }, function (e) {
+    assert.equal(called, 0, 'a run with nowhere to go must not reach fetch');
+    assert.equal(e.message, 'NO TRANSPORT, and the paste path is free.');
+  });
+});
+
+// ---- the proxy source, on the properties that keep it from being a free relay ----
+//
+// The behaviour is proved against the real module by the Deno suite next to it
+// (supabase/functions/ai-proxy/test.ts, 21 tests, mocked upstream, no spend).
+// What is pinned HERE is the small set of facts that must never quietly change
+// in a repo whose main CI is node: the allowlists, the kill switch, and the
+// rule that the caller's identity is never read out of the request.
+
+test('the proxy allowlists exactly the models the two surfaces call', () => {
+  const fs2 = require('fs'); const path2 = require('path');
+  const src = fs2.readFileSync(
+    path2.join(__dirname, '..', 'supabase', 'functions', 'ai-proxy', 'index.ts'), 'utf8');
+  const block = src.slice(src.indexOf('const ALLOWED_MODELS'), src.indexOf('const ALLOWED_BODY_KEYS'));
+  const models = (block.match(/"claude-[a-z0-9.-]+"/g) || []).map(function (m) { return m.slice(1, -1); });
+  models.sort();
+  assert.deepEqual(models, ['claude-haiku-4-5-20251001', 'claude-opus-4-8', 'claude-sonnet-4-6'],
+    'the allowlist is what stops a 29 USD account being a relay to anything Anthropic sells');
+  // And every model the shipped app actually calls is on it.
+  ['index.html', 'trip/index.html'].forEach(function (rel) {
+    const html = fs2.readFileSync(path2.join(__dirname, '..', rel), 'utf8');
+    (html.match(/'claude-[a-z0-9.-]+'/g) || []).forEach(function (q) {
+      const m = q.slice(1, -1);
+      assert.ok(models.indexOf(m) !== -1,
+        rel + ' calls ' + m + ', which the proxy would refuse. A managed subscriber would meet ' +
+        'a dead control on that path.');
+    });
+  });
+});
+
+test('the proxy refuses a system prompt, tools, and anything it has not priced', () => {
+  const fs2 = require('fs'); const path2 = require('path');
+  const src = fs2.readFileSync(
+    path2.join(__dirname, '..', 'supabase', 'functions', 'ai-proxy', 'index.ts'), 'utf8');
+  const line = /const ALLOWED_BODY_KEYS = \[([^\]]*)\]/.exec(src);
+  assert.ok(line, 'the body-key allowlist is gone');
+  const keys = (line[1].match(/"[a-z_]+"/g) || []).map(function (k) { return k.slice(1, -1); });
+  ['system', 'tools', 'tool_choice', 'metadata', 'service_tier', 'container', 'mcp_servers']
+    .forEach(function (k) {
+      assert.equal(keys.indexOf(k), -1,
+        'accepting "' + k + '" would turn a 29 USD account into somebody else\'s product');
+    });
+  assert.ok(keys.indexOf('messages') !== -1 && keys.indexOf('model') !== -1);
+});
+
+test('the proxy has a kill switch, and reads it before it spends anything', () => {
+  const fs2 = require('fs'); const path2 = require('path');
+  const src = fs2.readFileSync(
+    path2.join(__dirname, '..', 'supabase', 'functions', 'ai-proxy', 'index.ts'), 'utf8');
+  const serve = src.indexOf('Deno.serve');
+  const kill = src.indexOf('AI_PROXY_DISABLED', serve);
+  const upstream = src.indexOf('ANTHROPIC_ENDPOINT', serve);
+  const reserve = src.indexOf('ai_reserve', serve);
+  assert.ok(kill !== -1, 'no kill switch: Rob cannot stop spend without a deploy');
+  assert.ok(kill < reserve && kill < upstream,
+    'the kill switch has to be read before anything costs anything');
+});
+
+test('the proxy reads who is calling from the token, never from the request', () => {
+  const fs2 = require('fs'); const path2 = require('path');
+  const src = fs2.readFileSync(
+    path2.join(__dirname, '..', 'supabase', 'functions', 'ai-proxy', 'index.ts'), 'utf8');
+  assert.ok(/\/auth\/v1\/user/.test(src),
+    'the user id must be read back from the project, not decoded and trusted');
+  assert.ok(/uid: user\.id/.test(src), 'the id handed to ai_reserve must be the verified one');
+  // A body that names a user is refused as an unknown key by the allowlist
+  // above, so there is no path where a request-supplied id is even consulted.
+  assert.equal(src.indexOf('body.user_id'), -1);
+  assert.equal(src.indexOf('body.uid'), -1);
+});
+
+test('the entitlement rule is asked, not copied, on the server side too', () => {
+  const fs2 = require('fs'); const path2 = require('path');
+  const sql = fs2.readFileSync(
+    path2.join(__dirname, '..', 'docs', 'sql', '2026-09-04-ai-usage.sql'), 'utf8');
+  assert.ok(/has_active_entitlement\(uid\)/.test(sql),
+    'ai_reserve has to call the Phase C helper; a second copy of that rule is a ' +
+    'second thing to get wrong on the day the first one changes');
+  // The serialization point. Without the row lock, two tabs both read "0 in
+  // flight" and both proceed, and a rate limit becomes a suggestion.
+  assert.ok(/for update/i.test(sql), 'ai_reserve has to take a row lock');
+  // The Phase C landmine, in the other direction: these two are service-role
+  // only BECAUSE no policy calls them. has_active_entitlement keeps its grant.
+  assert.ok(/revoke all on function public\.ai_reserve/.test(sql));
+  assert.ok(/grant execute on function public\.my_ai_usage\(\) to authenticated/.test(sql));
+  assert.equal(sql.indexOf('revoke all on function public.has_active_entitlement'), -1,
+    'revoking that one breaks every gated write on every table at once');
+});
+
 // ---- the shipped bytes, on the two claims that matter to a stranger ----
 
 test("no shipped surface can mock a plan state off localhost", () => {
@@ -6904,6 +7222,13 @@ test("no shipped surface can mock a plan state off localhost", () => {
     const head = html.slice(i, i + 400);
     assert.ok(head.indexOf("127.0.0.1") !== -1 && head.indexOf("localhost") !== -1,
       rel + ": the mock lost its hostname gate, so a live page could fake an entitlement");
+    // The meter's own mock, gated the same way. A live page that could fake a
+    // usage row could show a subscriber a full allowance they had spent.
+    const j = html.indexOf("function aiUsageMock(");
+    assert.ok(j !== -1, rel + " has no aiUsageMock");
+    const head2 = html.slice(j, j + 400);
+    assert.ok(head2.indexOf("127.0.0.1") !== -1 && head2.indexOf("localhost") !== -1,
+      rel + ": the meter mock lost its hostname gate");
   });
 });
 
@@ -6913,8 +7238,9 @@ test("the managed tier is not offered for sale in any shipped surface", () => {
   ["index.html", "trip/index.html"].forEach(function (rel) {
     const html = fs2.readFileSync(path2.join(root2, rel), "utf8");
     assert.ok(/BILLING_MANAGED_LIVE = false/.test(html),
-      rel + ": the 29 USD tier runs AI on OUR key and that server does not exist. " +
-      "It must stay unsellable until it does.");
+      rel + ": the 29 USD tier runs AI on OUR key. The proxy is deployed, but it " +
+      "cannot answer until the AI allowance SQL is run and ANTHROPIC_API_KEY is set. " +
+      "It must stay unsellable until both are done.");
   });
 });
 

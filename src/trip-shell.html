@@ -1670,7 +1670,11 @@
                sidecar on the profile sync row while you are signed in, and
                every prompt you run is sent to Anthropic. Facts, no
                guarantees. -->
-          <div class="muted" style="margin-top:6px">Saved on this device, and in your own account while you are signed in. Prompts you run are sent to Anthropic's API. Required for live in-app responses.</div>
+          <div class="muted" style="margin-top:6px">Saved on this device, and in your own account while you are signed in. Prompts you run are sent to Anthropic's API. Required for live in-app responses, unless your plan already runs AI on our key.</div>
+          <!-- Filled by renderSettings for the tier whose AI runs on our key: a
+               saved key WINS over the plan, and that is a spending decision the
+               person making it deserves to be told about. -->
+          <div class="muted" id="api-key-managed-note" style="margin-top:6px;display:none"></div>
           <div style="margin-top:12px;padding:10px 12px;background:var(--bg-softer);border-radius:6px;font-size:12px">
             <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">AI usage</div>
             <div id="ai-usage-display"><span style="color:var(--text-3)">No AI usage today.</span></div>
@@ -4727,23 +4731,14 @@ Return ONLY valid JSON in this exact format (no markdown fences, no preamble):
 
 async function runCityResearch(city) {
   if (!apiAiReady()) {
-    toast('API mode + key required for AI research. Configure in Settings.', 'error');
+    toast(apiAiWhyNot(), 'error');
     return null;
   }
   const prompt = buildCityResearchPrompt(city);
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': credGet('anthropic'),
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2500,
-      messages: [{ role: 'user', content: prompt }]
-    })
+  const res = await aiMessages({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 2500,
+    messages: [{ role: 'user', content: prompt }]
   });
   if (!res.ok) {
     const errText = await res.text();
@@ -5208,6 +5203,19 @@ function renderSettings() {
     aiNote.style.display = g ? 'block' : 'none';
   }
   document.getElementById('api-key-input').value = credGet('anthropic') || '';
+  const mgNote = document.getElementById('api-key-managed-note');
+  if (mgNote) {
+    const onOurKey = aiTransportNow() === 'proxy';
+    const managedTier = CityOps.aiProxyKit.MANAGED_TIERS
+      .indexOf((_entRow && _entRow.row && _entRow.row.tier) || '') !== -1;
+    mgNote.textContent = onOurKey
+      ? 'Your plan runs AI on our key, so you do not need one of these.'
+      : (managedTier && credGet('anthropic')
+        ? 'This device is using your own key, so your plan\u2019s included AI stays untouched. ' +
+          'Clear the field to go back to ours.'
+        : '');
+    mgNote.style.display = mgNote.textContent ? 'block' : 'none';
+  }
   const budgetInput = document.getElementById('budget-target-input');
   if (budgetInput) budgetInput.value = state.budgetMonthlyTarget || '';
   const nameInput = document.getElementById('traveler-name-input');
@@ -6415,7 +6423,7 @@ async function runNotesAI() {
   const notes = document.getElementById('notes-input').value.trim();
   if (!notes) { setNotesStatus('Paste notes first.', 'error'); return; }
   if (!apiAiReady()) {
-    setNotesStatus('API mode + key required. Configure in Settings, or use Copy extraction prompt.', 'error');
+    setNotesStatus(apiAiWhyNot(), 'error');
     return;
   }
   const btn = document.getElementById('notes-ai-btn');
@@ -6423,19 +6431,10 @@ async function runNotesAI() {
   btn.textContent = '⏳ Processing…';
   setNotesStatus('Sending to Claude…');
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': credGet('anthropic'),
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 8000,
-        messages: [{ role: 'user', content: buildNotesPrompt(notes) }]
-      })
+    const res = await aiMessages({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 8000,
+      messages: [{ role: 'user', content: buildNotesPrompt(notes) }]
     });
     if (!res.ok) {
       const errText = await res.text();
@@ -7572,8 +7571,8 @@ function copyPrompt() {
 }
 
 async function runAPI() {
-  if (!credGet('anthropic')) {
-    toast('API key required. Add it in Settings.', 'error');
+  if (aiTransportNow() === 'none') {
+    toast(aiNoTransportText(), 'error');
     return;
   }
   const btn = document.getElementById('modal-api-btn');
@@ -7581,19 +7580,10 @@ async function runAPI() {
   btn.textContent = 'Running…';
   btn.disabled = true;
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': credGet('anthropic'),
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1500,
-        messages: [{ role: 'user', content: currentPrompt }]
-      })
+    const res = await aiMessages({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1500,
+      messages: [{ role: 'user', content: currentPrompt }]
     });
     if (!res.ok) {
       const errText = await res.text();
@@ -7756,22 +7746,13 @@ async function geocode(name, country) {
 
 async function geocodeViaAPI(name, country) {
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': credGet('anthropic'),
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 100,
-        messages: [{
-          role: 'user',
-          content: `Return ONLY a JSON object with the latitude and longitude of the city named "${name}"${country ? ', in the country: ' + country : ''}. No preamble, no markdown fences. Format: {"lat": 0.0, "lng": 0.0}. If you don't know the city, return {"lat": null, "lng": null}.`
-        }]
-      })
+    const res = await aiMessages({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 100,
+      messages: [{
+        role: 'user',
+        content: `Return ONLY a JSON object with the latitude and longitude of the city named "${name}"${country ? ', in the country: ' + country : ''}. No preamble, no markdown fences. Format: {"lat": 0.0, "lng": 0.0}. If you don't know the city, return {"lat": null, "lng": null}.`
+      }]
     });
     if (!res.ok) return null;
     const data = await res.json();
@@ -8140,19 +8121,10 @@ async function runAICityScore(city) {
   if (!apiAiReady()) return null;
   try {
     const prompt = buildCityScorePrompt(city);
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': credGet('anthropic'),
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1500,
-        messages: [{ role: 'user', content: prompt }]
-      })
+    const res = await aiMessages({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1500,
+      messages: [{ role: 'user', content: prompt }]
     });
     if (!res.ok) {
       const errText = await res.text();
@@ -8175,7 +8147,7 @@ let _batchScoreContext = null; // { type: 'cities' } or { type: 'accoms', cityId
 
 function openBatchScoreModalForCities() {
   if (!apiAiReady()) {
-    toast('API mode + key required for batch scoring. Configure in Settings or use Copy prompt on individual cities.', 'error');
+    toast(apiAiWhyNot() + ' Copy prompt on an individual city also works.', 'error');
     return;
   }
   _batchScoreContext = { type: 'cities' };
@@ -8204,7 +8176,7 @@ function openBatchScoreModalForCities() {
 
 function openBatchScoreModalForAccoms(cityId) {
   if (!apiAiReady()) {
-    toast('API mode + key required for batch scoring. Configure in Settings.', 'error');
+    toast(apiAiWhyNot(), 'error');
     return;
   }
   const city = state.cities.find(c => c.id === cityId);
@@ -8260,8 +8232,18 @@ function renderAIUsage() {
     el.innerHTML = '<span style="color:var(--text-3)">No AI usage today.</span>';
     return;
   }
+  const total = (u.inputTokens + u.outputTokens).toLocaleString();
+  // The dollar figure is an estimate of what the traveler's OWN key cost them,
+  // and it is only true while the run went on their own key. On the managed
+  // tier the same tokens cost them nothing extra, and quoting a price at
+  // somebody who is not being charged it is just wrong.
+  if (aiTransportNow() === 'proxy') {
+    el.innerHTML = `<span style="color:var(--text-2)">Today: <strong>${total}</strong> tokens, ` +
+      `included in your plan. The month's allowance is in the Plan card above.</span>`;
+    return;
+  }
   const cost = estimateCost(u.inputTokens, u.outputTokens);
-  el.innerHTML = `<span style="color:var(--text-2)">Today: <strong>${(u.inputTokens + u.outputTokens).toLocaleString()}</strong> tokens · ${fmtCost(cost)}</span>`;
+  el.innerHTML = `<span style="color:var(--text-2)">Today: <strong>${total}</strong> tokens · ${fmtCost(cost)}</span>`;
 }
 
 // Sonnet 4.6 approx pricing per million tokens
@@ -8327,7 +8309,7 @@ function buildBatchCityScorePrompt(cities) {
 
 async function batchScoreCities(forceRescoreAll) {
   if (!apiAiReady()) {
-    toast('API mode + key required. Configure in Settings.', 'error');
+    toast(apiAiWhyNot(), 'error');
     return;
   }
   const candidates = state.cities.filter(c => {
@@ -8346,19 +8328,10 @@ async function batchScoreCities(forceRescoreAll) {
   toast(`Scoring ${candidates.length} cities…`);
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': credGet('anthropic'),
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: Math.min(8000, 400 + candidates.length * 300),
-        messages: [{ role: 'user', content: prompt }]
-      })
+    const res = await aiMessages({
+      model: 'claude-sonnet-4-6',
+      max_tokens: Math.min(8000, 400 + candidates.length * 300),
+      messages: [{ role: 'user', content: prompt }]
     });
     if (!res.ok) {
       const errText = await res.text();
@@ -8436,7 +8409,7 @@ function buildBatchAccomScorePrompt(city, accoms) {
 
 async function batchScoreAccommodations(cityId, forceRescoreAll) {
   if (!apiAiReady()) {
-    toast('API mode + key required. Configure in Settings.', 'error');
+    toast(apiAiWhyNot(), 'error');
     return;
   }
   const city = state.cities.find(c => c.id === cityId);
@@ -8458,19 +8431,10 @@ async function batchScoreAccommodations(cityId, forceRescoreAll) {
   toast(`Scoring ${candidates.length} properties…`);
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': credGet('anthropic'),
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: Math.min(4000, 300 + candidates.length * 200),
-        messages: [{ role: 'user', content: prompt }]
-      })
+    const res = await aiMessages({
+      model: 'claude-sonnet-4-6',
+      max_tokens: Math.min(4000, 300 + candidates.length * 200),
+      messages: [{ role: 'user', content: prompt }]
     });
     if (!res.ok) {
       const errText = await res.text();
@@ -10135,7 +10099,10 @@ function pullNow(force) {
   fetchEntitlement().then(() => {
     renderPlanCard();
     if (!entAllows()) entGateToast('sync');
-  });
+    // Whether to draw a meter at all is a question only the tier can answer,
+    // so the usage read follows the plan read rather than racing it.
+    return fetchAiUsage();
+  }).then(() => renderPlanCard());
   const now = Date.now();
   if (!force && now - _lastPullAt < 60000) return Promise.resolve(false);
   _pullInFlight = true;
@@ -10481,12 +10448,147 @@ function entGateToast(action) {
   return g;
 }
 
-// One-tap AI is allowed when the traveler chose API mode, has a key, AND the
-// account may write. Before this there were a dozen copies of the first two
-// conditions scattered through the file; there is one now, which is the only
-// way the third can be added without missing one of them.
+// ---- which bill an AI run goes on ----
+//
+// Two transports, one request builder. A traveler with their own Anthropic key
+// keeps calling api.anthropic.com straight from this page exactly as they
+// always have, and no allowance of ours touches them: their key, their bill.
+// A managed subscriber with no key of their own goes through the ai-proxy edge
+// function, which holds OUR key, meters the month, and refuses politely when
+// the allowance is spent. Our key never reaches this page.
+//
+// The DECISION is CityOps.aiProxyKit.transport, pure and unit tested and shared
+// with the city surface, because the two surfaces share an account and must
+// never disagree about what it can do.
+function aiTransportNow() {
+  return CityOps.aiProxyKit.transport({
+    hasKey: !!credGet('anthropic'),
+    tier: (_entRow && _entRow.row && _entRow.row.tier) || '',
+    entitled: entAllows(),
+    signedIn: _entMocked || syncSignedIn()
+  });
+}
+
+// ---- the managed-AI meter ----
+//
+// Read alongside the plan, and ONLY shown to somebody whose AI runs on our key.
+// A bring-your-own-key subscriber is spending their own money on their own key,
+// and metering that back at them would be reporting on a bill we do not send.
+let _aiUsageRow = null;
+function fetchAiUsage() {
+  // Localhost only, checked inside the kit. See the city app for why.
+  const mock = CityOps.aiProxyKit.mock(location.href || '', location.hostname || '');
+  if (mock) { _aiUsageRow = mock; return Promise.resolve(_aiUsageRow); }
+  if (!syncOn() || !syncSignedIn()) { _aiUsageRow = null; return Promise.resolve(null); }
+  return syncApi('/rest/v1/rpc/my_ai_usage', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}'
+  }).then(r => {
+    const row = Array.isArray(r) ? r[0] : r;
+    _aiUsageRow = (row && typeof row === 'object') ? row : null;
+    return _aiUsageRow;
+  }).catch(e => {
+    // Information, not a gate. Unreadable means the app says nothing rather
+    // than showing a number somebody might plan a week around.
+    syncWarn('AI usage read failed', e);
+    _aiUsageRow = null;
+    return null;
+  });
+}
+
+// One-tap AI is allowed when the traveler chose API mode AND a transport
+// exists. Before this there were a dozen copies of the key check scattered
+// through the file; there is one now, which is the only way the tier could be
+// added without missing one of them.
 function apiAiReady() {
-  return state.aiMode === 'api' && !!credGet('anthropic') && entAllows();
+  return state.aiMode === 'api' && aiTransportNow() !== 'none';
+}
+
+// The other half of every apiAiReady check: WHY not, in a sentence that names
+// the thing that does still work. "API mode + key required" stopped being true
+// the day the managed tier shipped, because that tier needs no key at all.
+function apiAiWhyNot() {
+  if (state.aiMode !== 'api') {
+    return 'Switch AI mode to API in Settings to run this in one tap. Prompt mode does the same ' +
+      'job right here, for free: copy the prompt, paste the answer back.';
+  }
+  return aiNoTransportText();
+}
+
+// Never a bare refusal. Whatever is missing, the prompt path in the same modal
+// still works and is named.
+function aiNoTransportText() {
+  if (!syncSignedIn() && !_entMocked) {
+    return 'Add an Anthropic API key in Settings to run this in one tap, or use Prompt mode and ' +
+      'paste the answer back. Prompt mode is free and always will be.';
+  }
+  if (!entAllows()) {
+    const g = entGate('ai');
+    return g.title + '. ' + g.body + ' ' + g.keeps;
+  }
+  return 'Your plan runs AI on your own Anthropic key. Add one in Settings, or switch to the ' +
+    'plan that includes AI. Prompt mode works either way and costs nothing.';
+}
+
+// Resolves to {url, headers, proxy} for the request to make, or {message} to
+// show instead. The proxy call carries a FRESH access token, because a call
+// that runs for a minute is exactly the one whose token was about to expire.
+function aiRequestPlan() {
+  const t = aiTransportNow();
+  if (t === 'direct') {
+    return Promise.resolve({
+      proxy: false,
+      url: 'https://api.anthropic.com/v1/messages',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': credGet('anthropic'),
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      }
+    });
+  }
+  if (t !== 'proxy') return Promise.resolve({ message: aiNoTransportText() });
+  return ensureSyncToken(false).then(tok => {
+    if (!tok) {
+      return { message: 'Your session needs a refresh before AI can run on our key. Sign in ' +
+        'again from Settings, or use Prompt mode.' };
+    }
+    return {
+      proxy: true,
+      url: CityOps.aiProxyKit.url(SUPA.url),
+      headers: {
+        'Authorization': 'Bearer ' + tok,
+        'apikey': SUPA.anon,
+        'Content-Type': 'application/json'
+      }
+    };
+  });
+}
+
+// THE door every AI call on this surface goes through. It returns a Response,
+// so every caller's own res.ok / res.json() handling is unchanged; what it adds
+// is the transport choice and the one translation that matters, which is
+// turning our proxy's refusal REASON into the app's own words instead of
+// "API error (429)".
+async function aiMessages(body) {
+  const plan = await aiRequestPlan();
+  if (plan.message) throw new Error(plan.message);
+  const res = await fetch(plan.url, {
+    method: 'POST',
+    headers: plan.headers,
+    body: JSON.stringify(body)
+  });
+  if (!res.ok && plan.proxy) {
+    // cloned, so the caller can still read the body it expects to read.
+    const t = await res.clone().text().catch(() => '');
+    let j = null;
+    try { j = JSON.parse(t); } catch (e) { /* not JSON: fall through */ }
+    if (j && j.error && j.error.reason) {
+      throw new Error(CityOps.aiProxyKit.pauseMessage(j.error.reason, j.error));
+    }
+  }
+  return res;
 }
 
 // The plan card in Settings. Same facts as the city app's Profile block, drawn
@@ -10530,6 +10632,32 @@ function renderPlanCard() {
   const head = line(s.headline);
   head.style.cssText = 'margin-bottom:6px;font-weight:600;color:var(--text-1);line-height:1.5';
   line(s.detail);
+
+  // The AI meter, for the tier whose AI runs on OUR key and for nobody else.
+  // Plain words first; the token count is second, because "212,000 tokens" is
+  // not something anyone plans a week around.
+  //
+  // The mock is read on the first draw too, so opening Settings with a ?plan=
+  // on localhost shows the meter without waiting for a sync round that a
+  // mocked, signed-out session is never going to run.
+  if (!_aiUsageRow) fetchAiUsage();
+  const meter = CityOps.aiProxyKit.meter(_aiUsageRow);
+  if (meter.show) {
+    const mh = line(meter.headline);
+    mh.style.cssText = 'margin-top:12px;margin-bottom:6px;font-weight:600;color:var(--text-1)';
+    const bar = document.createElement('div');
+    bar.style.cssText = 'height:8px;border-radius:6px;overflow:hidden;margin:6px 0;' +
+      'background:var(--bg-softer);border:1px solid var(--border-light)';
+    const fill = document.createElement('div');
+    fill.style.cssText = 'height:100%;width:' + meter.pct + '%;' +
+      'background:var(--' + (meter.atCap ? 'accent' : 'green') + ')';
+    bar.appendChild(fill);
+    bar.setAttribute('role', 'img');
+    bar.setAttribute('aria-label', meter.headline + '. ' + meter.detail);
+    host.appendChild(bar);
+    line(meter.detail);
+    if (meter.atCap) line(CityOps.aiProxyKit.pauseMessage('over_monthly_cap', _aiUsageRow));
+  }
 
   if (BILLING.portal && _entRow.row && _entRow.row.has_customer) {
     const manage = document.createElement('a');

@@ -21,5 +21,14 @@ jobs:
         run: node tools/assemble.js && git diff --exit-code
       - name: Unit tests
         run: node tests/run.js
+      # The edge function is Deno, so node cannot run it. This suite drives the
+      # real ai-proxy module with a mocked upstream and a mocked database, which
+      # is the only way the money paths (the caps, the kill switch, the model
+      # allowlist, the streaming pipe) get checked without spending anything.
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Edge function tests
+        run: deno test --allow-env --allow-read --allow-net --no-check supabase/functions/ai-proxy/test.ts
       - name: City datasets validate
         run: node tests/validate-city.js cities/example.json
