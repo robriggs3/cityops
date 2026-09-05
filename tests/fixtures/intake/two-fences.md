@@ -1,0 +1,16 @@
+First, install the CLI:
+
+```bash
+npm install -g cityops
+```
+
+Then here is the guide:
+
+```json
+{
+  "schema": 1,
+  "city": { "name": "Porto", "dates": { "from": "2026-04-06", "to": "2026-04-12" } },
+  "sections": [{ "id": "dinner", "label": "Dinner" }],
+  "items": [{ "id": "cantina32", "section": "dinner", "status": "plan", "name": "Cantina 32", "links": [] }]
+}
+```

@@ -1690,6 +1690,101 @@
     };
   }
 
+  // ---- the tolerant paste door, shared by every paste box in this shell ----
+  // Owner report 2026-09-05: the boxes asked for JSON and were picky about it,
+  // so a markdown answer out of a chat meant going back to fight the format.
+  // The tolerance itself is CityOps.intakeKit: pure, unit tested, and the ONLY
+  // place in the product that is allowed to be forgiving. What lands here still
+  // goes through validate() and mergeDelta() untouched, which is why this
+  // function could be added without a single check being relaxed.
+  //
+  // TWO PRESSES, BUT ONLY WHEN TOLERANCE WAS USED. A clean JSON paste applies
+  // on the first press exactly as it always did. A payload that had to be
+  // repaired, dug out of prose, or read from markdown says what it found and
+  // waits for a second press, so nothing arrives in a guide that the traveler
+  // has not seen counted first. Editing the box cancels the pending read.
+  //
+  // cfg: { ta, button, msg, box, opts(), preview(data), onApply(data),
+  //        copyPrompt(text) }
+  function attachPasteDoor(cfg) {
+    var origLabel = cfg.button.textContent;
+    var pending = null;
+    var row = null;
+
+    function dropRow() {
+      if (row && row.parentNode) row.parentNode.removeChild(row);
+      row = null;
+    }
+    function reset() { pending = null; cfg.button.textContent = origLabel; }
+    cfg.ta.addEventListener('input', function () { reset(); dropRow(); });
+
+    // Layer 3 is OFFERED, never spent on the traveler's behalf: a conversion is
+    // a real call on somebody's money, so it is a tap they make. The copy path
+    // beside it is free and is the only path a keyless account has, which is
+    // why it is drawn whether or not one tap is available.
+    function offerConvert(text) {
+      if (row) return;
+      row = el('div', 'mrow');
+      if (aiOneTapReady()) {
+        var run = el('button', 'ctl to-done', 'Convert with Claude');
+        run.type = 'button';
+        run.onclick = function () { convert(run, text); };
+        row.appendChild(run);
+      }
+      var copy = el('button', 'ctl', 'Copy conversion prompt');
+      copy.type = 'button';
+      copy.title = 'Paste this into Claude or ChatGPT, then paste the JSON it returns back here';
+      copy.onclick = function () { cfg.copyPrompt(CityOps.intakeKit.conversionPrompt(text, cfg.opts())); };
+      row.appendChild(copy);
+      if (cfg.msg.parentNode) cfg.msg.parentNode.insertBefore(row, cfg.msg.nextSibling);
+      else cfg.box.appendChild(row);
+    }
+
+    function convert(btn, text) {
+      var orig = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Converting...';
+      cfg.msg.textContent = 'Starting...';
+      callClaudeStream(CityOps.intakeKit.conversionPrompt(text, cfg.opts()), loadApiKey(), function (p) {
+        cfg.msg.textContent = (p.kind === 'thinking' ? 'Thinking... ' : 'Writing... ') +
+          p.totalChars + ' characters so far.';
+      }).then(function (reply) {
+        btn.disabled = false;
+        btn.textContent = orig;
+        // Back through the SAME door, which previews the result like any other
+        // tolerant read. There is no second apply path for a converted reply.
+        cfg.ta.value = reply;
+        dropRow();
+        press();
+      }).catch(function (e) {
+        btn.disabled = false;
+        btn.textContent = orig;
+        cfg.msg.textContent = 'Claude API error: ' + e.message;
+      });
+    }
+
+    function press() {
+      if (pending) { var data = pending; reset(); dropRow(); cfg.onApply(data); return; }
+      var text = cfg.ta.value;
+      var res = CityOps.intakeKit.read(text, cfg.opts());
+      if (!res.ok) {
+        cfg.msg.textContent = res.message;
+        if (res.convertible) offerConvert(text); else dropRow();
+        return;
+      }
+      dropRow();
+      if (!res.tolerant) { cfg.onApply(res.data); return; }
+      var line = cfg.preview ? cfg.preview(res.data) : res.message;
+      if (line === null) return;
+      pending = res.data;
+      cfg.button.textContent = 'Confirm';
+      cfg.msg.textContent = line + ' Press Confirm to add it.';
+    }
+
+    cfg.button.onclick = press;
+    return { press: press, cancel: function () { reset(); dropRow(); } };
+  }
+
   function openEnrichModal() {
     if (!activeId || !has(store.cities, activeId)) return;
     var m = modalShell('Enrich ' + store.cities[activeId].city.name);
@@ -1705,6 +1800,10 @@
       var st = CityOps.liveState() || CityOps.makeStore(activeId, LS).load();
       return CityOps.effectiveData(store.cities[activeId], st);
     }
+    // The guide the delta merges into, so intake checks a markdown read against
+    // the REAL mergeDelta rather than a weaker stand-in, and so a conversion
+    // prompt can name the sections and places already here.
+    function deltaIntakeOpts() { return { mode: 'delta', existing: currentData() }; }
     function build(kind) {
       var tpl = promptTemplateText();
       if (!tpl) {
@@ -1742,17 +1841,17 @@
       }).then(function (resultText) {
         btn.disabled = false;
         btn.textContent = origLabel;
-        var block = CityOps.extractJsonBlock(resultText);
-        if (block === null) { msg.textContent = CityOps.RETRY_INSTRUCTION; return; }
-        var parsed;
-        try { parsed = JSON.parse(block); }
-        catch (e) { msg.textContent = 'Claude\'s response was not valid JSON: ' + e.message; return; }
-        var res = CityOps.mergeDelta(currentData(), parsed);
+        // Through the SAME intake the paste box uses, so a reply that came
+        // back as prose or markdown is read here too rather than refused for
+        // a format the traveler never chose.
+        var read = CityOps.intakeKit.read(resultText, deltaIntakeOpts());
+        if (!read.ok) { msg.textContent = read.message; return; }
+        var res = CityOps.mergeDelta(currentData(), read.data);
         if (!res.data) { msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n'); return; }
         // Preview only: fill the textarea and report the counts, same as a
         // paste would look right before the traveler hits Apply. Nothing is
         // written until that explicit click.
-        ta.value = JSON.stringify(parsed, null, 2);
+        ta.value = JSON.stringify(read.data, null, 2);
         msg.textContent = 'Claude proposes: ' + enrichSummaryText(res.summary) + '. Review below, then Apply.';
       }).catch(function (e) {
         btn.disabled = false;
@@ -1823,29 +1922,33 @@
       'for the places still in play (plan and backup), as a badge on each card.'));
     m.box.appendChild(promptRow('ratings', 'ratings-refresh.md', null, 'ratings'));
 
-    m.box.appendChild(el('p', 'diff', 'Paste what your AI returns here. It is a partial payload: only new items, ' +
-      'intel and ratings, never a whole guide.'));
+    m.box.appendChild(el('p', 'diff', 'Paste what your AI returns here: JSON or markdown, whichever it gave you. ' +
+      'It is a partial payload, so only new items, intel and ratings land, never a whole guide.'));
     var ta = document.createElement('textarea');
-    ta.setAttribute('aria-label', 'Delta JSON from your AI');
+    ta.setAttribute('aria-label', 'Delta from your AI, as JSON or markdown');
     m.box.appendChild(ta);
     m.box.appendChild(msg);
 
     var row = el('div', 'mrow');
     var apply = el('button', 'ctl to-done', 'Apply');
     apply.type = 'button';
-    apply.onclick = function () {
-      var parsed;
-      try { parsed = JSON.parse(ta.value); }
-      catch (e) { msg.textContent = 'That is not valid JSON: ' + e.message; return; }
-      var res = CityOps.mergeDelta(currentData(), parsed);
-      if (!res.data) {
-        msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n');
-        return;
+    attachPasteDoor({
+      ta: ta, button: apply, msg: msg, box: m.box,
+      opts: deltaIntakeOpts,
+      copyPrompt: copyOut,
+      preview: function (data) {
+        var res = CityOps.mergeDelta(currentData(), data);
+        if (!res.data) { msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n'); return null; }
+        return 'Ready to apply: ' + enrichSummaryText(res.summary) + '.';
+      },
+      onApply: function (data) {
+        var res = CityOps.mergeDelta(currentData(), data);
+        if (!res.data) { msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n'); return; }
+        m.close();
+        commitCityData(res.data);
+        showSyncNotice('Enriched: ' + enrichSummaryText(res.summary) + '.');
       }
-      m.close();
-      commitCityData(res.data);
-      showSyncNotice('Enriched: ' + enrichSummaryText(res.summary) + '.');
-    };
+    });
     var cancel = el('button', 'ctl', 'Cancel');
     cancel.type = 'button';
     cancel.onclick = m.close;
@@ -1899,6 +2002,7 @@
       var st = CityOps.liveState() || CityOps.makeStore(activeId, LS).load();
       return CityOps.effectiveData(store.cities[activeId], st);
     }
+    function deltaIntakeOpts() { return { mode: 'delta', existing: currentData() }; }
     var data = currentData();
     var item = null;
     (data.items || []).forEach(function (x) { if (x && x.id === itemId) item = x; });
@@ -1957,14 +2061,11 @@
         }).then(function (resultText) {
           run.disabled = false;
           run.textContent = orig;
-          var block = CityOps.extractJsonBlock(resultText);
-          if (block === null) { msg.textContent = CityOps.RETRY_INSTRUCTION; return; }
-          var parsed;
-          try { parsed = JSON.parse(block); }
-          catch (e) { msg.textContent = 'Claude\'s response was not valid JSON: ' + e.message; return; }
-          var res = CityOps.mergeDelta(currentData(), parsed);
+          var read = CityOps.intakeKit.read(resultText, deltaIntakeOpts());
+          if (!read.ok) { msg.textContent = read.message; return; }
+          var res = CityOps.mergeDelta(currentData(), read.data);
           if (!res.data) { msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n'); return; }
-          ta.value = JSON.stringify(parsed, null, 2);
+          ta.value = JSON.stringify(read.data, null, 2);
           msg.textContent = 'Claude proposes: ' + enrichSummaryText(res.summary) + '. Review below, then Apply.';
         }).catch(function (e) {
           run.disabled = false;
@@ -1990,24 +2091,31 @@
     if (!aiOneTapReady()) {
       m.box.appendChild(el('p', 'diff', aiNoTransportText()));
     }
-    m.box.appendChild(el('p', 'diff', 'Paste what your AI returns here. It is a partial payload: ' +
-      'a rating and an intel block for this one place.'));
+    m.box.appendChild(el('p', 'diff', 'Paste what your AI returns here, JSON or markdown. It is a partial ' +
+      'payload: a rating and an intel block for this one place.'));
     m.box.appendChild(ta);
     m.box.appendChild(msg);
 
     var row2 = el('div', 'mrow');
     var apply = el('button', 'ctl to-done', 'Apply');
     apply.type = 'button';
-    apply.onclick = function () {
-      var parsed;
-      try { parsed = JSON.parse(ta.value); }
-      catch (e) { msg.textContent = 'That is not valid JSON: ' + e.message; return; }
-      var res = CityOps.mergeDelta(currentData(), parsed);
-      if (!res.data) { msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n'); return; }
-      m.close();
-      commitCityData(res.data);
-      showSyncNotice('Enriched: ' + enrichSummaryText(res.summary) + '.');
-    };
+    attachPasteDoor({
+      ta: ta, button: apply, msg: msg, box: m.box,
+      opts: deltaIntakeOpts,
+      copyPrompt: out.copy,
+      preview: function (d) {
+        var res = CityOps.mergeDelta(currentData(), d);
+        if (!res.data) { msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n'); return null; }
+        return 'Ready to apply: ' + enrichSummaryText(res.summary) + '.';
+      },
+      onApply: function (d) {
+        var res = CityOps.mergeDelta(currentData(), d);
+        if (!res.data) { msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n'); return; }
+        m.close();
+        commitCityData(res.data);
+        showSyncNotice('Enriched: ' + enrichSummaryText(res.summary) + '.');
+      }
+    });
     var cancel = el('button', 'ctl', 'Cancel');
     cancel.type = 'button';
     cancel.onclick = m.close;
@@ -2383,6 +2491,13 @@
         notes: trim(bnotes.value)
       };
     }
+    // What intake is told before it reads anything: the fields on this form.
+    // A markdown guide that names no dates still lands, because the dates are
+    // right here; and the conversion prompt can state them rather than ask.
+    function cityIntakeOpts() {
+      var h = formHeader();
+      return { mode: 'city', header: { name: h.name, country: h.country, from: h.from, to: h.to } };
+    }
     function buildPromptText() {
       if (!trim(bn.value) || !bf.value || !bt2.value) {
         bmsg.textContent = 'Fill city name and dates first';
@@ -2395,11 +2510,9 @@
       }
       return CityOps.promptKit.buildCityPrompt(tpl, formHeader(), store.profile);
     }
-    var bprompt = el('button', 'ctl', 'Build my prompt');
-    bprompt.type = 'button';
-    bprompt.onclick = function () {
-      var text = buildPromptText();
-      if (text === null) return;
+    // One clipboard path for every prompt this modal hands out: Build my
+    // prompt and, when a paste will not read, the conversion prompt.
+    function copyPromptText(text) {
       var wrote = null;
       try {
         if (navigator.clipboard && navigator.clipboard.writeText) wrote = navigator.clipboard.writeText(text);
@@ -2411,6 +2524,13 @@
       } else {
         showPromptFallback(text);
       }
+    }
+    var bprompt = el('button', 'ctl', 'Build my prompt');
+    bprompt.type = 'button';
+    bprompt.onclick = function () {
+      var text = buildPromptText();
+      if (text === null) return;
+      copyPromptText(text);
     };
     brow2.appendChild(bprompt);
     var bdl = el('button', 'ctl', 'Download prompt.md');
@@ -2577,23 +2697,21 @@
       }, genAbort ? genAbort.signal : null).then(function (text) {
         genAbort = null;
         setGenerating(false);
-        var block = CityOps.extractJsonBlock(text);
         // Never a dead end: the scaffold city is already saved and already
-        // active, so a reply that will not parse costs the traveler the wait
+        // active, so a reply that will not read costs the traveler the wait
         // and nothing else. The reply itself is preserved in the paste box
-        // below, where Apply runs it through the same validated door, and
-        // Retry is one tap.
-        if (block === null) { keepReply(text); showRetry(CityOps.RETRY_INSTRUCTION); return; }
-        var res = CityOps.parse(block);
-        if (!res.data) {
-          keepReply(block);
-          showRetry('Claude\'s response did not match the city guide format:\n- ' + res.errors.join('\n- ') +
-            '\n\nThe reply is in the paste box below: fix it and press Apply, or press Retry.');
+        // below, where Apply runs it through the same intake and the same
+        // validated door, and Retry is one tap.
+        var read = CityOps.intakeKit.read(text, cityIntakeOpts());
+        if (!read.ok) {
+          keepReply(text);
+          showRetry(read.message + '\n\nThe reply is in the paste box below: press Apply to try it ' +
+            'there, or press Retry.');
           return;
         }
-        genMsg.textContent = 'Generated ' + res.data.city.name + '. Added to your cities.';
-        offerDownload(res.data);
-        commitFromForm(res.data, true);
+        genMsg.textContent = 'Generated ' + read.data.city.name + '. Added to your cities.';
+        offerDownload(read.data);
+        commitFromForm(read.data, true);
       }).catch(function (e) {
         genAbort = null;
         setGenerating(false);
@@ -2644,12 +2762,13 @@
             if (!r2.ok) throw new Error('cities/' + c.file + ' ' + r2.status);
             return r2.text();
           }).then(function (text) {
-            var res = CityOps.fetchTextToCity(text);
-            if (!res.data) {
+            var read = CityOps.intakeKit.read(text, { mode: 'city' });
+            if (!read.ok) {
               btn.disabled = false;
-              msg.textContent = 'Could not load ' + c.name + ': ' + res.errors.join('\n');
+              msg.textContent = 'Could not load ' + c.name + ': ' + read.message;
               return;
             }
+            var res = { data: read.data };
             // Same funnel as paste and Generate: duplicate detection (Replace
             // / Keep both) still runs if this city is already saved.
             commitFromForm(res.data);
@@ -2666,14 +2785,16 @@
       }
     }).catch(function () { /* offline, no manifest, or blocked: hide silently */ });
 
-    box.appendChild(el('p', 'diff', 'Or paste schema v1 city JSON (the output of PROMPT.md). ' + whereItGoes));
+    box.appendChild(el('p', 'diff', 'Or paste what your chat gave you: schema v1 city JSON, or the guide as ' +
+      'markdown. Either reads. ' + whereItGoes));
     var ta = document.createElement('textarea');
     box.appendChild(ta);
 
     // ---- Load from link (no-paste import, part 2): fetch a URL instead of
     // pasting. Covers both a direct cities/<file>.json link and a raw .md
     // guide URL (JSON wrapped in a ```json fence, the shape PROMPT.md output
-    // takes), via CityOps.fetchTextToCity's parse-then-extract fallback.
+    // takes), and now a plain markdown guide too, via CityOps.intakeKit.read:
+    // one door, so a link and a paste accept exactly the same shapes.
     var linkInput = document.createElement('input');
     linkInput.type = 'url';
     linkInput.className = 'date-field link-field';
@@ -2696,25 +2817,18 @@
         return r.text();
       }).then(function (text) {
         setLinkLoading(false);
-        var res = CityOps.fetchTextToCity(text);
-        if (res.kind === 'not-json') {
-          msg.textContent = 'That link is not JSON. Paste the JSON directly above, or point the link straight at a .json file.';
-          return;
-        }
-        if (res.kind === 'invalid') {
-          msg.textContent = 'That link is JSON, but not a valid city guide:\n- ' + res.errors.join('\n- ');
-          return;
-        }
-        commitFromForm(res.data);
+        var read = CityOps.intakeKit.read(text, cityIntakeOpts());
+        if (!read.ok) { msg.textContent = read.message; return; }
+        commitFromForm(read.data);
       }).catch(function () {
         setLinkLoading(false);
-        // The one failure mode fetchTextToCity cannot see: the network call
+        // The one failure mode intake cannot see: the network call
         // itself never completed (offline, DNS, or the server's CORS policy
         // blocked the read from this origin).
         msg.textContent = 'That site does not allow apps to read it; download the file and use a link from this site instead.';
       });
     };
-    box.appendChild(el('p', 'diff', 'Or load from a link: a URL to a hosted city JSON file, or a page with one in a ```json block.'));
+    box.appendChild(el('p', 'diff', 'Or load from a link: a URL to a hosted city JSON file, a page with one in a code block, or a markdown guide.'));
     var linkRow = el('div', 'mrow');
     linkRow.appendChild(linkInput);
     linkRow.appendChild(linkBtn);
@@ -2827,22 +2941,12 @@
 
     var apply = el('button', 'ctl', 'Apply');
     apply.type = 'button';
-    apply.onclick = function () {
-      var res = CityOps.parse(ta.value);
-      if (!res.data) {
-        var text = 'Invalid:\n' + res.errors.join('\n');
-        if (CityOps.isJsonSyntaxError(res.errors)) {
-          // A syntax error (as opposed to a schema error) on a large paste is
-          // the phone-clipboard-truncation symptom this whole feature exists
-          // for. Point at the alternatives right when it happens.
-          text += '\n\nPhone clipboards often mangle large files. If this city is ' +
-            'hosted on this site, use the On this site buttons or Load from link above instead.';
-        }
-        msg.textContent = text;
-        return;
-      }
-      commitFromForm(res.data);
-    };
+    attachPasteDoor({
+      ta: ta, button: apply, msg: msg, box: box,
+      opts: cityIntakeOpts,
+      copyPrompt: copyPromptText,
+      onApply: function (data) { commitFromForm(data); }
+    });
     var cancel = el('button', 'ctl', 'Cancel');
     cancel.type = 'button';
     cancel.onclick = close;

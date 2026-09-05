@@ -1820,7 +1820,7 @@
 <div class="modal-bg" id="paste-modal-bg" onclick="if(event.target===this)closePasteImport()">
   <div class="modal">
     <h3>Paste JSON to import</h3>
-    <div class="modal-sub">Open your exported JSON file in any text editor, copy all contents, and paste below. This will replace all current data.</div>
+    <div class="modal-sub">Open your exported JSON file in any text editor, copy all contents, and paste below. A block copied out of a chat reply, with prose around it or a stray trailing comma in it, reads too. This will replace all current data.</div>
     <textarea class="modal-textarea" id="paste-import-area" placeholder='Paste the contents of your plan-ahead-YYYY-MM-DD.json file here…'></textarea>
     <div id="paste-status" style="margin-top:10px;font-size:13px;min-height:18px"></div>
     <div class="modal-actions">
@@ -1879,7 +1879,7 @@
 
     <div id="notes-step2" style="margin-top:16px;display:none">
       <label style="font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-3);margin-bottom:6px;display:block">Step 2 — AI's JSON response</label>
-      <textarea class="modal-textarea" id="notes-json" placeholder="Paste the JSON the AI returned, then click Preview"></textarea>
+      <textarea class="modal-textarea" id="notes-json" placeholder="Paste the AI's reply here, code fence and all, then click Preview"></textarea>
       <div style="margin-top:8px;display:flex;gap:8px">
         <button class="btn-secondary" onclick="previewNotesImport()">Preview destinations</button>
       </div>
@@ -4747,8 +4747,7 @@ async function runCityResearch(city) {
   const data = await res.json();
   if (data.usage) trackAIUsage(data.usage.input_tokens, data.usage.output_tokens);
   const text = (data.content || []).map(b => b.text || '').join('').trim();
-  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
-  return { research: JSON.parse(cleaned), usage: data.usage };
+  return { research: parseAiJson(text, 'The city research'), usage: data.usage };
 }
 
 // Merges AI research into the city's sublists, deduping by name (case-insensitive).
@@ -6246,6 +6245,39 @@ function closePasteImport() {
   document.getElementById('paste-modal-bg').classList.remove('show');
 }
 
+// ---- the tolerant read, trip side ----
+// Owner report 2026-09-05: the paste boxes wanted JSON and were picky about it.
+// CityOps.intakeKit is the one place in the product allowed to be forgiving,
+// and this is its trip-surface door: raw JSON, JSON in a fence, JSON buried in
+// prose, then the named repair rules (trailing commas, curly quotes used as
+// delimiters, a raw newline inside a string, a leading json word, emphasis
+// characters wrapping the block).
+//
+// mode 'raw' on purpose. The markdown-to-schema-v1 extractor exists for CITY
+// GUIDES; this surface's payloads are the planner's own export shape and the
+// notes-import shape, so there is nothing for it to extract and asking it to
+// try would only invent. Anything that needs converting on this surface goes
+// through Import from notes, which is what that feature already is.
+//
+// Returns { ok, data, repairs, message }; the message is a sentence, never a
+// parser exception.
+function readPastedJson(text) {
+  const res = CityOps.intakeKit.read(text, { mode: 'raw' });
+  return res;
+}
+
+// The same read for a reply nobody pasted. Every AI call on this surface used
+// to carry its own copy of a two-regex fence strip that only worked when the
+// fence began at the first character and ended at the last one; a model that
+// said "Here you go:" first defeated all five copies. This throws on a reply
+// that will not read, which is the shape each caller's own catch already
+// expects.
+function parseAiJson(text, what) {
+  const res = CityOps.intakeKit.read(text, { mode: 'raw' });
+  if (!res.ok) throw new Error((what || 'The reply') + ' could not be read: ' + res.message);
+  return res.data;
+}
+
 function importFromPaste() {
   const text = document.getElementById('paste-import-area').value.trim();
   if (!text) { setPasteStatus('Paste JSON first.', 'error'); return; }
@@ -6253,21 +6285,13 @@ function importFromPaste() {
 }
 
 function applyImportedJSON(text, source) {
-  let parsed;
-  try {
-    parsed = JSON.parse(text);
-  } catch(err) {
-    const msg = 'Could not parse JSON: ' + err.message;
-    if (source === 'paste') setPasteStatus(msg, 'error');
-    else setDataStatus(msg, 'error');
+  const read = readPastedJson(text);
+  if (!read.ok) {
+    if (source === 'paste') setPasteStatus(read.message, 'error');
+    else setDataStatus(read.message, 'error');
     return false;
   }
-  if (typeof parsed !== 'object' || parsed === null) {
-    const msg = 'Imported data is not a valid object.';
-    if (source === 'paste') setPasteStatus(msg, 'error');
-    else setDataStatus(msg, 'error');
-    return false;
-  }
+  const parsed = read.data;
 
   // Detect format: { meta, state } wrapper or bare state. Accept either.
   const importedState = (parsed.state && typeof parsed.state === 'object') ? parsed.state : parsed;
@@ -6442,9 +6466,10 @@ async function runNotesAI() {
     }
     const data = await res.json();
     const text = (data.content || []).map(b => b.text || '').filter(Boolean).join('\n').trim();
-    // Strip markdown fences if Claude added them despite instructions
-    const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
-    document.getElementById('notes-json').value = cleaned;
+    // Whatever shape the reply took, the box below reads it through the same
+    // tolerant door a hand-paste goes through, so there is no second rule here.
+    const read = readPastedJson(text);
+    document.getElementById('notes-json').value = read.ok ? JSON.stringify(read.data, null, 2) : text;
     document.getElementById('notes-step2').style.display = 'block';
     setNotesStatus('✓ Extracted. Review below or click Preview.', 'ok');
     previewNotesImport();
@@ -6458,19 +6483,10 @@ async function runNotesAI() {
 
 function previewNotesImport() {
   const text = document.getElementById('notes-json').value.trim();
-  if (!text) { setNotesStatus('Paste JSON response first.', 'error'); return; }
-  let parsed;
-  try {
-    const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
-    parsed = JSON.parse(cleaned);
-  } catch(err) {
-    setNotesStatus('Could not parse JSON: ' + err.message, 'error');
-    return;
-  }
-  if (!parsed || typeof parsed !== 'object') {
-    setNotesStatus('Response is not a JSON object.', 'error');
-    return;
-  }
+  if (!text) { setNotesStatus('Paste the AI response first.', 'error'); return; }
+  const read = readPastedJson(text);
+  if (!read.ok) { setNotesStatus(read.message, 'error'); return; }
+  const parsed = read.data;
   const cities = Array.isArray(parsed.cities) ? parsed.cities : [];
   const ideas = Array.isArray(parsed.ideas) ? parsed.ideas : [];
   if (cities.length === 0 && ideas.length === 0) {
@@ -7757,8 +7773,7 @@ async function geocodeViaAPI(name, country) {
     if (!res.ok) return null;
     const data = await res.json();
     const text = (data.content || []).map(b => b.text || '').join('').trim();
-    const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
-    const parsed = JSON.parse(cleaned);
+    const parsed = parseAiJson(text, 'The geocode reply');
     if (typeof parsed.lat === 'number' && typeof parsed.lng === 'number') {
       return { lat: parsed.lat, lng: parsed.lng };
     }
@@ -8133,8 +8148,7 @@ async function runAICityScore(city) {
     const data = await res.json();
     if (data.usage) trackAIUsage(data.usage.input_tokens, data.usage.output_tokens);
     const text = (data.content || []).map(b => b.text || '').join('').trim();
-    const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
-    return JSON.parse(cleaned);
+    return parseAiJson(text, 'The city score');
   } catch(e) {
     console.warn('AI city score failed:', e.message);
     throw e;
@@ -8340,8 +8354,7 @@ async function batchScoreCities(forceRescoreAll) {
     const data = await res.json();
     if (data.usage) trackAIUsage(data.usage.input_tokens, data.usage.output_tokens);
     const text = (data.content || []).map(b => b.text || '').join('').trim();
-    const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
-    const parsed = JSON.parse(cleaned);
+    const parsed = parseAiJson(text, 'The scoring reply');
 
     let applied = 0;
     (parsed.results || []).forEach(r => {
@@ -8443,8 +8456,7 @@ async function batchScoreAccommodations(cityId, forceRescoreAll) {
     const data = await res.json();
     if (data.usage) trackAIUsage(data.usage.input_tokens, data.usage.output_tokens);
     const text = (data.content || []).map(b => b.text || '').join('').trim();
-    const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
-    const parsed = JSON.parse(cleaned);
+    const parsed = parseAiJson(text, 'The scoring reply');
 
     let applied = 0;
     (parsed.results || []).forEach(r => {
@@ -9039,15 +9051,10 @@ function applyPastedScore() {
   const city = state.cities.find(c => c.id === _scoreCityId);
   if (!city) return;
   const text = document.getElementById('score-paste-area').value.trim();
-  if (!text) { toast('Paste JSON first.', 'error'); return; }
-  let parsed;
-  try {
-    const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
-    parsed = JSON.parse(cleaned);
-  } catch(err) {
-    toast('Could not parse JSON: ' + err.message, 'error');
-    return;
-  }
+  if (!text) { toast('Paste the AI response first.', 'error'); return; }
+  const read = readPastedJson(text);
+  if (!read.ok) { toast(read.message, 'error'); return; }
+  const parsed = read.data;
   if (!city.scores) city.scores = {};
   // Backfill objective if not yet computed
   if (!city.scores.schengen) city.scores.schengen = scoreSchengen(city);

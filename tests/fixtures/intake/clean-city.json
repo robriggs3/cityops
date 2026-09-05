@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "city": {
+    "name": "Porto",
+    "country": "PT",
+    "dates": { "from": "2026-04-06", "to": "2026-04-12" },
+    "notes": ["Bolt works well"]
+  },
+  "sections": [
+    { "id": "dinner", "label": "Dinner", "icon": "🍽️" }
+  ],
+  "items": [
+    {
+      "id": "cantina32",
+      "section": "dinner",
+      "status": "plan",
+      "day": "2026-04-07",
+      "name": "Cantina 32",
+      "links": [],
+      "place_id": null,
+      "verified": null
+    }
+  ]
+}

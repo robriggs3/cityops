@@ -3732,6 +3732,1031 @@ var CityOps = (function () {
     return { data: null, errors: viaFence.errors, kind: 'invalid' };
   }
 
+  // ==========================================================================
+  // Tolerant intake (pure). ONE door for every paste box in the product.
+  // ==========================================================================
+  // Owner report 2026-09-05: "i need to be able to paste md file content into
+  // the city plan creator, or enrichment, or wherever. currently it's asking
+  // for json and it's very picky with format."
+  //
+  // The workflow this exists for: the app builds a prompt, the traveler pastes
+  // it into Claude.ai or ChatGPT, and pastes the answer back. What comes back
+  // is only sometimes the single fenced JSON block the prompt asked for. It is
+  // just as often prose with the JSON buried in it, JSON with one trailing
+  // comma, a block a chat client re-typed with curly quotes, or a perfectly
+  // good city guide written as markdown headings and bullets. Every one of
+  // those used to be refused with a parser exception.
+  //
+  // THREE LAYERS, CHEAPEST FIRST:
+  //   1. structured  - raw JSON, fenced JSON, JSON embedded in prose, then a
+  //                    named repair pass. Offline, instant, free.
+  //   2. markdown    - a deterministic markdown-to-schema-v1 extractor.
+  //                    Offline, instant, free.
+  //   3. AI          - the shells offer a Convert with Claude button (and a
+  //                    copy-a-conversion-prompt path for an account with no
+  //                    transport) built from conversionPrompt() below. Costs
+  //                    money, so it is a tap the traveler makes, never a tap
+  //                    the app makes for them.
+  //
+  // WHAT THIS LAYER IS NOT ALLOWED TO DO, and the reason a future reader will
+  // otherwise be tempted: TOLERANCE BELONGS AT INTAKE, NEVER AT THE MERGE
+  // BOUNDARY. Whatever comes out of here goes through the SAME validate /
+  // validateItem / mergeDelta path a hand-typed payload has always gone
+  // through, with the same guarantees: an existing item is skipped and never
+  // overwritten, ids stay unique, the id maps stay prototype-safe. If a guide
+  // is ever refused for a reason that feels too strict, the fix is a new
+  // NAMED rule in here, never a loosened check over there. The whole point of
+  // one intake door is that the merge door did not have to move.
+
+  // Characters this file must recognise in pasted text but must never itself
+  // ship (the repo bans the em-dash outright, and the smart quotes only ever
+  // appear here as things to repair). Built from code points so the source
+  // stays clean and greppable.
+  var CH_EMDASH = String.fromCharCode(8212);
+  var CH_ENDASH = String.fromCharCode(8211);
+  var CH_MIDDOT = String.fromCharCode(183);
+  var CH_BULLET = String.fromCharCode(8226);
+  var CH_LDQUO = String.fromCharCode(8220);
+  var CH_RDQUO = String.fromCharCode(8221);
+  var CH_LSQUO = String.fromCharCode(8216);
+  var CH_RSQUO = String.fromCharCode(8217);
+  var CH_STAR = String.fromCharCode(9733);
+  var CH_STAR_OUTLINE = String.fromCharCode(9734);
+
+  // ---- layer 1a: finding candidate JSON text ----
+
+  // Every fenced block in the text, in order, opening and closing markers
+  // anchored to their own lines for the reason FENCE_RE above already
+  // documents. Unlike extractJsonBlock this returns them ALL and parses none:
+  // the caller decides which candidate wins, and gets to try each one twice
+  // (once clean, once repaired).
+  function fenceBodies(text) {
+    var out = [];
+    FENCE_RE.lastIndex = 0;
+    var m;
+    while ((m = FENCE_RE.exec(text)) !== null) {
+      var body = m[2].replace(/^\s+|\s+$/g, '');
+      if (body) out.push(body);
+    }
+    return out;
+  }
+
+  // The outermost balanced object in a run of prose: from the first `{` to the
+  // `}` that closes it. String-aware, so a brace inside a string value (a note
+  // that says "the {sic}") cannot end the scan early, and escape-aware, so a
+  // literal backslash-quote inside a string cannot end the string early.
+  // Returns null when the text has no `{`, or when the braces never balance.
+  function embeddedObject(text) {
+    var start = text.indexOf('{');
+    if (start === -1) return null;
+    var depth = 0;
+    var inStr = false;
+    var esc = false;
+    for (var i = start; i < text.length; i++) {
+      var c = text.charAt(i);
+      if (inStr) {
+        if (esc) { esc = false; continue; }
+        if (c === '\\') { esc = true; continue; }
+        if (c === '"') inStr = false;
+        continue;
+      }
+      if (c === '"') { inStr = true; continue; }
+      if (c === '{') depth++;
+      else if (c === '}') {
+        depth--;
+        if (depth === 0) return text.slice(start, i + 1);
+      }
+    }
+    return null;
+  }
+
+  // ---- layer 1b: the repair rules ----
+  // Five rules, each one a failure this repo has actually seen come out of a
+  // chat window, each one named in the result so a report can say what was
+  // repaired. NOTHING here is a regex free-for-all: three of the five run
+  // inside a single string-aware scanner precisely so a repair cannot reach
+  // into a string value and change what a note SAYS.
+  //
+  // The refusal rule that makes the rest safe: a repair may change SYNTAX and
+  // never MEANING. Where the two cannot be told apart the pass refuses and
+  // the text falls through to the markdown layer, which is why single curly
+  // quotes are deliberately not repaired (see below).
+
+  // Rule "leading-json-word": a bare `json` left over from a fence marker the
+  // traveler's copy took the backticks off, e.g. "json\n{ ... }".
+  function stripJsonWord(text, fired) {
+    var m = /^\s*json\s*\r?\n?/i.exec(text);
+    if (!m) return text;
+    var rest = text.slice(m[0].length);
+    if (rest.charAt(0) !== '{' && rest.charAt(0) !== '[') return text;
+    fired.push('leading-json-word');
+    return rest;
+  }
+
+  // Rule "markdown-emphasis": a chat that bolded or italicised the whole
+  // block, or an opening fence whose closing fence never arrived (which is
+  // what a truncated copy off a phone looks like). Only symmetric wrappers,
+  // and only when what is left starts like JSON.
+  function stripWrappers(text, fired) {
+    var t = text;
+    var changed = false;
+    var guard = 0;
+    while (guard++ < 8) {
+      var before = t;
+      t = t.replace(/^\s+|\s+$/g, '');
+      // An opening fence with no close: the fence extractor could not see it
+      // because it is not a pair, but the body underneath is still the answer.
+      var open = /^```[ \t]*\w*[ \t]*\r?\n/.exec(t);
+      if (open && t.indexOf('\n```') === -1) { t = t.slice(open[0].length); }
+      // A trailing lone fence marker, same story from the other end.
+      t = t.replace(/\r?\n?```[ \t]*$/, '');
+      // Symmetric emphasis runs. Matched pairs only: `**{...}**` is a wrapper,
+      // `**{...}` is a fragment and is left alone.
+      var em = /^([*_`]{1,3})([\s\S]*)\1$/.exec(t);
+      if (em && /^\s*[{[]/.test(em[2])) t = em[2];
+      if (t === before) break;
+      changed = true;
+    }
+    if (changed && t !== text.replace(/^\s+|\s+$/g, '')) fired.push('markdown-emphasis');
+    return t;
+  }
+
+  // Rules "trailing-comma", "smart-quotes" and "unescaped-newline", in ONE
+  // string-aware pass because all three need to know whether the cursor is
+  // inside a JSON string, and three separate regex passes over the same text
+  // would each have to guess.
+  //
+  // smart-quotes: a curly double quote in STRUCTURAL position (outside any
+  // string) is a delimiter a chat client substituted, so it becomes a straight
+  // quote and its partner does too; a curly quote INSIDE a string is content
+  // (an apostrophe in "Joe's Bar") and is left exactly as it is. Single curly
+  // quotes are deliberately NOT treated as delimiters in any position: the
+  // closing one is indistinguishable from an apostrophe, so repairing them
+  // would be guessing at meaning. That is the refusal this pass exists to make
+  // rather than the repair it is tempted to make.
+  //
+  // unescaped-newline: a raw line break between an opening quote and its close
+  // is invalid JSON and is the single most common thing a chat window emits
+  // for a long note. It becomes an escaped newline, which preserves the text.
+  //
+  // Returns null when the scan ends INSIDE a string, because at that point the
+  // repair has lost track of where strings begin and end, and a repair that is
+  // lost is a repair that invents.
+  function repairScan(text, fired) {
+    var out = [];
+    var inStr = false;
+    var smart = false;      // this string opened with a curly quote
+    var esc = false;
+    var hitComma = false, hitSmart = false, hitNewline = false;
+    for (var i = 0; i < text.length; i++) {
+      var c = text.charAt(i);
+      if (inStr) {
+        if (esc) { out.push(c); esc = false; continue; }
+        if (c === '\\') { out.push(c); esc = true; continue; }
+        if (smart && c === CH_RDQUO) { out.push('"'); inStr = false; smart = false; continue; }
+        if (smart && c === '"') { out.push('\\"'); continue; }
+        if (!smart && c === '"') { out.push('"'); inStr = false; continue; }
+        if (c === '\n') { out.push('\\n'); hitNewline = true; continue; }
+        if (c === '\r') { hitNewline = true; continue; }
+        if (c === '\t') { out.push('\\t'); continue; }
+        out.push(c);
+        continue;
+      }
+      if (c === '"') { out.push(c); inStr = true; smart = false; continue; }
+      if (c === CH_LDQUO) { out.push('"'); inStr = true; smart = true; hitSmart = true; continue; }
+      // A stray closing curly quote outside a string is the partner of an
+      // opener this scan already turned straight; treat it as a delimiter too.
+      if (c === CH_RDQUO) { out.push('"'); inStr = true; smart = true; hitSmart = true; continue; }
+      if (c === ',') {
+        var j = i + 1;
+        while (j < text.length && /\s/.test(text.charAt(j))) j++;
+        var next = text.charAt(j);
+        if (next === '}' || next === ']') { hitComma = true; continue; }
+        out.push(c);
+        continue;
+      }
+      out.push(c);
+    }
+    if (inStr) return null;
+    if (hitComma) fired.push('trailing-comma');
+    if (hitSmart) fired.push('smart-quotes');
+    if (hitNewline) fired.push('unescaped-newline');
+    return out.join('');
+  }
+
+  // One candidate, all five rules. Returns {text, repairs} or null when the
+  // pass refused. Never called on text that already parses: the caller tries
+  // every candidate clean first, so a repair can never win over a clean read.
+  function repairCandidate(text) {
+    var fired = [];
+    var t = stripWrappers(String(text), fired);
+    t = stripJsonWord(t, fired);
+    var scanned = repairScan(t, fired);
+    if (scanned === null) return null;
+    return { text: scanned, repairs: fired };
+  }
+
+  // ---- layer 1: structured intake ----
+  // Candidate order is the order of confidence: the whole text, then each
+  // fenced block in document order, then the outermost balanced object in the
+  // surrounding prose. Every candidate is tried CLEAN first and only then
+  // REPAIRED, so a reply carrying one clean block and one mangled one always
+  // lands on the clean one.
+  //
+  // route is one of 'json' (the paste was JSON and nothing else), 'fence'
+  // (it came out of a code block) or 'embedded' (it was surrounded by prose).
+  // The shells use route plus repairs to decide whether to preview before
+  // committing: a clean 'json' paste behaves exactly as it always did.
+  function readStructured(text) {
+    var raw = String(text === null || text === undefined ? '' : text);
+    var trimmed = raw.replace(/^\s+|\s+$/g, '');
+    if (!trimmed) return null;
+    var candidates = [{ text: trimmed, route: 'json' }];
+    fenceBodies(raw).forEach(function (b) { candidates.push({ text: b, route: 'fence' }); });
+    var emb = embeddedObject(raw);
+    if (emb && emb !== trimmed) candidates.push({ text: emb, route: 'embedded' });
+    var i, data;
+    for (i = 0; i < candidates.length; i++) {
+      try { data = JSON.parse(candidates[i].text); }
+      catch (e) { continue; }
+      if (data && typeof data === 'object') {
+        return { data: data, route: candidates[i].route, repairs: [] };
+      }
+    }
+    for (i = 0; i < candidates.length; i++) {
+      var fixed = repairCandidate(candidates[i].text);
+      if (!fixed) continue;
+      if (!fixed.repairs.length) continue;   // nothing changed, so nothing new to try
+      try { data = JSON.parse(fixed.text); }
+      catch (e2) { continue; }
+      if (data && typeof data === 'object') {
+        return { data: data, route: candidates[i].route, repairs: fixed.repairs };
+      }
+    }
+    // Last resort inside layer 1: prose around a block that only balances once
+    // its own repairs are applied (a trailing comma before the closing brace
+    // is the common one). Re-scan for the embedded object in the repaired
+    // whole text rather than repairing an object we could not find.
+    var wholeFixed = repairCandidate(trimmed);
+    if (wholeFixed && wholeFixed.repairs.length) {
+      var emb2 = embeddedObject(wholeFixed.text);
+      if (emb2) {
+        try {
+          var d2 = JSON.parse(emb2);
+          if (d2 && typeof d2 === 'object') {
+            return { data: d2, route: 'embedded', repairs: wholeFixed.repairs };
+          }
+        } catch (e3) { /* refused: fall through to the markdown layer */ }
+      }
+    }
+    return null;
+  }
+
+  // ---- layer 2: markdown to schema v1 ----
+  // Deterministic, offline and CONSERVATIVE. It reads the shape these guides
+  // actually take (see PROMPT.md: eight or nine named sections, a place per
+  // bullet, hours and price and a map link on the same line) and nothing it
+  // cannot read confidently becomes a guessed field: it becomes note text.
+  //
+  // Three things it will NEVER produce, because each one is a fact about the
+  // world rather than a fact about the text:
+  //   - a `day` it did not read as a literal ISO date;
+  //   - a status other than plan or backup;
+  //   - a rating that is not anchored to an explicit stars/out-of-five/review
+  //     marker, so a price of 4.6 can never become a rating of 4.6.
+  // It also never emits hours.class, which would mean deciding from a closing
+  // time whether an evening suits, and never invents a link.
+
+  // The section ids PROMPT.md asks for, and the words a chat actually writes
+  // above them. An unrecognised heading keeps its own words and gets a slug
+  // id: an extra section is a section the traveler can see and rename, while a
+  // heading forced into the wrong id is data in the wrong tab.
+  var MD_SECTIONS = [
+    { id: 'dinner', label: 'Dinner', icon: '🍽️', words: ['dinner', 'dinners', 'evening meal', 'evening meals', 'supper'] },
+    { id: 'breakfast', label: 'Breakfast', icon: '🥐', words: ['breakfast', 'breakfasts', 'brunch'] },
+    { id: 'lunch', label: 'Lunch', icon: '🥗', words: ['lunch', 'lunches'] },
+    { id: 'coffee', label: 'Coffee', icon: '☕', words: ['coffee', 'cafe', 'cafes', 'coffee shops', 'espresso', 'specialty coffee'] },
+    { id: 'cowork', label: 'Coworking', icon: '💻', words: ['cowork', 'coworking', 'co-working', 'work spaces', 'workspaces', 'coworking spaces'] },
+    { id: 'activities', label: 'Activities', icon: '🗺️', words: ['activities', 'activity', 'things to do', 'sights', 'attractions', 'day trips', 'see and do'] },
+    { id: 'services', label: 'Services', icon: '🧺', words: ['services', 'service', 'laundry', 'errands', 'admin'] },
+    { id: 'practical', label: 'Practical', icon: '📌', words: ['practical', 'practical notes', 'practicalities', 'logistics', 'getting around', 'good to know', 'notes'] },
+    { id: 'interests', label: 'My interests', icon: '⭐', words: ['interests', 'my interests', 'personal interests'] }
+  ];
+
+  // Words that mean "the picks below are the fallback ones". A heading or a
+  // standalone bold label carrying one of these switches the status of what
+  // follows to backup, which is the only status besides plan this layer can
+  // ever produce.
+  var MD_BACKUP_WORDS = ['backup', 'backups', 'back-up', 'alternate', 'alternates', 'alternative',
+    'alternatives', 'fallback', 'fallbacks', 'if closed', 'in reserve', 'reserves', 'runners up',
+    'runners-up', 'also considered', 'other options'];
+  var MD_PLAN_WORDS = ['plan', 'plans', 'plan picks', 'picks', 'main picks', 'top picks', 'the picks'];
+
+  function mdNormalize(s) {
+    return String(s || '')
+      .replace(/[*_`~]/g, '')
+      .replace(/[^\w\s-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/^\s+|\s+$/g, '')
+      .toLowerCase();
+  }
+
+  function mdMatchesAny(norm, words) {
+    for (var i = 0; i < words.length; i++) {
+      if (norm === words[i]) return true;
+      if (norm.indexOf(words[i]) !== -1) return true;
+    }
+    return false;
+  }
+
+  function mdSectionFor(headingText) {
+    var norm = mdNormalize(headingText);
+    if (!norm) return null;
+    for (var i = 0; i < MD_SECTIONS.length; i++) {
+      if (mdMatchesAny(norm, MD_SECTIONS[i].words)) {
+        return { id: MD_SECTIONS[i].id, label: MD_SECTIONS[i].label, icon: MD_SECTIONS[i].icon };
+      }
+    }
+    var id = slug(headingText.replace(/[*_`#]/g, ''));
+    if (!id) return null;
+    return { id: id, label: String(headingText).replace(/[*_`#]/g, '').replace(/^\s+|\s+$/g, ''), icon: '📍' };
+  }
+
+  // Every markdown link and bare URL on a line, classified by where it points.
+  // `map` is decided by host, never by the label, because a chat writes
+  // "Map" over a plain website link as often as not.
+  var MAP_HOSTS = /(^|\.)(google\.[a-z.]+\/maps|maps\.google\.|goo\.gl\/maps|maps\.app\.goo\.gl|openstreetmap\.org|osm\.org|maps\.apple\.com)/i;
+  function mdLinks(line) {
+    var links = [];
+    var seen = Object.create(null);
+    function push(kind, label, href) {
+      if (Object.prototype.hasOwnProperty.call(seen, href)) return;
+      seen[href] = 1;
+      links.push({ kind: kind, label: label, href: href });
+    }
+    function kindOf(href) {
+      if (/^tel:/i.test(href)) return 'tel';
+      if (MAP_HOSTS.test(href.replace(/^https?:\/\//i, '')) || /google\.[a-z.]+\/maps/i.test(href)) return 'map';
+      return 'web';
+    }
+    var re = /\[([^\]]*)\]\((\s*[^)\s]+)\s*\)/g;
+    var m;
+    while ((m = re.exec(line)) !== null) {
+      var href = m[2].replace(/^\s+|\s+$/g, '');
+      if (!/^(https?:|tel:|mailto:)/i.test(href)) continue;
+      var kind = kindOf(href);
+      var label = m[1].replace(/^\s+|\s+$/g, '') || (kind === 'map' ? 'Open in Maps' : href);
+      push(kind, label, href);
+    }
+    var bare = /(^|[\s(<])((?:https?:\/\/|tel:)[^\s)<>\]]+)/g;
+    while ((m = bare.exec(line)) !== null) {
+      var h = m[2].replace(/[.,;:]+$/, '');
+      var k = kindOf(h);
+      push(k, k === 'map' ? 'Open in Maps' : (k === 'tel' ? 'Call' : h.replace(/^https?:\/\//i, '').replace(/\/$/, '')), h);
+    }
+    return links;
+  }
+
+  // A link's own words already live in links[], so the whole construct comes
+  // out of the note rather than leaving "Map Site" trailing off the end of a
+  // sentence. Nothing else about the line is touched.
+  function mdStripLinks(line) {
+    return line
+      .replace(/\[([^\]]*)\]\(\s*(?:https?:|tel:|mailto:)[^)\s]*\s*\)/g, '')
+      .replace(/(?:https?:\/\/|tel:)[^\s)<>\]]+/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .replace(/\s+([.,;:])/g, '$1');
+  }
+
+  // A price is a currency symbol or code next to a number, optionally a range.
+  // Anchored to the currency, never to a bare number, so "4.6" cannot become a
+  // price any more than it can become a rating.
+  var PRICE_RE = new RegExp(
+    '(~|about |around |approx\\.? )?' +
+    '(?:[$' + String.fromCharCode(8364) + String.fromCharCode(163) + String.fromCharCode(165) +
+    String.fromCharCode(8382) + String.fromCharCode(8377) + ']\\s?\\d[\\d.,]*' +
+    '(?:\\s?[-' + CH_ENDASH + CH_EMDASH + ']\\s?[$' + String.fromCharCode(8364) + String.fromCharCode(163) +
+    String.fromCharCode(165) + String.fromCharCode(8382) + String.fromCharCode(8377) + ']?\\d[\\d.,]*)?' +
+    '|\\d[\\d.,]*(?:\\s?[-' + CH_ENDASH + CH_EMDASH + ']\\s?\\d[\\d.,]*)?\\s?' +
+    '(?:EUR|USD|GBP|GEL|ALL|AMD|CHF|SEK|NOK|DKK|PLN|CZK|HUF|TRY|RON|BGN|MKD|RSD)\\b)', 'i');
+
+  function mdPrice(text) {
+    var m = PRICE_RE.exec(text);
+    if (!m) return null;
+    var t = m[0].replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '').replace(/[.,]+$/, '');
+    return t ? { text: t } : null;
+  }
+
+  // Hours are a clock range, or an explicit "opens"/"closes" plus a clock.
+  // Whatever day words sit immediately after the range ride along, because
+  // "12:00-23:00 daily" and "12:00-23:00 Tue to Sun" are different facts.
+  var HOURS_CLOCK = '\\d{1,2}[:.]\\d{2}\\s?(?:am|pm)?';
+  var HOURS_DAYWORD = '(?:daily|every day|weekdays|weekends' +
+    '|monday|tuesday|wednesday|thursday|friday|saturday|sunday' +
+    '|mon|tues|tue|thurs|thur|thu|wed|fri|sat|sun)';
+  var HOURS_RANGE = '\\b' + HOURS_CLOCK + '\\s?[-' + CH_ENDASH + CH_EMDASH + 'to]{1,3}\\s?' + HOURS_CLOCK;
+  var HOURS_RE = new RegExp(
+    HOURS_RANGE +
+    '(?:\\s?,\\s?' + HOURS_RANGE + ')*' +
+    '(?:\\s*,?\\s*(?:closed\\s+)?' + HOURS_DAYWORD +
+    '(?:\\s*(?:[-' + CH_ENDASH + ']|to|and|,)\\s*' + HOURS_DAYWORD + ')*)?', 'i');
+  var OPENS_RE = /\b(opens?|closes?)\s+(?:at\s+)?\d{1,2}[:.]\d{2}\s?(?:am|pm)?/i;
+
+  function mdHours(text) {
+    var m = HOURS_RE.exec(text);
+    if (m) return { text: m[0].replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '') };
+    m = OPENS_RE.exec(text);
+    if (m) return { text: m[0].replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '') };
+    return null;
+  }
+
+  // A rating is only ever read when the number is ANCHORED: a stars word, a
+  // star glyph, or an explicit out-of-five. A bare decimal is never a rating,
+  // which is the rule that stops a price, a distance or a walk time becoming
+  // one. The review count needs its own anchor for the same reason.
+  var RATING_RE = new RegExp(
+    '(?:[' + CH_STAR + CH_STAR_OUTLINE + ']\\s*(\\d(?:\\.\\d)?)' +
+    '|(\\d(?:\\.\\d)?)\\s*(?:\\/\\s*5|out of 5|[' + CH_STAR + CH_STAR_OUTLINE + ']|\\bstars?\\b)' +
+    '|\\brating[:\\s]+(\\d(?:\\.\\d)?)\\b)', 'i');
+  var COUNT_RE = /(\d[\d,. ]*)\s*(?:reviews?|ratings?)\b/i;
+  var COUNT_AFTER_RE = /\(\s*(\d[\d,. ]*)\s*\)/;
+
+  function mdRating(text) {
+    var m = RATING_RE.exec(text);
+    if (!m) return null;
+    var stars = parseFloat(m[1] || m[2] || m[3]);
+    if (!(typeof stars === 'number') || isNaN(stars) || stars < 0 || stars > 5) return null;
+    var out = { stars: stars };
+    var after = text.slice(m.index + m[0].length);
+    var cm = COUNT_RE.exec(text) || COUNT_AFTER_RE.exec(after);
+    if (cm) {
+      var n = parseInt(String(cm[1]).replace(/[,. ]/g, ''), 10);
+      if (!isNaN(n) && n >= 0) out.count = n;
+    }
+    return out;
+  }
+
+  var ISO_RE = /\b(\d{4}-\d{2}-\d{2})\b/;
+
+  // Names: the confident forms first, a separator split second, the whole
+  // short line third, and NOTHING after that. A line this cannot name is not
+  // guessed at; the caller turns it into note text on the item above it.
+  var NAME_SEPARATORS = [' ' + CH_EMDASH + ' ', ' ' + CH_ENDASH + ' ', ' ' + CH_MIDDOT + ' ',
+    ' - ', ' | ', ': ', ' ' + CH_BULLET + ' '];
+
+  // The hyphen goes LAST in the class: written between _ and the en-dash it is
+  // a RANGE spanning every letter, and the whole note gets stripped away.
+  var LEAD_RE = new RegExp('^[\\s:.,;>*_' + CH_ENDASH + CH_EMDASH + CH_MIDDOT + CH_BULLET + '-]*');
+  function mdStripLead(text) { return String(text).replace(LEAD_RE, ''); }
+
+  function mdItemName(text) {
+    var t = String(text).replace(/^\s+|\s+$/g, '');
+    if (!t) return null;
+    var bold = /^(?:\*\*|__)([^*_]{1,90}?)(?:\*\*|__)\s*(.*)$/.exec(t);
+    if (bold) {
+      var bn = bold[1].replace(/[\s:.,;]+$/, '').replace(/^\s+|\s+$/g, '');
+      if (bn) return { name: bn, rest: mdStripLead(bold[2]) };
+    }
+    var link = /^\[([^\]]{1,90})\]\([^)]*\)\s*(.*)$/.exec(t);
+    if (link) {
+      var ln = link[1].replace(/^\s+|\s+$/g, '');
+      if (ln) return { name: ln, rest: mdStripLead(link[2]) };
+    }
+    for (var i = 0; i < NAME_SEPARATORS.length; i++) {
+      var at = t.indexOf(NAME_SEPARATORS[i]);
+      if (at > 0 && at <= 90) {
+        var n = t.slice(0, at).replace(/[*_`]/g, '').replace(/^\s+|\s+$/g, '');
+        if (n) return { name: n, rest: t.slice(at + NAME_SEPARATORS[i].length).replace(/^\s+|\s+$/g, '') };
+      }
+    }
+    var plain = t.replace(/[*_`]/g, '').replace(/^\s+|\s+$/g, '');
+    if (plain && plain.length <= 60 && !/[.!?]\s/.test(plain)) return { name: plain, rest: '' };
+    return null;
+  }
+
+  var BULLET_RE = new RegExp('^(\\s*)(?:[-*+' + CH_BULLET + ']|\\d+[.)])\\s+(.*)$');
+  var HEADING_RE = /^(#{1,6})\s+(.*)$/;
+  var BOLD_LINE_RE = /^\s*(?:\*\*|__)([^*_]+?)\s*(:?)\s*(?:\*\*|__)\s*(:?)\s*$/;
+
+  // The extractor proper. `opts.header` (name, country, from, to) is what the
+  // caller already knows: the Add city form's fields, or the city an Update
+  // data is replacing. Anything the header does not supply is looked for in
+  // the markdown itself, and a trip whose dates cannot be found anywhere is
+  // reported as exactly that rather than given invented ones.
+  function markdownToCity(text, opts) {
+    opts = opts || {};
+    var header = opts.header || {};
+    var lines = String(text === null || text === undefined ? '' : text).split(/\r?\n/);
+    var sections = [];
+    var sectionIds = Object.create(null);
+    var items = [];
+    var itemIds = Object.create(null);
+    var unread = 0;
+
+    function addSection(sec) {
+      if (!sec) return null;
+      if (!Object.prototype.hasOwnProperty.call(sectionIds, sec.id)) {
+        sectionIds[sec.id] = 1;
+        sections.push(sec);
+      }
+      return sec.id;
+    }
+    function uniqueItemId(name) {
+      var base = slug(name) || 'item';
+      var id = base;
+      var n = 2;
+      while (Object.prototype.hasOwnProperty.call(itemIds, id)) { id = base + '-' + n; n++; }
+      itemIds[id] = 1;
+      return id;
+    }
+
+    // Which heading level names a section. A guide with any level-2 heading
+    // uses those; one with only level-1 headings uses those; a guide with no
+    // headings at all gets one honest catch-all rather than eight invented
+    // section names.
+    var seenLevels = [];
+    var levelCount = Object.create(null);
+    var levelNamed = Object.create(null);
+    lines.forEach(function (l) {
+      var h = HEADING_RE.exec(l);
+      if (!h) return;
+      var lv = h[1].length;
+      if (!Object.prototype.hasOwnProperty.call(levelCount, lv)) {
+        levelCount[lv] = 0; levelNamed[lv] = 0; seenLevels.push(lv);
+      }
+      levelCount[lv]++;
+      var norm = mdNormalize(h[2]);
+      for (var q = 0; q < MD_SECTIONS.length; q++) {
+        if (mdMatchesAny(norm, MD_SECTIONS[q].words)) { levelNamed[lv]++; break; }
+      }
+    });
+    seenLevels.sort(function (a, b) { return a - b; });
+    var sectionLevel = 0;
+    var bestNamed = 0;
+    seenLevels.forEach(function (lv) {
+      if (levelNamed[lv] > bestNamed) { bestNamed = levelNamed[lv]; sectionLevel = lv; }
+    });
+    if (!sectionLevel) {
+      for (var r = 0; r < seenLevels.length; r++) {
+        if (levelCount[seenLevels[r]] > 1) { sectionLevel = seenLevels[r]; break; }
+      }
+    }
+    if (!sectionLevel && seenLevels.length) sectionLevel = seenLevels[0];
+
+    // The stay, when the caller knows it, is the only fence around a date.
+    function dayInRange(iso) {
+      if (!header.from || !header.to) return true;
+      return iso >= String(header.from) && iso <= String(header.to);
+    }
+
+    var fenced = Object.create(null);
+    (function () {
+      var marks = [];
+      lines.forEach(function (l, n) { if (/^\s*```/.test(l)) marks.push(n); });
+      for (var p = 0; p + 1 < marks.length; p += 2) {
+        for (var q = marks[p]; q <= marks[p + 1]; q++) fenced[q] = 1;
+      }
+      if (marks.length % 2 === 1) fenced[marks[marks.length - 1]] = 1;
+    })();
+
+    var currentSection = null;
+    var currentStatus = 'plan';
+    var current = null;         // the item still collecting note lines
+    var headerLines = [];
+
+    function flush() {
+      if (!current) return;
+      var noteParts = current.notes.filter(function (s) { return !!s; });
+      var note = noteParts.join(' ').replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '');
+      var scanText = current.scan.join(' ');
+      var it = {
+        id: current.id,
+        section: current.section,
+        status: current.status,
+        name: current.name,
+        links: current.links,
+        place_id: null,
+        verified: null
+      };
+      var day = ISO_RE.exec(scanText);
+      if (day && dayInRange(day[1])) it.day = day[1];
+      var price = mdPrice(scanText);
+      if (price) it.price = price;
+      var hours = mdHours(scanText);
+      if (hours) it.hours = hours;
+      var rating = mdRating(scanText);
+      if (rating) it.rating = rating;
+      if (note) it.note = note;
+      items.push(it);
+      current = null;
+    }
+
+    function startItem(name, restText, rawLine) {
+      flush();
+      if (!currentSection) {
+        currentSection = addSection({ id: 'notes', label: 'From your notes', icon: '📍' });
+      }
+      var id = uniqueItemId(name);
+      current = {
+        id: id, section: currentSection, status: currentStatus, name: name,
+        links: mdLinks(rawLine), notes: [mdStripLinks(restText).replace(/^\s+|\s+$/g, '')],
+        scan: [mdStripLinks(rawLine)]
+      };
+    }
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (Object.prototype.hasOwnProperty.call(fenced, i)) continue;
+      if (!/\S/.test(line)) continue;
+      if (/^\s*(\||[-:| ]{4,})\s*$/.test(line)) continue;   // a table rule, not content
+
+      var h = HEADING_RE.exec(line);
+      if (h) {
+        var level = h[1].length;
+        var htext = h[2].replace(/[*_`]/g, '').replace(/\s*#+\s*$/, '').replace(/^\s+|\s+$/g, '');
+        if (level < sectionLevel || sectionLevel === 0) { headerLines.push(htext); continue; }
+        if (level === sectionLevel) {
+          flush();
+          var sec = mdSectionFor(htext);
+          if (sec) { currentSection = addSection(sec); currentStatus = 'plan'; }
+          continue;
+        }
+        // A deeper heading: either a plan/backup label, or a place in its own
+        // right. A label switches the status of what follows and adds nothing.
+        var hn = mdNormalize(htext);
+        if (mdMatchesAny(hn, MD_BACKUP_WORDS)) { flush(); currentStatus = 'backup'; continue; }
+        if (mdMatchesAny(hn, MD_PLAN_WORDS)) { flush(); currentStatus = 'plan'; continue; }
+        var named = mdItemName(htext);
+        if (named) { startItem(named.name, named.rest, line); }
+        else { unread++; }
+        continue;
+      }
+
+      var bl = BOLD_LINE_RE.exec(line);
+      if (bl) {
+        var bn2 = mdNormalize(bl[1]);
+        if (mdMatchesAny(bn2, MD_BACKUP_WORDS)) { flush(); currentStatus = 'backup'; continue; }
+        if (mdMatchesAny(bn2, MD_PLAN_WORDS)) { flush(); currentStatus = 'plan'; continue; }
+        // A trailing colon makes it a label over the prose beneath it, not the
+        // name of a place. The prose keeps flowing into whatever item is open.
+        if (bl[2] || bl[3]) { continue; }
+        var namedB = mdItemName(bl[1]);
+        if (namedB) { startItem(namedB.name, '', line); }
+        else { unread++; }
+        continue;
+      }
+
+      var b = BULLET_RE.exec(line);
+      if (b) {
+        var indent = b[1].replace(/\t/g, '  ').length;
+        var body = b[2];
+        // A nested bullet is detail about the item above it, never a new one.
+        if (indent >= 2 && current) {
+          current.notes.push(mdStripLinks(body).replace(/^\s+|\s+$/g, ''));
+          current.scan.push(mdStripLinks(body));
+          mdLinks(line).forEach(function (lk) { current.links.push(lk); });
+          continue;
+        }
+        var nb = mdNormalize(body);
+        if (mdMatchesAny(nb, MD_BACKUP_WORDS) && body.replace(/[*_`:]/g, '').replace(/^\s+|\s+$/g, '').length <= 24) {
+          flush(); currentStatus = 'backup'; continue;
+        }
+        var named2 = mdItemName(body);
+        if (named2) { startItem(named2.name, named2.rest, line); continue; }
+        // Could not name it confidently: it becomes note text on the item
+        // above rather than a guessed field or a silently dropped line.
+        if (current) {
+          current.notes.push(mdStripLinks(body).replace(/^\s+|\s+$/g, ''));
+          current.scan.push(mdStripLinks(body));
+        } else { unread++; }
+        continue;
+      }
+
+      // A plain paragraph line: note text for the item being collected, and
+      // header material before any section has opened.
+      if (current) {
+        current.notes.push(mdStripLinks(line).replace(/^\s+|\s+$/g, ''));
+        current.scan.push(mdStripLinks(line));
+        mdLinks(line).forEach(function (lk) { current.links.push(lk); });
+      } else if (!currentSection) {
+        headerLines.push(line);
+      } else {
+        unread++;
+      }
+    }
+    flush();
+
+    // The city header: what the caller knows wins, because a form field the
+    // traveler filled in is a fact and a line in a chat reply is a guess.
+    var headText = headerLines.join('\n');
+    var name = (header.name && String(header.name).replace(/^\s+|\s+$/g, '')) || '';
+    if (!name) {
+      for (var k = 0; k < headerLines.length; k++) {
+        if (/["{}[\]]/.test(headerLines[k])) continue;   // JSON wreckage, not a city name
+        var cand = headerLines[k].replace(/[*_`#]/g, '').split(/[,(]/)[0].replace(/^\s+|\s+$/g, '');
+        cand = cand.replace(/\s+\d{4}-\d{2}-\d{2}.*$/, '').replace(/^\s+|\s+$/g, '');
+        if (cand && cand.length <= 60) { name = cand; break; }
+      }
+    }
+    var from = header.from || '';
+    var to = header.to || '';
+    if (!from || !to) {
+      var dates = headText.match(/\d{4}-\d{2}-\d{2}/g) || [];
+      if (dates.length >= 2) { from = from || dates[0]; to = to || dates[1]; }
+    }
+    var city = { name: name, dates: { from: from, to: to } };
+    if (header.country) city.country = String(header.country);
+
+    var missing = [];
+    if (!name) missing.push('the city name');
+    if (!from || !to) missing.push('the trip dates');
+    return {
+      data: { schema: 1, city: city, sections: sections, items: items },
+      stats: { items: items.length, sections: sections.length, unread: unread },
+      sawHeader: !missing.length, missing: missing
+    };
+  }
+
+  // The delta shape, from the same extractor. Only NEW sections are declared
+  // (renaming a section is the traveler's business and a re-run must not undo
+  // it), and an extracted place whose name already matches one in the guide is
+  // dropped HERE rather than relying on mergeDelta's id check, because a chat
+  // re-listing the same restaurant under a slightly different slug would
+  // otherwise arrive as a second copy of it. Dropping is the only thing this
+  // does about an existing item: it never edits one, which is mergeDelta's
+  // guarantee and stays mergeDelta's guarantee.
+  function markdownToDelta(text, existing, opts) {
+    var built = markdownToCity(text, opts || {});
+    var have = existing && typeof existing === 'object' ? existing : { sections: [], items: [] };
+    var haveSections = Object.create(null);
+    (Array.isArray(have.sections) ? have.sections : []).forEach(function (s) {
+      if (s && s.id) haveSections[s.id] = 1;
+    });
+    var haveNames = Object.create(null);
+    var haveIds = Object.create(null);
+    (Array.isArray(have.items) ? have.items : []).forEach(function (it) {
+      if (!it) return;
+      if (it.id) haveIds[it.id] = 1;
+      if (it.name) haveNames[mdNormalize(it.name)] = 1;
+    });
+    var duplicates = 0;
+    var items = [];
+    var used = Object.create(null);
+    built.data.items.forEach(function (it) {
+      var norm = mdNormalize(it.name);
+      if (norm && Object.prototype.hasOwnProperty.call(haveNames, norm)) { duplicates++; return; }
+      // A fresh id, because the extractor numbered its ids against its own
+      // list and the guide it is merging into has ids of its own.
+      var base = slug(it.name) || 'item';
+      var id = base;
+      var n = 2;
+      while (Object.prototype.hasOwnProperty.call(haveIds, id) ||
+             Object.prototype.hasOwnProperty.call(used, id)) { id = base + '-' + n; n++; }
+      used[id] = 1;
+      var copy = {};
+      Object.keys(it).forEach(function (k) { copy[k] = it[k]; });
+      copy.id = id;
+      if (copy.status !== 'plan' && copy.status !== 'backup') copy.status = 'plan';
+      items.push(copy);
+    });
+    var sections = built.data.sections.filter(function (s) {
+      return !Object.prototype.hasOwnProperty.call(haveSections, s.id);
+    });
+    var delta = { schema: 1, delta: true, items: items };
+    if (sections.length) delta.sections = sections;
+    return {
+      data: delta,
+      stats: { items: items.length, sections: sections.length, unread: built.stats.unread,
+        duplicates: duplicates }
+    };
+  }
+
+  // ---- the one door ----
+
+  // Names the ACTION, not a button. The city app draws Convert with Claude plus
+  // Copy conversion prompt beside this sentence; the engine, which also ships
+  // inside offline guide files, draws only the copy one. A sentence naming a
+  // control that is not on screen is the failure mode this wording avoids.
+  var INTAKE_NEXT_STEP = 'Try the conversion buttons below, or paste the JSON block from your chat.';
+
+  // Does this text look like markdown a person wrote, as opposed to a failed
+  // JSON paste? Headings or bullets are the tell. Used only to pick the FAILURE
+  // wording, never to decide whether to run the extractor.
+  function looksMarkdown(text) {
+    return /^\s{0,3}#{1,6}\s+\S/m.test(text) ||
+      new RegExp('^\\s{0,4}(?:[-*+' + CH_BULLET + ']|\\d+[.)])\\s+\\S', 'm').test(text) ||
+      /\*\*[^*]+\*\*/.test(text);
+  }
+  function looksJson(text) {
+    var t = String(text).replace(/^\s+|\s+$/g, '');
+    return t.charAt(0) === '{' || t.charAt(0) === '[' || /```/.test(t) || /"\s*:/.test(t);
+  }
+
+  // Is this payload TRYING to be schema v1? A JSON object that names schema,
+  // items, sections, city or delta gets its schema errors reported, because
+  // those errors are the useful answer. Anything else falls through to the
+  // markdown layer instead of being reported against a contract it was never
+  // aiming at.
+  function aimsAtSchema(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+    return ['schema', 'items', 'sections', 'city', 'delta'].some(function (k) {
+      return Object.prototype.hasOwnProperty.call(data, k);
+    });
+  }
+
+  function intakeSummary(data, mode) {
+    if (mode === 'raw') return 'imported data';
+    var items = Array.isArray(data.items) ? data.items.length : 0;
+    var secs = Array.isArray(data.sections) ? data.sections.length : 0;
+    var what = items + (items === 1 ? ' place' : ' places');
+    if (secs) what += ' across ' + secs + (secs === 1 ? ' section' : ' sections');
+    if (mode === 'city' && data.city && data.city.name) return data.city.name + ': ' + what;
+    return what;
+  }
+
+  // Whatever comes out of a layer is checked by the SAME validator the merge
+  // door uses, and by nothing weaker. mergeDelta is called here in dry-run
+  // spirit only: its result is thrown away and the caller calls it again for
+  // real, so there is still exactly one place that writes a merged city.
+  function checkPayload(data, mode, opts) {
+    if (mode === 'raw') {
+      if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        return { ok: false, errors: ['Imported data is not a valid object.'] };
+      }
+      return { ok: true, errors: [] };
+    }
+    if (mode === 'delta') {
+      var have = opts && opts.existing;
+      if (have) {
+        var res = mergeDelta(have, data);
+        return { ok: !res.errors.length, errors: res.errors };
+      }
+      var errs = [];
+      if (!data || typeof data !== 'object' || Array.isArray(data)) errs.push('Delta is not an object');
+      else {
+        if (data.schema !== 1) errs.push('schema must be 1');
+        if (data.delta !== true) errs.push('delta must be true: this is a partial payload, not a whole guide');
+      }
+      return { ok: !errs.length, errors: errs };
+    }
+    var e = validate(data);
+    return { ok: !e.length, errors: e };
+  }
+
+  // read(text, opts) is what every paste box in the product calls.
+  //   opts.mode     'city' (a whole guide), 'delta' (an Enrich payload), or
+  //                 'raw' (the trip surface's own export shape, which is not
+  //                 schema v1 and gets layer 1 only).
+  //   opts.header   {name, country, from, to} the caller already knows.
+  //   opts.existing the city a delta merges into, so the check here is the
+  //                 real mergeDelta and not a weaker stand-in.
+  // On success `tolerant` says whether anything beyond a clean JSON.parse was
+  // needed; the shells preview before committing when it is true, so the
+  // path that has always worked keeps behaving exactly as it did.
+  function intakeRead(text, opts) {
+    opts = opts || {};
+    var mode = opts.mode === 'delta' ? 'delta' : opts.mode === 'raw' ? 'raw' : 'city';
+    var raw = String(text === null || text === undefined ? '' : text);
+    if (!/\S/.test(raw)) {
+      return { ok: false, data: null, route: null, repairs: [], tolerant: false,
+        found: 'empty', errors: [], convertible: false,
+        message: 'There is nothing here yet. Paste what your chat replied with: markdown or JSON, either works.' };
+    }
+
+    var structuredErrors = null;
+    var s = readStructured(raw);
+    if (s) {
+      var chk = checkPayload(s.data, mode, opts);
+      if (chk.ok) {
+        return { ok: true, data: s.data, route: s.route, repairs: s.repairs,
+          tolerant: s.route !== 'json' || s.repairs.length > 0,
+          found: 'json', errors: [], stats: null,
+          message: intakeSummary(s.data, mode) + '.' };
+      }
+      // A payload that was clearly aiming at the schema gets its own errors
+      // reported. Running the markdown extractor over a near-miss guide would
+      // replace a precise answer with a vague one.
+      if (aimsAtSchema(s.data) || mode === 'raw') {
+        return { ok: false, data: null, route: s.route, repairs: s.repairs, tolerant: true,
+          found: 'json', errors: chk.errors, convertible: false,
+          message: 'That parsed as JSON, but it is not a valid ' +
+            (mode === 'delta' ? 'delta payload' : 'city guide') + ':\n- ' + chk.errors.join('\n- ') };
+      }
+      structuredErrors = chk.errors;
+    }
+
+    if (mode !== 'raw') {
+      var built = mode === 'delta'
+        ? markdownToDelta(raw, opts.existing, opts)
+        : markdownToCity(raw, opts);
+      if (built.stats.items > 0) {
+        var chk2 = checkPayload(built.data, mode, opts);
+        if (chk2.ok) {
+          return { ok: true, data: built.data, route: 'markdown', repairs: [], tolerant: true,
+            found: 'markdown', errors: [], stats: built.stats,
+            message: intakeSummary(built.data, mode) + ', read from markdown.' };
+        }
+        // The one markdown failure worth its own sentence, because it is the
+        // one the traveler can fix in two seconds without touching the paste.
+        if (mode === 'city' && !built.sawHeader) {
+          return { ok: false, data: null, route: 'markdown', repairs: [], tolerant: true,
+            found: 'markdown', errors: chk2.errors, stats: built.stats, missing: built.missing,
+            convertible: false,
+            message: 'Read ' + built.stats.items + ' ' +
+              (built.stats.items === 1 ? 'place' : 'places') +
+              ' from that markdown, but not ' + built.missing.join(' or ') +
+              '. Fill the fields above, then press Apply again.' };
+        }
+        return { ok: false, data: null, route: 'markdown', repairs: [], tolerant: true,
+          found: 'markdown', errors: chk2.errors, stats: built.stats, convertible: true,
+          message: 'Read ' + built.stats.items + ' ' +
+            (built.stats.items === 1 ? 'place' : 'places') +
+            ' from that markdown, but the result is not valid:\n- ' + chk2.errors.join('\n- ') };
+      }
+      if (looksMarkdown(raw)) {
+        return { ok: false, data: null, route: null, repairs: [], tolerant: false,
+          found: 'markdown', errors: structuredErrors || [], stats: built.stats, convertible: true,
+          message: 'This looks like markdown but no places could be read from it. ' + INTAKE_NEXT_STEP };
+      }
+    }
+
+    if (looksJson(raw)) {
+      return { ok: false, data: null, route: null, repairs: [], tolerant: false,
+        found: 'json', errors: structuredErrors || [], convertible: mode !== 'raw',
+        message: 'This looks like JSON but no complete block in it would parse, ' +
+          'even after repairing trailing commas and curly quotes. ' +
+          (mode === 'raw' ? 'Copy the file again, whole, and paste it here.' : INTAKE_NEXT_STEP) };
+    }
+    if (mode === 'raw') {
+      return { ok: false, data: null, route: null, repairs: [], tolerant: false,
+        found: 'unknown', errors: structuredErrors || [], convertible: false,
+        message: 'No JSON was found in that. Copy the whole exported file, or the whole ' +
+          'reply your chat gave you, and paste it here.' };
+    }
+    return { ok: false, data: null, route: null, repairs: [], tolerant: false,
+      found: 'unknown', errors: structuredErrors || [], convertible: true,
+      message: 'Nothing here reads as a city guide: no JSON, and no headings or ' +
+        'lists with places under them. ' + INTAKE_NEXT_STEP };
+  }
+
+  // ---- layer 3: the conversion prompt ----
+  // Built here rather than in either shell so the one-tap path and the
+  // copy-it-into-your-own-chat path are the same words, and so the words are
+  // testable. It carries the contract the app enforces anyway, which is the
+  // only reason the reply comes back mergeable: an instruction that leaves
+  // status or ids to the model produces a payload validate() then refuses.
+  function intakeKit_conversionPrompt(text, opts) { return conversionPrompt(text, opts); }
+  function conversionPrompt(text, opts) {
+    opts = opts || {};
+    var mode = opts.mode === 'delta' ? 'delta' : 'city';
+    var header = opts.header || {};
+    var lines = [];
+    if (mode === 'delta') {
+      lines.push('Convert the notes at the end of this message into a CityOps schema v1 DELTA payload.');
+      lines.push('');
+      lines.push('Reply with a single ```json fenced code block and nothing else: no prose before it, no explanation after it.');
+      lines.push('');
+      lines.push('The object has exactly these top level keys: "schema": 1, "delta": true, an optional "sections" array, and an "items" array.');
+      lines.push('Each item has "id" (a short lowercase slug, unique within your reply), "section" (one of the section ids listed below, or one you declare in "sections"), "status" ("plan" or "backup" and nothing else), "name", and "links" (an array, empty if the notes carry no URL).');
+      lines.push('Optional per item: "day" (YYYY-MM-DD, only when the notes state an actual date), "when", "note", "price" as {"text": "..."}, "hours" as {"text": "..."}, "rating" as {"stars": 4.6, "count": 1203}, "tags", "intel".');
+      if (opts.existing && Array.isArray(opts.existing.sections) && opts.existing.sections.length) {
+        lines.push('');
+        lines.push('Section ids already in this guide: ' +
+          opts.existing.sections.map(function (s) { return s && s.id; }).filter(Boolean).join(', ') + '.');
+      }
+      if (opts.existing && Array.isArray(opts.existing.items) && opts.existing.items.length) {
+        var names = opts.existing.items.map(function (it) { return it && it.name; }).filter(Boolean);
+        if (names.length) {
+          lines.push('Places already in this guide, which you must NOT repeat: ' + names.join('; ') + '.');
+        }
+      }
+    } else {
+      lines.push('Convert the city guide at the end of this message into a CityOps schema v1 JSON guide.');
+      lines.push('');
+      lines.push('Reply with a single ```json fenced code block and nothing else: no prose before it, no explanation after it.');
+      lines.push('');
+      lines.push('The object has exactly these top level keys: "schema": 1, "city", "sections", "items".');
+      lines.push('"city" has "name", optional "country" (2 or 3 letters), and "dates": {"from": "YYYY-MM-DD", "to": "YYYY-MM-DD"}.');
+      if (header.name) lines.push('The city name is ' + header.name + '.');
+      if (header.country) lines.push('The country code is ' + header.country + '.');
+      if (header.from && header.to) lines.push('The trip dates are ' + header.from + ' to ' + header.to + '.');
+      lines.push('"sections" is an array of {"id", "label", "icon"}; prefer these ids where they fit: dinner, breakfast, lunch, coffee, cowork, activities, services, practical, interests.');
+      lines.push('Each item has "id" (a short lowercase slug, unique across the whole reply), "section" (matching a declared section id), "status" ("plan" or "backup" and nothing else), "name", and "links" (an array, empty if the notes carry no URL).');
+      lines.push('Optional per item: "day" (YYYY-MM-DD inside the trip dates, only when the notes state an actual date), "when", "note", "price" as {"text": "..."}, "hours" as {"text": "..."}, "rating" as {"stars": 4.6, "count": 1203}, "tags", "intel".');
+    }
+    lines.push('');
+    lines.push('Rules that matter more than completeness:');
+    lines.push('- Use only what the notes below actually say. Do not add places, ratings, prices, hours or dates that are not there.');
+    lines.push('- Never emit "done" or "archived" as a status. Those are states the traveler sets later.');
+    lines.push('- Omit "day" entirely rather than guess one.');
+    lines.push('- Omit "rating" entirely for a place whose stars the notes do not state.');
+    lines.push('');
+    lines.push('The notes to convert:');
+    lines.push('');
+    lines.push(String(text === null || text === undefined ? '' : text));
+    return lines.join('\n');
+  }
+
   // ---- sync helpers (pure) ----
   // Every network call, session store and piece of sync UI lives in the app
   // shell (src/app-shell.html). Only decision logic lives here, so it is unit
@@ -7886,7 +8911,8 @@ var CityOps = (function () {
     var wrap = el('div', 'modal-wrap');
     var box = el('div', 'modal');
     box.appendChild(el('h3', null, 'Update city data'));
-    box.appendChild(el('p', 'diff', 'Paste schema v1 JSON. It is stored on this device as an override; the file itself is not changed. Export and paste into the file to make it permanent.'));
+    box.appendChild(el('p', 'diff', 'Paste this city\'s research again: schema v1 JSON, or the guide as markdown. ' +
+      'It is stored on this device as an override; the file itself is not changed. Export and paste into the file to make it permanent.'));
     var ta = document.createElement('textarea');
     box.appendChild(ta);
     var msg = el('div', 'diff', '');
@@ -7894,13 +8920,93 @@ var CityOps = (function () {
     var row = el('div', 'mrow');
     var apply = el('button', 'ctl', 'Apply');
     apply.type = 'button';
+    // This door replaces a city WHOLESALE, so what the traveler already knows
+    // about it (its name and its dates) is what intake reads a headerless
+    // markdown paste against. A guide pasted as headings and bullets needs no
+    // header line of its own here, because the city is already open.
+    function updateIntakeOpts() {
+      var cur = effectiveData(ctx.base, ctx.store.load());
+      var d = (cur && cur.city && cur.city.dates) || {};
+      return { mode: 'city', header: {
+        name: cur && cur.city ? cur.city.name : '', country: cur && cur.city ? cur.city.country : '',
+        from: d.from, to: d.to } };
+    }
+    // The engine ships inside standalone guide files with no network at all,
+    // so the one-tap conversion the app shell offers cannot live here. The
+    // free path can, and does: the prompt goes to the clipboard, or into a
+    // selected box when the clipboard is out of reach.
+    var convertRow = null, convertTa = null;
+    function copyConversionPrompt(text) {
+      var wrote = null;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) wrote = navigator.clipboard.writeText(text);
+      } catch (e) { wrote = null; }
+      function fallback() {
+        if (!convertTa) {
+          convertTa = document.createElement('textarea');
+          convertTa.readOnly = true;
+          convertTa.setAttribute('aria-label', 'Conversion prompt');
+          box.insertBefore(convertTa, msg);
+        }
+        convertTa.value = text;
+        msg.textContent = 'Could not reach the clipboard. The prompt is selected above: copy it, ' +
+          'paste it into Claude or ChatGPT, then paste the JSON it returns below.';
+        try { convertTa.focus(); convertTa.select(); } catch (e2) {}
+      }
+      if (wrote && typeof wrote.then === 'function') {
+        wrote.then(function () {
+          msg.textContent = 'Copied. Paste it into Claude or ChatGPT, then paste the JSON it returns below.';
+        }, fallback);
+      } else { fallback(); }
+    }
+    function dropConvertRow() {
+      if (convertRow && convertRow.parentNode) convertRow.parentNode.removeChild(convertRow);
+      convertRow = null;
+    }
+    function offerConvert(text) {
+      if (convertRow) return;
+      convertRow = el('div', 'mrow');
+      var copy = el('button', 'ctl', 'Copy conversion prompt');
+      copy.type = 'button';
+      copy.onclick = function () {
+        copyConversionPrompt(intakeKit_conversionPrompt(text, updateIntakeOpts()));
+      };
+      convertRow.appendChild(copy);
+      box.insertBefore(convertRow, row);
+    }
+    // Two presses when tolerance was used, one when it was not: the same rule
+    // the app shell's paste doors follow, so the two halves of the product
+    // behave identically on the same paste.
+    var pending = null;
+    ta.addEventListener('input', function () {
+      if (pending) { pending = null; apply.textContent = 'Apply'; }
+      dropConvertRow();
+    });
     apply.onclick = function () {
-      var res = parse(ta.value);
-      if (!res.data) { msg.textContent = 'Invalid:\n' + res.errors.join('\n'); return; }
+      var data = pending;
+      if (!data) {
+        var read = intakeRead(ta.value, updateIntakeOpts());
+        if (!read.ok) {
+          msg.textContent = read.message;
+          if (read.convertible) offerConvert(ta.value); else dropConvertRow();
+          return;
+        }
+        dropConvertRow();
+        if (read.tolerant) {
+          pending = read.data;
+          apply.textContent = 'Confirm';
+          msg.textContent = read.message + ' Press Confirm to replace this city with it.';
+          return;
+        }
+        data = read.data;
+      }
+      pending = null;
+      apply.textContent = 'Apply';
+      dropConvertRow();
       var st = ctx.store.load();
       var current = effectiveData(ctx.base, st);
-      var summary = diffSummary(current, res.data);
-      st.dataOverride = res.data;
+      var summary = diffSummary(current, data);
+      st.dataOverride = data;
       ctx.store.save(st);
       pendingPromote = pendingMove = pendingEdit = justMoved = null; // item ids may change under an override
       wrap.remove();
@@ -8274,6 +9380,15 @@ var CityOps = (function () {
     },
     extractJsonBlock: extractJsonBlock, RETRY_INSTRUCTION: RETRY_INSTRUCTION,
     isJsonSyntaxError: isJsonSyntaxError, fetchTextToCity: fetchTextToCity,
+    // The ONE door every paste box in the product goes through. Tolerance
+    // lives here and only here: what comes out still faces validate(),
+    // validateItem() and mergeDelta() exactly as a hand-typed payload does.
+    intakeKit: {
+      read: intakeRead, structured: readStructured, repair: repairCandidate,
+      markdownToCity: markdownToCity, markdownToDelta: markdownToDelta,
+      conversionPrompt: conversionPrompt, NEXT_STEP: INTAKE_NEXT_STEP,
+      SECTIONS: MD_SECTIONS
+    },
     // Who may write, and what a lapsed account keeps. The DATABASE enforces
     // this (public.has_active_entitlement, checked in the WITH CHECK of every
     // write policy); the kit is the same decision in pure JS so the app can
@@ -8432,6 +9547,7 @@ var CityOps = (function () {
   };
 })();
 CityOps.init();
+
 </script>
 
 <script type="text/plain" id="guide-template">
@@ -11970,6 +13086,1031 @@ var CityOps = (function () {
     return { data: null, errors: viaFence.errors, kind: 'invalid' };
   }
 
+  // ==========================================================================
+  // Tolerant intake (pure). ONE door for every paste box in the product.
+  // ==========================================================================
+  // Owner report 2026-09-05: "i need to be able to paste md file content into
+  // the city plan creator, or enrichment, or wherever. currently it's asking
+  // for json and it's very picky with format."
+  //
+  // The workflow this exists for: the app builds a prompt, the traveler pastes
+  // it into Claude.ai or ChatGPT, and pastes the answer back. What comes back
+  // is only sometimes the single fenced JSON block the prompt asked for. It is
+  // just as often prose with the JSON buried in it, JSON with one trailing
+  // comma, a block a chat client re-typed with curly quotes, or a perfectly
+  // good city guide written as markdown headings and bullets. Every one of
+  // those used to be refused with a parser exception.
+  //
+  // THREE LAYERS, CHEAPEST FIRST:
+  //   1. structured  - raw JSON, fenced JSON, JSON embedded in prose, then a
+  //                    named repair pass. Offline, instant, free.
+  //   2. markdown    - a deterministic markdown-to-schema-v1 extractor.
+  //                    Offline, instant, free.
+  //   3. AI          - the shells offer a Convert with Claude button (and a
+  //                    copy-a-conversion-prompt path for an account with no
+  //                    transport) built from conversionPrompt() below. Costs
+  //                    money, so it is a tap the traveler makes, never a tap
+  //                    the app makes for them.
+  //
+  // WHAT THIS LAYER IS NOT ALLOWED TO DO, and the reason a future reader will
+  // otherwise be tempted: TOLERANCE BELONGS AT INTAKE, NEVER AT THE MERGE
+  // BOUNDARY. Whatever comes out of here goes through the SAME validate /
+  // validateItem / mergeDelta path a hand-typed payload has always gone
+  // through, with the same guarantees: an existing item is skipped and never
+  // overwritten, ids stay unique, the id maps stay prototype-safe. If a guide
+  // is ever refused for a reason that feels too strict, the fix is a new
+  // NAMED rule in here, never a loosened check over there. The whole point of
+  // one intake door is that the merge door did not have to move.
+
+  // Characters this file must recognise in pasted text but must never itself
+  // ship (the repo bans the em-dash outright, and the smart quotes only ever
+  // appear here as things to repair). Built from code points so the source
+  // stays clean and greppable.
+  var CH_EMDASH = String.fromCharCode(8212);
+  var CH_ENDASH = String.fromCharCode(8211);
+  var CH_MIDDOT = String.fromCharCode(183);
+  var CH_BULLET = String.fromCharCode(8226);
+  var CH_LDQUO = String.fromCharCode(8220);
+  var CH_RDQUO = String.fromCharCode(8221);
+  var CH_LSQUO = String.fromCharCode(8216);
+  var CH_RSQUO = String.fromCharCode(8217);
+  var CH_STAR = String.fromCharCode(9733);
+  var CH_STAR_OUTLINE = String.fromCharCode(9734);
+
+  // ---- layer 1a: finding candidate JSON text ----
+
+  // Every fenced block in the text, in order, opening and closing markers
+  // anchored to their own lines for the reason FENCE_RE above already
+  // documents. Unlike extractJsonBlock this returns them ALL and parses none:
+  // the caller decides which candidate wins, and gets to try each one twice
+  // (once clean, once repaired).
+  function fenceBodies(text) {
+    var out = [];
+    FENCE_RE.lastIndex = 0;
+    var m;
+    while ((m = FENCE_RE.exec(text)) !== null) {
+      var body = m[2].replace(/^\s+|\s+$/g, '');
+      if (body) out.push(body);
+    }
+    return out;
+  }
+
+  // The outermost balanced object in a run of prose: from the first `{` to the
+  // `}` that closes it. String-aware, so a brace inside a string value (a note
+  // that says "the {sic}") cannot end the scan early, and escape-aware, so a
+  // literal backslash-quote inside a string cannot end the string early.
+  // Returns null when the text has no `{`, or when the braces never balance.
+  function embeddedObject(text) {
+    var start = text.indexOf('{');
+    if (start === -1) return null;
+    var depth = 0;
+    var inStr = false;
+    var esc = false;
+    for (var i = start; i < text.length; i++) {
+      var c = text.charAt(i);
+      if (inStr) {
+        if (esc) { esc = false; continue; }
+        if (c === '\\') { esc = true; continue; }
+        if (c === '"') inStr = false;
+        continue;
+      }
+      if (c === '"') { inStr = true; continue; }
+      if (c === '{') depth++;
+      else if (c === '}') {
+        depth--;
+        if (depth === 0) return text.slice(start, i + 1);
+      }
+    }
+    return null;
+  }
+
+  // ---- layer 1b: the repair rules ----
+  // Five rules, each one a failure this repo has actually seen come out of a
+  // chat window, each one named in the result so a report can say what was
+  // repaired. NOTHING here is a regex free-for-all: three of the five run
+  // inside a single string-aware scanner precisely so a repair cannot reach
+  // into a string value and change what a note SAYS.
+  //
+  // The refusal rule that makes the rest safe: a repair may change SYNTAX and
+  // never MEANING. Where the two cannot be told apart the pass refuses and
+  // the text falls through to the markdown layer, which is why single curly
+  // quotes are deliberately not repaired (see below).
+
+  // Rule "leading-json-word": a bare `json` left over from a fence marker the
+  // traveler's copy took the backticks off, e.g. "json\n{ ... }".
+  function stripJsonWord(text, fired) {
+    var m = /^\s*json\s*\r?\n?/i.exec(text);
+    if (!m) return text;
+    var rest = text.slice(m[0].length);
+    if (rest.charAt(0) !== '{' && rest.charAt(0) !== '[') return text;
+    fired.push('leading-json-word');
+    return rest;
+  }
+
+  // Rule "markdown-emphasis": a chat that bolded or italicised the whole
+  // block, or an opening fence whose closing fence never arrived (which is
+  // what a truncated copy off a phone looks like). Only symmetric wrappers,
+  // and only when what is left starts like JSON.
+  function stripWrappers(text, fired) {
+    var t = text;
+    var changed = false;
+    var guard = 0;
+    while (guard++ < 8) {
+      var before = t;
+      t = t.replace(/^\s+|\s+$/g, '');
+      // An opening fence with no close: the fence extractor could not see it
+      // because it is not a pair, but the body underneath is still the answer.
+      var open = /^```[ \t]*\w*[ \t]*\r?\n/.exec(t);
+      if (open && t.indexOf('\n```') === -1) { t = t.slice(open[0].length); }
+      // A trailing lone fence marker, same story from the other end.
+      t = t.replace(/\r?\n?```[ \t]*$/, '');
+      // Symmetric emphasis runs. Matched pairs only: `**{...}**` is a wrapper,
+      // `**{...}` is a fragment and is left alone.
+      var em = /^([*_`]{1,3})([\s\S]*)\1$/.exec(t);
+      if (em && /^\s*[{[]/.test(em[2])) t = em[2];
+      if (t === before) break;
+      changed = true;
+    }
+    if (changed && t !== text.replace(/^\s+|\s+$/g, '')) fired.push('markdown-emphasis');
+    return t;
+  }
+
+  // Rules "trailing-comma", "smart-quotes" and "unescaped-newline", in ONE
+  // string-aware pass because all three need to know whether the cursor is
+  // inside a JSON string, and three separate regex passes over the same text
+  // would each have to guess.
+  //
+  // smart-quotes: a curly double quote in STRUCTURAL position (outside any
+  // string) is a delimiter a chat client substituted, so it becomes a straight
+  // quote and its partner does too; a curly quote INSIDE a string is content
+  // (an apostrophe in "Joe's Bar") and is left exactly as it is. Single curly
+  // quotes are deliberately NOT treated as delimiters in any position: the
+  // closing one is indistinguishable from an apostrophe, so repairing them
+  // would be guessing at meaning. That is the refusal this pass exists to make
+  // rather than the repair it is tempted to make.
+  //
+  // unescaped-newline: a raw line break between an opening quote and its close
+  // is invalid JSON and is the single most common thing a chat window emits
+  // for a long note. It becomes an escaped newline, which preserves the text.
+  //
+  // Returns null when the scan ends INSIDE a string, because at that point the
+  // repair has lost track of where strings begin and end, and a repair that is
+  // lost is a repair that invents.
+  function repairScan(text, fired) {
+    var out = [];
+    var inStr = false;
+    var smart = false;      // this string opened with a curly quote
+    var esc = false;
+    var hitComma = false, hitSmart = false, hitNewline = false;
+    for (var i = 0; i < text.length; i++) {
+      var c = text.charAt(i);
+      if (inStr) {
+        if (esc) { out.push(c); esc = false; continue; }
+        if (c === '\\') { out.push(c); esc = true; continue; }
+        if (smart && c === CH_RDQUO) { out.push('"'); inStr = false; smart = false; continue; }
+        if (smart && c === '"') { out.push('\\"'); continue; }
+        if (!smart && c === '"') { out.push('"'); inStr = false; continue; }
+        if (c === '\n') { out.push('\\n'); hitNewline = true; continue; }
+        if (c === '\r') { hitNewline = true; continue; }
+        if (c === '\t') { out.push('\\t'); continue; }
+        out.push(c);
+        continue;
+      }
+      if (c === '"') { out.push(c); inStr = true; smart = false; continue; }
+      if (c === CH_LDQUO) { out.push('"'); inStr = true; smart = true; hitSmart = true; continue; }
+      // A stray closing curly quote outside a string is the partner of an
+      // opener this scan already turned straight; treat it as a delimiter too.
+      if (c === CH_RDQUO) { out.push('"'); inStr = true; smart = true; hitSmart = true; continue; }
+      if (c === ',') {
+        var j = i + 1;
+        while (j < text.length && /\s/.test(text.charAt(j))) j++;
+        var next = text.charAt(j);
+        if (next === '}' || next === ']') { hitComma = true; continue; }
+        out.push(c);
+        continue;
+      }
+      out.push(c);
+    }
+    if (inStr) return null;
+    if (hitComma) fired.push('trailing-comma');
+    if (hitSmart) fired.push('smart-quotes');
+    if (hitNewline) fired.push('unescaped-newline');
+    return out.join('');
+  }
+
+  // One candidate, all five rules. Returns {text, repairs} or null when the
+  // pass refused. Never called on text that already parses: the caller tries
+  // every candidate clean first, so a repair can never win over a clean read.
+  function repairCandidate(text) {
+    var fired = [];
+    var t = stripWrappers(String(text), fired);
+    t = stripJsonWord(t, fired);
+    var scanned = repairScan(t, fired);
+    if (scanned === null) return null;
+    return { text: scanned, repairs: fired };
+  }
+
+  // ---- layer 1: structured intake ----
+  // Candidate order is the order of confidence: the whole text, then each
+  // fenced block in document order, then the outermost balanced object in the
+  // surrounding prose. Every candidate is tried CLEAN first and only then
+  // REPAIRED, so a reply carrying one clean block and one mangled one always
+  // lands on the clean one.
+  //
+  // route is one of 'json' (the paste was JSON and nothing else), 'fence'
+  // (it came out of a code block) or 'embedded' (it was surrounded by prose).
+  // The shells use route plus repairs to decide whether to preview before
+  // committing: a clean 'json' paste behaves exactly as it always did.
+  function readStructured(text) {
+    var raw = String(text === null || text === undefined ? '' : text);
+    var trimmed = raw.replace(/^\s+|\s+$/g, '');
+    if (!trimmed) return null;
+    var candidates = [{ text: trimmed, route: 'json' }];
+    fenceBodies(raw).forEach(function (b) { candidates.push({ text: b, route: 'fence' }); });
+    var emb = embeddedObject(raw);
+    if (emb && emb !== trimmed) candidates.push({ text: emb, route: 'embedded' });
+    var i, data;
+    for (i = 0; i < candidates.length; i++) {
+      try { data = JSON.parse(candidates[i].text); }
+      catch (e) { continue; }
+      if (data && typeof data === 'object') {
+        return { data: data, route: candidates[i].route, repairs: [] };
+      }
+    }
+    for (i = 0; i < candidates.length; i++) {
+      var fixed = repairCandidate(candidates[i].text);
+      if (!fixed) continue;
+      if (!fixed.repairs.length) continue;   // nothing changed, so nothing new to try
+      try { data = JSON.parse(fixed.text); }
+      catch (e2) { continue; }
+      if (data && typeof data === 'object') {
+        return { data: data, route: candidates[i].route, repairs: fixed.repairs };
+      }
+    }
+    // Last resort inside layer 1: prose around a block that only balances once
+    // its own repairs are applied (a trailing comma before the closing brace
+    // is the common one). Re-scan for the embedded object in the repaired
+    // whole text rather than repairing an object we could not find.
+    var wholeFixed = repairCandidate(trimmed);
+    if (wholeFixed && wholeFixed.repairs.length) {
+      var emb2 = embeddedObject(wholeFixed.text);
+      if (emb2) {
+        try {
+          var d2 = JSON.parse(emb2);
+          if (d2 && typeof d2 === 'object') {
+            return { data: d2, route: 'embedded', repairs: wholeFixed.repairs };
+          }
+        } catch (e3) { /* refused: fall through to the markdown layer */ }
+      }
+    }
+    return null;
+  }
+
+  // ---- layer 2: markdown to schema v1 ----
+  // Deterministic, offline and CONSERVATIVE. It reads the shape these guides
+  // actually take (see PROMPT.md: eight or nine named sections, a place per
+  // bullet, hours and price and a map link on the same line) and nothing it
+  // cannot read confidently becomes a guessed field: it becomes note text.
+  //
+  // Three things it will NEVER produce, because each one is a fact about the
+  // world rather than a fact about the text:
+  //   - a `day` it did not read as a literal ISO date;
+  //   - a status other than plan or backup;
+  //   - a rating that is not anchored to an explicit stars/out-of-five/review
+  //     marker, so a price of 4.6 can never become a rating of 4.6.
+  // It also never emits hours.class, which would mean deciding from a closing
+  // time whether an evening suits, and never invents a link.
+
+  // The section ids PROMPT.md asks for, and the words a chat actually writes
+  // above them. An unrecognised heading keeps its own words and gets a slug
+  // id: an extra section is a section the traveler can see and rename, while a
+  // heading forced into the wrong id is data in the wrong tab.
+  var MD_SECTIONS = [
+    { id: 'dinner', label: 'Dinner', icon: '🍽️', words: ['dinner', 'dinners', 'evening meal', 'evening meals', 'supper'] },
+    { id: 'breakfast', label: 'Breakfast', icon: '🥐', words: ['breakfast', 'breakfasts', 'brunch'] },
+    { id: 'lunch', label: 'Lunch', icon: '🥗', words: ['lunch', 'lunches'] },
+    { id: 'coffee', label: 'Coffee', icon: '☕', words: ['coffee', 'cafe', 'cafes', 'coffee shops', 'espresso', 'specialty coffee'] },
+    { id: 'cowork', label: 'Coworking', icon: '💻', words: ['cowork', 'coworking', 'co-working', 'work spaces', 'workspaces', 'coworking spaces'] },
+    { id: 'activities', label: 'Activities', icon: '🗺️', words: ['activities', 'activity', 'things to do', 'sights', 'attractions', 'day trips', 'see and do'] },
+    { id: 'services', label: 'Services', icon: '🧺', words: ['services', 'service', 'laundry', 'errands', 'admin'] },
+    { id: 'practical', label: 'Practical', icon: '📌', words: ['practical', 'practical notes', 'practicalities', 'logistics', 'getting around', 'good to know', 'notes'] },
+    { id: 'interests', label: 'My interests', icon: '⭐', words: ['interests', 'my interests', 'personal interests'] }
+  ];
+
+  // Words that mean "the picks below are the fallback ones". A heading or a
+  // standalone bold label carrying one of these switches the status of what
+  // follows to backup, which is the only status besides plan this layer can
+  // ever produce.
+  var MD_BACKUP_WORDS = ['backup', 'backups', 'back-up', 'alternate', 'alternates', 'alternative',
+    'alternatives', 'fallback', 'fallbacks', 'if closed', 'in reserve', 'reserves', 'runners up',
+    'runners-up', 'also considered', 'other options'];
+  var MD_PLAN_WORDS = ['plan', 'plans', 'plan picks', 'picks', 'main picks', 'top picks', 'the picks'];
+
+  function mdNormalize(s) {
+    return String(s || '')
+      .replace(/[*_`~]/g, '')
+      .replace(/[^\w\s-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/^\s+|\s+$/g, '')
+      .toLowerCase();
+  }
+
+  function mdMatchesAny(norm, words) {
+    for (var i = 0; i < words.length; i++) {
+      if (norm === words[i]) return true;
+      if (norm.indexOf(words[i]) !== -1) return true;
+    }
+    return false;
+  }
+
+  function mdSectionFor(headingText) {
+    var norm = mdNormalize(headingText);
+    if (!norm) return null;
+    for (var i = 0; i < MD_SECTIONS.length; i++) {
+      if (mdMatchesAny(norm, MD_SECTIONS[i].words)) {
+        return { id: MD_SECTIONS[i].id, label: MD_SECTIONS[i].label, icon: MD_SECTIONS[i].icon };
+      }
+    }
+    var id = slug(headingText.replace(/[*_`#]/g, ''));
+    if (!id) return null;
+    return { id: id, label: String(headingText).replace(/[*_`#]/g, '').replace(/^\s+|\s+$/g, ''), icon: '📍' };
+  }
+
+  // Every markdown link and bare URL on a line, classified by where it points.
+  // `map` is decided by host, never by the label, because a chat writes
+  // "Map" over a plain website link as often as not.
+  var MAP_HOSTS = /(^|\.)(google\.[a-z.]+\/maps|maps\.google\.|goo\.gl\/maps|maps\.app\.goo\.gl|openstreetmap\.org|osm\.org|maps\.apple\.com)/i;
+  function mdLinks(line) {
+    var links = [];
+    var seen = Object.create(null);
+    function push(kind, label, href) {
+      if (Object.prototype.hasOwnProperty.call(seen, href)) return;
+      seen[href] = 1;
+      links.push({ kind: kind, label: label, href: href });
+    }
+    function kindOf(href) {
+      if (/^tel:/i.test(href)) return 'tel';
+      if (MAP_HOSTS.test(href.replace(/^https?:\/\//i, '')) || /google\.[a-z.]+\/maps/i.test(href)) return 'map';
+      return 'web';
+    }
+    var re = /\[([^\]]*)\]\((\s*[^)\s]+)\s*\)/g;
+    var m;
+    while ((m = re.exec(line)) !== null) {
+      var href = m[2].replace(/^\s+|\s+$/g, '');
+      if (!/^(https?:|tel:|mailto:)/i.test(href)) continue;
+      var kind = kindOf(href);
+      var label = m[1].replace(/^\s+|\s+$/g, '') || (kind === 'map' ? 'Open in Maps' : href);
+      push(kind, label, href);
+    }
+    var bare = /(^|[\s(<])((?:https?:\/\/|tel:)[^\s)<>\]]+)/g;
+    while ((m = bare.exec(line)) !== null) {
+      var h = m[2].replace(/[.,;:]+$/, '');
+      var k = kindOf(h);
+      push(k, k === 'map' ? 'Open in Maps' : (k === 'tel' ? 'Call' : h.replace(/^https?:\/\//i, '').replace(/\/$/, '')), h);
+    }
+    return links;
+  }
+
+  // A link's own words already live in links[], so the whole construct comes
+  // out of the note rather than leaving "Map Site" trailing off the end of a
+  // sentence. Nothing else about the line is touched.
+  function mdStripLinks(line) {
+    return line
+      .replace(/\[([^\]]*)\]\(\s*(?:https?:|tel:|mailto:)[^)\s]*\s*\)/g, '')
+      .replace(/(?:https?:\/\/|tel:)[^\s)<>\]]+/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .replace(/\s+([.,;:])/g, '$1');
+  }
+
+  // A price is a currency symbol or code next to a number, optionally a range.
+  // Anchored to the currency, never to a bare number, so "4.6" cannot become a
+  // price any more than it can become a rating.
+  var PRICE_RE = new RegExp(
+    '(~|about |around |approx\\.? )?' +
+    '(?:[$' + String.fromCharCode(8364) + String.fromCharCode(163) + String.fromCharCode(165) +
+    String.fromCharCode(8382) + String.fromCharCode(8377) + ']\\s?\\d[\\d.,]*' +
+    '(?:\\s?[-' + CH_ENDASH + CH_EMDASH + ']\\s?[$' + String.fromCharCode(8364) + String.fromCharCode(163) +
+    String.fromCharCode(165) + String.fromCharCode(8382) + String.fromCharCode(8377) + ']?\\d[\\d.,]*)?' +
+    '|\\d[\\d.,]*(?:\\s?[-' + CH_ENDASH + CH_EMDASH + ']\\s?\\d[\\d.,]*)?\\s?' +
+    '(?:EUR|USD|GBP|GEL|ALL|AMD|CHF|SEK|NOK|DKK|PLN|CZK|HUF|TRY|RON|BGN|MKD|RSD)\\b)', 'i');
+
+  function mdPrice(text) {
+    var m = PRICE_RE.exec(text);
+    if (!m) return null;
+    var t = m[0].replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '').replace(/[.,]+$/, '');
+    return t ? { text: t } : null;
+  }
+
+  // Hours are a clock range, or an explicit "opens"/"closes" plus a clock.
+  // Whatever day words sit immediately after the range ride along, because
+  // "12:00-23:00 daily" and "12:00-23:00 Tue to Sun" are different facts.
+  var HOURS_CLOCK = '\\d{1,2}[:.]\\d{2}\\s?(?:am|pm)?';
+  var HOURS_DAYWORD = '(?:daily|every day|weekdays|weekends' +
+    '|monday|tuesday|wednesday|thursday|friday|saturday|sunday' +
+    '|mon|tues|tue|thurs|thur|thu|wed|fri|sat|sun)';
+  var HOURS_RANGE = '\\b' + HOURS_CLOCK + '\\s?[-' + CH_ENDASH + CH_EMDASH + 'to]{1,3}\\s?' + HOURS_CLOCK;
+  var HOURS_RE = new RegExp(
+    HOURS_RANGE +
+    '(?:\\s?,\\s?' + HOURS_RANGE + ')*' +
+    '(?:\\s*,?\\s*(?:closed\\s+)?' + HOURS_DAYWORD +
+    '(?:\\s*(?:[-' + CH_ENDASH + ']|to|and|,)\\s*' + HOURS_DAYWORD + ')*)?', 'i');
+  var OPENS_RE = /\b(opens?|closes?)\s+(?:at\s+)?\d{1,2}[:.]\d{2}\s?(?:am|pm)?/i;
+
+  function mdHours(text) {
+    var m = HOURS_RE.exec(text);
+    if (m) return { text: m[0].replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '') };
+    m = OPENS_RE.exec(text);
+    if (m) return { text: m[0].replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '') };
+    return null;
+  }
+
+  // A rating is only ever read when the number is ANCHORED: a stars word, a
+  // star glyph, or an explicit out-of-five. A bare decimal is never a rating,
+  // which is the rule that stops a price, a distance or a walk time becoming
+  // one. The review count needs its own anchor for the same reason.
+  var RATING_RE = new RegExp(
+    '(?:[' + CH_STAR + CH_STAR_OUTLINE + ']\\s*(\\d(?:\\.\\d)?)' +
+    '|(\\d(?:\\.\\d)?)\\s*(?:\\/\\s*5|out of 5|[' + CH_STAR + CH_STAR_OUTLINE + ']|\\bstars?\\b)' +
+    '|\\brating[:\\s]+(\\d(?:\\.\\d)?)\\b)', 'i');
+  var COUNT_RE = /(\d[\d,. ]*)\s*(?:reviews?|ratings?)\b/i;
+  var COUNT_AFTER_RE = /\(\s*(\d[\d,. ]*)\s*\)/;
+
+  function mdRating(text) {
+    var m = RATING_RE.exec(text);
+    if (!m) return null;
+    var stars = parseFloat(m[1] || m[2] || m[3]);
+    if (!(typeof stars === 'number') || isNaN(stars) || stars < 0 || stars > 5) return null;
+    var out = { stars: stars };
+    var after = text.slice(m.index + m[0].length);
+    var cm = COUNT_RE.exec(text) || COUNT_AFTER_RE.exec(after);
+    if (cm) {
+      var n = parseInt(String(cm[1]).replace(/[,. ]/g, ''), 10);
+      if (!isNaN(n) && n >= 0) out.count = n;
+    }
+    return out;
+  }
+
+  var ISO_RE = /\b(\d{4}-\d{2}-\d{2})\b/;
+
+  // Names: the confident forms first, a separator split second, the whole
+  // short line third, and NOTHING after that. A line this cannot name is not
+  // guessed at; the caller turns it into note text on the item above it.
+  var NAME_SEPARATORS = [' ' + CH_EMDASH + ' ', ' ' + CH_ENDASH + ' ', ' ' + CH_MIDDOT + ' ',
+    ' - ', ' | ', ': ', ' ' + CH_BULLET + ' '];
+
+  // The hyphen goes LAST in the class: written between _ and the en-dash it is
+  // a RANGE spanning every letter, and the whole note gets stripped away.
+  var LEAD_RE = new RegExp('^[\\s:.,;>*_' + CH_ENDASH + CH_EMDASH + CH_MIDDOT + CH_BULLET + '-]*');
+  function mdStripLead(text) { return String(text).replace(LEAD_RE, ''); }
+
+  function mdItemName(text) {
+    var t = String(text).replace(/^\s+|\s+$/g, '');
+    if (!t) return null;
+    var bold = /^(?:\*\*|__)([^*_]{1,90}?)(?:\*\*|__)\s*(.*)$/.exec(t);
+    if (bold) {
+      var bn = bold[1].replace(/[\s:.,;]+$/, '').replace(/^\s+|\s+$/g, '');
+      if (bn) return { name: bn, rest: mdStripLead(bold[2]) };
+    }
+    var link = /^\[([^\]]{1,90})\]\([^)]*\)\s*(.*)$/.exec(t);
+    if (link) {
+      var ln = link[1].replace(/^\s+|\s+$/g, '');
+      if (ln) return { name: ln, rest: mdStripLead(link[2]) };
+    }
+    for (var i = 0; i < NAME_SEPARATORS.length; i++) {
+      var at = t.indexOf(NAME_SEPARATORS[i]);
+      if (at > 0 && at <= 90) {
+        var n = t.slice(0, at).replace(/[*_`]/g, '').replace(/^\s+|\s+$/g, '');
+        if (n) return { name: n, rest: t.slice(at + NAME_SEPARATORS[i].length).replace(/^\s+|\s+$/g, '') };
+      }
+    }
+    var plain = t.replace(/[*_`]/g, '').replace(/^\s+|\s+$/g, '');
+    if (plain && plain.length <= 60 && !/[.!?]\s/.test(plain)) return { name: plain, rest: '' };
+    return null;
+  }
+
+  var BULLET_RE = new RegExp('^(\\s*)(?:[-*+' + CH_BULLET + ']|\\d+[.)])\\s+(.*)$');
+  var HEADING_RE = /^(#{1,6})\s+(.*)$/;
+  var BOLD_LINE_RE = /^\s*(?:\*\*|__)([^*_]+?)\s*(:?)\s*(?:\*\*|__)\s*(:?)\s*$/;
+
+  // The extractor proper. `opts.header` (name, country, from, to) is what the
+  // caller already knows: the Add city form's fields, or the city an Update
+  // data is replacing. Anything the header does not supply is looked for in
+  // the markdown itself, and a trip whose dates cannot be found anywhere is
+  // reported as exactly that rather than given invented ones.
+  function markdownToCity(text, opts) {
+    opts = opts || {};
+    var header = opts.header || {};
+    var lines = String(text === null || text === undefined ? '' : text).split(/\r?\n/);
+    var sections = [];
+    var sectionIds = Object.create(null);
+    var items = [];
+    var itemIds = Object.create(null);
+    var unread = 0;
+
+    function addSection(sec) {
+      if (!sec) return null;
+      if (!Object.prototype.hasOwnProperty.call(sectionIds, sec.id)) {
+        sectionIds[sec.id] = 1;
+        sections.push(sec);
+      }
+      return sec.id;
+    }
+    function uniqueItemId(name) {
+      var base = slug(name) || 'item';
+      var id = base;
+      var n = 2;
+      while (Object.prototype.hasOwnProperty.call(itemIds, id)) { id = base + '-' + n; n++; }
+      itemIds[id] = 1;
+      return id;
+    }
+
+    // Which heading level names a section. A guide with any level-2 heading
+    // uses those; one with only level-1 headings uses those; a guide with no
+    // headings at all gets one honest catch-all rather than eight invented
+    // section names.
+    var seenLevels = [];
+    var levelCount = Object.create(null);
+    var levelNamed = Object.create(null);
+    lines.forEach(function (l) {
+      var h = HEADING_RE.exec(l);
+      if (!h) return;
+      var lv = h[1].length;
+      if (!Object.prototype.hasOwnProperty.call(levelCount, lv)) {
+        levelCount[lv] = 0; levelNamed[lv] = 0; seenLevels.push(lv);
+      }
+      levelCount[lv]++;
+      var norm = mdNormalize(h[2]);
+      for (var q = 0; q < MD_SECTIONS.length; q++) {
+        if (mdMatchesAny(norm, MD_SECTIONS[q].words)) { levelNamed[lv]++; break; }
+      }
+    });
+    seenLevels.sort(function (a, b) { return a - b; });
+    var sectionLevel = 0;
+    var bestNamed = 0;
+    seenLevels.forEach(function (lv) {
+      if (levelNamed[lv] > bestNamed) { bestNamed = levelNamed[lv]; sectionLevel = lv; }
+    });
+    if (!sectionLevel) {
+      for (var r = 0; r < seenLevels.length; r++) {
+        if (levelCount[seenLevels[r]] > 1) { sectionLevel = seenLevels[r]; break; }
+      }
+    }
+    if (!sectionLevel && seenLevels.length) sectionLevel = seenLevels[0];
+
+    // The stay, when the caller knows it, is the only fence around a date.
+    function dayInRange(iso) {
+      if (!header.from || !header.to) return true;
+      return iso >= String(header.from) && iso <= String(header.to);
+    }
+
+    var fenced = Object.create(null);
+    (function () {
+      var marks = [];
+      lines.forEach(function (l, n) { if (/^\s*```/.test(l)) marks.push(n); });
+      for (var p = 0; p + 1 < marks.length; p += 2) {
+        for (var q = marks[p]; q <= marks[p + 1]; q++) fenced[q] = 1;
+      }
+      if (marks.length % 2 === 1) fenced[marks[marks.length - 1]] = 1;
+    })();
+
+    var currentSection = null;
+    var currentStatus = 'plan';
+    var current = null;         // the item still collecting note lines
+    var headerLines = [];
+
+    function flush() {
+      if (!current) return;
+      var noteParts = current.notes.filter(function (s) { return !!s; });
+      var note = noteParts.join(' ').replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '');
+      var scanText = current.scan.join(' ');
+      var it = {
+        id: current.id,
+        section: current.section,
+        status: current.status,
+        name: current.name,
+        links: current.links,
+        place_id: null,
+        verified: null
+      };
+      var day = ISO_RE.exec(scanText);
+      if (day && dayInRange(day[1])) it.day = day[1];
+      var price = mdPrice(scanText);
+      if (price) it.price = price;
+      var hours = mdHours(scanText);
+      if (hours) it.hours = hours;
+      var rating = mdRating(scanText);
+      if (rating) it.rating = rating;
+      if (note) it.note = note;
+      items.push(it);
+      current = null;
+    }
+
+    function startItem(name, restText, rawLine) {
+      flush();
+      if (!currentSection) {
+        currentSection = addSection({ id: 'notes', label: 'From your notes', icon: '📍' });
+      }
+      var id = uniqueItemId(name);
+      current = {
+        id: id, section: currentSection, status: currentStatus, name: name,
+        links: mdLinks(rawLine), notes: [mdStripLinks(restText).replace(/^\s+|\s+$/g, '')],
+        scan: [mdStripLinks(rawLine)]
+      };
+    }
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (Object.prototype.hasOwnProperty.call(fenced, i)) continue;
+      if (!/\S/.test(line)) continue;
+      if (/^\s*(\||[-:| ]{4,})\s*$/.test(line)) continue;   // a table rule, not content
+
+      var h = HEADING_RE.exec(line);
+      if (h) {
+        var level = h[1].length;
+        var htext = h[2].replace(/[*_`]/g, '').replace(/\s*#+\s*$/, '').replace(/^\s+|\s+$/g, '');
+        if (level < sectionLevel || sectionLevel === 0) { headerLines.push(htext); continue; }
+        if (level === sectionLevel) {
+          flush();
+          var sec = mdSectionFor(htext);
+          if (sec) { currentSection = addSection(sec); currentStatus = 'plan'; }
+          continue;
+        }
+        // A deeper heading: either a plan/backup label, or a place in its own
+        // right. A label switches the status of what follows and adds nothing.
+        var hn = mdNormalize(htext);
+        if (mdMatchesAny(hn, MD_BACKUP_WORDS)) { flush(); currentStatus = 'backup'; continue; }
+        if (mdMatchesAny(hn, MD_PLAN_WORDS)) { flush(); currentStatus = 'plan'; continue; }
+        var named = mdItemName(htext);
+        if (named) { startItem(named.name, named.rest, line); }
+        else { unread++; }
+        continue;
+      }
+
+      var bl = BOLD_LINE_RE.exec(line);
+      if (bl) {
+        var bn2 = mdNormalize(bl[1]);
+        if (mdMatchesAny(bn2, MD_BACKUP_WORDS)) { flush(); currentStatus = 'backup'; continue; }
+        if (mdMatchesAny(bn2, MD_PLAN_WORDS)) { flush(); currentStatus = 'plan'; continue; }
+        // A trailing colon makes it a label over the prose beneath it, not the
+        // name of a place. The prose keeps flowing into whatever item is open.
+        if (bl[2] || bl[3]) { continue; }
+        var namedB = mdItemName(bl[1]);
+        if (namedB) { startItem(namedB.name, '', line); }
+        else { unread++; }
+        continue;
+      }
+
+      var b = BULLET_RE.exec(line);
+      if (b) {
+        var indent = b[1].replace(/\t/g, '  ').length;
+        var body = b[2];
+        // A nested bullet is detail about the item above it, never a new one.
+        if (indent >= 2 && current) {
+          current.notes.push(mdStripLinks(body).replace(/^\s+|\s+$/g, ''));
+          current.scan.push(mdStripLinks(body));
+          mdLinks(line).forEach(function (lk) { current.links.push(lk); });
+          continue;
+        }
+        var nb = mdNormalize(body);
+        if (mdMatchesAny(nb, MD_BACKUP_WORDS) && body.replace(/[*_`:]/g, '').replace(/^\s+|\s+$/g, '').length <= 24) {
+          flush(); currentStatus = 'backup'; continue;
+        }
+        var named2 = mdItemName(body);
+        if (named2) { startItem(named2.name, named2.rest, line); continue; }
+        // Could not name it confidently: it becomes note text on the item
+        // above rather than a guessed field or a silently dropped line.
+        if (current) {
+          current.notes.push(mdStripLinks(body).replace(/^\s+|\s+$/g, ''));
+          current.scan.push(mdStripLinks(body));
+        } else { unread++; }
+        continue;
+      }
+
+      // A plain paragraph line: note text for the item being collected, and
+      // header material before any section has opened.
+      if (current) {
+        current.notes.push(mdStripLinks(line).replace(/^\s+|\s+$/g, ''));
+        current.scan.push(mdStripLinks(line));
+        mdLinks(line).forEach(function (lk) { current.links.push(lk); });
+      } else if (!currentSection) {
+        headerLines.push(line);
+      } else {
+        unread++;
+      }
+    }
+    flush();
+
+    // The city header: what the caller knows wins, because a form field the
+    // traveler filled in is a fact and a line in a chat reply is a guess.
+    var headText = headerLines.join('\n');
+    var name = (header.name && String(header.name).replace(/^\s+|\s+$/g, '')) || '';
+    if (!name) {
+      for (var k = 0; k < headerLines.length; k++) {
+        if (/["{}[\]]/.test(headerLines[k])) continue;   // JSON wreckage, not a city name
+        var cand = headerLines[k].replace(/[*_`#]/g, '').split(/[,(]/)[0].replace(/^\s+|\s+$/g, '');
+        cand = cand.replace(/\s+\d{4}-\d{2}-\d{2}.*$/, '').replace(/^\s+|\s+$/g, '');
+        if (cand && cand.length <= 60) { name = cand; break; }
+      }
+    }
+    var from = header.from || '';
+    var to = header.to || '';
+    if (!from || !to) {
+      var dates = headText.match(/\d{4}-\d{2}-\d{2}/g) || [];
+      if (dates.length >= 2) { from = from || dates[0]; to = to || dates[1]; }
+    }
+    var city = { name: name, dates: { from: from, to: to } };
+    if (header.country) city.country = String(header.country);
+
+    var missing = [];
+    if (!name) missing.push('the city name');
+    if (!from || !to) missing.push('the trip dates');
+    return {
+      data: { schema: 1, city: city, sections: sections, items: items },
+      stats: { items: items.length, sections: sections.length, unread: unread },
+      sawHeader: !missing.length, missing: missing
+    };
+  }
+
+  // The delta shape, from the same extractor. Only NEW sections are declared
+  // (renaming a section is the traveler's business and a re-run must not undo
+  // it), and an extracted place whose name already matches one in the guide is
+  // dropped HERE rather than relying on mergeDelta's id check, because a chat
+  // re-listing the same restaurant under a slightly different slug would
+  // otherwise arrive as a second copy of it. Dropping is the only thing this
+  // does about an existing item: it never edits one, which is mergeDelta's
+  // guarantee and stays mergeDelta's guarantee.
+  function markdownToDelta(text, existing, opts) {
+    var built = markdownToCity(text, opts || {});
+    var have = existing && typeof existing === 'object' ? existing : { sections: [], items: [] };
+    var haveSections = Object.create(null);
+    (Array.isArray(have.sections) ? have.sections : []).forEach(function (s) {
+      if (s && s.id) haveSections[s.id] = 1;
+    });
+    var haveNames = Object.create(null);
+    var haveIds = Object.create(null);
+    (Array.isArray(have.items) ? have.items : []).forEach(function (it) {
+      if (!it) return;
+      if (it.id) haveIds[it.id] = 1;
+      if (it.name) haveNames[mdNormalize(it.name)] = 1;
+    });
+    var duplicates = 0;
+    var items = [];
+    var used = Object.create(null);
+    built.data.items.forEach(function (it) {
+      var norm = mdNormalize(it.name);
+      if (norm && Object.prototype.hasOwnProperty.call(haveNames, norm)) { duplicates++; return; }
+      // A fresh id, because the extractor numbered its ids against its own
+      // list and the guide it is merging into has ids of its own.
+      var base = slug(it.name) || 'item';
+      var id = base;
+      var n = 2;
+      while (Object.prototype.hasOwnProperty.call(haveIds, id) ||
+             Object.prototype.hasOwnProperty.call(used, id)) { id = base + '-' + n; n++; }
+      used[id] = 1;
+      var copy = {};
+      Object.keys(it).forEach(function (k) { copy[k] = it[k]; });
+      copy.id = id;
+      if (copy.status !== 'plan' && copy.status !== 'backup') copy.status = 'plan';
+      items.push(copy);
+    });
+    var sections = built.data.sections.filter(function (s) {
+      return !Object.prototype.hasOwnProperty.call(haveSections, s.id);
+    });
+    var delta = { schema: 1, delta: true, items: items };
+    if (sections.length) delta.sections = sections;
+    return {
+      data: delta,
+      stats: { items: items.length, sections: sections.length, unread: built.stats.unread,
+        duplicates: duplicates }
+    };
+  }
+
+  // ---- the one door ----
+
+  // Names the ACTION, not a button. The city app draws Convert with Claude plus
+  // Copy conversion prompt beside this sentence; the engine, which also ships
+  // inside offline guide files, draws only the copy one. A sentence naming a
+  // control that is not on screen is the failure mode this wording avoids.
+  var INTAKE_NEXT_STEP = 'Try the conversion buttons below, or paste the JSON block from your chat.';
+
+  // Does this text look like markdown a person wrote, as opposed to a failed
+  // JSON paste? Headings or bullets are the tell. Used only to pick the FAILURE
+  // wording, never to decide whether to run the extractor.
+  function looksMarkdown(text) {
+    return /^\s{0,3}#{1,6}\s+\S/m.test(text) ||
+      new RegExp('^\\s{0,4}(?:[-*+' + CH_BULLET + ']|\\d+[.)])\\s+\\S', 'm').test(text) ||
+      /\*\*[^*]+\*\*/.test(text);
+  }
+  function looksJson(text) {
+    var t = String(text).replace(/^\s+|\s+$/g, '');
+    return t.charAt(0) === '{' || t.charAt(0) === '[' || /```/.test(t) || /"\s*:/.test(t);
+  }
+
+  // Is this payload TRYING to be schema v1? A JSON object that names schema,
+  // items, sections, city or delta gets its schema errors reported, because
+  // those errors are the useful answer. Anything else falls through to the
+  // markdown layer instead of being reported against a contract it was never
+  // aiming at.
+  function aimsAtSchema(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+    return ['schema', 'items', 'sections', 'city', 'delta'].some(function (k) {
+      return Object.prototype.hasOwnProperty.call(data, k);
+    });
+  }
+
+  function intakeSummary(data, mode) {
+    if (mode === 'raw') return 'imported data';
+    var items = Array.isArray(data.items) ? data.items.length : 0;
+    var secs = Array.isArray(data.sections) ? data.sections.length : 0;
+    var what = items + (items === 1 ? ' place' : ' places');
+    if (secs) what += ' across ' + secs + (secs === 1 ? ' section' : ' sections');
+    if (mode === 'city' && data.city && data.city.name) return data.city.name + ': ' + what;
+    return what;
+  }
+
+  // Whatever comes out of a layer is checked by the SAME validator the merge
+  // door uses, and by nothing weaker. mergeDelta is called here in dry-run
+  // spirit only: its result is thrown away and the caller calls it again for
+  // real, so there is still exactly one place that writes a merged city.
+  function checkPayload(data, mode, opts) {
+    if (mode === 'raw') {
+      if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        return { ok: false, errors: ['Imported data is not a valid object.'] };
+      }
+      return { ok: true, errors: [] };
+    }
+    if (mode === 'delta') {
+      var have = opts && opts.existing;
+      if (have) {
+        var res = mergeDelta(have, data);
+        return { ok: !res.errors.length, errors: res.errors };
+      }
+      var errs = [];
+      if (!data || typeof data !== 'object' || Array.isArray(data)) errs.push('Delta is not an object');
+      else {
+        if (data.schema !== 1) errs.push('schema must be 1');
+        if (data.delta !== true) errs.push('delta must be true: this is a partial payload, not a whole guide');
+      }
+      return { ok: !errs.length, errors: errs };
+    }
+    var e = validate(data);
+    return { ok: !e.length, errors: e };
+  }
+
+  // read(text, opts) is what every paste box in the product calls.
+  //   opts.mode     'city' (a whole guide), 'delta' (an Enrich payload), or
+  //                 'raw' (the trip surface's own export shape, which is not
+  //                 schema v1 and gets layer 1 only).
+  //   opts.header   {name, country, from, to} the caller already knows.
+  //   opts.existing the city a delta merges into, so the check here is the
+  //                 real mergeDelta and not a weaker stand-in.
+  // On success `tolerant` says whether anything beyond a clean JSON.parse was
+  // needed; the shells preview before committing when it is true, so the
+  // path that has always worked keeps behaving exactly as it did.
+  function intakeRead(text, opts) {
+    opts = opts || {};
+    var mode = opts.mode === 'delta' ? 'delta' : opts.mode === 'raw' ? 'raw' : 'city';
+    var raw = String(text === null || text === undefined ? '' : text);
+    if (!/\S/.test(raw)) {
+      return { ok: false, data: null, route: null, repairs: [], tolerant: false,
+        found: 'empty', errors: [], convertible: false,
+        message: 'There is nothing here yet. Paste what your chat replied with: markdown or JSON, either works.' };
+    }
+
+    var structuredErrors = null;
+    var s = readStructured(raw);
+    if (s) {
+      var chk = checkPayload(s.data, mode, opts);
+      if (chk.ok) {
+        return { ok: true, data: s.data, route: s.route, repairs: s.repairs,
+          tolerant: s.route !== 'json' || s.repairs.length > 0,
+          found: 'json', errors: [], stats: null,
+          message: intakeSummary(s.data, mode) + '.' };
+      }
+      // A payload that was clearly aiming at the schema gets its own errors
+      // reported. Running the markdown extractor over a near-miss guide would
+      // replace a precise answer with a vague one.
+      if (aimsAtSchema(s.data) || mode === 'raw') {
+        return { ok: false, data: null, route: s.route, repairs: s.repairs, tolerant: true,
+          found: 'json', errors: chk.errors, convertible: false,
+          message: 'That parsed as JSON, but it is not a valid ' +
+            (mode === 'delta' ? 'delta payload' : 'city guide') + ':\n- ' + chk.errors.join('\n- ') };
+      }
+      structuredErrors = chk.errors;
+    }
+
+    if (mode !== 'raw') {
+      var built = mode === 'delta'
+        ? markdownToDelta(raw, opts.existing, opts)
+        : markdownToCity(raw, opts);
+      if (built.stats.items > 0) {
+        var chk2 = checkPayload(built.data, mode, opts);
+        if (chk2.ok) {
+          return { ok: true, data: built.data, route: 'markdown', repairs: [], tolerant: true,
+            found: 'markdown', errors: [], stats: built.stats,
+            message: intakeSummary(built.data, mode) + ', read from markdown.' };
+        }
+        // The one markdown failure worth its own sentence, because it is the
+        // one the traveler can fix in two seconds without touching the paste.
+        if (mode === 'city' && !built.sawHeader) {
+          return { ok: false, data: null, route: 'markdown', repairs: [], tolerant: true,
+            found: 'markdown', errors: chk2.errors, stats: built.stats, missing: built.missing,
+            convertible: false,
+            message: 'Read ' + built.stats.items + ' ' +
+              (built.stats.items === 1 ? 'place' : 'places') +
+              ' from that markdown, but not ' + built.missing.join(' or ') +
+              '. Fill the fields above, then press Apply again.' };
+        }
+        return { ok: false, data: null, route: 'markdown', repairs: [], tolerant: true,
+          found: 'markdown', errors: chk2.errors, stats: built.stats, convertible: true,
+          message: 'Read ' + built.stats.items + ' ' +
+            (built.stats.items === 1 ? 'place' : 'places') +
+            ' from that markdown, but the result is not valid:\n- ' + chk2.errors.join('\n- ') };
+      }
+      if (looksMarkdown(raw)) {
+        return { ok: false, data: null, route: null, repairs: [], tolerant: false,
+          found: 'markdown', errors: structuredErrors || [], stats: built.stats, convertible: true,
+          message: 'This looks like markdown but no places could be read from it. ' + INTAKE_NEXT_STEP };
+      }
+    }
+
+    if (looksJson(raw)) {
+      return { ok: false, data: null, route: null, repairs: [], tolerant: false,
+        found: 'json', errors: structuredErrors || [], convertible: mode !== 'raw',
+        message: 'This looks like JSON but no complete block in it would parse, ' +
+          'even after repairing trailing commas and curly quotes. ' +
+          (mode === 'raw' ? 'Copy the file again, whole, and paste it here.' : INTAKE_NEXT_STEP) };
+    }
+    if (mode === 'raw') {
+      return { ok: false, data: null, route: null, repairs: [], tolerant: false,
+        found: 'unknown', errors: structuredErrors || [], convertible: false,
+        message: 'No JSON was found in that. Copy the whole exported file, or the whole ' +
+          'reply your chat gave you, and paste it here.' };
+    }
+    return { ok: false, data: null, route: null, repairs: [], tolerant: false,
+      found: 'unknown', errors: structuredErrors || [], convertible: true,
+      message: 'Nothing here reads as a city guide: no JSON, and no headings or ' +
+        'lists with places under them. ' + INTAKE_NEXT_STEP };
+  }
+
+  // ---- layer 3: the conversion prompt ----
+  // Built here rather than in either shell so the one-tap path and the
+  // copy-it-into-your-own-chat path are the same words, and so the words are
+  // testable. It carries the contract the app enforces anyway, which is the
+  // only reason the reply comes back mergeable: an instruction that leaves
+  // status or ids to the model produces a payload validate() then refuses.
+  function intakeKit_conversionPrompt(text, opts) { return conversionPrompt(text, opts); }
+  function conversionPrompt(text, opts) {
+    opts = opts || {};
+    var mode = opts.mode === 'delta' ? 'delta' : 'city';
+    var header = opts.header || {};
+    var lines = [];
+    if (mode === 'delta') {
+      lines.push('Convert the notes at the end of this message into a CityOps schema v1 DELTA payload.');
+      lines.push('');
+      lines.push('Reply with a single ```json fenced code block and nothing else: no prose before it, no explanation after it.');
+      lines.push('');
+      lines.push('The object has exactly these top level keys: "schema": 1, "delta": true, an optional "sections" array, and an "items" array.');
+      lines.push('Each item has "id" (a short lowercase slug, unique within your reply), "section" (one of the section ids listed below, or one you declare in "sections"), "status" ("plan" or "backup" and nothing else), "name", and "links" (an array, empty if the notes carry no URL).');
+      lines.push('Optional per item: "day" (YYYY-MM-DD, only when the notes state an actual date), "when", "note", "price" as {"text": "..."}, "hours" as {"text": "..."}, "rating" as {"stars": 4.6, "count": 1203}, "tags", "intel".');
+      if (opts.existing && Array.isArray(opts.existing.sections) && opts.existing.sections.length) {
+        lines.push('');
+        lines.push('Section ids already in this guide: ' +
+          opts.existing.sections.map(function (s) { return s && s.id; }).filter(Boolean).join(', ') + '.');
+      }
+      if (opts.existing && Array.isArray(opts.existing.items) && opts.existing.items.length) {
+        var names = opts.existing.items.map(function (it) { return it && it.name; }).filter(Boolean);
+        if (names.length) {
+          lines.push('Places already in this guide, which you must NOT repeat: ' + names.join('; ') + '.');
+        }
+      }
+    } else {
+      lines.push('Convert the city guide at the end of this message into a CityOps schema v1 JSON guide.');
+      lines.push('');
+      lines.push('Reply with a single ```json fenced code block and nothing else: no prose before it, no explanation after it.');
+      lines.push('');
+      lines.push('The object has exactly these top level keys: "schema": 1, "city", "sections", "items".');
+      lines.push('"city" has "name", optional "country" (2 or 3 letters), and "dates": {"from": "YYYY-MM-DD", "to": "YYYY-MM-DD"}.');
+      if (header.name) lines.push('The city name is ' + header.name + '.');
+      if (header.country) lines.push('The country code is ' + header.country + '.');
+      if (header.from && header.to) lines.push('The trip dates are ' + header.from + ' to ' + header.to + '.');
+      lines.push('"sections" is an array of {"id", "label", "icon"}; prefer these ids where they fit: dinner, breakfast, lunch, coffee, cowork, activities, services, practical, interests.');
+      lines.push('Each item has "id" (a short lowercase slug, unique across the whole reply), "section" (matching a declared section id), "status" ("plan" or "backup" and nothing else), "name", and "links" (an array, empty if the notes carry no URL).');
+      lines.push('Optional per item: "day" (YYYY-MM-DD inside the trip dates, only when the notes state an actual date), "when", "note", "price" as {"text": "..."}, "hours" as {"text": "..."}, "rating" as {"stars": 4.6, "count": 1203}, "tags", "intel".');
+    }
+    lines.push('');
+    lines.push('Rules that matter more than completeness:');
+    lines.push('- Use only what the notes below actually say. Do not add places, ratings, prices, hours or dates that are not there.');
+    lines.push('- Never emit "done" or "archived" as a status. Those are states the traveler sets later.');
+    lines.push('- Omit "day" entirely rather than guess one.');
+    lines.push('- Omit "rating" entirely for a place whose stars the notes do not state.');
+    lines.push('');
+    lines.push('The notes to convert:');
+    lines.push('');
+    lines.push(String(text === null || text === undefined ? '' : text));
+    return lines.join('\n');
+  }
+
   // ---- sync helpers (pure) ----
   // Every network call, session store and piece of sync UI lives in the app
   // shell (src/app-shell.html). Only decision logic lives here, so it is unit
@@ -16124,7 +18265,8 @@ var CityOps = (function () {
     var wrap = el('div', 'modal-wrap');
     var box = el('div', 'modal');
     box.appendChild(el('h3', null, 'Update city data'));
-    box.appendChild(el('p', 'diff', 'Paste schema v1 JSON. It is stored on this device as an override; the file itself is not changed. Export and paste into the file to make it permanent.'));
+    box.appendChild(el('p', 'diff', 'Paste this city\'s research again: schema v1 JSON, or the guide as markdown. ' +
+      'It is stored on this device as an override; the file itself is not changed. Export and paste into the file to make it permanent.'));
     var ta = document.createElement('textarea');
     box.appendChild(ta);
     var msg = el('div', 'diff', '');
@@ -16132,13 +18274,93 @@ var CityOps = (function () {
     var row = el('div', 'mrow');
     var apply = el('button', 'ctl', 'Apply');
     apply.type = 'button';
+    // This door replaces a city WHOLESALE, so what the traveler already knows
+    // about it (its name and its dates) is what intake reads a headerless
+    // markdown paste against. A guide pasted as headings and bullets needs no
+    // header line of its own here, because the city is already open.
+    function updateIntakeOpts() {
+      var cur = effectiveData(ctx.base, ctx.store.load());
+      var d = (cur && cur.city && cur.city.dates) || {};
+      return { mode: 'city', header: {
+        name: cur && cur.city ? cur.city.name : '', country: cur && cur.city ? cur.city.country : '',
+        from: d.from, to: d.to } };
+    }
+    // The engine ships inside standalone guide files with no network at all,
+    // so the one-tap conversion the app shell offers cannot live here. The
+    // free path can, and does: the prompt goes to the clipboard, or into a
+    // selected box when the clipboard is out of reach.
+    var convertRow = null, convertTa = null;
+    function copyConversionPrompt(text) {
+      var wrote = null;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) wrote = navigator.clipboard.writeText(text);
+      } catch (e) { wrote = null; }
+      function fallback() {
+        if (!convertTa) {
+          convertTa = document.createElement('textarea');
+          convertTa.readOnly = true;
+          convertTa.setAttribute('aria-label', 'Conversion prompt');
+          box.insertBefore(convertTa, msg);
+        }
+        convertTa.value = text;
+        msg.textContent = 'Could not reach the clipboard. The prompt is selected above: copy it, ' +
+          'paste it into Claude or ChatGPT, then paste the JSON it returns below.';
+        try { convertTa.focus(); convertTa.select(); } catch (e2) {}
+      }
+      if (wrote && typeof wrote.then === 'function') {
+        wrote.then(function () {
+          msg.textContent = 'Copied. Paste it into Claude or ChatGPT, then paste the JSON it returns below.';
+        }, fallback);
+      } else { fallback(); }
+    }
+    function dropConvertRow() {
+      if (convertRow && convertRow.parentNode) convertRow.parentNode.removeChild(convertRow);
+      convertRow = null;
+    }
+    function offerConvert(text) {
+      if (convertRow) return;
+      convertRow = el('div', 'mrow');
+      var copy = el('button', 'ctl', 'Copy conversion prompt');
+      copy.type = 'button';
+      copy.onclick = function () {
+        copyConversionPrompt(intakeKit_conversionPrompt(text, updateIntakeOpts()));
+      };
+      convertRow.appendChild(copy);
+      box.insertBefore(convertRow, row);
+    }
+    // Two presses when tolerance was used, one when it was not: the same rule
+    // the app shell's paste doors follow, so the two halves of the product
+    // behave identically on the same paste.
+    var pending = null;
+    ta.addEventListener('input', function () {
+      if (pending) { pending = null; apply.textContent = 'Apply'; }
+      dropConvertRow();
+    });
     apply.onclick = function () {
-      var res = parse(ta.value);
-      if (!res.data) { msg.textContent = 'Invalid:\n' + res.errors.join('\n'); return; }
+      var data = pending;
+      if (!data) {
+        var read = intakeRead(ta.value, updateIntakeOpts());
+        if (!read.ok) {
+          msg.textContent = read.message;
+          if (read.convertible) offerConvert(ta.value); else dropConvertRow();
+          return;
+        }
+        dropConvertRow();
+        if (read.tolerant) {
+          pending = read.data;
+          apply.textContent = 'Confirm';
+          msg.textContent = read.message + ' Press Confirm to replace this city with it.';
+          return;
+        }
+        data = read.data;
+      }
+      pending = null;
+      apply.textContent = 'Apply';
+      dropConvertRow();
       var st = ctx.store.load();
       var current = effectiveData(ctx.base, st);
-      var summary = diffSummary(current, res.data);
-      st.dataOverride = res.data;
+      var summary = diffSummary(current, data);
+      st.dataOverride = data;
       ctx.store.save(st);
       pendingPromote = pendingMove = pendingEdit = justMoved = null; // item ids may change under an override
       wrap.remove();
@@ -16512,6 +18734,15 @@ var CityOps = (function () {
     },
     extractJsonBlock: extractJsonBlock, RETRY_INSTRUCTION: RETRY_INSTRUCTION,
     isJsonSyntaxError: isJsonSyntaxError, fetchTextToCity: fetchTextToCity,
+    // The ONE door every paste box in the product goes through. Tolerance
+    // lives here and only here: what comes out still faces validate(),
+    // validateItem() and mergeDelta() exactly as a hand-typed payload does.
+    intakeKit: {
+      read: intakeRead, structured: readStructured, repair: repairCandidate,
+      markdownToCity: markdownToCity, markdownToDelta: markdownToDelta,
+      conversionPrompt: conversionPrompt, NEXT_STEP: INTAKE_NEXT_STEP,
+      SECTIONS: MD_SECTIONS
+    },
     // Who may write, and what a lapsed account keeps. The DATABASE enforces
     // this (public.has_active_entitlement, checked in the WITH CHECK of every
     // write policy); the kit is the same decision in pure JS so the app can
@@ -16670,6 +18901,7 @@ var CityOps = (function () {
   };
 })();
 CityOps.init();
+
 <\/script>
 </body>
 </html>
@@ -18859,6 +21091,101 @@ only judges it. `ratings` may be omitted when you could not verify the place;
     };
   }
 
+  // ---- the tolerant paste door, shared by every paste box in this shell ----
+  // Owner report 2026-09-05: the boxes asked for JSON and were picky about it,
+  // so a markdown answer out of a chat meant going back to fight the format.
+  // The tolerance itself is CityOps.intakeKit: pure, unit tested, and the ONLY
+  // place in the product that is allowed to be forgiving. What lands here still
+  // goes through validate() and mergeDelta() untouched, which is why this
+  // function could be added without a single check being relaxed.
+  //
+  // TWO PRESSES, BUT ONLY WHEN TOLERANCE WAS USED. A clean JSON paste applies
+  // on the first press exactly as it always did. A payload that had to be
+  // repaired, dug out of prose, or read from markdown says what it found and
+  // waits for a second press, so nothing arrives in a guide that the traveler
+  // has not seen counted first. Editing the box cancels the pending read.
+  //
+  // cfg: { ta, button, msg, box, opts(), preview(data), onApply(data),
+  //        copyPrompt(text) }
+  function attachPasteDoor(cfg) {
+    var origLabel = cfg.button.textContent;
+    var pending = null;
+    var row = null;
+
+    function dropRow() {
+      if (row && row.parentNode) row.parentNode.removeChild(row);
+      row = null;
+    }
+    function reset() { pending = null; cfg.button.textContent = origLabel; }
+    cfg.ta.addEventListener('input', function () { reset(); dropRow(); });
+
+    // Layer 3 is OFFERED, never spent on the traveler's behalf: a conversion is
+    // a real call on somebody's money, so it is a tap they make. The copy path
+    // beside it is free and is the only path a keyless account has, which is
+    // why it is drawn whether or not one tap is available.
+    function offerConvert(text) {
+      if (row) return;
+      row = el('div', 'mrow');
+      if (aiOneTapReady()) {
+        var run = el('button', 'ctl to-done', 'Convert with Claude');
+        run.type = 'button';
+        run.onclick = function () { convert(run, text); };
+        row.appendChild(run);
+      }
+      var copy = el('button', 'ctl', 'Copy conversion prompt');
+      copy.type = 'button';
+      copy.title = 'Paste this into Claude or ChatGPT, then paste the JSON it returns back here';
+      copy.onclick = function () { cfg.copyPrompt(CityOps.intakeKit.conversionPrompt(text, cfg.opts())); };
+      row.appendChild(copy);
+      if (cfg.msg.parentNode) cfg.msg.parentNode.insertBefore(row, cfg.msg.nextSibling);
+      else cfg.box.appendChild(row);
+    }
+
+    function convert(btn, text) {
+      var orig = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Converting...';
+      cfg.msg.textContent = 'Starting...';
+      callClaudeStream(CityOps.intakeKit.conversionPrompt(text, cfg.opts()), loadApiKey(), function (p) {
+        cfg.msg.textContent = (p.kind === 'thinking' ? 'Thinking... ' : 'Writing... ') +
+          p.totalChars + ' characters so far.';
+      }).then(function (reply) {
+        btn.disabled = false;
+        btn.textContent = orig;
+        // Back through the SAME door, which previews the result like any other
+        // tolerant read. There is no second apply path for a converted reply.
+        cfg.ta.value = reply;
+        dropRow();
+        press();
+      }).catch(function (e) {
+        btn.disabled = false;
+        btn.textContent = orig;
+        cfg.msg.textContent = 'Claude API error: ' + e.message;
+      });
+    }
+
+    function press() {
+      if (pending) { var data = pending; reset(); dropRow(); cfg.onApply(data); return; }
+      var text = cfg.ta.value;
+      var res = CityOps.intakeKit.read(text, cfg.opts());
+      if (!res.ok) {
+        cfg.msg.textContent = res.message;
+        if (res.convertible) offerConvert(text); else dropRow();
+        return;
+      }
+      dropRow();
+      if (!res.tolerant) { cfg.onApply(res.data); return; }
+      var line = cfg.preview ? cfg.preview(res.data) : res.message;
+      if (line === null) return;
+      pending = res.data;
+      cfg.button.textContent = 'Confirm';
+      cfg.msg.textContent = line + ' Press Confirm to add it.';
+    }
+
+    cfg.button.onclick = press;
+    return { press: press, cancel: function () { reset(); dropRow(); } };
+  }
+
   function openEnrichModal() {
     if (!activeId || !has(store.cities, activeId)) return;
     var m = modalShell('Enrich ' + store.cities[activeId].city.name);
@@ -18874,6 +21201,10 @@ only judges it. `ratings` may be omitted when you could not verify the place;
       var st = CityOps.liveState() || CityOps.makeStore(activeId, LS).load();
       return CityOps.effectiveData(store.cities[activeId], st);
     }
+    // The guide the delta merges into, so intake checks a markdown read against
+    // the REAL mergeDelta rather than a weaker stand-in, and so a conversion
+    // prompt can name the sections and places already here.
+    function deltaIntakeOpts() { return { mode: 'delta', existing: currentData() }; }
     function build(kind) {
       var tpl = promptTemplateText();
       if (!tpl) {
@@ -18911,17 +21242,17 @@ only judges it. `ratings` may be omitted when you could not verify the place;
       }).then(function (resultText) {
         btn.disabled = false;
         btn.textContent = origLabel;
-        var block = CityOps.extractJsonBlock(resultText);
-        if (block === null) { msg.textContent = CityOps.RETRY_INSTRUCTION; return; }
-        var parsed;
-        try { parsed = JSON.parse(block); }
-        catch (e) { msg.textContent = 'Claude\'s response was not valid JSON: ' + e.message; return; }
-        var res = CityOps.mergeDelta(currentData(), parsed);
+        // Through the SAME intake the paste box uses, so a reply that came
+        // back as prose or markdown is read here too rather than refused for
+        // a format the traveler never chose.
+        var read = CityOps.intakeKit.read(resultText, deltaIntakeOpts());
+        if (!read.ok) { msg.textContent = read.message; return; }
+        var res = CityOps.mergeDelta(currentData(), read.data);
         if (!res.data) { msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n'); return; }
         // Preview only: fill the textarea and report the counts, same as a
         // paste would look right before the traveler hits Apply. Nothing is
         // written until that explicit click.
-        ta.value = JSON.stringify(parsed, null, 2);
+        ta.value = JSON.stringify(read.data, null, 2);
         msg.textContent = 'Claude proposes: ' + enrichSummaryText(res.summary) + '. Review below, then Apply.';
       }).catch(function (e) {
         btn.disabled = false;
@@ -18992,29 +21323,33 @@ only judges it. `ratings` may be omitted when you could not verify the place;
       'for the places still in play (plan and backup), as a badge on each card.'));
     m.box.appendChild(promptRow('ratings', 'ratings-refresh.md', null, 'ratings'));
 
-    m.box.appendChild(el('p', 'diff', 'Paste what your AI returns here. It is a partial payload: only new items, ' +
-      'intel and ratings, never a whole guide.'));
+    m.box.appendChild(el('p', 'diff', 'Paste what your AI returns here: JSON or markdown, whichever it gave you. ' +
+      'It is a partial payload, so only new items, intel and ratings land, never a whole guide.'));
     var ta = document.createElement('textarea');
-    ta.setAttribute('aria-label', 'Delta JSON from your AI');
+    ta.setAttribute('aria-label', 'Delta from your AI, as JSON or markdown');
     m.box.appendChild(ta);
     m.box.appendChild(msg);
 
     var row = el('div', 'mrow');
     var apply = el('button', 'ctl to-done', 'Apply');
     apply.type = 'button';
-    apply.onclick = function () {
-      var parsed;
-      try { parsed = JSON.parse(ta.value); }
-      catch (e) { msg.textContent = 'That is not valid JSON: ' + e.message; return; }
-      var res = CityOps.mergeDelta(currentData(), parsed);
-      if (!res.data) {
-        msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n');
-        return;
+    attachPasteDoor({
+      ta: ta, button: apply, msg: msg, box: m.box,
+      opts: deltaIntakeOpts,
+      copyPrompt: copyOut,
+      preview: function (data) {
+        var res = CityOps.mergeDelta(currentData(), data);
+        if (!res.data) { msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n'); return null; }
+        return 'Ready to apply: ' + enrichSummaryText(res.summary) + '.';
+      },
+      onApply: function (data) {
+        var res = CityOps.mergeDelta(currentData(), data);
+        if (!res.data) { msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n'); return; }
+        m.close();
+        commitCityData(res.data);
+        showSyncNotice('Enriched: ' + enrichSummaryText(res.summary) + '.');
       }
-      m.close();
-      commitCityData(res.data);
-      showSyncNotice('Enriched: ' + enrichSummaryText(res.summary) + '.');
-    };
+    });
     var cancel = el('button', 'ctl', 'Cancel');
     cancel.type = 'button';
     cancel.onclick = m.close;
@@ -19068,6 +21403,7 @@ only judges it. `ratings` may be omitted when you could not verify the place;
       var st = CityOps.liveState() || CityOps.makeStore(activeId, LS).load();
       return CityOps.effectiveData(store.cities[activeId], st);
     }
+    function deltaIntakeOpts() { return { mode: 'delta', existing: currentData() }; }
     var data = currentData();
     var item = null;
     (data.items || []).forEach(function (x) { if (x && x.id === itemId) item = x; });
@@ -19126,14 +21462,11 @@ only judges it. `ratings` may be omitted when you could not verify the place;
         }).then(function (resultText) {
           run.disabled = false;
           run.textContent = orig;
-          var block = CityOps.extractJsonBlock(resultText);
-          if (block === null) { msg.textContent = CityOps.RETRY_INSTRUCTION; return; }
-          var parsed;
-          try { parsed = JSON.parse(block); }
-          catch (e) { msg.textContent = 'Claude\'s response was not valid JSON: ' + e.message; return; }
-          var res = CityOps.mergeDelta(currentData(), parsed);
+          var read = CityOps.intakeKit.read(resultText, deltaIntakeOpts());
+          if (!read.ok) { msg.textContent = read.message; return; }
+          var res = CityOps.mergeDelta(currentData(), read.data);
           if (!res.data) { msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n'); return; }
-          ta.value = JSON.stringify(parsed, null, 2);
+          ta.value = JSON.stringify(read.data, null, 2);
           msg.textContent = 'Claude proposes: ' + enrichSummaryText(res.summary) + '. Review below, then Apply.';
         }).catch(function (e) {
           run.disabled = false;
@@ -19159,24 +21492,31 @@ only judges it. `ratings` may be omitted when you could not verify the place;
     if (!aiOneTapReady()) {
       m.box.appendChild(el('p', 'diff', aiNoTransportText()));
     }
-    m.box.appendChild(el('p', 'diff', 'Paste what your AI returns here. It is a partial payload: ' +
-      'a rating and an intel block for this one place.'));
+    m.box.appendChild(el('p', 'diff', 'Paste what your AI returns here, JSON or markdown. It is a partial ' +
+      'payload: a rating and an intel block for this one place.'));
     m.box.appendChild(ta);
     m.box.appendChild(msg);
 
     var row2 = el('div', 'mrow');
     var apply = el('button', 'ctl to-done', 'Apply');
     apply.type = 'button';
-    apply.onclick = function () {
-      var parsed;
-      try { parsed = JSON.parse(ta.value); }
-      catch (e) { msg.textContent = 'That is not valid JSON: ' + e.message; return; }
-      var res = CityOps.mergeDelta(currentData(), parsed);
-      if (!res.data) { msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n'); return; }
-      m.close();
-      commitCityData(res.data);
-      showSyncNotice('Enriched: ' + enrichSummaryText(res.summary) + '.');
-    };
+    attachPasteDoor({
+      ta: ta, button: apply, msg: msg, box: m.box,
+      opts: deltaIntakeOpts,
+      copyPrompt: out.copy,
+      preview: function (d) {
+        var res = CityOps.mergeDelta(currentData(), d);
+        if (!res.data) { msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n'); return null; }
+        return 'Ready to apply: ' + enrichSummaryText(res.summary) + '.';
+      },
+      onApply: function (d) {
+        var res = CityOps.mergeDelta(currentData(), d);
+        if (!res.data) { msg.textContent = 'Nothing was applied:\n' + res.errors.join('\n'); return; }
+        m.close();
+        commitCityData(res.data);
+        showSyncNotice('Enriched: ' + enrichSummaryText(res.summary) + '.');
+      }
+    });
     var cancel = el('button', 'ctl', 'Cancel');
     cancel.type = 'button';
     cancel.onclick = m.close;
@@ -19552,6 +21892,13 @@ only judges it. `ratings` may be omitted when you could not verify the place;
         notes: trim(bnotes.value)
       };
     }
+    // What intake is told before it reads anything: the fields on this form.
+    // A markdown guide that names no dates still lands, because the dates are
+    // right here; and the conversion prompt can state them rather than ask.
+    function cityIntakeOpts() {
+      var h = formHeader();
+      return { mode: 'city', header: { name: h.name, country: h.country, from: h.from, to: h.to } };
+    }
     function buildPromptText() {
       if (!trim(bn.value) || !bf.value || !bt2.value) {
         bmsg.textContent = 'Fill city name and dates first';
@@ -19564,11 +21911,9 @@ only judges it. `ratings` may be omitted when you could not verify the place;
       }
       return CityOps.promptKit.buildCityPrompt(tpl, formHeader(), store.profile);
     }
-    var bprompt = el('button', 'ctl', 'Build my prompt');
-    bprompt.type = 'button';
-    bprompt.onclick = function () {
-      var text = buildPromptText();
-      if (text === null) return;
+    // One clipboard path for every prompt this modal hands out: Build my
+    // prompt and, when a paste will not read, the conversion prompt.
+    function copyPromptText(text) {
       var wrote = null;
       try {
         if (navigator.clipboard && navigator.clipboard.writeText) wrote = navigator.clipboard.writeText(text);
@@ -19580,6 +21925,13 @@ only judges it. `ratings` may be omitted when you could not verify the place;
       } else {
         showPromptFallback(text);
       }
+    }
+    var bprompt = el('button', 'ctl', 'Build my prompt');
+    bprompt.type = 'button';
+    bprompt.onclick = function () {
+      var text = buildPromptText();
+      if (text === null) return;
+      copyPromptText(text);
     };
     brow2.appendChild(bprompt);
     var bdl = el('button', 'ctl', 'Download prompt.md');
@@ -19746,23 +22098,21 @@ only judges it. `ratings` may be omitted when you could not verify the place;
       }, genAbort ? genAbort.signal : null).then(function (text) {
         genAbort = null;
         setGenerating(false);
-        var block = CityOps.extractJsonBlock(text);
         // Never a dead end: the scaffold city is already saved and already
-        // active, so a reply that will not parse costs the traveler the wait
+        // active, so a reply that will not read costs the traveler the wait
         // and nothing else. The reply itself is preserved in the paste box
-        // below, where Apply runs it through the same validated door, and
-        // Retry is one tap.
-        if (block === null) { keepReply(text); showRetry(CityOps.RETRY_INSTRUCTION); return; }
-        var res = CityOps.parse(block);
-        if (!res.data) {
-          keepReply(block);
-          showRetry('Claude\'s response did not match the city guide format:\n- ' + res.errors.join('\n- ') +
-            '\n\nThe reply is in the paste box below: fix it and press Apply, or press Retry.');
+        // below, where Apply runs it through the same intake and the same
+        // validated door, and Retry is one tap.
+        var read = CityOps.intakeKit.read(text, cityIntakeOpts());
+        if (!read.ok) {
+          keepReply(text);
+          showRetry(read.message + '\n\nThe reply is in the paste box below: press Apply to try it ' +
+            'there, or press Retry.');
           return;
         }
-        genMsg.textContent = 'Generated ' + res.data.city.name + '. Added to your cities.';
-        offerDownload(res.data);
-        commitFromForm(res.data, true);
+        genMsg.textContent = 'Generated ' + read.data.city.name + '. Added to your cities.';
+        offerDownload(read.data);
+        commitFromForm(read.data, true);
       }).catch(function (e) {
         genAbort = null;
         setGenerating(false);
@@ -19813,12 +22163,13 @@ only judges it. `ratings` may be omitted when you could not verify the place;
             if (!r2.ok) throw new Error('cities/' + c.file + ' ' + r2.status);
             return r2.text();
           }).then(function (text) {
-            var res = CityOps.fetchTextToCity(text);
-            if (!res.data) {
+            var read = CityOps.intakeKit.read(text, { mode: 'city' });
+            if (!read.ok) {
               btn.disabled = false;
-              msg.textContent = 'Could not load ' + c.name + ': ' + res.errors.join('\n');
+              msg.textContent = 'Could not load ' + c.name + ': ' + read.message;
               return;
             }
+            var res = { data: read.data };
             // Same funnel as paste and Generate: duplicate detection (Replace
             // / Keep both) still runs if this city is already saved.
             commitFromForm(res.data);
@@ -19835,14 +22186,16 @@ only judges it. `ratings` may be omitted when you could not verify the place;
       }
     }).catch(function () { /* offline, no manifest, or blocked: hide silently */ });
 
-    box.appendChild(el('p', 'diff', 'Or paste schema v1 city JSON (the output of PROMPT.md). ' + whereItGoes));
+    box.appendChild(el('p', 'diff', 'Or paste what your chat gave you: schema v1 city JSON, or the guide as ' +
+      'markdown. Either reads. ' + whereItGoes));
     var ta = document.createElement('textarea');
     box.appendChild(ta);
 
     // ---- Load from link (no-paste import, part 2): fetch a URL instead of
     // pasting. Covers both a direct cities/<file>.json link and a raw .md
     // guide URL (JSON wrapped in a ```json fence, the shape PROMPT.md output
-    // takes), via CityOps.fetchTextToCity's parse-then-extract fallback.
+    // takes), and now a plain markdown guide too, via CityOps.intakeKit.read:
+    // one door, so a link and a paste accept exactly the same shapes.
     var linkInput = document.createElement('input');
     linkInput.type = 'url';
     linkInput.className = 'date-field link-field';
@@ -19865,25 +22218,18 @@ only judges it. `ratings` may be omitted when you could not verify the place;
         return r.text();
       }).then(function (text) {
         setLinkLoading(false);
-        var res = CityOps.fetchTextToCity(text);
-        if (res.kind === 'not-json') {
-          msg.textContent = 'That link is not JSON. Paste the JSON directly above, or point the link straight at a .json file.';
-          return;
-        }
-        if (res.kind === 'invalid') {
-          msg.textContent = 'That link is JSON, but not a valid city guide:\n- ' + res.errors.join('\n- ');
-          return;
-        }
-        commitFromForm(res.data);
+        var read = CityOps.intakeKit.read(text, cityIntakeOpts());
+        if (!read.ok) { msg.textContent = read.message; return; }
+        commitFromForm(read.data);
       }).catch(function () {
         setLinkLoading(false);
-        // The one failure mode fetchTextToCity cannot see: the network call
+        // The one failure mode intake cannot see: the network call
         // itself never completed (offline, DNS, or the server's CORS policy
         // blocked the read from this origin).
         msg.textContent = 'That site does not allow apps to read it; download the file and use a link from this site instead.';
       });
     };
-    box.appendChild(el('p', 'diff', 'Or load from a link: a URL to a hosted city JSON file, or a page with one in a ```json block.'));
+    box.appendChild(el('p', 'diff', 'Or load from a link: a URL to a hosted city JSON file, a page with one in a code block, or a markdown guide.'));
     var linkRow = el('div', 'mrow');
     linkRow.appendChild(linkInput);
     linkRow.appendChild(linkBtn);
@@ -19996,22 +22342,12 @@ only judges it. `ratings` may be omitted when you could not verify the place;
 
     var apply = el('button', 'ctl', 'Apply');
     apply.type = 'button';
-    apply.onclick = function () {
-      var res = CityOps.parse(ta.value);
-      if (!res.data) {
-        var text = 'Invalid:\n' + res.errors.join('\n');
-        if (CityOps.isJsonSyntaxError(res.errors)) {
-          // A syntax error (as opposed to a schema error) on a large paste is
-          // the phone-clipboard-truncation symptom this whole feature exists
-          // for. Point at the alternatives right when it happens.
-          text += '\n\nPhone clipboards often mangle large files. If this city is ' +
-            'hosted on this site, use the On this site buttons or Load from link above instead.';
-        }
-        msg.textContent = text;
-        return;
-      }
-      commitFromForm(res.data);
-    };
+    attachPasteDoor({
+      ta: ta, button: apply, msg: msg, box: box,
+      opts: cityIntakeOpts,
+      copyPrompt: copyPromptText,
+      onApply: function (data) { commitFromForm(data); }
+    });
     var cancel = el('button', 'ctl', 'Cancel');
     cancel.type = 'button';
     cancel.onclick = close;

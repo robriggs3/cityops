@@ -1,5 +1,5 @@
 // CityOps app-shell service worker. Bump CACHE on each release.
-var CACHE = 'cityops-app-v20';
+var CACHE = 'cityops-app-v21';
 // Both surfaces of the app, because both are things a traveler opens with no
 // signal. The fetch handler is cache-first with a background refresh, so
 // without the bump above a phone would serve the previous build once after

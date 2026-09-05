@@ -4041,7 +4041,7 @@ test('the service worker precaches the share shell and nothing token-shaped', ()
   // v17: the subscription gates. A phone still serving v16 would let a lapsed
   // account tap sync, one-tap AI and Publish with no explanation attached to
   // any of them, and then watch the database refuse all three in silence.
-  assert.ok(/var CACHE = 'cityops-app-v20';/.test(sw));
+  assert.ok(/var CACHE = 'cityops-app-v21';/.test(sw));
   // GET only, so the rpc POST that carries the token is never cached, and a
   // rotated share cannot keep answering out of a stale cache.
   assert.ok(/if \(e\.request\.method !== 'GET'\) return;/.test(sw));
@@ -7242,6 +7242,557 @@ test("the managed tier is not offered for sale in any shipped surface", () => {
       "cannot answer until the AI allowance SQL is run and ANTHROPIC_API_KEY is set. " +
       "It must stay unsellable until both are done.");
   });
+});
+
+
+// ---------------------------------------------------------------------------
+// Tolerant intake: one door for every paste box (owner request 2026-09-05).
+// ---------------------------------------------------------------------------
+// Fixture driven on purpose. Every file under tests/fixtures/intake is a shape
+// a chat window has actually produced, so a regression here reads as "this
+// reply stopped working" rather than as a failing regex.
+const intakeFs = require('node:fs');
+const intakePath = require('node:path');
+const INTAKE_DIR = intakePath.join(__dirname, 'fixtures', 'intake');
+function fixture(name) {
+  return intakeFs.readFileSync(intakePath.join(INTAKE_DIR, name), 'utf8');
+}
+const IK = C.intakeKit;
+const PORTO_HEADER = { name: 'Porto', country: 'PT', from: '2026-04-06', to: '2026-04-12' };
+// Built from code points: this repo bans the em-dash outright, and the intake
+// layer has to READ one without this file ever shipping one.
+const EMDASH = String.fromCharCode(8212);
+const LDQUO = String.fromCharCode(8220);
+const RDQUO = String.fromCharCode(8221);
+
+// ---- layer 1: structured, in order of confidence ----
+
+test('intake: clean schema v1 JSON is the untouched path', () => {
+  const r = IK.read(fixture('clean-city.json'), { mode: 'city' });
+  assert.equal(r.ok, true);
+  assert.equal(r.route, 'json');
+  assert.deepEqual(r.repairs, []);
+  // The whole point of route/tolerant: a clean paste must behave EXACTLY as it
+  // did before this feature existed, with no preview step in front of it.
+  assert.equal(r.tolerant, false);
+  assert.equal(r.data.city.name, 'Porto');
+});
+
+test('intake: JSON inside a fenced block', () => {
+  const r = IK.read(fixture('fenced-city.md'), { mode: 'city' });
+  assert.equal(r.ok, true);
+  assert.equal(r.route, 'fence');
+  assert.equal(r.tolerant, true);
+  assert.equal(r.data.items.length, 1);
+});
+
+test('intake: a bash fence before the json fence does not win', () => {
+  const r = IK.read(fixture('two-fences.md'), { mode: 'city' });
+  assert.equal(r.ok, true);
+  assert.equal(r.route, 'fence');
+  assert.equal(r.data.city.name, 'Porto');
+});
+
+test('intake: JSON with prose on both sides of it', () => {
+  const r = IK.read(fixture('prose-around-json.txt'), { mode: 'city' });
+  assert.equal(r.ok, true);
+  assert.equal(r.route, 'embedded');
+  assert.equal(r.data.items[0].id, 'cantina32');
+});
+
+test('intake: a fence that was never closed still yields its object', () => {
+  const r = IK.read(fixture('unclosed-fence.md'), { mode: 'city' });
+  assert.equal(r.ok, true);
+  assert.equal(r.data.city.name, 'Porto');
+});
+
+test('intake: braces inside a string never steer the embedded scan', () => {
+  // Two cases, because the scan can fail in two directions, and a MATCHED pair
+  // of stray braces would balance by accident and prove neither.
+  function around(notes) {
+    return 'here you go:\n{"schema":1,"city":{"name":"Porto","dates":{"from":"2026-04-06",' +
+      '"to":"2026-04-12"},"notes":' + JSON.stringify(notes) + '},' +
+      '"sections":[{"id":"d","label":"D"}],' +
+      '"items":[{"id":"a","section":"d","status":"plan","name":"A","links":[]}]}\nthat is all.';
+  }
+  // Stray closers: counted, they would close the root object early and hand
+  // back the city object as if it were the whole guide.
+  const early = IK.read(around(['the sign says }} closed']), { mode: 'city' });
+  assert.equal(early.ok, true);
+  assert.equal(early.route, 'embedded');
+  assert.deepEqual(early.data.city.notes, ['the sign says }} closed']);
+  // Stray openers: counted, the root would never close and the scan would
+  // give up on a guide that is perfectly well formed.
+  const late = IK.read(around(['the menu is written {{ like this']), { mode: 'city' });
+  assert.equal(late.ok, true);
+  assert.equal(late.route, 'embedded');
+  assert.deepEqual(late.data.city.notes, ['the menu is written {{ like this']);
+});
+
+// ---- layer 1b: the five repair rules, each one named ----
+
+test('intake repair: trailing commas', () => {
+  const r = IK.read(fixture('repair-trailing-comma.txt'), { mode: 'city' });
+  assert.equal(r.ok, true);
+  assert.ok(r.repairs.indexOf('trailing-comma') !== -1, 'names the rule: ' + r.repairs.join(','));
+  assert.equal(r.tolerant, true);
+});
+
+test('intake repair: curly quotes used as JSON delimiters', () => {
+  const r = IK.read(fixture('repair-smart-quotes.txt'), { mode: 'city' });
+  assert.equal(r.ok, true);
+  assert.ok(r.repairs.indexOf('smart-quotes') !== -1, r.repairs.join(','));
+  // The apostrophe INSIDE the value is content and survives untouched. This is
+  // the line between repairing syntax and rewriting meaning.
+  assert.equal(r.data.items[0].name, 'Joe' + String.fromCharCode(8217) + 's Cantina');
+});
+
+test('intake repair: a raw line break inside a string', () => {
+  const r = IK.read(fixture('repair-unescaped-newline.txt'), { mode: 'city' });
+  assert.equal(r.ok, true);
+  assert.ok(r.repairs.indexOf('unescaped-newline') !== -1, r.repairs.join(','));
+  assert.equal(r.data.items[0].note, 'Small plates, no bookings.\nGet there before 19:30 or wait.');
+});
+
+test('intake repair: a leading json word left over from a fence', () => {
+  const fixed = IK.repair(fixture('repair-leading-json-word.txt'));
+  assert.ok(fixed.repairs.indexOf('leading-json-word') !== -1, fixed.repairs.join(','));
+  assert.equal(JSON.parse(fixed.text).city.name, 'Porto');
+  assert.equal(IK.read(fixture('repair-leading-json-word.txt'), { mode: 'city' }).ok, true);
+});
+
+test('intake repair: emphasis characters wrapping the whole block', () => {
+  const fixed = IK.repair(fixture('repair-emphasis-wrapped.txt'));
+  assert.ok(fixed.repairs.indexOf('markdown-emphasis') !== -1, fixed.repairs.join(','));
+  assert.equal(JSON.parse(fixed.text).city.name, 'Porto');
+  assert.equal(IK.read(fixture('repair-emphasis-wrapped.txt'), { mode: 'city' }).ok, true);
+});
+
+test('intake repair: never runs on text that already parses', () => {
+  // Clean JSON carrying a curly quote and a comma INSIDE its strings. If the
+  // repair pass ever ran first, both would be rewritten.
+  const text = '{"schema":1,"city":{"name":"Caf' + String.fromCharCode(233) + ' ' + LDQUO + 'Bo' + RDQUO +
+    '","dates":{"from":"2026-04-06","to":"2026-04-12"}},"sections":[{"id":"d","label":"D"}],' +
+    '"items":[{"id":"a","section":"d","status":"plan","name":"A, B,","links":[]}]}';
+  const r = IK.read(text, { mode: 'city' });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.repairs, []);
+  assert.equal(r.data.city.name.indexOf(LDQUO) !== -1, true);
+  assert.equal(r.data.items[0].name, 'A, B,');
+});
+
+test('intake repair: refuses when the scan ends inside a string', () => {
+  // An unterminated string is where "repair" would become "invent": the pass
+  // has lost track of where the value ends, so it declines rather than guess.
+  assert.equal(IK.repair('{"a": "never closed'), null);
+});
+
+test('intake repair: single curly quotes are deliberately NOT delimiters', () => {
+  // The closing one is indistinguishable from an apostrophe, so repairing it
+  // would be a guess at meaning. It stays refused, and falls through.
+  const text = '{' + String.fromCharCode(8216) + 'schema' + String.fromCharCode(8217) + ': 1}';
+  const fixed = IK.repair(text);
+  assert.ok(fixed === null || fixed.repairs.indexOf('smart-quotes') === -1);
+  assert.equal(IK.read(text, { mode: 'city' }).ok, false);
+});
+
+// ---- layer 2: markdown to schema v1 ----
+
+test('intake markdown: a whole city guide round-trips through validate', () => {
+  const r = IK.read(fixture('city-guide.md'), { mode: 'city', header: PORTO_HEADER });
+  assert.equal(r.ok, true);
+  assert.equal(r.route, 'markdown');
+  assert.equal(r.tolerant, true);
+  // The contract that matters: what came out is a city the ORIGINAL validator
+  // accepts, with no allowance made for where it came from.
+  assert.deepEqual(C.validate(r.data), []);
+  assert.equal(r.stats.items, 8);
+  assert.deepEqual(r.data.sections.map(s => s.id), ['dinner', 'coffee', 'practical']);
+});
+
+test('intake markdown: headings map to the section ids PROMPT.md asks for', () => {
+  const md = '## Dinner\n- **A** - x\n## Coworking\n- **B** - x\n## Practical notes\n- **C** - x\n' +
+    '## Speakeasies\n- **D** - x\n';
+  const r = IK.read(md, { mode: 'city', header: PORTO_HEADER });
+  assert.equal(r.ok, true);
+  // Known headings take the canonical id; an unknown one keeps its own words
+  // rather than being forced into the nearest tab.
+  assert.deepEqual(r.data.sections.map(s => s.id), ['dinner', 'cowork', 'practical', 'speakeasies']);
+  assert.equal(r.data.sections[3].label, 'Speakeasies');
+});
+
+test('intake markdown: the section level is the one that names sections', () => {
+  // A guide that puts its sections at # and its labels at ## used to come out
+  // inverted, because "some ## exists" chose level 2 and threw the real
+  // sections into the header. The level whose headings actually name PROMPT.md
+  // sections wins instead.
+  const md = '# Porto trip\n\n# Dinner\n\n## Plan picks\n\n- **Cantina 32** - good\n\n' +
+    '## Backups\n\n- **Tasca** - fine\n\n# Coffee\n\n- **Combi** - great\n';
+  const r = IK.read(md, { mode: 'city', header: PORTO_HEADER });
+  assert.equal(r.ok, true);
+  assert.ok(r.data.sections.map(x => x.id).indexOf('dinner') !== -1, 'dinner is a section');
+  assert.ok(r.data.sections.map(x => x.id).indexOf('coffee') !== -1, 'coffee is a section');
+  const byId = {};
+  r.data.items.forEach(i => { byId[i.id] = i; });
+  assert.equal(byId['cantina-32'].section, 'dinner');
+  assert.equal(byId['tasca'].status, 'backup');
+  assert.equal(byId['combi'].section, 'coffee');
+});
+
+test('intake markdown: a bold label is not a place', () => {
+  // "**Tip:**" over a paragraph is a chat writing a label, and it used to
+  // arrive in the guide as a card called Tip.
+  const md = '## Dinner\n\n- **Cantina 32** - good\n\n**Getting there:**\n\n' +
+    'Take the 22 tram to Carmo.\n\n**Tip:**\n\nBook a week out.\n';
+  const r = IK.read(md, { mode: 'city', header: PORTO_HEADER });
+  assert.deepEqual(r.data.items.map(i => i.name), ['Cantina 32']);
+  // The prose under the label is not thrown away: it lands as note text.
+  assert.ok(r.data.items[0].note.indexOf('22 tram') !== -1, r.data.items[0].note);
+  assert.ok(r.data.items[0].note.indexOf('Book a week out') !== -1, r.data.items[0].note);
+});
+
+test('intake markdown: a backup heading is the only way to leave plan', () => {
+  const r = IK.read(fixture('city-guide.md'), { mode: 'city', header: PORTO_HEADER });
+  const byId = {};
+  r.data.items.forEach(i => { byId[i.id] = i; });
+  assert.equal(byId['cantina-32'].status, 'plan');
+  assert.equal(byId['tasquinha-do-bairro'].status, 'backup');
+  // Nothing this layer produces is ever done or archived: those are the
+  // traveler's own states and no pasted text can set them.
+  r.data.items.forEach(i => {
+    assert.ok(i.status === 'plan' || i.status === 'backup', i.id + ' has status ' + i.status);
+  });
+});
+
+test('intake markdown: bold names keep their digits', () => {
+  // Regression: a trailing-punctuation strip written as a character class ate
+  // the "32" out of "Cantina 32" and shipped a guide full of renamed places.
+  const r = IK.read(fixture('city-guide.md'), { mode: 'city', header: PORTO_HEADER });
+  assert.equal(r.data.items[0].name, 'Cantina 32');
+  assert.equal(r.data.items[0].id, 'cantina-32');
+});
+
+test('intake markdown: every dash dialect separates a name from its note', () => {
+  const md = '## Dinner\n' +
+    '- **A Place** ' + EMDASH + ' em dash note\n' +
+    '- B Place ' + String.fromCharCode(8211) + ' en dash note\n' +
+    '- C Place - hyphen note\n' +
+    '- D Place: colon note\n';
+  const r = IK.read(md, { mode: 'city', header: PORTO_HEADER });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.data.items.map(i => i.name), ['A Place', 'B Place', 'C Place', 'D Place']);
+  assert.deepEqual(r.data.items.map(i => i.note),
+    ['em dash note', 'en dash note', 'hyphen note', 'colon note']);
+});
+
+test('intake markdown: links are classified by host, never by their label', () => {
+  const r = IK.read(fixture('city-guide.md'), { mode: 'city', header: PORTO_HEADER });
+  const genuino = r.data.items.filter(i => i.id === 'genuino')[0];
+  assert.deepEqual(genuino.links.map(l => l.kind), ['map', 'web']);
+  const combi = r.data.items.filter(i => i.id === 'combi-coffee')[0];
+  assert.equal(combi.links[0].kind, 'web');
+  // A link's markup leaves the note; its words live in links[] instead.
+  assert.equal(genuino.note.indexOf('Map'), -1);
+  assert.equal(genuino.note.indexOf('http'), -1);
+});
+
+test('intake markdown: price, hours and rating come off the same line', () => {
+  const r = IK.read(fixture('city-guide.md'), { mode: 'city', header: PORTO_HEADER });
+  const c = r.data.items.filter(i => i.id === 'cantina-32')[0];
+  assert.equal(c.price.text, 'About ' + String.fromCharCode(8364) + '35');
+  assert.equal(c.hours.text, '12:30-15:00, 19:30-23:00, closed Sunday');
+  assert.deepEqual(c.rating, { stars: 4.5, count: 3102 });
+  // hours.class is never guessed: deciding from a closing time whether an
+  // evening suits is a judgement, not a reading.
+  assert.equal(c.hours.class, undefined);
+});
+
+test('intake markdown: a bare decimal is never a rating', () => {
+  const md = '## Dinner\n- **Cheap Place** - 4.5 km from the flat, mains around 4.6 EUR\n';
+  const r = IK.read(md, { mode: 'city', header: PORTO_HEADER });
+  assert.equal(r.ok, true);
+  assert.equal(r.data.items[0].rating, undefined);
+  // The anchored form is read, and only the anchored form.
+  const r2 = IK.read('## Dinner\n- **Anchored** - 4.6/5 from 12 reviews\n',
+    { mode: 'city', header: PORTO_HEADER });
+  assert.deepEqual(r2.data.items[0].rating, { stars: 4.6, count: 12 });
+});
+
+test('intake markdown: a day is only ever a literal ISO date inside the stay', () => {
+  const md = '## Dinner\n' +
+    '- **Booked** - table held for 2026-04-08\n' +
+    '- **Reopening** - shut for works until 2026-09-01\n' +
+    '- **Someday** - go on the Tuesday\n';
+  const r = IK.read(md, { mode: 'city', header: PORTO_HEADER });
+  assert.equal(r.data.items[0].day, '2026-04-08');
+  // Outside the stay: a fact about the place, not a plan for the trip.
+  assert.equal(r.data.items[1].day, undefined);
+  // A weekday name is not a date and is never turned into one.
+  assert.equal(r.data.items[2].day, undefined);
+});
+
+test('intake markdown: an unnameable line becomes note text, never a guess', () => {
+  const md = '## Dinner\n' +
+    '- **Real Place** - the good one\n' +
+    '- Everything here closes early in April, which is worth knowing before you set out for the evening.\n';
+  const r = IK.read(md, { mode: 'city', header: PORTO_HEADER });
+  assert.equal(r.data.items.length, 1);
+  assert.ok(r.data.items[0].note.indexOf('closes early in April') !== -1,
+    'the unclassifiable line landed as note text: ' + r.data.items[0].note);
+});
+
+test('intake markdown: a nested bullet is detail, not a second place', () => {
+  const r = IK.read(fixture('city-guide.md'), { mode: 'city', header: PORTO_HEADER });
+  const combi = r.data.items.filter(i => i.id === 'combi-coffee')[0];
+  assert.ok(combi.note.indexOf('window seat') !== -1);
+  assert.ok(combi.note.indexOf('Closed Mondays') !== -1);
+  assert.equal(r.data.items.filter(i => i.name === 'Take the window seat').length, 0);
+});
+
+test('intake markdown: item ids are unique even when two places share a name', () => {
+  const md = '## Dinner\n- **Bar Central** - the one downtown\n## Coffee\n- **Bar Central** - the other one\n';
+  const r = IK.read(md, { mode: 'city', header: PORTO_HEADER });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.data.items.map(i => i.id), ['bar-central', 'bar-central-2']);
+  assert.deepEqual(C.validate(r.data), []);
+});
+
+test('intake markdown: reads its own header when the caller has none', () => {
+  const r = IK.read(fixture('city-guide.md'), { mode: 'city' });
+  assert.equal(r.ok, true);
+  assert.equal(r.data.city.name, 'Porto');
+  assert.deepEqual(r.data.city.dates, { from: '2026-04-06', to: '2026-04-12' });
+});
+
+test('intake markdown: says which header field is missing rather than inventing it', () => {
+  const r = IK.read('## Dinner\n- **Place One** - good\n', { mode: 'city' });
+  assert.equal(r.ok, false);
+  assert.deepEqual(r.missing, ['the city name', 'the trip dates']);
+  assert.ok(/Read 1 place from that markdown, but not the city name or the trip dates/.test(r.message),
+    r.message);
+});
+
+test('intake markdown: a half-markdown half-JSON reply still lands', () => {
+  // The commonest long-answer failure: a fence opens, the object is cut off,
+  // and the rest arrives as prose. An unpaired fence marker must not swallow
+  // the places that follow it.
+  const r = IK.read(fixture('half-markdown-half-json.md'), { mode: 'city', header: PORTO_HEADER });
+  assert.equal(r.ok, true);
+  assert.equal(r.route, 'markdown');
+  assert.equal(r.stats.items, 2);
+  assert.deepEqual(C.validate(r.data), []);
+});
+
+// ---- layer 2, delta side ----
+
+const HAVE_CITY = {
+  schema: 1,
+  city: { name: 'Porto', dates: { from: '2026-04-06', to: '2026-04-12' } },
+  sections: [{ id: 'coffee', label: 'Coffee' }],
+  items: [{ id: 'combi', section: 'coffee', status: 'done', name: 'Combi Coffee',
+    note: 'the traveler wrote this', links: [] }]
+};
+
+test('intake markdown delta: new sections and items, merged by the same door', () => {
+  const r = IK.read(fixture('enrich-delta.md'), { mode: 'delta', existing: HAVE_CITY });
+  assert.equal(r.ok, true);
+  assert.equal(r.route, 'markdown');
+  assert.equal(r.data.delta, true);
+  assert.equal(r.data.schema, 1);
+  // coffee already exists, so it is not re-declared: a section the traveler
+  // renamed must not be renamed back by a re-run.
+  assert.deepEqual(r.data.sections.map(s => s.id), ['live-music']);
+  const merged = C.mergeDelta(HAVE_CITY, r.data);
+  assert.deepEqual(merged.errors, []);
+  assert.equal(merged.summary.added, 4);
+});
+
+test('intake markdown delta: only plan and backup ever come out', () => {
+  const r = IK.read(fixture('enrich-delta.md'), { mode: 'delta', existing: HAVE_CITY });
+  const statuses = {};
+  r.data.items.forEach(i => { statuses[i.status] = 1; });
+  assert.deepEqual(Object.keys(statuses).sort(), ['backup', 'plan']);
+});
+
+// ---- the negative that matters most ----
+
+test('intake: no tolerant path can overwrite an existing item', () => {
+  // Same place, re-described, arriving as markdown. Two guards stand in the
+  // way and this asserts both: intake drops it by name, and if it ever got
+  // past that, mergeDelta skips a colliding id rather than writing over it.
+  const md = '## Coffee\n- **Combi Coffee** - actually terrible, one star, skip it\n' +
+    '- **Somewhere New** - genuinely new\n';
+  const r = IK.read(md, { mode: 'delta', existing: HAVE_CITY });
+  assert.equal(r.ok, true);
+  assert.equal(r.stats.duplicates, 1);
+  assert.deepEqual(r.data.items.map(i => i.name), ['Somewhere New']);
+
+  const merged = C.mergeDelta(HAVE_CITY, r.data);
+  const kept = merged.data.items.filter(i => i.id === 'combi')[0];
+  assert.equal(kept.name, 'Combi Coffee');
+  assert.equal(kept.note, 'the traveler wrote this');
+  assert.equal(kept.status, 'done');           // a traveler state, never touched
+
+  // The belt to that brace: a payload that names the existing id outright.
+  const collide = { schema: 1, delta: true,
+    items: [{ id: 'combi', section: 'coffee', status: 'plan', name: 'HIJACK', links: [] }] };
+  const m2 = C.mergeDelta(HAVE_CITY, collide);
+  assert.deepEqual(m2.errors, []);
+  assert.equal(m2.summary.skipped, 1);
+  assert.equal(m2.summary.added, 0);
+  assert.equal(m2.data.items[0].name, 'Combi Coffee');
+});
+
+test('intake: a whole-guide paste can never smuggle in done or archived', () => {
+  // Tolerance is at intake; the validator is not. A markdown line that says
+  // "done" is note text, and a JSON payload that says it is refused by the
+  // same validate() it always was.
+  const md = '## Dinner\n- **Been There** - done, archived, finished\n';
+  const r = IK.read(md, { mode: 'city', header: PORTO_HEADER });
+  assert.equal(r.data.items[0].status, 'plan');
+  const bad = { schema: 1, delta: true,
+    items: [{ id: 'x', section: 'coffee', status: 'done', name: 'X', links: [] }] };
+  const m = C.mergeDelta(HAVE_CITY, bad);
+  assert.equal(m.data, null);
+  assert.ok(m.errors.join(' ').indexOf('bad status "done"') !== -1, m.errors.join(' '));
+});
+
+// ---- failures say what was found and what to do next ----
+
+test('intake: garbage is refused with a useful message, never an exception', () => {
+  const r = IK.read(fixture('garbage.txt'), { mode: 'city', header: PORTO_HEADER });
+  assert.equal(r.ok, false);
+  assert.equal(r.found, 'unknown');
+  assert.equal(r.message,
+    'Nothing here reads as a city guide: no JSON, and no headings or lists with places under them. ' +
+    'Try the conversion buttons below, or paste the JSON block from your chat.');
+  assert.equal(r.message.indexOf('JSON parse error'), -1);
+  assert.equal(/Unexpected token/.test(r.message), false);
+});
+
+test('intake: markdown with no readable places says exactly that', () => {
+  const r = IK.read('# Porto\n\nA lovely city. I will write the guide up properly tomorrow.\n',
+    { mode: 'city', header: PORTO_HEADER });
+  assert.equal(r.ok, false);
+  assert.equal(r.found, 'markdown');
+  assert.equal(r.message,
+    'This looks like markdown but no places could be read from it. ' +
+    'Try the conversion buttons below, or paste the JSON block from your chat.');
+});
+
+test('intake: an empty box says so instead of failing', () => {
+  const r = IK.read('   \n  ', { mode: 'city' });
+  assert.equal(r.ok, false);
+  assert.equal(r.found, 'empty');
+  assert.equal(r.message,
+    'There is nothing here yet. Paste what your chat replied with: markdown or JSON, either works.');
+});
+
+test('intake: a near-miss schema payload keeps its own schema errors', () => {
+  // A JSON object that is clearly AIMING at schema v1 must be told what is
+  // wrong with it. Running the markdown extractor over it instead would trade
+  // a precise answer for a vague one.
+  const text = '{"schema":1,"city":{"name":"X","dates":{"from":"2026-01-01","to":"2026-01-02"}},' +
+    '"sections":[{"id":"a","label":"A"}],' +
+    '"items":[{"id":"i","section":"nope","status":"plan","name":"N"}]}';
+  const r = IK.read(text, { mode: 'city' });
+  assert.equal(r.ok, false);
+  assert.equal(r.found, 'json');
+  assert.ok(/unknown section "nope"/.test(r.message), r.message);
+});
+
+test('intake: raw mode is layer 1 only and never runs the extractor', () => {
+  // The trip surface's own export shape is not schema v1, so there is nothing
+  // for a schema-v1 extractor to produce; it gets the structured layer and the
+  // structured layer alone.
+  const r = IK.read('note: {"cities": [{"name": "Porto"}], "ideas": []} , enjoy', { mode: 'raw' });
+  assert.equal(r.ok, true);
+  assert.equal(r.route, 'embedded');
+  assert.equal(r.data.cities[0].name, 'Porto');
+  const bad = IK.read('## Dinner\n- **A** - x\n', { mode: 'raw' });
+  assert.equal(bad.ok, false);
+});
+
+test('intake: raw mode repairs a trailing comma in an export', () => {
+  const r = IK.read('{"cities": [{"name": "Porto"},], "ideas": [],}', { mode: 'raw' });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.repairs, ['trailing-comma']);
+});
+
+// ---- layer 3: the conversion prompt, which is words, not a call ----
+
+test('intake: the conversion prompt carries the contract and the pasted text', () => {
+  const p = IK.conversionPrompt('## Dinner\n- Somewhere\n', { mode: 'city', header: PORTO_HEADER });
+  assert.ok(p.indexOf('single ```json fenced code block') !== -1);
+  assert.ok(p.indexOf('The city name is Porto.') !== -1);
+  assert.ok(p.indexOf('The trip dates are 2026-04-06 to 2026-04-12.') !== -1);
+  assert.ok(p.indexOf('Never emit "done" or "archived"') !== -1);
+  assert.ok(p.indexOf('## Dinner') !== -1, 'the notes ride along');
+  assert.equal(p.indexOf(EMDASH), -1);
+});
+
+test('intake: the delta conversion prompt names what is already in the guide', () => {
+  const p = IK.conversionPrompt('some notes', { mode: 'delta', existing: HAVE_CITY });
+  assert.ok(p.indexOf('"delta": true') !== -1);
+  assert.ok(p.indexOf('Section ids already in this guide: coffee.') !== -1);
+  assert.ok(p.indexOf('must NOT repeat: Combi Coffee.') !== -1);
+});
+
+test('intake: a conversion reply goes back through the same door', () => {
+  // The round trip layer 3 is built for: prompt out, JSON in a fence back,
+  // and the SAME read() that refused the markdown accepts the reply.
+  const reply = 'Sure, here it is:\n\n```json\n' +
+    JSON.stringify({ schema: 1, delta: true,
+      items: [{ id: 'new-one', section: 'coffee', status: 'plan', name: 'New One', links: [] }] }) +
+    '\n```\n';
+  const r = IK.read(reply, { mode: 'delta', existing: HAVE_CITY });
+  assert.equal(r.ok, true);
+  assert.equal(r.route, 'fence');
+  assert.deepEqual(C.mergeDelta(HAVE_CITY, r.data).errors, []);
+});
+
+test('the shipped bytes carry the tolerant intake on BOTH surfaces', () => {
+  const fs3 = require('node:fs');
+  const path3 = require('node:path');
+  const root3 = path3.join(__dirname, '..');
+  ['index.html', 'trip/index.html', 'template.html', 'example.html'].forEach(function (rel) {
+    const html = fs3.readFileSync(path3.join(root3, rel), 'utf8');
+    assert.ok(html.indexOf('intakeKit: {') !== -1, rel + ' ships no intake layer');
+  });
+  const app = fs3.readFileSync(path3.join(root3, 'index.html'), 'utf8');
+  // The city app's four paste boxes all hang off the one door.
+  assert.ok(app.indexOf('function attachPasteDoor(cfg)') !== -1);
+  assert.ok(app.indexOf('Copy conversion prompt') !== -1);
+  assert.ok(app.indexOf('Convert with Claude') !== -1);
+  const trip = fs3.readFileSync(path3.join(root3, 'trip/index.html'), 'utf8');
+  assert.ok(trip.indexOf('function readPastedJson(text)') !== -1);
+  assert.ok(trip.indexOf('function parseAiJson(text, what)') !== -1);
+});
+
+test('no paste or reply path strips a fence by hand any more', () => {
+  // Five hand-rolled copies of a two-regex fence strip lived on the trip
+  // surface, and each one only worked when the fence started at character one.
+  // The intake layer replaced all five; this stops a sixth being written.
+  const fs4 = require('node:fs');
+  const path4 = require('node:path');
+  const root4 = path4.join(__dirname, '..');
+  ['src/trip-shell.html', 'src/app-shell.html', 'src/cityops.js'].forEach(function (rel) {
+    const text = fs4.readFileSync(path4.join(root4, rel), 'utf8');
+    assert.equal(/replace\(\/\^```/.test(text), false,
+      rel + ' strips a code fence by hand; call CityOps.intakeKit.read instead');
+  });
+});
+
+test('intake: every fixture is exercised by the tests above', () => {
+  // A fixture nobody asserts on is a file that rots. This is the guard.
+  const files = intakeFs.readdirSync(INTAKE_DIR).sort();
+  assert.deepEqual(files, [
+    'city-guide.md', 'clean-city.json', 'enrich-delta.md', 'fenced-city.md',
+    'garbage.txt', 'half-markdown-half-json.md', 'prose-around-json.txt',
+    'repair-emphasis-wrapped.txt', 'repair-leading-json-word.txt',
+    'repair-smart-quotes.txt', 'repair-trailing-comma.txt',
+    'repair-unescaped-newline.txt', 'two-fences.md', 'unclosed-fence.md'
+  ]);
 });
 
 // The async tests above resolve on a microtask, so the summary has to wait
