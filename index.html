@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CityOps</title>
+<title>Nomadding</title>
 <style>
   :root{
     --bg:#cccccc; --bg-card:#ffffff; --bg-soft:#bdbdbd; --bg-softer:#e8e8e8;
@@ -1482,7 +1482,7 @@ var CityOps = (function () {
     var link = trimStr(f.link);
     var linkKind = link ? researchLinkKind(link) : null;
     if (link && !linkKind) {
-      errors.push('That link is not a web address CityOps can open. Paste a link starting with http:// or https://.');
+      errors.push('That link is not a web address Nomadding can open. Paste a link starting with http:// or https://.');
     }
     if (!name) errors.push('A name is required.');
     var secIds = Object.create(null);
@@ -3341,7 +3341,7 @@ var CityOps = (function () {
     var rerun = sliceLandmark(templateText, 'RERUN:INTERESTS');
     var contract = sliceLandmark(templateText, 'CONTRACT:ITEM');
     var p = normalizeProfile(profile);
-    var out = ['You are extending an existing CityOps city guide.', ''];
+    var out = ['You are extending an existing Nomadding city guide.', ''];
     out = out.concat(cityHeaderLines(cityData));
     if (!profileIsEmpty(p)) out = out.concat(interestsBlockLines(p, null));
     out.push('## What I need', '', rerun, '');
@@ -3362,7 +3362,7 @@ var CityOps = (function () {
     var rerun = sliceLandmark(templateText, 'RERUN:RESEARCH');
     var contract = sliceLandmark(templateText, 'CONTRACT:ITEM');
     var p = normalizeProfile(profile);
-    var out = ['You are extending an existing CityOps city guide with a full-coverage research pass.', ''];
+    var out = ['You are extending an existing Nomadding city guide with a full-coverage research pass.', ''];
     out = out.concat(cityHeaderLines(cityData));
     if (!profileIsEmpty(p)) out = out.concat(interestsBlockLines(p, null));
     out.push('## What I need', '', rerun, '');
@@ -3387,7 +3387,7 @@ var CityOps = (function () {
     var rerun = sliceLandmark(templateText, 'RERUN:INTEL');
     var items = (cityData && Array.isArray(cityData.items) ? cityData.items : [])
       .filter(function (it) { return it && it.status !== 'archived'; });
-    var out = ['You are adding review-verified intel to an existing CityOps city guide.', ''];
+    var out = ['You are adding review-verified intel to an existing Nomadding city guide.', ''];
     out = out.concat(cityHeaderLines(cityData));
     out.push('## Intel quality rules', '', rules, '');
     out.push('## What I need', '', rerun, '');
@@ -3439,7 +3439,7 @@ var CityOps = (function () {
     var rerun = sliceLandmark(templateText, 'RERUN:RATINGS');
     var items = (cityData && Array.isArray(cityData.items) ? cityData.items : [])
       .filter(function (it) { return it && (it.status === 'plan' || it.status === 'backup'); });
-    var out = ['You are refreshing the Google Maps ratings on an existing CityOps city guide.', ''];
+    var out = ['You are refreshing the Google Maps ratings on an existing Nomadding city guide.', ''];
     out = out.concat(cityHeaderLines(cityData));
     out.push('## What I need', '', rerun, '');
     out.push('## Items', '');
@@ -3529,7 +3529,7 @@ var CityOps = (function () {
     var others = (cityData && Array.isArray(cityData.items) ? cityData.items : [])
       .filter(function (it) { return it && it.id && it.id !== item.id && it.section === secId; });
     var name = trimStr(state ? effectiveName(item, state) : item.name);
-    var out = ['You are checking one place a traveler added by hand to an existing CityOps city guide.', ''];
+    var out = ['You are checking one place a traveler added by hand to an existing Nomadding city guide.', ''];
     out = out.concat(cityHeaderLines(cityData));
     out.push('## The place', '');
     out.push('- **Item id:** ' + item.id);
@@ -4733,7 +4733,7 @@ var CityOps = (function () {
     var header = opts.header || {};
     var lines = [];
     if (mode === 'delta') {
-      lines.push('Convert the notes at the end of this message into a CityOps schema v1 DELTA payload.');
+      lines.push('Convert the notes at the end of this message into a Nomadding schema v1 DELTA payload.');
       lines.push('');
       lines.push('Reply with a single ```json fenced code block and nothing else: no prose before it, no explanation after it.');
       lines.push('');
@@ -4752,7 +4752,7 @@ var CityOps = (function () {
         }
       }
     } else {
-      lines.push('Convert the city guide at the end of this message into a CityOps schema v1 JSON guide.');
+      lines.push('Convert the city guide at the end of this message into a Nomadding schema v1 JSON guide.');
       lines.push('');
       lines.push('Reply with a single ```json fenced code block and nothing else: no prose before it, no explanation after it.');
       lines.push('');
@@ -9578,7 +9578,7 @@ CityOps.init();
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CityOps Guide</title>
+<title>Nomadding Guide</title>
 <style>
   :root{
     --bg:#cccccc; --bg-card:#ffffff; --bg-soft:#bdbdbd; --bg-softer:#e8e8e8;
@@ -10858,7 +10858,7 @@ var CityOps = (function () {
     var link = trimStr(f.link);
     var linkKind = link ? researchLinkKind(link) : null;
     if (link && !linkKind) {
-      errors.push('That link is not a web address CityOps can open. Paste a link starting with http:// or https://.');
+      errors.push('That link is not a web address Nomadding can open. Paste a link starting with http:// or https://.');
     }
     if (!name) errors.push('A name is required.');
     var secIds = Object.create(null);
@@ -12717,7 +12717,7 @@ var CityOps = (function () {
     var rerun = sliceLandmark(templateText, 'RERUN:INTERESTS');
     var contract = sliceLandmark(templateText, 'CONTRACT:ITEM');
     var p = normalizeProfile(profile);
-    var out = ['You are extending an existing CityOps city guide.', ''];
+    var out = ['You are extending an existing Nomadding city guide.', ''];
     out = out.concat(cityHeaderLines(cityData));
     if (!profileIsEmpty(p)) out = out.concat(interestsBlockLines(p, null));
     out.push('## What I need', '', rerun, '');
@@ -12738,7 +12738,7 @@ var CityOps = (function () {
     var rerun = sliceLandmark(templateText, 'RERUN:RESEARCH');
     var contract = sliceLandmark(templateText, 'CONTRACT:ITEM');
     var p = normalizeProfile(profile);
-    var out = ['You are extending an existing CityOps city guide with a full-coverage research pass.', ''];
+    var out = ['You are extending an existing Nomadding city guide with a full-coverage research pass.', ''];
     out = out.concat(cityHeaderLines(cityData));
     if (!profileIsEmpty(p)) out = out.concat(interestsBlockLines(p, null));
     out.push('## What I need', '', rerun, '');
@@ -12763,7 +12763,7 @@ var CityOps = (function () {
     var rerun = sliceLandmark(templateText, 'RERUN:INTEL');
     var items = (cityData && Array.isArray(cityData.items) ? cityData.items : [])
       .filter(function (it) { return it && it.status !== 'archived'; });
-    var out = ['You are adding review-verified intel to an existing CityOps city guide.', ''];
+    var out = ['You are adding review-verified intel to an existing Nomadding city guide.', ''];
     out = out.concat(cityHeaderLines(cityData));
     out.push('## Intel quality rules', '', rules, '');
     out.push('## What I need', '', rerun, '');
@@ -12815,7 +12815,7 @@ var CityOps = (function () {
     var rerun = sliceLandmark(templateText, 'RERUN:RATINGS');
     var items = (cityData && Array.isArray(cityData.items) ? cityData.items : [])
       .filter(function (it) { return it && (it.status === 'plan' || it.status === 'backup'); });
-    var out = ['You are refreshing the Google Maps ratings on an existing CityOps city guide.', ''];
+    var out = ['You are refreshing the Google Maps ratings on an existing Nomadding city guide.', ''];
     out = out.concat(cityHeaderLines(cityData));
     out.push('## What I need', '', rerun, '');
     out.push('## Items', '');
@@ -12905,7 +12905,7 @@ var CityOps = (function () {
     var others = (cityData && Array.isArray(cityData.items) ? cityData.items : [])
       .filter(function (it) { return it && it.id && it.id !== item.id && it.section === secId; });
     var name = trimStr(state ? effectiveName(item, state) : item.name);
-    var out = ['You are checking one place a traveler added by hand to an existing CityOps city guide.', ''];
+    var out = ['You are checking one place a traveler added by hand to an existing Nomadding city guide.', ''];
     out = out.concat(cityHeaderLines(cityData));
     out.push('## The place', '');
     out.push('- **Item id:** ' + item.id);
@@ -14109,7 +14109,7 @@ var CityOps = (function () {
     var header = opts.header || {};
     var lines = [];
     if (mode === 'delta') {
-      lines.push('Convert the notes at the end of this message into a CityOps schema v1 DELTA payload.');
+      lines.push('Convert the notes at the end of this message into a Nomadding schema v1 DELTA payload.');
       lines.push('');
       lines.push('Reply with a single ```json fenced code block and nothing else: no prose before it, no explanation after it.');
       lines.push('');
@@ -14128,7 +14128,7 @@ var CityOps = (function () {
         }
       }
     } else {
-      lines.push('Convert the city guide at the end of this message into a CityOps schema v1 JSON guide.');
+      lines.push('Convert the city guide at the end of this message into a Nomadding schema v1 JSON guide.');
       lines.push('');
       lines.push('Reply with a single ```json fenced code block and nothing else: no prose before it, no explanation after it.');
       lines.push('');
@@ -18953,7 +18953,7 @@ CityOps.init();
 </script>
 
 <script type="text/plain" id="prompt-template">
-# CityOps generation prompt
+# Nomadding generation prompt
 
 This is the prompt Rob pastes into Claude, ChatGPT, or any capable AI engine
 to generate a city guide. Fill in the header, paste the whole file (header
@@ -19242,7 +19242,7 @@ block, nothing outside the fence. The JSON must be valid against schema v1
 
 ### Schema v1 shape reference
 
-This is the schema example, taken directly from the CityOps design spec
+This is the schema example, taken directly from the Nomadding design spec
 (`docs/superpowers/specs/2026-08-10-cityops-phase1-design.md`, section
 "Schema (v1)"). It shows the exact shape to produce, not literal content
 to copy.
@@ -19827,7 +19827,7 @@ only judges it. `ratings` may be omitted when you could not verify the place;
     // The engine's renderHeader observes the same boundary.
     var hdr = document.getElementById('hdr-mid') || document.getElementById('hdr');
     hdr.innerHTML = '';
-    hdr.appendChild(el('h1', null, 'CityOps'));
+    hdr.appendChild(el('h1', null, 'Nomadding'));
     hdr.appendChild(el('div', 'sub', 'No cities yet'));
     // Nothing renders through the engine in this state, so the hook that
     // normally refills the action slot never fires: do it here.

@@ -1,4 +1,4 @@
-# CityOps generation prompt
+# Nomadding generation prompt
 
 This is the prompt Rob pastes into Claude, ChatGPT, or any capable AI engine
 to generate a city guide. Fill in the header, paste the whole file (header
@@ -287,7 +287,7 @@ block, nothing outside the fence. The JSON must be valid against schema v1
 
 ### Schema v1 shape reference
 
-This is the schema example, taken directly from the CityOps design spec
+This is the schema example, taken directly from the Nomadding design spec
 (`docs/superpowers/specs/2026-08-10-cityops-phase1-design.md`, section
 "Schema (v1)"). It shows the exact shape to produce, not literal content
 to copy.
