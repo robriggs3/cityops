@@ -1549,6 +1549,10 @@ const FAKE_RERUN = [
   'Research this city for the traveler interests listed above.',
   '<' + '!-- /RERUN:INTERESTS -->',
   '',
+  '<' + '!-- RERUN:RESEARCH -->',
+  'Research this city across every category a traveler plans around.',
+  '<' + '!-- /RERUN:RESEARCH -->',
+  '',
   '<' + '!-- RERUN:INTEL -->',
   'Research the items listed below, by id.',
   '<' + '!-- /RERUN:INTEL -->',
@@ -1588,6 +1592,43 @@ test('buildInterestsDeltaPrompt carries the header, city, profile, re-run block,
   // Item shape, and NOT the whole-guide contract a delta must never satisfy.
   assert.ok(out.includes('- Every item has a unique `id`, a `name`, and a `links` array.'));
   assert.equal(out.indexOf('match the trip dates given above'), -1);
+});
+
+test('buildResearchAllPrompt carries the header, city, profile, research block, item list and item shape', () => {
+  const out = C.promptKit.buildResearchAllPrompt(FAKE_RERUN, GOOD, PROFILE);
+  assert.ok(out.startsWith('You are extending an existing CityOps city guide with a full-coverage research pass.'));
+  assert.ok(out.includes('- **City:** Batumi'));
+  assert.ok(out.includes('- **Dates:** 2026-08-08 to 2026-08-15'));
+  // Profile weights the pass, same formatter as the interests delta.
+  assert.ok(out.includes('## Traveler interests'));
+  assert.ok(out.includes('- climbing gyms'));
+  assert.ok(out.includes('Notes: Vegetarian most days.'));
+  // The RESEARCH landmark, not the INTERESTS one: this is what makes it the
+  // all-categories pass rather than the single-bucket delta.
+  assert.ok(out.includes('Research this city across every category a traveler plans around.'));
+  assert.equal(out.indexOf('Research this city for the traveler interests listed above.'), -1);
+  assert.equal(out.indexOf('RERUN:RESEARCH'), -1);
+  // Existing items are listed so nothing is re-suggested, and the item shape is
+  // the delta contract, not the whole-guide one.
+  assert.ok(out.includes('## Existing items (do not re-suggest these)'));
+  assert.ok(out.includes('- brasserie | dinner | Brasserie 1900'));
+  assert.ok(out.includes('- Every item has a unique `id`, a `name`, and a `links` array.'));
+  assert.equal(out.indexOf('match the trip dates given above'), -1);
+});
+
+test('buildResearchAllPrompt throws when its landmark is missing, and tolerates a bare city with no profile', () => {
+  assert.throws(() => C.promptKit.buildResearchAllPrompt('# nothing here', GOOD, PROFILE),
+    /no RERUN:RESEARCH block/);
+  const noContract = FAKE_RERUN.split('\n').filter((l) => l.indexOf('CONTRACT:ITEM') === -1).join('\n');
+  assert.throws(() => C.promptKit.buildResearchAllPrompt(noContract, GOOD, PROFILE),
+    /no CONTRACT:ITEM block/);
+  // Runs with no profile, just untailored: the button is never gated on one.
+  const city = clone(GOOD);
+  const snap = JSON.stringify(city);
+  const out = C.promptKit.buildResearchAllPrompt(FAKE_RERUN, city, null);
+  assert.equal(out.indexOf('## Traveler interests'), -1);
+  assert.ok(out.includes('Research this city across every category a traveler plans around.'));
+  assert.equal(JSON.stringify(city), snap);
 });
 
 test('buildIntelPassPrompt carries the rules above the instructions and lists every unarchived item', () => {
@@ -1642,7 +1683,7 @@ test('the real PROMPT.md carries every landmark the builders slice', () => {
   const fs = require('fs');
   const path = require('path');
   const prompt = fs.readFileSync(path.join(__dirname, '..', 'PROMPT.md'), 'utf8');
-  ['RULES:INTEL', 'CONTRACT:ITEM', 'RERUN:INTERESTS', 'RERUN:INTEL', 'RERUN:RATINGS',
+  ['RULES:INTEL', 'CONTRACT:ITEM', 'RERUN:INTERESTS', 'RERUN:RESEARCH', 'RERUN:INTEL', 'RERUN:RATINGS',
     'RERUN:PLACE'].forEach((name) => {
     assert.ok(prompt.indexOf('<' + '!-- ' + name + ' -->') !== -1, 'missing open ' + name);
     assert.ok(prompt.indexOf('<' + '!-- /' + name + ' -->') !== -1, 'missing close ' + name);
@@ -1650,6 +1691,10 @@ test('the real PROMPT.md carries every landmark the builders slice', () => {
   const interests = C.promptKit.buildInterestsDeltaPrompt(prompt, GOOD, PROFILE);
   assert.ok(interests.includes('Never return an item whose id is already in the list below'));
   assert.ok(interests.includes('- brasserie | dinner | Brasserie 1900'));
+  const research = C.promptKit.buildResearchAllPrompt(prompt, GOOD, PROFILE);
+  assert.ok(research.includes('Cover each of these categories that makes sense for this city'));
+  assert.ok(research.includes('Return 10 to 18 new items in total'));
+  assert.ok(research.includes('- brasserie | dinner | Brasserie 1900'));
   const intel = C.promptKit.buildIntelPassPrompt(prompt, GOOD);
   assert.ok(intel.includes('Follow the Intel quality rules above exactly'));
   assert.ok(intel.includes('**Omit `intel` entirely rather than pad it.**'));

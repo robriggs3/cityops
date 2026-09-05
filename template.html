@@ -3180,6 +3180,27 @@ var CityOps = (function () {
     return out.join('\n');
   }
 
+  // The full-coverage cousin of the interests delta: one pass that researches
+  // the city across every category a traveler plans around (eat, see, do,
+  // services) and distributes the picks into the sections they belong to,
+  // rather than clustering them into one interests bucket. Same assembly as the
+  // interests delta so the two read alike; the difference is entirely in the
+  // RERUN:RESEARCH instructions this pulls instead of RERUN:INTERESTS.
+  function buildResearchAllPrompt(templateText, cityData, profile) {
+    var rerun = sliceLandmark(templateText, 'RERUN:RESEARCH');
+    var contract = sliceLandmark(templateText, 'CONTRACT:ITEM');
+    var p = normalizeProfile(profile);
+    var out = ['You are extending an existing CityOps city guide with a full-coverage research pass.', ''];
+    out = out.concat(cityHeaderLines(cityData));
+    if (!profileIsEmpty(p)) out = out.concat(interestsBlockLines(p, null));
+    out.push('## What I need', '', rerun, '');
+    out.push('## Existing items (do not re-suggest these)', '');
+    out = out.concat(itemListLines(cityData && cityData.items));
+    out.push('');
+    out.push('## Item shape', '', contract, '');
+    return out.join('\n');
+  }
+
   // Assembly order, top to bottom:
   //   1. one header line saying what this run is
   //   2. the city block
@@ -9194,6 +9215,7 @@ var CityOps = (function () {
       buildCityPrompt: buildCityPrompt, INTERESTS_SECTION: INTERESTS_SECTION,
       COPY_LINE: PROMPT_COPY_LINE,
       buildInterestsDeltaPrompt: buildInterestsDeltaPrompt,
+      buildResearchAllPrompt: buildResearchAllPrompt,
       buildIntelPassPrompt: buildIntelPassPrompt,
       buildRatingsPassPrompt: buildRatingsPassPrompt,
       // The single-place pass: one item, plus the rest of its section as the
