@@ -9,7 +9,7 @@ independently and the product works between phases.
 
 ## Context for the executing agent
 
-- Repo: github.com/robriggs3/cityops, public. Pages serves cityops.robriggs.com
+- Repo: github.com/robriggs3/cityops, public. Pages serves app.nomadding.com
   from main root. Every push to main deploys.
 - Two surfaces, one shared header: `/` (cities app, from src/app-shell.html) and
   `/trip.html` (trip planner, from src/trip-shell.html). tools/assemble.js emits
@@ -54,7 +54,7 @@ Goal: `/` and `/trip/` are the two pages. No behavior change.
    `/trip.html` redirects, `/` unchanged, old github.io editor URL still
    lands correctly through its existing redirect chain.
 
-Acceptance: address bar shows cityops.robriggs.com/trip/ with no .html
+Acceptance: address bar shows app.nomadding.com/trip/ with no .html
 anywhere in normal navigation; all tests green; no other visible change.
 
 ## Phase B: public share from the profile

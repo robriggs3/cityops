@@ -1,4 +1,4 @@
-# CityOps
+# Nomadding
 
 **A living city guide you operate, not just read.**
 
@@ -10,7 +10,7 @@
 AI engines produce good city research in minutes, but the output is a wall
 of text you re-scroll all week while the real trip mutates around it:
 plans reorder, options die ("full tonight"), backups get promoted, and
-half the value is discovered on the ground. CityOps owns the layer between
+half the value is discovered on the ground. Nomadding owns the layer between
 AI research and the actual week: a guide with a working memory.
 
 **Live app:** [app.nomadding.com](https://app.nomadding.com) ·

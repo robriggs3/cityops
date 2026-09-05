@@ -1570,7 +1570,7 @@ const PROFILE = { interests: ['climbing gyms', 'live jazz'], avoid: ['nightclubs
 
 test('buildInterestsDeltaPrompt carries the header, city, profile, re-run block, item list and item shape', () => {
   const out = C.promptKit.buildInterestsDeltaPrompt(FAKE_RERUN, GOOD, PROFILE);
-  assert.ok(out.startsWith('You are extending an existing CityOps city guide.'));
+  assert.ok(out.startsWith('You are extending an existing Nomadding city guide.'));
   assert.ok(out.includes('- **City:** Batumi'));
   assert.ok(out.includes('- **Country:** GE'));
   assert.ok(out.includes('- **Dates:** 2026-08-08 to 2026-08-15'));
@@ -1596,7 +1596,7 @@ test('buildInterestsDeltaPrompt carries the header, city, profile, re-run block,
 
 test('buildResearchAllPrompt carries the header, city, profile, research block, item list and item shape', () => {
   const out = C.promptKit.buildResearchAllPrompt(FAKE_RERUN, GOOD, PROFILE);
-  assert.ok(out.startsWith('You are extending an existing CityOps city guide with a full-coverage research pass.'));
+  assert.ok(out.startsWith('You are extending an existing Nomadding city guide with a full-coverage research pass.'));
   assert.ok(out.includes('- **City:** Batumi'));
   assert.ok(out.includes('- **Dates:** 2026-08-08 to 2026-08-15'));
   // Profile weights the pass, same formatter as the interests delta.
@@ -1635,7 +1635,7 @@ test('buildIntelPassPrompt carries the rules above the instructions and lists ev
   const city = clone(GOOD);
   city.items.push({ id: 'gone', section: 'dinner', status: 'archived', name: 'Closed Place', links: [] });
   const out = C.promptKit.buildIntelPassPrompt(FAKE_RERUN, city);
-  assert.ok(out.startsWith('You are adding review-verified intel to an existing CityOps city guide.'));
+  assert.ok(out.startsWith('You are adding review-verified intel to an existing Nomadding city guide.'));
   assert.ok(out.includes('- **City:** Batumi'));
   assert.ok(out.includes('## Intel quality rules'));
   assert.ok(out.includes('- **Restaurants and cafes:** name 2 to 4 specific dishes.'));
@@ -2573,7 +2573,7 @@ test('buildRatingsPassPrompt lists the items still in play and nothing else', ()
   city.items.push({ id: 'gone', section: 'dinner', status: 'archived', name: 'Closed Place', links: [] });
   city.items.push({ id: 'eaten', section: 'dinner', status: 'done', name: 'Already Been', links: [] });
   const out = C.promptKit.buildRatingsPassPrompt(FAKE_RERUN, city);
-  assert.ok(out.startsWith('You are refreshing the Google Maps ratings on an existing CityOps city guide.'));
+  assert.ok(out.startsWith('You are refreshing the Google Maps ratings on an existing Nomadding city guide.'));
   assert.ok(out.includes('- **City:** Batumi'));
   assert.ok(out.includes('Look up the CURRENT Google Maps rating for each item listed below.'));
   assert.equal(out.indexOf('RERUN:RATINGS'), -1);
