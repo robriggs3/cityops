@@ -1811,6 +1811,7 @@
         return null;
       }
       try {
+        if (kind === 'research') return CityOps.promptKit.buildResearchAllPrompt(tpl, currentData(), store.profile);
         if (kind === 'intel') return CityOps.promptKit.buildIntelPassPrompt(tpl, currentData());
         if (kind === 'ratings') return CityOps.promptKit.buildRatingsPassPrompt(tpl, currentData());
         return CityOps.promptKit.buildInterestsDeltaPrompt(tpl, currentData(), store.profile);
@@ -1896,6 +1897,25 @@
     // sheet's group labels use, so the three blocks read as three choices
     // rather than one long paragraph with buttons in it.
     var profileEmpty = CityOps.profile.isEmpty(store.profile);
+
+    // The headline pass: one tap that researches the whole city across every
+    // category and weights the picks to the profile, so the common case ("find
+    // me more to do here") is a single button rather than a choice between
+    // three narrower prompts. It runs with no profile too, just less tailored,
+    // so it is never gated the way the interests delta is.
+    m.box.appendChild(el('div', 'sheet-grouplabel enrich-h', 'Research this city'));
+    m.box.appendChild(el('p', 'diff', 'One pass across eat, see, do and services, weighted to your ' +
+      'profile. New places only: nothing you have already planned is touched.'));
+    var rrow = promptRow('research', 'research-city.md', null, 'research');
+    if (profileEmpty) {
+      var researchProfile = el('button', 'ctl', 'Open Profile');
+      researchProfile.type = 'button';
+      researchProfile.title = 'Add interests so the research is tailored to you';
+      researchProfile.onclick = function () { m.close(); openProfileModal(); };
+      rrow.appendChild(researchProfile);
+    }
+    m.box.appendChild(rrow);
+
     m.box.appendChild(el('div', 'sheet-grouplabel enrich-h', 'Interests delta'));
     m.box.appendChild(el('p', 'diff', 'New places in this city that match your interest profile, ' +
       'in their own section, on top of what is already here.'));

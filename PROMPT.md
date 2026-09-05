@@ -448,6 +448,82 @@ Respond with only a JSON code block in this shape, no prose:
 `items` is required and holds new items only.
 <!-- /RERUN:INTERESTS -->
 
+### Research this city
+
+One full-coverage pass that researches the city across every category a
+traveler plans around (eat, see, do, services) and returns recommendations
+weighted to the traveler profile. Broader than the interests delta, which
+clusters picks into one section.
+
+<!-- RERUN:RESEARCH -->
+A delta is never a whole guide. Never re-list an item that already exists,
+never restate `city` or `dates`, and never emit `"status": "done"` or
+`"archived"`.
+
+Research this city across every category a traveler plans around, and return
+ONLY new items. The city, its dates and the traveler profile are given above;
+the items the guide already holds are listed below, by id. Weight your picks
+toward the traveler profile, but cover the whole trip, not only the listed
+interests.
+
+Cover each of these categories that makes sense for this city:
+
+- Eat and drink: restaurants, cafes, bars, markets, a standout local dish.
+- See: landmarks, viewpoints, museums, neighbourhoods worth a walk.
+- Do: activities, day trips, tours, anything hands-on.
+- Services and practical: SIM or eSIM, pharmacy, laundry, coworking, a
+  reliable ATM, getting in from the airport.
+
+Rules:
+
+- Return 10 to 18 new items in total, spread across the categories above so no
+  single one dominates. Weight the count toward the traveler's interests where
+  the city supports it.
+- Put each item in the section it belongs to. Use an existing section id from
+  the list below when the pick fits one (a dinner spot goes in the existing
+  dinner section). Create a new section only for a category the guide does not
+  have yet, with a short lowercase-slug id, a plain label, and one emoji icon.
+- Never return an item whose id is already in the list below, and never return
+  the same place under a new id. New ids must be short slugs and unique against
+  that list.
+- Every item follows the same rules as a full guide: real place, real Maps
+  link, no invented URLs, prices in local currency and USD, `place_id` and
+  `verified` both null, `status` either `plan` or `backup`, `day` only when the
+  pick only works on a specific date inside the stay.
+- Skip anything on the Avoid list, and apply the Notes.
+- If a category has no real option worth adding in this city, leave it out and
+  say nothing: do not pad the delta with weak picks.
+
+Respond with only a JSON code block in this shape, no prose:
+
+```json
+{
+  "schema": 1,
+  "delta": true,
+  "sections": [{"id": "do", "label": "Do", "icon": "🎯"}],
+  "items": [
+    {
+      "id": "new-slug",
+      "section": "do",
+      "status": "plan",
+      "name": "Real Place Name",
+      "note": "Why it fits, with rating and review count if you have it.",
+      "price": {"text": "~2500 AMD / $6"},
+      "hours": {"text": "10:00-22:00 daily", "class": "late"},
+      "tags": [],
+      "links": [{"kind": "map", "label": "Open in Maps", "href": "https://maps.google.com/?cid=..."}],
+      "place_id": null,
+      "verified": null
+    }
+  ]
+}
+```
+
+`sections` is optional: include only the new sections you are adding, and omit
+it entirely when every pick fits a section that already exists. `items` is
+required and holds new items only.
+<!-- /RERUN:RESEARCH -->
+
 ### Intel pass
 
 Adds the `intel` block (verdicts, tips, source) to items the guide already
